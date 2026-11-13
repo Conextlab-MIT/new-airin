@@ -1,12 +1,12 @@
-import type { StreamHandlers } from "@nakama/client";
+import type { StreamHandlers } from "@airin/client";
 import type {
   AgentQuestionAnswer,
   AgentQuestionnaire,
   AgentTodo,
   ChatContextUsage,
   ProfileSummary,
-} from "@nakama/core/contract";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/core/contract";
+import { cn } from "@airin/ui/utils";
 import type { Dispatch, SetStateAction } from "react";
 import type { ChatStatus } from "@/lib/ai-ui-types";
 import type { ChatListItem } from "@/lib/chat-history";
@@ -17,6 +17,7 @@ import {
 } from "@/lib/chat-stream-workflow";
 import { addChatUsage } from "@/lib/chat-usage";
 import { createClientId } from "@/lib/client-id";
+import type { DisplayDocument } from "@/lib/pasted-text";
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This parser accepts untrusted provider or tool output and decodes it at this boundary.
 function formatBashToolResult(result: unknown): string | null {
@@ -83,6 +84,73 @@ function formatDefaultToolResult(result: unknown): string | null {
   return String(result);
 }
 
+interface ToolResultImage {
+  data: string;
+  mimeType: string;
+}
+
+interface ToolResultImageSplit {
+  images: ToolResultImage[];
+  rest: unknown;
+}
+
+/** Pull MCP-style `{ type: "image" }` content out of a tool result; `rest` keeps the text parts. */
+export function splitToolResultImages(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This parser accepts untrusted provider or tool output and decodes it at this boundary.
+  result: unknown
+): ToolResultImageSplit {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+  if (typeof result !== "object" || result === null) {
+    return { images: [], rest: result };
+  }
+
+  // SAFETY: The enclosing parser checks the value before this conversion.
+  const { content } = result as { content?: unknown };
+
+  if (!Array.isArray(content)) {
+    return { images: [], rest: result };
+  }
+
+  const images: ToolResultImage[] = [];
+  const texts: string[] = [];
+  // The server now sends image bytes apart and leaves a `{ type: "image" }` stub.
+  let hasImagePart = false;
+
+  for (const item of content) {
+    // SAFETY: Each field is checked before use.
+    const { type, data, mimeType, text } = (item ?? {}) as {
+      type?: unknown;
+      data?: unknown;
+      mimeType?: unknown;
+      text?: unknown;
+    };
+
+    if (type === "image") {
+      hasImagePart = true;
+    }
+
+    if (
+      type === "image" &&
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+      typeof data === "string" &&
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+      typeof mimeType === "string" &&
+      /^image\/[\w.+-]+$/.test(mimeType)
+    ) {
+      images.push({ data, mimeType });
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    } else if (type === "text" && typeof text === "string" && text.trim()) {
+      texts.push(text.trim());
+    }
+  }
+
+  if (!hasImagePart) {
+    return { images, rest: result };
+  }
+
+  return { images, rest: texts.length > 0 ? texts.join("\n\n") : null };
+}
+
 export function formatToolResult(
   tool: string | undefined,
   // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This parser accepts untrusted provider or tool output and decodes it at this boundary.
@@ -99,6 +167,23 @@ export function formatToolResult(
     typeof result.content === "string"
   ) {
     return result.content.replace(/\r\n/g, "\n").trim() || null;
+  }
+
+  if (
+    tool === "extract_document_text" &&
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    typeof result === "object" &&
+    result !== null &&
+    !("error" in result) &&
+    "text" in result &&
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    typeof result.text === "string"
+  ) {
+    // The text starts with a one-paragraph note for the model; show the file.
+    const text = result.text.replace(/\r\n/g, "\n");
+    const start = text.indexOf("\n\n");
+
+    return (start === -1 ? text : text.slice(start + 2)).trim() || null;
   }
 
   if (tool === "bash") {
@@ -211,11 +296,39 @@ export function parseProfileCreatedResult(
   return profile as CreatedProfileSummary;
 }
 
+export function parseGroupCreatedResult(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This parser accepts untrusted provider or tool output and decodes it at this boundary.
+  result: unknown
+): { id: string; name: string } | null {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+  if (typeof result !== "object" || result === null) {
+    return null;
+  }
+
+  // SAFETY: The enclosing parser checks the value before this conversion.
+  const { group, type } = result as { group?: unknown; type?: unknown };
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+  if (type !== "group_created" || typeof group !== "object" || group === null) {
+    return null;
+  }
+
+  // SAFETY: The enclosing parser checks the value before this conversion.
+  const { id, name } = group as { id?: unknown; name?: unknown };
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+  return typeof id === "string" && typeof name === "string"
+    ? { id, name }
+    : null;
+}
+
 type SubAgentToolStatus = "success" | "fail" | "timeout";
 
 export interface ParsedSubAgentResult {
   error?: string;
   output: string;
+  /** The child chat the run went to, so the parent can link to it. */
+  sessionId?: string;
   status: SubAgentToolStatus;
   summary: string;
 }
@@ -235,6 +348,7 @@ export function parseSubAgentResult(
     summary?: unknown;
     output?: unknown;
     error?: unknown;
+    sessionId?: unknown;
   };
 
   const status =
@@ -261,12 +375,20 @@ export function parseSubAgentResult(
       ? record.error.trim()
       : undefined;
 
+  const sessionId =
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    typeof record.sessionId === "string" && record.sessionId.trim()
+      ? record.sessionId.trim()
+      : undefined;
+
   return {
     output,
     status,
     summary,
     // oxlint-disable-next-line anti-slop/no-conditional-empty-object-spread -- This optional field must stay absent when no value exists to preserve the wire payload contract.
     ...(error ? { error } : {}),
+    // oxlint-disable-next-line anti-slop/no-conditional-empty-object-spread -- This optional field must stay absent when no value exists to preserve the wire payload contract.
+    ...(sessionId ? { sessionId } : {}),
   };
 }
 
@@ -423,12 +545,29 @@ function basename(value: string): string {
 export function formatToolActionLabel(
   tool: string | undefined,
   // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- This dictionary holds external JSON keys until the boundary parser validates each value.
-  input?: Record<string, unknown>
+  input?: Record<string, unknown>,
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool results are untrusted JSON and are narrowed below.
+  result?: unknown
 ): string {
   const summary = formatToolSummary(tool, input);
 
   if (isSubAgentTool(tool)) {
     return formatSubAgentTitle(input);
+  }
+
+  // The input holds only an attachment id; the result names the file.
+  if (tool === "extract_document_text") {
+    const filename =
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+      typeof result === "object" &&
+      result !== null &&
+      "filename" in result &&
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+      typeof result.filename === "string"
+        ? result.filename.trim()
+        : "";
+
+    return filename ? `Read ${basename(filename)}` : "Read document";
   }
 
   if (isListWorkflowsTool(tool)) {
@@ -442,7 +581,9 @@ export function formatToolActionLabel(
   }
 
   if (
-    (tool === "write_file" || tool === "write_docx") &&
+    (tool === "write_file" ||
+      tool === "write_docx" ||
+      tool === "save_artifact") &&
     // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
     typeof input?.path === "string"
   ) {
@@ -665,6 +806,8 @@ export function buildStreamHandlers(
     onTodosUpdated?: (todos: AgentTodo[]) => void;
     onQuestionnaireUpdated?: (questionnaire: AgentQuestionnaire | null) => void;
     onContextUsage?: (usage: ChatContextUsage) => void;
+    /** Gets the reply the server sends with its done event. */
+    onDone?: (reply: string) => void;
   } = {}
 ): StreamHandlers {
   return {
@@ -696,6 +839,7 @@ export function buildStreamHandlers(
       });
     },
     onContextUsage: options.onContextUsage,
+    onDone: options.onDone,
     onQuestionnaireUpdated: options.onQuestionnaireUpdated,
     onSubAgentActivity: (event) => {
       setMessages((current) =>
@@ -751,6 +895,10 @@ export function buildStreamHandlers(
                 subAgentActivity: undefined,
                 toolCompletedAt: Date.now(),
                 toolGroupId: event.toolGroupId ?? message.toolGroupId,
+                toolImages: event.images?.map((image) => ({
+                  mediaType: image.mediaType,
+                  url: `data:${image.mediaType};base64,${image.data}`,
+                })),
                 toolResult: event.result,
                 toolStatus: "done",
               }
@@ -851,7 +999,7 @@ type OutgoingMessageOptions = {
 function buildOutgoingUserMessage(
   text: string,
   images: Array<{ mediaType: string; url: string }> = [],
-  documents: Array<{ filename: string; mediaType: string }> = [],
+  documents: DisplayDocument[] = [],
   options: OutgoingMessageOptions = {}
 ): ChatListItem {
   return {
@@ -886,7 +1034,7 @@ export function appendOutgoingMessages(
   setMessages: Dispatch<SetStateAction<ChatListItem[]>>,
   text: string,
   images: Array<{ mediaType: string; url: string }> = [],
-  documents: Array<{ filename: string; mediaType: string }> = [],
+  documents: DisplayDocument[] = [],
   options: OutgoingMessageOptions = {}
 ): void {
   setMessages((current) => [
@@ -909,12 +1057,8 @@ export const composerIconButtonClass = cn(
 export const composerToolbarClass =
   "flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden @[22rem]/composer:gap-1.5";
 
-/** Ghost select trigger for composer model / thinking controls (no filled chip look). */
-export const composerSelectTriggerClass =
-  "h-7 w-auto max-w-full min-w-0 gap-1 rounded-md border-none bg-transparent px-1.5 text-xs font-medium text-muted-foreground shadow-none hover:bg-accent/60 hover:text-foreground aria-expanded:bg-accent/60 aria-expanded:text-foreground dark:bg-transparent dark:hover:bg-accent/60 *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate";
-
 const composerInputGroupBase =
-  "[&_[data-slot=input-group]]:h-auto [&_[data-slot=input-group]]:flex-col [&_[data-slot=input-group]]:items-stretch [&_[data-slot=input-group]]:gap-0 [&_[data-slot=input-group]]:p-2.5 sm:[&_[data-slot=input-group]]:p-3";
+  "[&_[data-slot=input-group]]:h-auto [&_[data-slot=input-group]]:flex-col [&_[data-slot=input-group]]:items-stretch [&_[data-slot=input-group]]:gap-0 [&_[data-slot=input-group]]:p-2 sm:[&_[data-slot=input-group]]:p-2.5";
 
 /** Chat composer InputGroup: solid face, no focus ring (streaming rim is the active cue). */
 export const composerInputGroupClass =
@@ -927,8 +1071,8 @@ export function composerShelfPanelClass(
   edge: ComposerStackEdge = "start"
 ): string {
   return cn(
-    "relative z-0 w-full shrink-0 overflow-hidden border border-border border-b-0 bg-card shadow-xs",
-    edge === "start" ? "rounded-t-xl rounded-b-none" : "rounded-none"
+    "relative z-0 mx-auto w-[calc(100%-2.5rem)] shrink-0 overflow-hidden border border-border border-b-0 bg-card shadow-xs",
+    edge === "start" ? "rounded-t-2xl rounded-b-none" : "rounded-none"
   );
 }
 

@@ -1,7 +1,7 @@
-import { WHATSAPP_ARTIFACT_DOCUMENT_MAX_BYTES } from "@nakama/core";
+import { WHATSAPP_ARTIFACT_DOCUMENT_MAX_BYTES } from "@airin/core";
 import type { WASocket } from "@whiskeysockets/baileys";
 
-export { WHATSAPP_ARTIFACT_DOCUMENT_MAX_BYTES } from "@nakama/core";
+export { WHATSAPP_ARTIFACT_DOCUMENT_MAX_BYTES } from "@airin/core";
 
 export interface SendWhatsAppArtifactDocumentInput {
   bytes: Uint8Array;
@@ -16,7 +16,7 @@ export interface SendWhatsAppArtifactDocumentResult {
 }
 
 export function formatWhatsAppArtifactOversizeError(bytes: number): string {
-  return `File is too large for WhatsApp attach (${formatMegabytes(bytes)}; max ${formatMegabytes(WHATSAPP_ARTIFACT_DOCUMENT_MAX_BYTES)}). Download it from Artifacts in Nakama.`;
+  return `File is too large for WhatsApp attach (${formatMegabytes(bytes)}; max ${formatMegabytes(WHATSAPP_ARTIFACT_DOCUMENT_MAX_BYTES)}). Download it from Artifacts in Airin.`;
 }
 
 export async function sendWhatsAppArtifactDocument(

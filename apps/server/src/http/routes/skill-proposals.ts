@@ -1,9 +1,9 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type {
   ListSkillProposalsResponse,
   SkillProposalResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   type SkillProposalService,
   toSkillProposal,
@@ -47,7 +47,7 @@ export function registerSkillProposalRoutes(
     const orgId = decodeURIComponent(c.req.param("orgId"));
 
     if (authOrgId !== orgId) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     return orgId;
@@ -55,7 +55,7 @@ export function registerSkillProposalRoutes(
 
   function requireService(): SkillProposalService {
     if (!skillProposalService) {
-      throw new NakamaApiError("Skill proposal service not configured", 500);
+      throw new AirinApiError("Skill proposal service not configured", 500);
     }
 
     return skillProposalService;
@@ -115,7 +115,7 @@ export function registerSkillProposalRoutes(
     const isOrgAdmin = auth.orgRole === "admin" || auth.isPlatformAdmin;
 
     if (!(isOrgAdmin || sessionId)) {
-      throw new NakamaApiError("Forbidden", 403);
+      throw new AirinApiError("Forbidden", 403);
     }
 
     const result = await service.listProposals(orgId, {

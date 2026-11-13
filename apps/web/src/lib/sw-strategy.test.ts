@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
-  cacheNameFor,
   classifyRequest,
   shouldCacheResponse,
   staleCacheNames,
 } from "./sw-strategy";
 
-const ORIGIN = "https://nakama.example.test";
+const ORIGIN = "https://airin.example.test";
 
 function classify(
   url: string,
@@ -52,7 +51,7 @@ describe("classifyRequest", () => {
 
   test("revalidates unhashed static files in the background", () => {
     expect(classify(`${ORIGIN}/manifest.webmanifest`)).toBe("revalidate");
-    expect(classify(`${ORIGIN}/nakama-logo-dither.png`)).toBe("revalidate");
+    expect(classify(`${ORIGIN}/favicon-64.png`)).toBe("revalidate");
     expect(classify(`${ORIGIN}/icons/icon-512.png`)).toBe("revalidate");
   });
 
@@ -87,16 +86,12 @@ describe("shouldCacheResponse", () => {
 });
 
 describe("cache names", () => {
-  test("scopes the cache to the build version", () => {
-    expect(cacheNameFor("abc123")).toBe("nakama-v-abc123");
-  });
-
-  test("drops only Nakama caches from other builds", () => {
+  test("drops only Airin caches from other builds", () => {
     expect(
       staleCacheNames(
-        ["nakama-v-old", "nakama-v-abc123", "some-other-app-cache"],
+        ["airin-v-old", "airin-v-abc123", "some-other-app-cache"],
         "abc123"
       )
-    ).toEqual(["nakama-v-old"]);
+    ).toEqual(["airin-v-old"]);
   });
 });

@@ -1,6 +1,40 @@
 import type { ProviderName } from "./contract";
 
-export const NETRA_AGENT_MODEL_ID = "deepseek/deepseek-v4-flash-0731";
+export const NETRA_AGENT_MODEL_ID = "deepseek/deepseek-v4.1-flash";
+
+// Saved selections remain readable; never send the retired ID to Netra.
+export function resolveNetraModelId(model: string): string {
+  return model === "deepseek/deepseek-v4-flash-0731"
+    ? NETRA_AGENT_MODEL_ID
+    : model;
+}
+
+// Netra's /v1/models reports input_modalities ["text", "image"] for V4.1
+// Flash. Saved entries predate that: tenant setup stores no flag, and older
+// configs keep supportsVision false from the retired text-only 0731 model.
+const NETRA_VISION_MODEL_IDS: ReadonlySet<string> = new Set([
+  NETRA_AGENT_MODEL_ID,
+]);
+
+export function netraModelSupportsVision(model: string): boolean {
+  return NETRA_VISION_MODEL_IDS.has(resolveNetraModelId(model.trim()));
+}
+
+// Command Code's /models response carries no modality field, so infer image
+// input from the model family. Everything else stays text-only.
+export function commandCodeModelSupportsVision(modelId: string): boolean {
+  const id = modelId.trim().toLowerCase();
+
+  return (
+    id.startsWith("claude-") ||
+    id.startsWith("gpt-") ||
+    id.startsWith("google/gemini-") ||
+    id.startsWith("xai/grok-") ||
+    id.includes("vision") ||
+    id.includes("omni") ||
+    id.includes("-vl")
+  );
+}
 
 // Providers whose model lists are discovered live from the platform's
 // /models endpoint and stored as instance custom models, instead of a
@@ -12,12 +46,16 @@ export const NETRA_AGENT_MODEL_ID = "deepseek/deepseek-v4-flash-0731";
 export const DISCOVERY_MODEL_PROVIDERS: ReadonlySet<ProviderName> =
   new Set<ProviderName>([
     "openai_compatible",
+    "command_code",
     "netra",
     "minimax",
     "minimax_cn",
     "moonshot",
     "moonshot_cn",
     "xai",
+    "groq",
+    "cheaper_inference",
+    "standardcompute",
     "zhipu",
     "zhipu_cn",
   ]);
@@ -28,11 +66,15 @@ export const DISCOVERY_MODEL_PROVIDERS: ReadonlySet<ProviderName> =
 export const DISCOVERY_PROVIDER_BASE_URLS: Readonly<
   Partial<Record<ProviderName, string>>
 > = {
+  cheaper_inference: "https://api.cheaperinference.com/v1",
+  command_code: "https://api.commandcode.ai/provider/v1",
+  groq: "https://api.groq.com/openai/v1",
   minimax: "https://api.minimax.io/v1",
   minimax_cn: "https://api.minimaxi.com/v1",
   moonshot: "https://api.moonshot.ai/v1",
   moonshot_cn: "https://api.moonshot.cn/v1",
   netra: "https://api.netraruntime.com/v1",
+  standardcompute: "https://api.stdcmpt.com/v1",
   zhipu: "https://api.z.ai/api/paas/v4",
   zhipu_cn: "https://open.bigmodel.cn/api/paas/v4",
 };

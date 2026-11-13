@@ -8,7 +8,7 @@ import {
   requireToolOrgMember,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import type { OrgMemoryService } from "../services/org-memory-service";
 

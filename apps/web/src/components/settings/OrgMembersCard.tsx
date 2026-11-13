@@ -1,8 +1,8 @@
-import type { OrgMemberSummary, OrgRole } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { Input } from "@nakama/ui/input";
-import { toast } from "@nakama/ui/toast";
+import type { OrgMemberSummary, OrgRole } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { Input } from "@airin/ui/input";
+import { toast } from "@airin/ui/toast";
 import { Cancel01Icon } from "hugeicons-react";
 import { useReducer, useState } from "react";
 import {
@@ -21,8 +21,11 @@ import { useAuth } from "@/context/use-auth";
 import {
   useAddOrgMember,
   useInviteOrgMember,
+  useOrgInvites,
   useOrgMembers,
   useRemoveOrgMember,
+  useRevokeOrgInvite,
+  useSetOrgMemberDisabled,
   useUpdateOrgMember,
 } from "@/hooks/use-org-members";
 import { formatError } from "@/lib/client";
@@ -304,6 +307,85 @@ function useOrgMemberActions(
   };
 }
 
+function OrgMembersToolbar({
+  tab,
+  setTab,
+  state,
+  dispatch,
+  invitePending,
+  onInviteSubmit,
+}: {
+  tab: "members" | "settings";
+  setTab(value: "members" | "settings"): void;
+  state: OrgMembersState;
+  dispatch: React.Dispatch<OrgMembersAction>;
+  invitePending: boolean;
+  onInviteSubmit(event: React.FormEvent): void;
+}) {
+  return (
+    <div
+      aria-label="Organization sections"
+      className="flex items-center justify-between gap-3 px-4 py-2"
+      role="tablist"
+    >
+      <OrgMembersTabs onChange={setTab} value={tab} />
+      {tab === "members" ? (
+        <OrgMembersActions
+          inviteEmail={state.inviteEmail}
+          inviteFormError={state.formError}
+          inviteOpen={state.inviteOpen}
+          invitePending={invitePending}
+          inviteRole={state.inviteRole}
+          onAddMember={() => {
+            dispatch({ type: "reset-add" });
+            dispatch({ type: "clear-secrets" });
+            dispatch({ type: "patch", values: { addOpen: true } });
+          }}
+          onInviteEmailChange={(value) =>
+            dispatch({ type: "patch", values: { inviteEmail: value } })
+          }
+          onInviteOpenChange={(open) => {
+            dispatch({ type: "patch", values: { inviteOpen: open } });
+
+            if (open) {
+              dispatch({ type: "reset-invite" });
+              dispatch({ type: "clear-secrets" });
+            } else {
+              dispatch({ type: "reset-invite" });
+            }
+          }}
+          onInviteRoleChange={(value) =>
+            dispatch({ type: "patch", values: { inviteRole: value } })
+          }
+          onInviteSubmit={onInviteSubmit}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function OrgMembersSecret({
+  state,
+  onCopy,
+}: {
+  state: OrgMembersState;
+  onCopy(value: string): void;
+}) {
+  const secretValue = state.secretValue;
+
+  if (!secretValue) {
+    return null;
+  }
+
+  return (
+    <OrgMembersSecretBanner
+      onCopy={() => onCopy(secretValue)}
+      secretHint={state.secretHint}
+      secretValue={secretValue}
+    />
+  );
+}
+
 export function OrgMembersCard() {
   const { user, activeOrg, updateOrg } = useAuth();
   const orgId = activeOrg?.id ?? null;
@@ -322,8 +404,9 @@ export function OrgMembersCard() {
   );
 
   const actions = useOrgMemberActions(orgId ?? "", state, dispatch);
+  const setDisabled = useSetOrgMemberDisabled(orgId ?? "");
 
-  if (!activeOrg || activeOrg.role !== "admin") {
+  if (activeOrg?.role !== "admin") {
     return null;
   }
 
@@ -349,44 +432,14 @@ export function OrgMembersCard() {
     <>
       <Card className="w-full shadow-none">
         <CardContent className="divide-y divide-border p-0">
-          <div
-            aria-label="Organization sections"
-            className="flex items-center justify-between gap-3 px-4 py-2"
-            role="tablist"
-          >
-            <OrgMembersTabs onChange={setTab} value={tab} />
-            {tab === "members" ? (
-              <OrgMembersActions
-                inviteEmail={state.inviteEmail}
-                inviteFormError={state.formError}
-                inviteOpen={state.inviteOpen}
-                invitePending={inviteMutation.isPending}
-                inviteRole={state.inviteRole}
-                onAddMember={() => {
-                  dispatch({ type: "reset-add" });
-                  dispatch({ type: "clear-secrets" });
-                  dispatch({ type: "patch", values: { addOpen: true } });
-                }}
-                onInviteEmailChange={(value) =>
-                  dispatch({ type: "patch", values: { inviteEmail: value } })
-                }
-                onInviteOpenChange={(open) => {
-                  dispatch({ type: "patch", values: { inviteOpen: open } });
-
-                  if (open) {
-                    dispatch({ type: "reset-invite" });
-                    dispatch({ type: "clear-secrets" });
-                  } else {
-                    dispatch({ type: "reset-invite" });
-                  }
-                }}
-                onInviteRoleChange={(value) =>
-                  dispatch({ type: "patch", values: { inviteRole: value } })
-                }
-                onInviteSubmit={handleInviteSubmit}
-              />
-            ) : null}
-          </div>
+          <OrgMembersToolbar
+            dispatch={dispatch}
+            invitePending={inviteMutation.isPending}
+            onInviteSubmit={handleInviteSubmit}
+            setTab={setTab}
+            state={state}
+            tab={tab}
+          />
 
           {tab === "settings" ? (
             <>
@@ -404,26 +457,36 @@ export function OrgMembersCard() {
             </>
           ) : (
             <>
-              {state.secretValue ? (
-                <OrgMembersSecretBanner
-                  onCopy={() =>
-                    void copyWithHint(state.secretValue!, "secretHint")
-                  }
-                  secretHint={state.secretHint}
-                  secretValue={state.secretValue}
-                />
-              ) : null}
+              <OrgMembersSecret
+                onCopy={(value) => void copyWithHint(value, "secretHint")}
+                state={state}
+              />
 
               <div>
                 <OrgMembersTable
                   currentUserEmail={user?.email}
+                  disablePending={setDisabled.isPending}
                   isLoading={isLoading}
                   members={members}
                   onEdit={(member) => dispatch({ member, type: "open-edit" })}
                   onRemove={handleRemove}
+                  onToggleDisabled={
+                    user?.isPlatformAdmin
+                      ? (member) =>
+                          setDisabled.mutate(
+                            {
+                              disabled: !member.disabledAt,
+                              userId: member.userId,
+                            },
+                            { onError: (error) => toast(formatError(error)) }
+                          )
+                      : undefined
+                  }
                   removePending={removeMutation.isPending}
                   updatePending={updateMemberMutation.isPending}
                 />
+
+                <PendingInvites orgId={activeOrg.id} />
 
                 {statusLine ? (
                   <p
@@ -455,6 +518,52 @@ export function OrgMembersCard() {
   );
 }
 
+function PendingInvites({ orgId }: { orgId: string }) {
+  const invites = useOrgInvites(orgId).data?.invites ?? [];
+  const revoke = useRevokeOrgInvite(orgId);
+
+  if (invites.length === 0) {
+    return null;
+  }
+
+  return (
+    <section aria-label="Pending invites" className="border-border border-t">
+      <h3 className="bg-muted/40 px-4 py-2.5 text-muted-foreground text-sm">
+        Pending invites
+      </h3>
+      <ul className="divide-y divide-border border-border border-t text-sm">
+        {invites.map((invite) => (
+          <li
+            className="flex items-center justify-between gap-3 px-4 py-2"
+            key={invite.id}
+          >
+            <p className="min-w-0 truncate">
+              {invite.email}
+              <span className="ml-1.5 text-muted-foreground capitalize">
+                {invite.role}
+              </span>
+            </p>
+            <Button
+              aria-label={`Revoke invite for ${invite.email}`}
+              disabled={revoke.isPending}
+              onClick={() =>
+                revoke.mutate(invite.id, {
+                  onError: (error) => toast(formatError(error)),
+                })
+              }
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Revoke
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function OrgMembersTabs({
   value,
   onChange,
@@ -472,6 +581,7 @@ function OrgMembersTabs({
       ).map(([tab, label]) => (
         <Button
           aria-selected={value === tab}
+          className={value === tab ? undefined : "text-muted-foreground"}
           key={tab}
           onClick={() => onChange(tab)}
           role="tab"

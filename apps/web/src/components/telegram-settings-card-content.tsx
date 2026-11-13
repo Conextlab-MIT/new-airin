@@ -1,13 +1,13 @@
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/input-group";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import {
   Copy01Icon,
   RefreshIcon,

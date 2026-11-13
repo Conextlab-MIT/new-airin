@@ -4,9 +4,9 @@ import type {
   ImageAttachment,
   InstallSkillRequest,
   ProfileDetail,
-} from "@nakama/core/contract";
-import { parseDataUrl } from "@nakama/core/message-content";
-import { BASH_TOOL_ID } from "@nakama/core/tools/protected";
+} from "@airin/core/contract";
+import { parseDataUrl } from "@airin/core/message-content";
+import { BASH_TOOL_ID } from "@airin/core/tools/protected";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useActiveChatProfile } from "@/context/use-active-chat-profile";
@@ -170,6 +170,11 @@ function syncProfileEditFieldsFromDetail({
   return detailId;
 }
 
+/** Same agents in the list, even when a refetch returns a new array. */
+function profileListKey(profiles: ReadonlyArray<{ id: string }>): string {
+  return profiles.map((profile) => profile.id).join("\n");
+}
+
 export function useProfilesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { profileId: liveChatProfileId } = useActiveChatProfile();
@@ -187,6 +192,14 @@ export function useProfilesPage() {
   const { data: composioToolkitsData } = useComposioToolkits();
   const [selectedId, setSelectedIdState] = useState<string | null>(null);
   const profileInitializedRef = useRef(false);
+
+  // A deep link to an agent the list hides stays selected, so the detail
+  // request answers 403 and the page shows why. Only for the list it came with.
+  const hiddenDeepLinkRef = useRef<{
+    listKey: string;
+    profileId: string;
+  } | null>(null);
+
   const selectedIdRef = useRef(selectedId);
 
   useEffect(() => {
@@ -655,6 +668,19 @@ export function useProfilesPage() {
     if (!profileInitializedRef.current) {
       profileInitializedRef.current = true;
 
+      if (
+        urlProfileId &&
+        !profiles.some((profile) => profile.id === urlProfileId)
+      ) {
+        hiddenDeepLinkRef.current = {
+          listKey: profileListKey(profiles),
+          profileId: urlProfileId,
+        };
+        setSelectedId(urlProfileId);
+
+        return;
+      }
+
       const initialProfileId = resolveProfilesPageProfileId({
         liveChatProfileId,
         profiles,
@@ -679,6 +705,17 @@ export function useProfilesPage() {
     }
 
     const current = selectedIdRef.current;
+    const hiddenDeepLink = hiddenDeepLinkRef.current;
+
+    if (
+      // The selection can lag one run behind the URL, so fall back to it.
+      hiddenDeepLink?.profileId === (current ?? urlProfileId) &&
+      hiddenDeepLink.listKey === profileListKey(profiles)
+    ) {
+      return;
+    }
+
+    hiddenDeepLinkRef.current = null;
 
     if (current && !profiles.some((profile) => profile.id === current)) {
       setSelectedId(profiles[0]!.id);
@@ -1003,7 +1040,12 @@ export function useProfilesPage() {
         profileId: selectedId,
         serverId: response.server.id,
       });
-      setMcpCreateOpen(false);
+
+      if (!response.authorizationUrl) {
+        setMcpCreateOpen(false);
+      }
+
+      return response;
     } catch (err) {
       const message = formatError(err);
       setError(message);

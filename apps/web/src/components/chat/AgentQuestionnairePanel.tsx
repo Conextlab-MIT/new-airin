@@ -1,9 +1,9 @@
-import { hasActiveAgentQuestionnaire } from "@nakama/core/agent-questionnaire";
+import { hasActiveAgentQuestionnaire } from "@airin/core/agent-questionnaire";
 import type {
   AgentQuestionAnswer,
   AgentQuestionnaire,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import type { KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -12,23 +12,17 @@ import {
 } from "@/components/chat/agent-questionnaire.shared";
 import { AgentQuestionnaireNav } from "@/components/chat/agent-questionnaire-nav";
 import { AgentQuestionnaireQuestion } from "@/components/chat/agent-questionnaire-question";
-import {
-  type ComposerStackEdge,
-  composerShelfPanelClass,
-} from "@/lib/chat-stream";
 
 interface AgentQuestionnairePanelProps {
   disabled?: boolean;
   onSubmit: (answers: AgentQuestionAnswer[]) => void;
   questionnaire: AgentQuestionnaire | null;
-  stackEdge?: ComposerStackEdge;
 }
 
 export function AgentQuestionnairePanel({
   questionnaire,
   disabled = false,
   onSubmit,
-  stackEdge = "start",
 }: AgentQuestionnairePanelProps) {
   const [answers, setAnswers] = useState<Record<string, DraftAnswerState>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -116,7 +110,7 @@ export function AgentQuestionnairePanel({
           "button[data-question-option='true']:not(:disabled)"
         );
 
-      (input ?? selectedOption ?? firstOption)?.focus();
+      (selectedOption ?? firstOption ?? input)?.focus();
     });
 
     return () => window.cancelAnimationFrame(focusTarget);
@@ -173,7 +167,7 @@ export function AgentQuestionnairePanel({
     setAnswers((current) => ({
       ...current,
       [activeQuestion.id]: {
-        ...activeState,
+        customAnswer: isCustomChoice(choice) ? activeState.customAnswer : "",
         selectedChoiceId: choice.id,
         selectedChoiceLabel: choice.label,
       },
@@ -219,6 +213,18 @@ export function AgentQuestionnairePanel({
       return;
     }
 
+    const isTyping = event.target instanceof HTMLInputElement;
+
+    if (!isTyping && /^[1-9]$/.test(event.key)) {
+      event.preventDefault();
+
+      if (!disabled) {
+        selectChoice(Number(event.key) - 1);
+      }
+
+      return;
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       handleContinue();
@@ -236,22 +242,18 @@ export function AgentQuestionnairePanel({
   }
 
   return (
-    <div className="px-3">
-      <aside
+    <div className="w-full max-w-xl">
+      <section
         aria-label="Agent questions"
-        className={composerShelfPanelClass(stackEdge)}
+        className="rounded-2xl border border-border bg-background"
       >
         <AgentQuestionnaireNav
-          activeAnswerLength={activeAnswer.length}
-          canGoNext={canGoNext}
-          canGoPrevious={canGoPrevious}
+          answered={resolvedAnswers.map(
+            (answer) => answer.answer.trim().length > 0
+          )}
           currentQuestionIndex={currentQuestionIndex}
-          disabled={disabled}
-          onNext={() => setCurrentQuestionIndex((current) => current + 1)}
-          onPrevious={() => setCurrentQuestionIndex((current) => current - 1)}
-          totalQuestions={activeQuestionnaire.questions.length}
         />
-        <div className="space-y-4 px-3 py-3" onKeyDown={handleKeyDown}>
+        <div className="space-y-4 px-4 pb-4" onKeyDown={handleKeyDown}>
           <div key={activeQuestion.id} ref={activeQuestionRef}>
             <AgentQuestionnaireQuestion
               disabled={disabled}
@@ -262,11 +264,10 @@ export function AgentQuestionnairePanel({
                 }))
               }
               question={activeQuestion}
-              questionIndex={currentQuestionIndex}
               state={activeState}
             />
           </div>
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center justify-between">
             <button
               className="text-muted-foreground text-sm transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
               disabled={disabled}
@@ -275,16 +276,57 @@ export function AgentQuestionnairePanel({
             >
               Skip
             </button>
-            <Button
-              disabled={disabled || !canContinue}
-              onClick={handleContinue}
-              type="button"
-            >
-              {canGoNext ? "Continue" : "Submit"}
-            </Button>
+            <div className="flex items-center gap-2">
+              {canGoPrevious ? (
+                <Button
+                  disabled={disabled}
+                  onClick={() =>
+                    setCurrentQuestionIndex((current) => current - 1)
+                  }
+                  type="button"
+                  variant="outline"
+                >
+                  Back
+                </Button>
+              ) : null}
+              <Button
+                disabled={disabled || !canContinue}
+                onClick={handleContinue}
+                type="button"
+              >
+                {canGoNext ? "Continue" : "Submit"}
+              </Button>
+            </div>
           </div>
         </div>
-      </aside>
+      </section>
     </div>
+  );
+}
+
+export function AgentQuestionnaireAnswers({
+  answers,
+}: {
+  answers: AgentQuestionAnswer[];
+}) {
+  return (
+    <section
+      aria-label="Agent questions"
+      className="w-full max-w-2xl rounded-xl border border-border bg-background px-3 py-3"
+    >
+      <p className="font-medium text-sm">Questions · Confirmed</p>
+      <div className="mt-3 space-y-3">
+        {answers.map((entry, index) => (
+          <div key={entry.questionId}>
+            <p className="font-medium text-sm">
+              {index + 1}. {entry.prompt}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap text-muted-foreground text-sm">
+              {entry.answer || "Skipped"}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

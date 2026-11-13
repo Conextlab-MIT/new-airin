@@ -1,4 +1,4 @@
-import type { MessageContentPart } from "@nakama/core/contract";
+import type { MessageContentPart } from "@airin/core/contract";
 import type { FileUIPart } from "@/lib/ai-ui-types";
 
 export const LONG_PASTE_WORD_THRESHOLD = 300;
@@ -19,7 +19,7 @@ export function countWords(text: string): number {
   return normalized.split(/\s+/).filter(Boolean).length;
 }
 
-export function pastedTextFilename(wordCount: number): string {
+function pastedTextFilename(wordCount: number): string {
   return `Pasted text (${wordCount} words).txt`;
 }
 
@@ -52,16 +52,29 @@ export function wordCountFromPastedFilename(filename: string): number | null {
 }
 
 export interface DisplayDocument {
+  /** Present for persisted `document_ref` parts; fetch content via `/v1/attachments/{id}/content`. */
+  attachmentId?: string;
   filename: string;
   mediaType: string;
+  /** Present for inline/fresh `document` parts (a `data:` URL). */
+  url?: string;
 }
 
 export function documentDisplayFromContentPart(
-  part: Extract<MessageContentPart, { type: "document" }>
+  part: Extract<MessageContentPart, { type: "document" | "document_ref" }>
 ): DisplayDocument {
+  if (part.type === "document_ref") {
+    return {
+      attachmentId: part.attachmentId,
+      filename: part.filename,
+      mediaType: part.mediaType,
+    };
+  }
+
   return {
     filename: part.filename,
     mediaType: part.mediaType,
+    url: `data:${part.mediaType};base64,${part.data}`,
   };
 }
 
@@ -69,5 +82,6 @@ export function documentDisplayFromFilePart(file: FileUIPart): DisplayDocument {
   return {
     filename: file.filename?.trim() || "document",
     mediaType: file.mediaType ?? "",
+    url: file.url,
   };
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { ChatgptOAuthCredentials, CustomModelEntry } from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
-import type { ChatgptOAuthDeviceStartResponse } from "@nakama/core/contract";
+import type { ChatgptOAuthCredentials, CustomModelEntry } from "@airin/core";
+import { AirinApiError } from "@airin/core";
+import type { ChatgptOAuthDeviceStartResponse } from "@airin/core/contract";
 import { z } from "zod";
 
 const CHATGPT_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -23,6 +23,9 @@ const CHATGPT_DEVICE_REDIRECT_URI =
 
 export const CHATGPT_JWT_CLAIM_PATH = "https://api.openai.com/auth";
 
+const CHATGPT_SIGN_IN_EXPIRED_MESSAGE =
+  "ChatGPT sign-in expired. Reconnect in Settings → AI Providers (/settings/providers).";
+
 const CHATGPT_DEVICE_CODE_TIMEOUT_MS = 15 * 60 * 1000;
 
 export interface ChatgptDeviceAuthSession {
@@ -40,6 +43,8 @@ const jwtPayloadSchema = z.object({
   [CHATGPT_JWT_CLAIM_PATH]: z
     .object({
       chatgpt_account_id: z.string().optional(),
+      // A bad plan claim must not hide the account id.
+      chatgpt_plan_type: z.string().optional().catch(undefined),
     })
     .optional(),
 });
@@ -117,10 +122,32 @@ export function readChatgptAccountIdFromAccessToken(
   return accountId && accountId.length > 0 ? accountId : null;
 }
 
+/** The ChatGPT plan in the access token, such as `"free"` or `"plus"`. */
+export function readChatgptPlanType(
+  oauth: Pick<ChatgptOAuthCredentials, "accessToken"> | null
+): string | undefined {
+  if (!oauth) {
+    return undefined;
+  }
+
+  const payload = decodeJwtPayload(oauth.accessToken);
+
+  return payload?.[CHATGPT_JWT_CLAIM_PATH]?.chatgpt_plan_type || undefined;
+}
+
 async function readTokenResponse(
   response: Response,
   operation: "exchange" | "refresh"
 ): Promise<ChatgptOAuthCredentials> {
+  // The token endpoint answers a dead or reused refresh token with 400/401.
+  if (
+    operation === "refresh" &&
+    (response.status === 400 || response.status === 401)
+  ) {
+    await response.body?.cancel();
+    throw new AirinApiError(CHATGPT_SIGN_IN_EXPIRED_MESSAGE, 400);
+  }
+
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(
@@ -352,10 +379,7 @@ export async function fetchChatgptCodexModels(
     try {
       refreshed = await refreshChatgptOAuthToken(oauth.refreshToken);
     } catch {
-      throw new NakamaApiError(
-        "ChatGPT sign-in expired. Reconnect in Settings → LLM providers.",
-        400
-      );
+      throw new AirinApiError(CHATGPT_SIGN_IN_EXPIRED_MESSAGE, 400);
     }
 
     await onTokenRefresh(refreshed);
@@ -364,10 +388,7 @@ export async function fetchChatgptCodexModels(
 
   if (response.status === 401) {
     await response.body?.cancel();
-    throw new NakamaApiError(
-      "ChatGPT sign-in expired. Reconnect in Settings → LLM providers.",
-      400
-    );
+    throw new AirinApiError(CHATGPT_SIGN_IN_EXPIRED_MESSAGE, 400);
   }
 
   if (!response.ok) {
@@ -386,7 +407,37 @@ export async function fetchChatgptCodexModels(
   return models;
 }
 
-export async function refreshChatgptOAuthToken(
+/**
+ * A refresh token works once. Calls that race on the same token share one
+ * redeem, so a second redeem cannot invalidate the new token chain.
+ */
+const pendingChatgptRefreshes = new Map<
+  string,
+  Promise<ChatgptOAuthCredentials>
+>();
+
+/** A stalled token endpoint must not hang the turn that waits on it. */
+const CHATGPT_REFRESH_TIMEOUT_MS = 30_000;
+
+export function refreshChatgptOAuthToken(
+  refreshToken: string
+): Promise<ChatgptOAuthCredentials> {
+  const pending = pendingChatgptRefreshes.get(refreshToken);
+
+  if (pending) {
+    return pending;
+  }
+
+  const refresh = redeemChatgptRefreshToken(refreshToken).finally(() => {
+    pendingChatgptRefreshes.delete(refreshToken);
+  });
+
+  pendingChatgptRefreshes.set(refreshToken, refresh);
+
+  return refresh;
+}
+
+async function redeemChatgptRefreshToken(
   refreshToken: string
 ): Promise<ChatgptOAuthCredentials> {
   const response = await fetch(CHATGPT_OAUTH_TOKEN_URL, {
@@ -397,6 +448,7 @@ export async function refreshChatgptOAuthToken(
     }),
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     method: "POST",
+    signal: AbortSignal.timeout(CHATGPT_REFRESH_TIMEOUT_MS),
   });
 
   return readTokenResponse(response, "refresh");
@@ -466,7 +518,7 @@ export async function completeChatgptOAuthDeviceSession(
   const session = deviceSessions.get(sessionId);
 
   if (!session) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "ChatGPT sign-in session expired. Start again.",
       400
     );

@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { tryServeStaticWeb } from "./static-web";
 
 function createDist(): string {
-  const distDir = mkdtempSync(join(tmpdir(), "nakama-static-web-"));
+  const distDir = mkdtempSync(join(tmpdir(), "airin-static-web-"));
   mkdirSync(join(distDir, "assets"));
   writeFileSync(join(distDir, "index.html"), "<!doctype html>");
-  writeFileSync(join(distDir, "manifest.webmanifest"), '{"name":"Nakama"}');
+  writeFileSync(join(distDir, "manifest.webmanifest"), '{"name":"Airin"}');
   writeFileSync(
     join(distDir, "sw.js"),
     "self.addEventListener('install', () => {});"

@@ -1,35 +1,47 @@
 import type { OrgRole, ProfileSummary } from "./contract";
 
-export function canAccessSuperBotProfile(options: {
+export function canAccessSuperAirinProfile(options: {
   orgRole?: OrgRole | null;
   isPlatformAdmin?: boolean;
 }): boolean {
   return options.isPlatformAdmin === true || options.orgRole === "admin";
 }
 
-export function filterProfilesForChatAccess(
-  profiles: ProfileSummary[],
-  options: {
-    orgRole?: OrgRole | null;
-    isPlatformAdmin?: boolean;
-    excludeSuperBot?: boolean;
-    userId?: string;
-  } = {}
-): ProfileSummary[] {
-  const visible = options.isPlatformAdmin
-    ? profiles
-    : profiles.filter(
-        (profile) =>
-          profile.sharedWithTeam !== false ||
-          (options.userId !== undefined &&
-            profile.ownerUserId === options.userId)
-      );
+interface ChatAccessOptions {
+  excludeSuperAirin?: boolean;
+  isPlatformAdmin?: boolean;
+  orgRole?: OrgRole | null;
+  userId?: string;
+}
 
-  if (options.excludeSuperBot || !canAccessSuperBotProfile(options)) {
-    return visible.filter((profile) => !profile.isSuper);
+/** True when the chat list shows this profile to the caller. */
+export function canChatWithProfile(
+  profile: {
+    isSuper: boolean;
+    ownerUserId?: string | null;
+    sharedWithTeam?: boolean;
+  },
+  options: ChatAccessOptions = {}
+): boolean {
+  if (
+    profile.isSuper &&
+    (options.excludeSuperAirin || !canAccessSuperAirinProfile(options))
+  ) {
+    return false;
   }
 
-  return visible;
+  return (
+    options.isPlatformAdmin === true ||
+    profile.sharedWithTeam !== false ||
+    (options.userId !== undefined && profile.ownerUserId === options.userId)
+  );
+}
+
+export function filterProfilesForChatAccess(
+  profiles: ProfileSummary[],
+  options: ChatAccessOptions = {}
+): ProfileSummary[] {
+  return profiles.filter((profile) => canChatWithProfile(profile, options));
 }
 
 export function slugifyProfileName(name: string): string {
@@ -38,7 +50,7 @@ export function slugifyProfileName(name: string): string {
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
+      .replace(/^-|-$/g, "")
       .slice(0, 64) || "profile"
   );
 }
@@ -77,18 +89,22 @@ export function resolveProfileInput(
 
   const lower = trimmed.toLowerCase();
 
-  const superBotAliases = new Set([
+  const superAirinAliases = new Set([
+    "super_airin",
+    "super-airin",
+    "superairin",
+    "super airin",
     "super_bot",
     "super-bot",
     "superbot",
     "super bot",
   ]);
 
-  if (superBotAliases.has(lower)) {
-    const superBots = profiles.filter((profile) => profile.isSuper);
+  if (superAirinAliases.has(lower)) {
+    const superAirins = profiles.filter((profile) => profile.isSuper);
 
-    if (superBots.length === 1) {
-      return superBots[0];
+    if (superAirins.length === 1) {
+      return superAirins[0];
     }
   }
 

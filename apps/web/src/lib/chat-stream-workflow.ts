@@ -4,7 +4,7 @@ import type {
   WorkflowRunStepRecord,
   WorkflowRunStepStatus,
   WorkflowStep,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { formatSessionRelativeTime } from "@/lib/chat-history";
 import { countWords } from "@/lib/pasted-text";
 
@@ -18,7 +18,7 @@ export function isListWorkflowsTool(tool: string | undefined): boolean {
   );
 }
 
-export interface ListedWorkflow {
+interface ListedWorkflow {
   description: string;
   enabled: boolean;
   id: string;
@@ -28,7 +28,7 @@ export interface ListedWorkflow {
 }
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This parser accepts untrusted provider or tool output and decodes it at this boundary.
-export function parseListWorkflowsResult(result: unknown): ListedWorkflow[] {
+function parseListWorkflowsResult(result: unknown): ListedWorkflow[] {
   if (!Array.isArray(result)) {
     return [];
   }
@@ -118,7 +118,7 @@ export function parseWorkflowId(
 export function parseRunWorkflowResult(result: unknown): {
   name: string | null;
   run: WorkflowRunRecord | null;
-  status: "completed" | "failed" | null;
+  status: "completed" | "failed" | "skipped" | null;
 } | null {
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
   if (!result || typeof result !== "object" || Array.isArray(result)) {
@@ -130,7 +130,9 @@ export function parseRunWorkflowResult(result: unknown): {
   const record = result as Record<string, unknown>;
 
   const status =
-    record.status === "completed" || record.status === "failed"
+    record.status === "completed" ||
+    record.status === "failed" ||
+    record.status === "skipped"
       ? record.status
       : null;
 
@@ -189,13 +191,17 @@ export function buildWorkflowRunCard({
 }
 
 function formatWorkflowRunStatusLabel(
-  status: "running" | "completed" | "failed" | "off",
+  status: "running" | "completed" | "failed" | "skipped" | "off",
   isRunning: boolean,
   activeIndex: number,
   total: number
 ): string {
   if (status === "failed") {
     return total ? `Failed · step ${activeIndex + 1} of ${total}` : "Failed";
+  }
+
+  if (status === "skipped") {
+    return total ? `Skipped · step ${activeIndex + 1} of ${total}` : "Skipped";
   }
 
   if (status === "off") {
@@ -220,7 +226,7 @@ export interface WorkflowStepView {
   tool: string | null;
 }
 
-export function buildWorkflowStepViews(
+function buildWorkflowStepViews(
   steps: WorkflowStep[],
   run: WorkflowRunRecord | null
 ): WorkflowStepView[] {
@@ -277,14 +283,16 @@ function markLivePendingStepRunning(
   );
 }
 
-export function activeWorkflowStepIndex(views: WorkflowStepView[]): number {
+function activeWorkflowStepIndex(views: WorkflowStepView[]): number {
   const running = views.findIndex((step) => step.status === "running");
 
   if (running >= 0) {
     return running;
   }
 
-  const failed = views.findIndex((step) => step.status === "failed");
+  const failed = views.findIndex(
+    (step) => step.status === "failed" || step.status === "skipped"
+  );
 
   if (failed >= 0) {
     return failed;
@@ -335,6 +343,10 @@ function formatWorkflowStepMeta(
 ): string | null {
   if (!receipt) {
     return null;
+  }
+
+  if (receipt.status === "skipped") {
+    return "Skipped";
   }
 
   if (receipt.error?.trim()) {

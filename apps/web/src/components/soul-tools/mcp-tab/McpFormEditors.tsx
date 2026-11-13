@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
+import { cn } from "@airin/ui/utils";
 import { Add01Icon, Cancel01Icon, Delete02Icon } from "hugeicons-react";
 import { type KeyboardEvent, type ReactNode, useRef, useState } from "react";
 import {

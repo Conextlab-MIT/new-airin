@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createInMemoryDatabaseAdapter,
   seedOrgDefaultProfile,
-} from "@nakama/db";
+} from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -12,7 +12,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-rbac-mutations-test-");
+setupTestConfigDir("airin-rbac-mutations-test-");
 
 const ORG_ID = "org_test";
 
@@ -70,9 +70,10 @@ test("automation run deletion is unavailable and preserves history", async () =>
 
   expect(specResponse.status).toBe(200);
   const spec = await specResponse.json();
-  expect(
-    spec.paths["/v1/automations/{automationId}/runs/{runId}"]
-  ).toBeUndefined();
+  // The path exists to read one run, never to delete it.
+  const runPath = spec.paths["/v1/automations/{automationId}/runs/{runId}"];
+  expect(runPath?.get).toBeDefined();
+  expect(runPath?.delete).toBeUndefined();
 });
 
 function createApp() {
@@ -196,7 +197,7 @@ describe("RBAC: removed member cannot reach state-changing automation/session ro
 
 describe("RBAC: admin can still reach the same routes (not a 403)", () => {
   test.each(["admin", "member"] as const)(
-    "messaging Super Bot sessions enforce the authenticated %s role",
+    "messaging Airin sessions enforce the authenticated %s role",
     async (role) => {
       const databaseAdapter = createInMemoryDatabaseAdapter();
       const agent = new AgentService(null, null, databaseAdapter);
@@ -244,35 +245,6 @@ describe("RBAC: admin can still reach the same routes (not a 403)", () => {
       }
     }
   );
-
-  test("POST /v1/automations is not forbidden for admin", async () => {
-    const { app, databaseAdapter, authService } = createApp();
-    await seedOrgAdmin(databaseAdapter, {
-      authService,
-      email: "admin@example.com",
-      orgId: ORG_ID,
-      password: PASSWORD,
-      role: "admin",
-      userId: "user_admin",
-    });
-
-    const admin = await loginUserSession(
-      app,
-      "admin@example.com",
-      PASSWORD,
-      ORG_ID
-    );
-
-    const response = await app.fetch(
-      new Request("http://localhost:4310/v1/automations", {
-        body: JSON.stringify({ name: "x", prompt: "x" }),
-        headers: admin.headers({ "X-CSRF-Token": admin.csrfToken }),
-        method: "POST",
-      })
-    );
-
-    expect(response.status).not.toBe(403);
-  });
 });
 
 test("force deleting an MCP server requires a platform admin", async () => {

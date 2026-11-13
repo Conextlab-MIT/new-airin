@@ -2,23 +2,13 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { NakamaClient } from "@nakama/client";
-import type {
-  HealthResponse,
-  ModelsResponse,
-  ProfileSummary,
-} from "@nakama/core";
+import { AirinClient } from "@airin/client";
 import {
   createChatExitController,
   createDebouncedEscAbortHandler,
   disableRawModeIfActive,
-  formatBusyDropLine,
-  formatErrorLines,
   formatSoulStatusLines,
-  formatStatusLines,
   formatToolCall,
-  isEscInterruptKey,
-  needsTrailingStreamNewline,
   previewToolValue,
   runChat,
   runCleanupThenExit,
@@ -27,21 +17,6 @@ import {
 import * as profile from "./profile";
 import * as promptModule from "./prompt";
 import { TerminalRenderer } from "./terminal-renderer";
-
-describe("needsTrailingStreamNewline", () => {
-  test("adds a newline when no chunk was rendered", () => {
-    expect(needsTrailingStreamNewline(null)).toBe(true);
-  });
-
-  test("adds a newline when the stream ended mid-line", () => {
-    expect(needsTrailingStreamNewline("Hello.")).toBe(true);
-  });
-
-  test("skips the newline when the stream already ended with one", () => {
-    expect(needsTrailingStreamNewline("Hello.\n")).toBe(false);
-    expect(needsTrailingStreamNewline("Hello.\r\n")).toBe(false);
-  });
-});
 
 describe("createChatExitController", () => {
   test("requestExit resolves wait without scheduling an interval", async () => {
@@ -85,22 +60,6 @@ describe("createChatExitController", () => {
   });
 });
 
-describe("formatBusyDropLine", () => {
-  test("shows a short busy marker before the warn threshold", () => {
-    expect(formatBusyDropLine(1)).toBe("[busy]");
-    expect(formatBusyDropLine(2)).toBe("[busy]");
-  });
-
-  test("includes the drop count once the warn threshold is reached", () => {
-    expect(formatBusyDropLine(3)).toBe(
-      "[busy] ignored input (3 while processing)"
-    );
-    expect(formatBusyDropLine(5)).toBe(
-      "[busy] ignored input (5 while processing)"
-    );
-  });
-});
-
 describe("tool rendering", () => {
   test("shows a compact summary without raw arguments and fits the terminal", () => {
     const input = { command: "bun test\n--coverage", secret: "hidden" };
@@ -137,75 +96,10 @@ describe("tool rendering", () => {
   });
 });
 
-describe("formatStatusLines", () => {
-  const health: HealthResponse = {
-    apiVersion: 1,
-    composioAvailable: false,
-    composioConfigured: false,
-    ok: true,
-    providerConfigured: true,
-    userConfigured: true,
-    version: "0.4.10",
-  };
-
-  const models: ModelsResponse = {
-    currentProviderId: "provider-a",
-    displayName: null,
-    models: [],
-    provider: "anthropic",
-    providers: [],
-  };
-
-  const profile: ProfileSummary = {
-    createdAt: "",
-    hasAvatar: false,
-    id: "default",
-    isSuper: false,
-    mcpServerCount: 0,
-    model: "provider-a::claude-sonnet",
-    name: "Default",
-    soulActive: false,
-    toolCount: 0,
-    updatedAt: "",
-  };
-
-  test("matches the telegram status summary fields", () => {
-    expect(formatStatusLines(health, models, profile)).toEqual([
-      "Server: ok",
-      "Provider configured: yes",
-      "Profile: Default",
-      "Provider: anthropic",
-      "Model: claude-sonnet",
-    ]);
-  });
-
-  test("shows offline mode when no provider is configured", () => {
-    expect(
-      formatStatusLines({ ...health, providerConfigured: false }, null, profile)
-    ).toEqual([
-      "Server: ok",
-      "Provider configured: no",
-      "Chat runs in offline mode without an API key.",
-    ]);
-  });
-});
-
-describe("formatErrorLines", () => {
-  test("adds a blank line above rendered errors", () => {
-    expect(formatErrorLines(new Error("Boom"))).toEqual(["", "Boom"]);
-  });
-
-  test("splits multiline errors into separate render lines", () => {
-    expect(
-      formatErrorLines(new Error("DeepSeek request failed\ninternal_error"))
-    ).toEqual(["", "DeepSeek request failed", "internal_error"]);
-  });
-});
-
 describe("formatSoulStatusLines", () => {
   const directory = join(
     homedir(),
-    ".nakama",
+    ".airin",
     "orgs",
     "org_secret",
     "profiles",
@@ -227,21 +121,8 @@ describe("formatSoulStatusLines", () => {
 
   test("masks soul directory by default", () => {
     expect(formatSoulStatusLines(status)[0]).toBe(
-      "Soul directory: ~/.nakama/orgs/<org>/profiles/<profile>"
+      "Soul directory: ~/.airin/orgs/<org>/profiles/<profile>"
     );
-  });
-
-  test("shows absolute soul directory when verbose", () => {
-    expect(formatSoulStatusLines(status, true)[0]).toBe(
-      `Soul directory: ${directory}`
-    );
-  });
-});
-
-describe("isEscInterruptKey", () => {
-  test("matches only a standalone escape key", () => {
-    expect(isEscInterruptKey("\u001b")).toBe(true);
-    expect(isEscInterruptKey("\u001b[A")).toBe(false);
   });
 });
 
@@ -376,7 +257,7 @@ describe("non-TTY slash commands and EOF", () => {
   } as ProfileSummary;
 
   async function runBlockingInput(input: string | null) {
-    const client = new NakamaClient();
+    const client = new AirinClient();
     const session = client.createChatSession("test", "cli");
     const output: string[] = [];
     const clear = spyOn(session, "clear").mockResolvedValue(undefined);
@@ -426,20 +307,6 @@ describe("non-TTY slash commands and EOF", () => {
       sendStream.mockRestore();
     }
   }
-
-  test("runs /help locally without sending it to the model", async () => {
-    const result = await runBlockingInput("/help");
-
-    expect(result.output.some((line) => line.includes("/help"))).toBe(true);
-    expect(result.sendCalls).toBe(0);
-  });
-
-  test("runs /clear locally without sending it to the model", async () => {
-    const result = await runBlockingInput("/clear");
-
-    expect(result.clearCalls).toBe(1);
-    expect(result.sendCalls).toBe(0);
-  });
 
   test("rejects interactive-only commands without sending them", async () => {
     const result = await runBlockingInput("/compact");

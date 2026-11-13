@@ -1,39 +1,33 @@
-import type { AgentChatSession } from "@nakama/agent";
-import type { OrgRole } from "@nakama/core";
+import type { OrgRole } from "@airin/core";
 import {
   AGENT_CHANNELS,
   type AgentChannel,
+  AirinApiError,
   type ApiErrorResponse,
-  type ChatTurnUsage,
-  type ChatUsage,
-  formatServerError,
   HOST_BOUND_BROWSER_SESSION_COOKIE_NAMES,
   LOCAL_CLIENT_EMAIL,
-  NakamaApiError,
   PLAIN_BROWSER_SESSION_COOKIE_NAMES,
-  reportError,
   browserSessionCookieNames as resolveBrowserSessionCookieNames,
-  resolveChatFirstTokenTimeoutMs,
-  resolveChatStreamTimeoutMs,
-  type SendMessageInput,
   type StreamEvent,
-  type ToolContext,
   verifyLocalAuthToken,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   DatabaseAdapter,
   StoredBrowserSessionRecord,
   StoredUserRecord,
-} from "@nakama/db";
-import { ensureLocalClientAccess } from "@nakama/db";
+} from "@airin/db";
+import { ensureLocalClientAccess } from "@airin/db";
 import type { Context } from "hono";
-import { type ZodType, z } from "zod";
+import type { ZodType } from "zod";
 import type { AuthService } from "../services/auth-service";
 import { loadMfaPolicy } from "../services/mfa-config";
 import { sessionTurnRegistry } from "../services/session-turn-registry";
 import type { AppEnv } from "./types";
 
 const LEGACY_COOKIE_NAMES = PLAIN_BROWSER_SESSION_COOKIE_NAMES;
+
+/** Large-body routes use this cap; JSON import bodies must not exceed it. */
+export const MAX_HTTP_REQUEST_BODY_LIMIT_BYTES = 140 * 1024 * 1024;
 
 const HOST_BOUND_COOKIE_NAMES = HOST_BOUND_BROWSER_SESSION_COOKIE_NAMES;
 
@@ -151,7 +145,7 @@ export function getRequestAuth(c: Context<AppEnv>): RequestAuthContext {
   const auth = c.get("auth");
 
   if (!auth) {
-    throw new NakamaApiError("Authentication required", 401);
+    throw new AirinApiError("Authentication required", 401);
   }
 
   return auth;
@@ -311,7 +305,8 @@ export async function authenticateRequest(
 
   await databaseAdapter.updateBrowserSessionLastUsedAt(
     session.id,
-    new Date().toISOString()
+    new Date().toISOString(),
+    session.userAgent ? null : request.headers.get("user-agent")
   );
 
   return {
@@ -339,11 +334,11 @@ export function assertBrowserCsrf(
   const csrfHeader = request.headers.get(CSRF_HEADER_NAME);
 
   if (!(csrfToken && csrfHeader) || csrfToken !== csrfHeader.trim()) {
-    throw new NakamaApiError("CSRF validation failed.", 403);
+    throw new AirinApiError("CSRF validation failed.", 403);
   }
 
   if (auth.session?.csrfTokenHash !== authService.hashToken(csrfToken)) {
-    throw new NakamaApiError("CSRF validation failed.", 403);
+    throw new AirinApiError("CSRF validation failed.", 403);
   }
 }
 
@@ -432,6 +427,7 @@ export async function createBrowserSessionResponse(
     lastUsedAt: now,
     revokedAt: null,
     sessionTokenHash: authService.hashToken(session.sessionToken),
+    userAgent: options.request.headers.get("user-agent"),
     userId: user.id,
   };
 
@@ -497,23 +493,106 @@ export function clearBrowserSessionCookies(headers: Headers): void {
  * forces the preflight, and nothing here answers one.
  */
 export function assertJsonRequest(request: Request): void {
-  const contentType = request.headers
+  if (readMediaType(request) !== "application/json") {
+    throw new AirinApiError("Content-Type must be application/json.", 415);
+  }
+}
+
+function readMediaType(request: Request): string | undefined {
+  return request.headers
     .get("content-type")
     ?.split(";")[0]
     ?.trim()
     .toLowerCase();
+}
 
-  if (contentType !== "application/json") {
-    throw new NakamaApiError("Content-Type must be application/json.", 415);
+/** application/zip is not a CORS-simple type, so it needs a preflight like JSON. */
+export function isArchiveRequest(request: Request): boolean {
+  return readMediaType(request) === "application/zip";
+}
+
+/**
+ * Bun can leave a body read pending forever when the client hangs up, which
+ * would pin whatever the caller holds, such as the restore lock.
+ */
+export function readUntilClientGone<T>(
+  request: Request,
+  read: Promise<T>
+): Promise<T> {
+  const gone = new Promise<never>((_resolve, reject) => {
+    const rejectGone = () => {
+      reject(new AirinApiError("The client closed the request.", 400));
+    };
+
+    if (request.signal.aborted) {
+      rejectGone();
+    }
+
+    request.signal.addEventListener("abort", rejectGone, { once: true });
+  });
+
+  return Promise.race([read, gone]);
+}
+
+async function readJsonBodyWithLimit<T>(
+  request: Request,
+  maxBytes: number
+): Promise<T> {
+  const contentLength = Number(request.headers.get("content-length") ?? "");
+
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new AirinApiError("Request body is too large.", 413);
   }
+
+  if (!request.body) {
+    return undefined;
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      bytes += value.byteLength;
+
+      if (bytes > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new AirinApiError("Request body is too large.", 413);
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const text = Buffer.concat(
+    chunks.map((chunk) => Buffer.from(chunk))
+  ).toString("utf8");
+
+  // SAFETY: the caller's schema validates this parsed value before use.
+  return JSON.parse(text) as T;
 }
 
 export async function readJson<T>(
   request: Request,
-  schema?: ZodType<T>
+  schema?: ZodType<T>,
+  maxBytes?: number
 ): Promise<T> {
   try {
-    const body = await request.json();
+    const body = maxBytes
+      ? await readUntilClientGone(
+          request,
+          readJsonBodyWithLimit<T>(request, maxBytes)
+        )
+      : await readUntilClientGone(request, request.json());
 
     if (!schema) {
       return body;
@@ -522,13 +601,13 @@ export async function readJson<T>(
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      throw new NakamaApiError("Invalid request body.", 400);
+      throw new AirinApiError("Invalid request body.", 400);
     }
 
     return parsed.data;
   } catch (err) {
     if (err instanceof SyntaxError) {
-      throw new NakamaApiError("Invalid JSON in request body.", 400);
+      throw new AirinApiError("Invalid JSON in request body.", 400);
     }
 
     throw err;
@@ -549,7 +628,7 @@ export function parseOptionalQueryEnum<const T extends string>(
     return parsed;
   }
 
-  throw new NakamaApiError("Invalid query parameter.", 400);
+  throw new AirinApiError("Invalid query parameter.", 400);
 }
 
 export async function readOptionalJson<T>(
@@ -573,13 +652,13 @@ export async function readOptionalJson<T>(
     const parsed = schema.safeParse(value);
 
     if (!parsed.success) {
-      throw new NakamaApiError("Invalid request body.", 400);
+      throw new AirinApiError("Invalid request body.", 400);
     }
 
     return parsed.data;
   } catch (err) {
     if (err instanceof SyntaxError) {
-      throw new NakamaApiError("Invalid JSON in request body.", 400);
+      throw new AirinApiError("Invalid JSON in request body.", 400);
     }
 
     throw err;
@@ -620,7 +699,7 @@ export function oauthResultPage(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${Bun.escapeHTML(title)} - Nakama</title>
+  <title>${Bun.escapeHTML(title)} - Airin</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1.25rem; line-height: 1.5; color: #111; }
     h1 { font-size: 1.35rem; margin-bottom: 0.5rem; }
@@ -652,113 +731,14 @@ export function parseChannel(value: string | undefined): AgentChannel {
     return channel;
   }
 
-  throw new NakamaApiError(`Invalid channel. Expected ${CHANNEL_LIST}.`, 400);
+  throw new AirinApiError(`Invalid channel. Expected ${CHANNEL_LIST}.`, 400);
 }
 
-const STREAM_TIMEOUT_MS = resolveChatStreamTimeoutMs();
-
-const FIRST_TOKEN_TIMEOUT_MS = resolveChatFirstTokenTimeoutMs();
-
-function createStreamSenders(
-  sessionId: string,
-  enqueue: (chunk: Uint8Array) => void
-) {
-  let terminal: StreamEvent | null = null;
-
-  const send = (event: StreamEvent) => {
-    sessionTurnRegistry.publish(sessionId, event);
-
-    if (event.type === "done" || event.type === "error") {
-      terminal = event;
-    }
-
-    try {
-      enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`));
-    } catch {
-      // Client disconnected — keep the server turn and registry subscribers alive.
-    }
-  };
-
-  return {
-    getTerminal: () => terminal,
-    send,
-  };
-}
-
-function buildAgentStreamHandlers(send: (event: StreamEvent) => void) {
-  return {
-    onChunk: (delta: string) => send({ delta, type: "chunk" }),
-    onSubAgentActivity: (event: { parentToolCallId: string; label: string }) =>
-      send({
-        label: event.label,
-        parentToolCallId: event.parentToolCallId,
-        type: "sub_agent_activity",
-      }),
-    onThinking: (delta: string) => send({ delta, type: "thinking" }),
-    onToolEnd: (event: {
-      toolGroupId?: string;
-      toolCallId: string;
-      tool: string;
-      result: unknown;
-    }) => {
-      send({
-        result: event.result,
-        tool: event.tool,
-        toolCallId: event.toolCallId,
-        toolGroupId: event.toolGroupId,
-        type: "tool_end",
-      });
-
-      if (event.tool === "todo_write") {
-        const parsed = agentTodoResultSchema.safeParse(event.result);
-
-        if (parsed.success) {
-          send({ todos: parsed.data.todos, type: "todos_updated" });
-        }
-      }
-
-      if (event.tool === "ask_user_question") {
-        const parsed = questionnaireResultSchema.safeParse(event.result);
-
-        if (parsed.success) {
-          send({
-            questionnaire: parsed.data.questionnaire,
-            type: "questionnaire_updated",
-          });
-        }
-      }
-    },
-    onToolInputDelta: (event: {
-      toolGroupId?: string;
-      toolCallId: string;
-      tool: string;
-      delta: string;
-      accumulatedArguments?: string;
-    }) =>
-      send({
-        accumulatedArguments: event.accumulatedArguments,
-        delta: event.delta,
-        tool: event.tool,
-        toolCallId: event.toolCallId,
-        toolGroupId: event.toolGroupId,
-        type: "tool_input_delta",
-      }),
-    onToolStart: (event: {
-      toolGroupId?: string;
-      toolCallId: string;
-      tool: string;
-      input: Extract<StreamEvent, { type: "tool_start" }>["input"];
-    }) =>
-      send({
-        input: event.input,
-        tool: event.tool,
-        toolCallId: event.toolCallId,
-        toolGroupId: event.toolGroupId,
-        type: "tool_start",
-      }),
-    onUsage: (usage: ChatUsage) => send({ type: "usage", usage }),
-  };
-}
+const SSE_HEADERS = {
+  "Cache-Control": "no-cache, no-transform",
+  Connection: "keep-alive",
+  "Content-Type": "text/event-stream; charset=utf-8",
+};
 
 export function streamTurnSubscribe(sessionId: string): Response | null {
   if (!sessionTurnRegistry.isActive(sessionId)) {
@@ -802,242 +782,54 @@ export function streamTurnSubscribe(sessionId: string): Response | null {
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "Content-Type": "text/event-stream; charset=utf-8",
-    },
-  });
+  return new Response(stream, { headers: SSE_HEADERS });
 }
 
-export function streamMessage(
-  sessionId: string,
-  session: Pick<
-    AgentChatSession,
-    "getContextUsage" | "getTurnUsage" | "sendStream"
-  >,
-  input: SendMessageInput,
-  onComplete?: (terminal: StreamEvent) => void,
-  requestSignal?: AbortSignal,
-  // Only tests pass these. The resolved values clamp to 60s and 5s minimums,
-  // which are far too long to wait for in a suite.
-  timeoutMs: number = STREAM_TIMEOUT_MS,
-  firstTokenTimeoutMs: number = FIRST_TOKEN_TIMEOUT_MS,
-  whatsappMessage?: ToolContext["whatsappMessage"]
-): Response {
+/**
+ * SSE framing for a turn. Events written before `respond` wait in the stream,
+ * and cancelling the response aborts `signal`, which stops the turn.
+ */
+export function createTurnStream() {
   const encoder = new TextEncoder();
-  const keepaliveIntervalMs = 4000;
-  // The turn is cancelled either by the client going away (requestSignal, which is
-  // what Discord /stop and a closed browser tab both look like here) or by the
-  // response stream being cancelled. Both must reach the agent, otherwise the turn
-  // runs to completion and endTurn is late, which is what returned 409 to the next
-  // message in the session.
-  const turnAbort = new AbortController();
-
-  const turnSignal = requestSignal
-    ? AbortSignal.any([turnAbort.signal, requestSignal])
-    : turnAbort.signal;
+  const cancel = new AbortController();
+  // start() runs inside the constructor, so this is set before first use.
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
 
   const stream = new ReadableStream<Uint8Array>({
     cancel() {
-      turnAbort.abort();
+      cancel.abort();
     },
-    async start(controller) {
-      const { send: publish, getTerminal } = createStreamSenders(
-        sessionId,
-        (chunk) => {
-          controller.enqueue(chunk);
-        }
-      );
+    start(streamController) {
+      controller = streamController;
+    },
+  });
 
-      // Anything the provider produces clears the first-token deadline. The
-      // keepalive below deliberately does not go through here: it is the
-      // server's own ping and says nothing about whether the provider is alive.
-      let sawProviderOutput = false;
+  const enqueue = (text: string) => {
+    try {
+      controller.enqueue(encoder.encode(text));
+    } catch {
+      // The client went away. The turn keeps running for registry subscribers.
+    }
+  };
 
-      const send = (event: StreamEvent) => {
-        sawProviderOutput = true;
-        publish(event);
-      };
+  return {
+    onEvent: (event: StreamEvent) =>
+      enqueue(`data: ${JSON.stringify(event)}\n\n`),
+    respond(done: Promise<unknown>): Response {
+      const keepalive = setInterval(() => enqueue(": ping\n\n"), 4000);
 
-      const keepalive = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(": ping\n\n"));
-        } catch {
-          clearInterval(keepalive);
-        }
-      }, keepaliveIntervalMs);
-
-      const deadlines: ReturnType<typeof setTimeout>[] = [];
-      // A deadline aborts the turn, so turnSignal.aborted alone can no longer
-      // tell a cancel from a timeout. Without this the user sees "Turn
-      // cancelled." for a provider that simply went quiet.
-      let timedOut = false;
-
-      const failAfter = (ms: number, message: string, when?: () => boolean) =>
-        new Promise<never>((_, reject) => {
-          deadlines.push(
-            setTimeout(() => {
-              if (when && !when()) {
-                return;
-              }
-
-              timedOut = true;
-              reject(new NakamaApiError(message, 504));
-              // After rejecting, so the race reports the timeout and not the
-              // abort. The provider request is still open at this point and
-              // nothing else ever stops it.
-              turnAbort.abort();
-            }, ms)
-          );
-        });
-
-      try {
-        const raced: Promise<string>[] = [
-          session.sendStream(input, buildAgentStreamHandlers(send), {
-            signal: turnSignal,
-            whatsappMessage,
-          }),
-          failAfter(
-            timeoutMs,
-            `Chat timed out after ${Math.round(timeoutMs / 1000)}s waiting for the provider. Try another model or check provider settings.`
-          ),
-        ];
-
-        if (firstTokenTimeoutMs > 0) {
-          raced.push(
-            failAfter(
-              firstTokenTimeoutMs,
-              `The provider accepted the request but sent nothing for ${Math.round(firstTokenTimeoutMs / 1000)}s. Try another model or check provider settings.`,
-              () => !sawProviderOutput
-            )
-          );
-        }
-
-        const reply = await Promise.race(raced);
-
-        const contextUsage = session.getContextUsage() ?? undefined;
-        const usage = session.getTurnUsage() ?? undefined;
-
-        const doneEvent: Extract<StreamEvent, { type: "done" }> = {
-          reply,
-          type: "done",
-        };
-
-        if (contextUsage) {
-          doneEvent.contextUsage = contextUsage;
-        }
-
-        if (usage) {
-          doneEvent.usage = usage;
-        }
-
-        send(doneEvent);
-      } catch (error) {
-        const cancelled = turnSignal.aborted && !timedOut;
-
-        // The first-token timeout is a NakamaApiError 504, and it is exactly the
-        // failure an operator needs, so only a 4xx refusal is skipped.
-        if (
-          !(
-            cancelled ||
-            (error instanceof NakamaApiError && error.status < 500)
-          )
-        ) {
-          // The stream already told the user; without this the operator never hears.
-          void reportError(error, { kind: "turn", source: "server" });
-        }
-
-        // The provider charged for the calls that did land, so a failed turn
-        // still reports them rather than billing silently. Wrapped because a
-        // throw here would replace the real failure with a blank one.
-        let spent: ChatTurnUsage | undefined;
-
-        try {
-          spent = session.getTurnUsage() ?? undefined;
-        } catch {
-          spent = undefined;
-        }
-
-        const errorEvent: Extract<StreamEvent, { type: "error" }> = {
-          error: cancelled ? "Turn cancelled." : formatServerError(error),
-          type: "error",
-        };
-
-        if (spent) {
-          errorEvent.usage = spent;
-        }
-
-        send(errorEvent);
-      } finally {
-        // Every turn scheduled these. Left pending, a long-running server
-        // accumulates live timers per turn for the whole timeout window.
-        for (const handle of deadlines) {
-          clearTimeout(handle);
-        }
-
+      void done.finally(() => {
         clearInterval(keepalive);
-
-        const observedTerminal = getTerminal();
-
-        if (!observedTerminal) {
-          console.warn(
-            `Session ${sessionId}: Stream closed before the agent finished.`
-          );
-        }
-
-        const terminal =
-          observedTerminal ??
-          ({
-            error: "Stream closed before the agent finished.",
-            type: "error",
-          } satisfies StreamEvent);
-
-        sessionTurnRegistry.endTurn(sessionId, terminal);
 
         try {
           controller.close();
         } catch {
           // Already closed by the client cancelling the stream.
         }
+      });
 
-        onComplete?.(terminal);
-      }
+      return new Response(stream, { headers: SSE_HEADERS });
     },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "Content-Type": "text/event-stream; charset=utf-8",
-    },
-  });
+    signal: cancel.signal,
+  };
 }
-
-const agentTodoResultSchema = z.object({
-  todos: z.array(
-    z.object({
-      content: z.string(),
-      id: z.string(),
-      status: z.enum(["pending", "in_progress", "completed", "cancelled"]),
-    })
-  ),
-});
-
-const questionnaireResultSchema = z.object({
-  questionnaire: z.object({
-    id: z.string(),
-    questions: z.array(
-      z.object({
-        allowCustomAnswer: z.boolean(),
-        choices: z.array(z.object({ id: z.string(), label: z.string() })),
-        id: z.string(),
-        placeholder: z.string().optional(),
-        prompt: z.string(),
-      })
-    ),
-    title: z.string(),
-  }),
-});

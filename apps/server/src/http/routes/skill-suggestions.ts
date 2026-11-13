@@ -1,9 +1,9 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type {
   ApplySkillSuggestionResponse,
   ListSkillSuggestionsResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   type SkillSuggestionService,
   toSkillSuggestion,
@@ -44,7 +44,7 @@ export function registerSkillSuggestionRoutes(
     const orgId = decodeURIComponent(c.req.param("orgId"));
 
     if (authOrgId !== orgId) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     return orgId;
@@ -52,7 +52,7 @@ export function registerSkillSuggestionRoutes(
 
   function requireService(): SkillSuggestionService {
     if (!skillSuggestionService) {
-      throw new NakamaApiError("Skill suggestion service not configured", 500);
+      throw new AirinApiError("Skill suggestion service not configured", 500);
     }
 
     return skillSuggestionService;

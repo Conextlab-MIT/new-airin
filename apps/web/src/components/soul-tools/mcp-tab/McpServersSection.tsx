@@ -1,9 +1,9 @@
-import type { McpServerSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { Spinner } from "@nakama/ui/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+import type { McpServerSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { Spinner } from "@airin/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import {
   Add01Icon,
   ArrowRight01Icon,
@@ -182,8 +182,7 @@ export function McpServersSection({
     >
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0 flex-1">
-          <h2 className="font-normal text-sm">MCP servers</h2>
-          <p className="type-body mt-1 text-xs">
+          <p className="type-body text-muted-foreground text-xs">
             {servers.length === 0
               ? "No MCP servers registered yet"
               : `${servers.length} registered`}
@@ -191,7 +190,7 @@ export function McpServersSection({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <Button onClick={onAddServer} size="sm" type="button">
+          <Button onClick={onAddServer} type="button">
             <Add01Icon aria-hidden className="size-4" />
             Add server
           </Button>

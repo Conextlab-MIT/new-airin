@@ -2,23 +2,26 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ToolDefinition } from "@nakama/core";
-import { emailTool } from "@nakama/core/tools/email";
+import type { ToolDefinition } from "@airin/core";
+import { emailTool } from "@airin/core/tools/email";
 import {
+  BROWSER_TOOL_IDS,
   LIST_PROFILE_SESSIONS_TOOL_ID,
   READ_PROFILE_SESSION_TOOL_ID,
   SUB_AGENT_TOOL_ID,
-} from "@nakama/core/tools/protected";
-import { saveWebSearchConfig } from "@nakama/core/web-search-config";
+} from "@airin/core/tools/protected";
+import { saveWebSearchConfig } from "@airin/core/web-search-config";
 import {
   createInMemoryDatabaseAdapter,
   type StoredToolRecord,
-} from "@nakama/db";
+} from "@airin/db";
+import { createBrowserTools } from "../tools/browser-tools";
 import { createSessionTools } from "../tools/session-tools";
 import { createSubAgentTool } from "../tools/sub-agent-tool";
 import { AgentService } from "./agent-service";
 import {
   omitUnavailableBuiltinTools,
+  omitUnavailableToolDetails,
   resolveProfileStoredTools,
   resolveToolsFromStorage,
 } from "./tool-resolver";
@@ -53,11 +56,31 @@ describe("omitUnavailableBuiltinTools", () => {
     const tools = [webSearchTool, emailTool];
 
     expect(
-      omitUnavailableBuiltinTools(tools, false).map((tool) => tool.name)
+      omitUnavailableBuiltinTools(tools, {
+        cloudBrowser: true,
+        email: false,
+      }).map((tool) => tool.name)
     ).toEqual(["web_search"]);
     expect(
-      omitUnavailableBuiltinTools(tools, true).map((tool) => tool.name)
+      omitUnavailableBuiltinTools(tools, {
+        cloudBrowser: true,
+        email: true,
+      }).map((tool) => tool.name)
     ).toEqual(["web_search", "email"]);
+  });
+
+  test("drops the browser tools when Kernel is not set up", () => {
+    const tools = [webSearchTool, ...createBrowserTools()];
+
+    expect(
+      omitUnavailableBuiltinTools(tools, {
+        cloudBrowser: false,
+        email: true,
+      }).map((tool) => tool.name)
+    ).toEqual(["web_search"]);
+    expect(
+      omitUnavailableBuiltinTools(tools, { cloudBrowser: true, email: true })
+    ).toHaveLength(tools.length);
   });
 });
 
@@ -85,6 +108,84 @@ describe("resolveToolsFromStorage sub_agent", () => {
     });
 
     expect(tools.map((tool) => tool.name)).toContain("sub_agent");
+  });
+});
+
+describe("omitUnavailableToolDetails", () => {
+  const original = {
+    configDir: process.env.AIRIN_CONFIG_DIR,
+    key: process.env.KERNEL_API_KEY,
+    provider: process.env.AIRIN_BROWSER_PROVIDER,
+  };
+
+  let configDir = "";
+
+  afterEach(async () => {
+    await rm(configDir, { force: true, recursive: true });
+
+    for (const [name, value] of [
+      ["AIRIN_CONFIG_DIR", original.configDir],
+      ["KERNEL_API_KEY", original.key],
+      ["AIRIN_BROWSER_PROVIDER", original.provider],
+    ] as const) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  });
+
+  const detail = (name: string, handlerType: string) => ({
+    createdAt: "",
+    description: "",
+    handlerConfig: {},
+    handlerType,
+    id: `tool_${name}`,
+    name,
+    updatedAt: "",
+  });
+
+  test("lists the browser tools only when Kernel is set up", async () => {
+    const response = {
+      tools: [detail("bash", "bash"), detail("browser_read", "browser")],
+    };
+
+    configDir = await mkdtemp(join(tmpdir(), "airin-tool-details-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    delete process.env.AIRIN_BROWSER_PROVIDER;
+    delete process.env.KERNEL_API_KEY;
+
+    const hidden = await omitUnavailableToolDetails(response);
+
+    process.env.AIRIN_BROWSER_PROVIDER = "kernel";
+    process.env.KERNEL_API_KEY = "kernel-key";
+
+    const shown = await omitUnavailableToolDetails(response);
+
+    expect(hidden.tools.map((tool) => tool.name)).toEqual(["bash"]);
+    expect(shown.tools.map((tool) => tool.name)).toEqual([
+      "bash",
+      "browser_read",
+    ]);
+  });
+});
+
+describe("resolveToolsFromStorage browser", () => {
+  test("resolves every seeded browser tool with no server overrides", async () => {
+    const db = createInMemoryDatabaseAdapter();
+
+    for (const [name, id] of Object.entries(BROWSER_TOOL_IDS)) {
+      await upsertTool(db, { handlerType: "browser", id, name });
+    }
+
+    const names = (
+      await resolveToolsFromStorage(await db.listTools(), db, [], {})
+    ).map((tool) => tool.name);
+
+    expect(names).toEqual(
+      expect.arrayContaining(Object.keys(BROWSER_TOOL_IDS))
+    );
   });
 });
 
@@ -149,12 +250,13 @@ describe("resolveProfileStoredTools web_search", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
+    delete process.env.EXA_API_KEY;
   });
 
   async function useTempConfigDir(): Promise<void> {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-web-search-resolver-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-web-search-resolver-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   }
 
   test("keeps the provider-hosted stub when no back-end is configured", async () => {
@@ -177,7 +279,8 @@ describe("resolveProfileStoredTools web_search", () => {
 
   test("swaps in a locally executed tool once a back-end is configured", async () => {
     await useTempConfigDir();
-    await saveWebSearchConfig({ apiKey: "exa-key", provider: "exa" });
+    process.env.EXA_API_KEY = "exa-key";
+    await saveWebSearchConfig({ provider: "exa" });
     const db = createInMemoryDatabaseAdapter();
     await upsertTool(db, {
       handlerType: "builtin",

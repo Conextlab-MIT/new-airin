@@ -1,6 +1,6 @@
-import type { CachedMcpToolSummary } from "@nakama/core/contract";
-import { Input } from "@nakama/ui/input";
-import { cn } from "@nakama/ui/utils";
+import type { CachedMcpToolSummary } from "@airin/core/contract";
+import { Input } from "@airin/ui/input";
+import { cn } from "@airin/ui/utils";
 import { ArrowRight01Icon, Search01Icon } from "hugeicons-react";
 import { useMemo, useState } from "react";
 import { parseMcpToolParameters } from "@/lib/mcp-tool-schema";

@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import {
   chmod,
   mkdir,
@@ -267,11 +267,10 @@ async function runWorker(directory: string, pluginDataDir: string) {
       apiKey: automatic.apiKey,
       baseUrl: automatic.baseUrl?.trim() || "https://api.openai.com/v1",
       model: automatic.model,
-      revision: createHash("sha256")
+      revision: createHmac("sha256", automatic.apiKey)
         .update(
           JSON.stringify([
             "openai-parameters-v1",
-            automatic.apiKey,
             automatic.baseUrl,
             automatic.model,
           ])
@@ -419,11 +418,11 @@ async function runWorker(directory: string, pluginDataDir: string) {
 }
 
 if (import.meta.main) {
-  const directory = process.env.NAKAMA_WORKER_DATA_DIR;
-  const pluginDataDir = process.env.NAKAMA_PLUGIN_DATA_DIR;
+  const directory = process.env.AIRIN_WORKER_DATA_DIR;
+  const pluginDataDir = process.env.AIRIN_PLUGIN_DATA_DIR;
 
   if (!(directory && pluginDataDir)) {
-    throw new Error("Run this worker through Nakama");
+    throw new Error("Run this worker through Airin");
   }
 
   await runWorker(directory, pluginDataDir);

@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type {
   ChatCompletionResult,
+  ChatMessage,
   GenerateChatInput,
   ProviderClient,
   ToolCall,
   ToolContext,
   ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
+import { AirinApiError, ProviderStreamInterruptedError } from "@airin/core";
 import { createAgentChatSession } from "./index";
 
 function createCountingProvider(responses: ChatCompletionResult[]) {
@@ -202,5 +204,142 @@ describe("agent chat cancellation", () => {
     // Without this the provider request outlives the cancel and the session
     // stays locked until the model finishes on its own.
     expect(providerSignal).toBe(controller.signal);
+  });
+});
+
+describe("agent chat stream interruption", () => {
+  function breakingProvider(
+    breaks: number,
+    failure: () => Error = () => new ProviderStreamInterruptedError("broke")
+  ) {
+    let calls = 0;
+
+    const provider: ProviderClient = {
+      generateChat: () => Promise.reject(new Error("stream only")),
+      generateText: () => Promise.resolve({ content: "{}" }),
+      name: "netra",
+      streamChat(_input, handlers) {
+        calls += 1;
+
+        if (calls <= breaks) {
+          handlers.onChunk("Part");
+          handlers.onToolInputDelta?.({
+            delta: "{",
+            tool: "save",
+            toolCallId: `c${calls}`,
+          });
+
+          return Promise.reject(failure());
+        }
+
+        handlers.onChunk(" Final");
+
+        return Promise.resolve({
+          assistantMessage: { content: " Final", role: "assistant" },
+          content: " Final",
+          toolCalls: [],
+        });
+      },
+    };
+
+    return { calls: () => calls, provider };
+  }
+
+  test("retries once and keeps the partial reply", async () => {
+    const { calls, provider } = breakingProvider(1);
+    const ended: string[] = [];
+    const session = createAgentChatSession({ provider }, {});
+
+    const reply = await session.sendStream("go", {
+      onChunk() {},
+      onToolEnd: (event) => ended.push(event.toolCallId),
+    });
+
+    expect(reply.trim()).toBe("Final");
+    expect(calls()).toBe(2);
+    expect(ended).toEqual(["c1"]);
+    expect(
+      session
+        .getHistory()
+        .filter((message) => message.role === "assistant")
+        .map((message) => message.content)
+    ).toEqual(["Part", " Final"]);
+  });
+
+  test("a provider failure after output keeps the partial reply instead of a fresh retry", async () => {
+    // A step can send more than one request (Anthropic pause_turn), so a
+    // later request can fail after the first one streamed text.
+    const { calls, provider } = breakingProvider(
+      1,
+      () => new AirinApiError("Anthropic request failed (529): Overloaded", 502)
+    );
+
+    const ended: string[] = [];
+    const session = createAgentChatSession({ provider }, {});
+
+    const reply = await session.sendStream("go", {
+      onChunk() {},
+      onToolEnd: (event) => ended.push(event.toolCallId),
+    });
+
+    expect(reply.trim()).toBe("Final");
+    expect(calls()).toBe(2);
+    expect(ended).toEqual(["c1"]);
+    expect(
+      session
+        .getHistory()
+        .filter((message) => message.role === "assistant")
+        .map((message) => message.content)
+    ).toEqual(["Part", " Final"]);
+  });
+
+  test("drops a thinking-only partial reply before the retry", async () => {
+    const histories: ChatMessage[][] = [];
+    let calls = 0;
+
+    const provider: ProviderClient = {
+      generateChat: () => Promise.reject(new Error("stream only")),
+      generateText: () => Promise.resolve({ content: "{}" }),
+      name: "deepseek",
+      streamChat(input, handlers) {
+        calls += 1;
+        histories.push([...input.messages]);
+
+        if (calls === 1) {
+          handlers.onThinking?.("Planning the deck");
+
+          return Promise.reject(new ProviderStreamInterruptedError("broke"));
+        }
+
+        handlers.onChunk("Done");
+
+        return Promise.resolve({
+          assistantMessage: { content: "Done", role: "assistant" },
+          content: "Done",
+          toolCalls: [],
+        });
+      },
+    };
+
+    const session = createAgentChatSession({ provider }, {});
+    const reply = await session.sendStream("go", { onChunk() {} });
+
+    expect(reply.trim()).toBe("Done");
+    expect(calls).toBe(2);
+    expect(
+      histories[1]?.filter(
+        (message) => message.role === "assistant" && !message.content
+      )
+    ).toEqual([]);
+  });
+
+  test("fails the turn when the stream breaks again", async () => {
+    const { calls, provider } = breakingProvider(2);
+    const session = createAgentChatSession({ provider }, {});
+
+    await expect(
+      session.sendStream("go", { onChunk() {} })
+    ).rejects.toBeInstanceOf(ProviderStreamInterruptedError);
+    expect(calls()).toBe(2);
   });
 });

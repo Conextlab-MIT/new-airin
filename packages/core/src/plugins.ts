@@ -7,7 +7,7 @@ export const PLUGIN_MANIFEST_API_VERSION = 1;
 
 export const PLUGIN_TOOL_NAME_MAX_LENGTH = 64;
 
-export const PLUGIN_MANIFEST_FILENAME = "nakama.plugin.json";
+export const PLUGIN_MANIFEST_FILENAME = "airin.plugin.json";
 
 const PLUGIN_PACKAGES_DIR_NAME = "plugins";
 
@@ -159,7 +159,7 @@ export interface PluginManifest {
   icon?: string;
   id: string;
   license: string;
-  minNakamaVersion: string;
+  minAirinVersion: string;
   name: string;
   skills: PluginSkillContribution[];
   ui?: PluginUiContribution;
@@ -234,8 +234,8 @@ export function validatePluginManifest(
     !(
       isNonEmptyString(value.version) &&
       SEMVER.test(value.version) &&
-      isNonEmptyString(value.minNakamaVersion) &&
-      SEMVER.test(value.minNakamaVersion)
+      isNonEmptyString(value.minAirinVersion) &&
+      SEMVER.test(value.minAirinVersion)
     )
   ) {
     return fail("invalid_version");
@@ -292,7 +292,7 @@ export function validatePluginManifest(
     description: value.description,
     id: value.id,
     license: value.license,
-    minNakamaVersion: value.minNakamaVersion,
+    minAirinVersion: value.minAirinVersion,
     name: value.name,
     skills: skillsResult.skills,
     version: value.version,

@@ -6,14 +6,14 @@ import {
   flushPendingErrorReports,
   installErrorHandlers,
   installErrorTrackingSink,
-} from "@nakama/core";
-import type { Server } from "bun";
+} from "@airin/core";
+import type { Server, WebSocketHandler } from "bun";
 import { ensureProcessPath } from "./lib/ensure-process-path";
 import { createPluginAgentHost } from "./services/plugin-agent-host";
 
 ensureProcessPath();
 
-if (process.env.NAKAMA_DESKTOP === "1") {
+if (process.env.AIRIN_DESKTOP === "1") {
   if (!process.connected) {
     process.exit(0);
   }
@@ -23,7 +23,7 @@ if (process.env.NAKAMA_DESKTOP === "1") {
 }
 
 // Position is cosmetic: ESM evaluates every import above before this line runs, so a throw
-// inside @nakama/db or @nakama/agent module init is already past. Everything after is covered.
+// inside @airin/db or @airin/agent module init is already past. Everything after is covered.
 installErrorHandlers("server");
 
 /**
@@ -35,8 +35,9 @@ installErrorHandlers("server");
  */
 void installErrorTrackingSink().then(() => flushPendingErrorReports());
 
-import { generateSkillConsolidateMarkdown } from "@nakama/agent";
+import { generateSkillConsolidateMarkdown } from "@airin/agent";
 import {
+  AIRIN_API_VERSION,
   clearRuntimeServerUrl,
   DEFAULT_SERVER_HOST,
   DEFAULT_SERVER_PORT,
@@ -44,16 +45,18 @@ import {
   getActiveProviderInstance,
   getUserConfigDir,
   loadConfig,
-  NAKAMA_API_VERSION,
+  setManagedSecretResolver,
+  setManagedSecretWriter,
   writeRuntimeServerUrl,
-} from "@nakama/core";
+} from "@airin/core";
+import { migrateChannelBotTokens } from "@airin/core/channel-config-shared";
 import {
   createDatabase,
   type Database,
   ensureBundledSkillsAssigned,
   resolveDatabasePath,
   seedDatabase,
-} from "@nakama/db";
+} from "@airin/db";
 import { createHonoApp, MAX_HTTP_REQUEST_BODY_LIMIT_BYTES } from "./http/app";
 import {
   disableBunIdleTimeoutForLongHeldRequest,
@@ -62,6 +65,7 @@ import {
 import { createProviderForInstance } from "./providers/create";
 import { runFirstBootSeed } from "./seed";
 import { AgentService } from "./services/agent-service";
+import { resolveTranscriptionProviderSelection } from "./services/audio-transcription";
 import { AuthService } from "./services/auth-service";
 import { AutomationDeliveryService } from "./services/automation-delivery-service";
 import { AutomationRunner } from "./services/automation-runner";
@@ -69,15 +73,28 @@ import { AutomationService } from "./services/automation-service";
 import { resolveComposioCallbackBaseUrl } from "./services/composio-callback-url";
 import { ComposioService } from "./services/composio-service";
 import { claimLegacyCustomTools } from "./services/custom-tool-handlers";
-import { retireAppUserData } from "./services/data-portability";
-import { GoogleMeetService } from "./services/google-meet/service";
+import { setToolSecrets } from "./services/custom-tool-shared";
+import {
+  cleanupDataPortabilityTempDirs,
+  createAirinDataExportFile,
+  getDataImportLimits,
+  retireAppUserData,
+} from "./services/data-portability";
+import { openaiProviderKey } from "./services/google-meet/actions";
+import {
+  type CaptureSocketData,
+  GoogleMeetService,
+} from "./services/google-meet/service";
 import { LlmUsageTracker } from "./services/llm-usage-tracker";
+import { decodeSecretsKey, ManagedSecrets } from "./services/managed-secrets";
 import { McpClientManager } from "./services/mcp-client-manager";
 import {
   createMcpAwareEmailOutboundAdapter,
   hasAutomationEmailDeliveryPath,
 } from "./services/mcp-email-delivery";
+import { installMcpSecretStore } from "./services/mcp-secret-store";
 import { McpService } from "./services/mcp-service";
+import { cleanupInterruptedMeetImports } from "./services/meet-recording-import";
 import { OrgMemoryService } from "./services/org-memory-service";
 import { OrgService } from "./services/org-service";
 import {
@@ -88,6 +105,10 @@ import {
   resolveDefaultModelForInstance,
   resolveProfileProviderSelection,
 } from "./services/provider-instance-helpers";
+import {
+  assertBackupDirOutsideRoot,
+  startScheduledBackups,
+} from "./services/scheduled-backup";
 import { SkillCuratorService } from "./services/skill-curator-service";
 import { SkillProposalService } from "./services/skill-proposal-service";
 import { SkillSuggestionService } from "./services/skill-suggestion-service";
@@ -100,7 +121,10 @@ import {
   createAutomationRunHistoryTools,
   createAutomationTools,
 } from "./tools/automation-tools";
+import { isTenantBashEnabled } from "./tools/bash-config";
 import { createGenerateImageTool } from "./tools/generate-image-tool";
+import { createSaveArtifactTool } from "./tools/save-artifact-tool";
+import { createSendToBotTool } from "./tools/send-to-bot-tool";
 import { createSessionTools } from "./tools/session-tools";
 import { createSubAgentTool } from "./tools/sub-agent-tool";
 
@@ -108,17 +132,17 @@ const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 let workerRecovery: Promise<void> = Promise.resolve();
 
-const host = process.env.NAKAMA_HOST ?? DEFAULT_SERVER_HOST;
+const host = process.env.AIRIN_HOST ?? DEFAULT_SERVER_HOST;
 
-const requestedPort = parsePort(process.env.NAKAMA_PORT);
+const requestedPort = parsePort(process.env.AIRIN_PORT);
 
-const canFallbackToNextPort = process.env.NAKAMA_PORT == null;
+const canFallbackToNextPort = process.env.AIRIN_PORT == null;
 
-const existingServerUrl = await findRunningNakamaServerUrl(host, requestedPort);
+const existingServerUrl = await findRunningAirinServerUrl(host, requestedPort);
 
 if (existingServerUrl) {
   const runtimeServerUrl = writeRuntimeServerUrl(existingServerUrl);
-  console.log(`Nakama server already running on ${runtimeServerUrl}`);
+  console.log(`Airin server already running on ${runtimeServerUrl}`);
   console.log(
     "Stop it before restarting to pick up code changes (for example: kill $(lsof -ti :4310))."
   );
@@ -126,17 +150,29 @@ if (existingServerUrl) {
   process.exit(0);
 }
 
-const { provider, userConfig } = await ensureProviderConfigured();
-
 const config = loadConfig();
 
 const database = await createDatabase(config.databaseUrl, {
   baseDir: getUserConfigDir(),
 });
 
+if (process.env.AIRIN_CHECK_SECRETS_KEY === "1") {
+  await new ManagedSecrets(database.adapter).checkIntegrity();
+  database.release();
+  process.exit(0);
+}
+
 const MAX_AUTOMATION_RUN_RESUMES = 2;
 
-await seedDatabase(database.adapter);
+await seedDatabase(database.adapter, { grantBash: isTenantBashEnabled() });
+
+await cleanupInterruptedMeetImports();
+
+try {
+  await cleanupDataPortabilityTempDirs(getUserConfigDir());
+} catch (error) {
+  console.warn("Could not remove stale data portability temp dirs:", error);
+}
 
 await claimLegacyCustomTools(database.adapter);
 
@@ -144,6 +180,52 @@ await retireAppUserData(
   getUserConfigDir(),
   resolveDatabasePath(config.databaseUrl, { baseDir: getUserConfigDir() })
 );
+
+let managedSecrets: ManagedSecrets;
+
+try {
+  managedSecrets = new ManagedSecrets(database.adapter);
+  await managedSecrets.migrateLegacyFiles();
+
+  if (process.env.AIRIN_SECRETS_KEY) {
+    setManagedSecretWriter(managedSecrets);
+  }
+} catch (error) {
+  // Saved keys stay in config.ini until the migration succeeds, so print the
+  // fix instead of a stack trace and let the operator restart.
+  console.error(
+    `Airin cannot start: ${error instanceof Error ? error.message : String(error)}`
+  );
+
+  if (!process.env.AIRIN_SECRETS_KEY) {
+    console.error(
+      "Create a key with `openssl rand -base64 32`, set it as AIRIN_SECRETS_KEY, and keep it with your backups."
+    );
+  }
+
+  database.release();
+  process.exit(1);
+}
+
+if (process.env.AIRIN_SECRETS_KEY_NEXT) {
+  await managedSecrets.rotateKey(process.env.AIRIN_SECRETS_KEY_NEXT);
+  database.release();
+  process.stdout.write(
+    "Airin secrets key rotation complete. Start with the new AIRIN_SECRETS_KEY.\n"
+  );
+  process.exit(0);
+}
+
+setToolSecrets(managedSecrets);
+
+await installMcpSecretStore(database.adapter, managedSecrets);
+
+setManagedSecretResolver(
+  async (scope, name, envNames) =>
+    (await managedSecrets.resolve(scope, name, envNames)).value
+);
+
+const { provider, userConfig } = await ensureProviderConfigured(managedSecrets);
 
 // Runs are only completed by the process that started them, so a crash or a
 // kill leaves rows claiming work nothing is doing. Settle them before serving.
@@ -175,13 +257,23 @@ const agent = new AgentService(
   userConfig,
   provider,
   database.adapter,
-  llmUsageTracker
+  llmUsageTracker,
+  managedSecrets
 );
+
+const composioService = new ComposioService(database.adapter, authService);
 
 const googleMeetService = new GoogleMeetService(
   database.adapter,
   getUserConfigDir(),
-  (request, signal) => agent.transcribeAudio(request, signal)
+  (request, signal) => agent.transcribeAudio(request, signal),
+  () => openaiProviderKey(agent.getUserConfig()),
+  composioService,
+  async () => {
+    await agent.ensureTranscriptionSettingsLoaded();
+
+    return resolveTranscriptionProviderSelection(agent.getUserConfig());
+  }
 );
 
 agent.setServerTools({
@@ -189,6 +281,8 @@ agent.setServerTools({
     db: database.adapter,
     ensureSettingsLoaded: () => agent.ensureImageGenerationSettingsLoaded(),
     getUserConfig: () => agent.getUserConfig(),
+    onChatgptTokenRefresh: (instanceId, oauth) =>
+      agent.persistChatgptOAuth(instanceId, oauth),
     recordUsage: (
       modelId,
       inputTokens,
@@ -203,6 +297,8 @@ agent.setServerTools({
     },
   }),
   googleMeet: googleMeetService.tools(),
+  saveArtifact: createSaveArtifactTool({ db: database.adapter }),
+  sendToBot: createSendToBotTool(agent),
   session: createSessionTools(agent),
   subAgent: createSubAgentTool(agent),
 });
@@ -227,8 +323,6 @@ const mcpClientManager = new McpClientManager();
 
 const mcpService = new McpService(database.adapter, mcpClientManager);
 
-const composioService = new ComposioService(database.adapter, authService);
-
 const skillsService = new SkillsService(database.adapter);
 
 agent.setMcpClientManager(mcpClientManager);
@@ -243,6 +337,7 @@ const automationService = new AutomationService(database.adapter, {
   canSendEmail: (profileId, _orgId) =>
     hasAutomationEmailDeliveryPath(database.adapter, profileId),
   getUserTimezone: () => agent.getUserTimezone(),
+  secrets: managedSecrets,
 });
 
 const automationDeliveryService = new AutomationDeliveryService(
@@ -366,11 +461,35 @@ orgService.beforeArchiveChannels = async (orgId) => {
 
 const pluginService = new PluginService(database.adapter, getUserConfigDir(), {
   officialPackagesDir: join(projectRoot, "packages/plugins"),
-  onHostRequest: createPluginAgentHost(database.adapter, agent),
+  onHostRequest: createPluginAgentHost(
+    database.adapter,
+    agent,
+    composioService
+  ),
   workerManager,
 });
 
 await googleMeetService.initialize();
+
+const backupDir = process.env.AIRIN_BACKUP_DIR?.trim();
+
+if (backupDir) {
+  try {
+    assertBackupDirOutsideRoot(backupDir, getUserConfigDir());
+    await startScheduledBackups({
+      dir: backupDir,
+      exportFile: async () =>
+        await googleMeetService.withSnapshot(() => createAirinDataExportFile()),
+      key: decodeSecretsKey(process.env.AIRIN_SECRETS_KEY ?? ""),
+    });
+  } catch (error) {
+    console.error(
+      `Airin cannot start backups: ${error instanceof Error ? error.message : String(error)}`
+    );
+    database.release();
+    process.exit(1);
+  }
+}
 
 try {
   await pluginService.recoverInterruptedPluginOperations();
@@ -480,6 +599,7 @@ const app = createHonoApp({
     await database.reopen();
     await agent.reloadAfterDataRestore();
     await googleMeetService.reopen();
+    await migrateChannelBotTokens();
     await workerManager.recoverDesiredWorkers();
   },
   orgMemoryService,
@@ -496,10 +616,11 @@ const app = createHonoApp({
 const server = startServer({
   canFallbackToNextPort,
   // The limiter needs the peer address, and Bun only exposes it on `server`.
-  fetch: (request: Request, server: Server<unknown>) =>
+  fetch: (request: Request, server: Server<CaptureSocketData>) =>
     app.fetch(request, { server }),
   host,
   preferredPort: requestedPort,
+  websocket: googleMeetService.captureSocket,
 });
 
 const serverUrl = writeRuntimeServerUrl(
@@ -515,7 +636,7 @@ const shutdownRuntime = registerRuntimeCleanup(
 );
 
 // Stop before recovering workers if Electron disappeared during initialization.
-if (process.env.NAKAMA_DESKTOP === "1" && !process.connected) {
+if (process.env.AIRIN_DESKTOP === "1" && !process.connected) {
   await shutdownRuntime();
 }
 
@@ -523,9 +644,9 @@ if (server.port !== requestedPort) {
   console.log(`Port ${requestedPort} is busy. Using ${server.port} instead.`);
 }
 
-console.log(`Nakama server listening on ${serverUrl}`);
+console.log(`Airin server listening on ${serverUrl}`);
 
-console.log(`Nakama database ready at ${config.databaseUrl}`);
+console.log(`Airin database ready at ${config.databaseUrl}`);
 
 void initializeOptionalServices({
   agent,
@@ -537,6 +658,8 @@ void initializeOptionalServices({
 try {
   workerRecovery = (async () => {
     await workerManager.recoverDesiredWorkers();
+    // After recovery restarted workers that read the token only from config.ini.
+    await migrateChannelBotTokens();
     await pluginService.recoverPluginWorkers();
   })();
   await workerRecovery;
@@ -545,7 +668,7 @@ try {
 }
 
 if (webDistDir) {
-  console.log(`Nakama web dashboard ready at ${serverUrl}`);
+  console.log(`Airin web dashboard ready at ${serverUrl}`);
 }
 
 const humanUserCount = await database.adapter.countHumanUsers();
@@ -556,8 +679,8 @@ if (humanUserCount > 0 && !agent.providerConfigured) {
   );
 }
 
-if (process.env.NAKAMA_DESKTOP === "1") {
-  process.send?.({ type: "nakama-ready", url: serverUrl });
+if (process.env.AIRIN_DESKTOP === "1") {
+  process.send?.({ type: "airin-ready", url: serverUrl });
 }
 
 function parsePort(value: string | undefined): number {
@@ -568,7 +691,7 @@ function parsePort(value: string | undefined): number {
   const port = Number(value);
 
   if (!Number.isInteger(port) || port < 0 || port > 65_535) {
-    throw new Error(`Invalid NAKAMA_PORT: ${value}`);
+    throw new Error(`Invalid AIRIN_PORT: ${value}`);
   }
 
   return port;
@@ -615,9 +738,11 @@ function startServer(options: {
   canFallbackToNextPort: boolean;
   fetch: (
     request: Request,
-    server: Server<unknown>
+    server: Server<CaptureSocketData>
   ) => Response | Promise<Response>;
-}): ReturnType<typeof Bun.serve> {
+  /** The only socket today is Meet capture, upgraded at `GET /v1/meet/capture`. */
+  websocket: WebSocketHandler<CaptureSocketData>;
+}): Server<CaptureSocketData> {
   const lastPort = options.canFallbackToNextPort
     ? Math.min(options.preferredPort + 2000, 65_535)
     : options.preferredPort;
@@ -626,8 +751,8 @@ function startServer(options: {
 
   for (let port = options.preferredPort; port <= lastPort; port += 1) {
     try {
-      return Bun.serve({
-        async fetch(request, server: Server<unknown>) {
+      return Bun.serve<CaptureSocketData>({
+        async fetch(request, server) {
           disableBunIdleTimeoutForLongHeldRequest(request, server);
           const response = await options.fetch(request, server);
           disableBunIdleTimeoutForSse(request, response, server);
@@ -636,8 +761,12 @@ function startServer(options: {
         },
         hostname: options.host,
         idleTimeout: 255,
-        maxRequestBodySize: MAX_HTTP_REQUEST_BODY_LIMIT_BYTES,
+        maxRequestBodySize: Math.max(
+          MAX_HTTP_REQUEST_BODY_LIMIT_BYTES,
+          getDataImportLimits().archiveBytes + 64 * 1024 * 1024
+        ),
         port,
+        websocket: options.websocket,
       });
     } catch (error) {
       if (
@@ -655,7 +784,7 @@ function startServer(options: {
   }
 
   throw (
-    lastError ?? new Error("Failed to find an open port for the Nakama server.")
+    lastError ?? new Error("Failed to find an open port for the Airin server.")
   );
 }
 
@@ -703,7 +832,7 @@ function killLeftoverPm2Daemon(pidPath: string): void {
 }
 
 function registerRuntimeCleanup(
-  server: ReturnType<typeof Bun.serve>,
+  server: Server<CaptureSocketData>,
   serverUrl: string,
   database: Database,
   mcpClientManager: McpClientManager,
@@ -735,14 +864,14 @@ function registerRuntimeCleanup(
     stopping = true;
     await googleMeetService.close();
 
-    if (process.env.NAKAMA_DESKTOP === "1") {
+    if (process.env.AIRIN_DESKTOP === "1") {
       // A quit during startup must not race workers being recreated after shutdown.
       await workerRecovery.catch(() => {});
     }
 
     // Desktop owns a private PM2 home; never stop a normal server's daemon.
     if (
-      process.env.NAKAMA_DESKTOP === "1" &&
+      process.env.AIRIN_DESKTOP === "1" &&
       process.env.PM2_HOME &&
       existsSync(join(process.env.PM2_HOME, "pm2.pid"))
     ) {
@@ -776,7 +905,7 @@ function registerRuntimeCleanup(
       }
     }
 
-    if (process.env.NAKAMA_DESKTOP === "1") {
+    if (process.env.AIRIN_DESKTOP === "1") {
       await Promise.race([
         Promise.allSettled([
           shutdownPluginRuntime(1500),
@@ -800,7 +929,7 @@ function registerRuntimeCleanup(
   return shutdown;
 }
 
-async function findRunningNakamaServerUrl(
+async function findRunningAirinServerUrl(
   host: string,
   port: number
 ): Promise<string | null> {
@@ -823,7 +952,7 @@ async function findRunningNakamaServerUrl(
       apiVersion?: number;
     };
 
-    return payload.ok === true && payload.apiVersion === NAKAMA_API_VERSION
+    return payload.ok === true && payload.apiVersion === AIRIN_API_VERSION
       ? serverUrl
       : null;
   } catch {

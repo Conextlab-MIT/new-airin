@@ -1,6 +1,6 @@
-import type { KnowledgeBaseDocument } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
+import type { KnowledgeBaseDocument } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
 import { ViewIcon } from "hugeicons-react";
 import { useEffect, useState } from "react";
 import { ArtifactAttachmentPanelActions } from "@/components/chat/artifact-attachment-panel-actions";

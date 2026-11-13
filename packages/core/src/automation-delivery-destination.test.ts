@@ -2,12 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import { validateAutomationDelivery } from "./automation-delivery";
-import {
-  canApproveAutomationDeliveryDestination,
-  isTelegramDeliveryChatAuthorized,
-} from "./automation-delivery-destination";
+import { canApproveAutomationDeliveryDestination } from "./automation-delivery-destination";
 import { asTestFetch } from "./channel-test-helpers";
 import type { JsonValue } from "./contract";
 import { getDiscordConfigDir, getDiscordConfigPath } from "./discord-config";
@@ -19,7 +16,7 @@ const member = { ...owner, access: { orgRole: "member" as const } };
 
 const orgAdmin = { ...owner, access: { orgRole: "admin" as const } };
 
-const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 /** Every request the destination check made, so tests can assert no lookup happened. */
 interface RecordingFetch {
@@ -41,8 +38,8 @@ function recordingFetch(handler: (url: string) => Response): RecordingFetch {
 }
 
 async function writeTelegramConfig(contents: string): Promise<string> {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-telegram-dest-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(join(tmpdir(), "airin-telegram-dest-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
   await mkdir(getTelegramConfigDir(owner), { recursive: true });
   await writeFile(getTelegramConfigPath(owner), contents, "utf8");
 
@@ -50,8 +47,8 @@ async function writeTelegramConfig(contents: string): Promise<string> {
 }
 
 async function writeDiscordConfig(contents: string): Promise<string> {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-discord-dest-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(join(tmpdir(), "airin-discord-dest-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
   await mkdir(getDiscordConfigDir(owner), { recursive: true });
   await writeFile(getDiscordConfigPath(owner), contents, "utf8");
 
@@ -67,11 +64,11 @@ function jsonResponse(body: Record<string, JsonValue>, status = 200): Response {
 
 async function captureRejection(
   run: () => Promise<void>
-): Promise<NakamaApiError> {
+): Promise<AirinApiError> {
   try {
     await run();
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       return error;
     }
 
@@ -84,9 +81,9 @@ async function captureRejection(
 describe("cross-destination authorization for automation delivery", () => {
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
   });
 
@@ -356,13 +353,5 @@ describe("cross-destination authorization for automation delivery", () => {
     expect(
       canApproveAutomationDeliveryDestination({ isPlatformAdmin: true })
     ).toBe(true);
-  });
-
-  test("telegram chat authorization follows paired and allowlisted ids only", () => {
-    const config = { allowedUserIds: [222], pairedUserIds: [111] };
-
-    expect(isTelegramDeliveryChatAuthorized(111, config)).toBe(true);
-    expect(isTelegramDeliveryChatAuthorized(222, config)).toBe(true);
-    expect(isTelegramDeliveryChatAuthorized(999, config)).toBe(false);
   });
 });

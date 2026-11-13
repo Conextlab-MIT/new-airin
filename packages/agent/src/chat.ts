@@ -7,15 +7,22 @@ import type {
   ChatTurnUsage,
   ChatUsage,
   CompactionResponse,
+  ImageAttachment,
   MessageContentPart,
   ProviderChatOptions,
   ProviderClient,
+  RehydrateMessagesOptions,
   SendMessageInput,
   ToolCall,
   ToolContext,
   ToolDefinition,
-} from "@nakama/core";
-import { createId } from "@nakama/core";
+} from "@airin/core";
+import {
+  AirinApiError,
+  createId,
+  MODEL_CONNECTION_CLOSED_MESSAGE,
+  ProviderStreamInterruptedError,
+} from "@airin/core";
 import { z } from "zod";
 
 export interface AgentRequest {
@@ -38,7 +45,7 @@ import {
   normalizeUserContent,
   partitionTools,
   toLlmToolDefinitions,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   buildChatSystemPrompt,
   buildWebSearchUnavailableGuidance,
@@ -72,15 +79,71 @@ const ImageAttachmentSchema = z.object({
 
 const VisualToolResultSchema = z.record(z.string(), z.json());
 
+const QuestionnaireToolResultSchema = z.object({ questionnaire: z.json() });
+
 const MAX_TOOL_ITERATIONS = 100;
 
 const MAX_TURN_OUTPUT_TOKENS = 200_000;
+
+/** Wait before the one retry a turn spends on a transient provider failure. */
+const PROVIDER_RETRY_DELAY_MS = 500;
+
+/**
+ * Connection failures that carry no HTTP status. Bun names them in `.code`
+ * ("ConnectionRefused", "ENOTFOUND", ...), older stacks use the Node
+ * spellings ("ECONNRESET", ...), and Bun's refused-host TypeError is only
+ * recognized by its fixed message. The OpenAI-shaped adapters pass all of
+ * these through as-is, so the retry gate has to recognize them itself.
+ */
+const CONNECTION_ERROR_CODES = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "ConnectionRefused",
+  "ConnectionReset",
+  "ConnectionClosed",
+]);
+
+function isTransientConnectionError<ErrorValue>(error: ErrorValue): boolean {
+  if (!(error instanceof TypeError)) {
+    return false;
+  }
+
+  // SAFETY: TypeError is the only shape this helper handles, and Bun's
+  // fetch connection failures carry the socket code on it when the runtime
+  // names one. The fallback covers the case where no code was attached.
+  const code = (error as { code?: string }).code;
+
+  if (code) {
+    return CONNECTION_ERROR_CODES.has(code);
+  }
+
+  return (
+    error.message.startsWith("Unable to connect") ||
+    error.message.includes("getaddrinfo")
+  );
+}
+
+const MAX_OPEN_TODO_NUDGES = 2;
 
 const EMPTY_REPLY_NUDGE =
   "Reply to the user now with a final answer based on the work so far.";
 
 const EMPTY_REPLY_NOTICE =
   "The model finished without writing a reply. Send another message to continue.";
+
+const OUTPUT_LIMIT_NOTICE =
+  "The model reached its output token limit before it wrote a reply. Send another message to continue.";
+
+const STREAM_INTERRUPTED_NOTE =
+  "Your previous response was cut off by a provider error. Continue from where it stopped without repeating it. Split large content into smaller tool calls.";
+
+const TRUNCATED_TOOL_CALL_ERROR =
+  "Not run: your reply reached the output token limit, so the arguments of this call were cut off. Split the work into smaller calls.";
 
 interface StreamHandlers {
   onChunk: (delta: string) => void;
@@ -94,6 +157,7 @@ interface StreamHandlers {
     toolCallId: string;
     tool: string;
     result: unknown;
+    images?: ImageAttachment[];
   }) => void;
   onToolInputDelta?: (event: {
     toolGroupId?: string;
@@ -154,7 +218,8 @@ export interface AgentChatSessionOptions {
     content: string | MessageContentPart[]
   ) => Promise<string | MessageContentPart[]>;
   rehydrateMessagesForProvider?: (
-    messages: readonly ChatMessage[]
+    messages: readonly ChatMessage[],
+    options: RehydrateMessagesOptions
   ) => Promise<ChatMessage[]>;
   resolvePromptContext?: (
     context?: ResolvePromptContextInput
@@ -164,6 +229,7 @@ export interface AgentChatSessionOptions {
   toolContext?: ToolContext;
   tools?: ToolDefinition[];
   userContext?: string;
+  userLanguage?: "id" | "en";
   userTimezone?: string;
 }
 
@@ -196,7 +262,8 @@ export function createAgentChatSession(
   const channel = options.channel ?? "cli";
   const tools = options.tools ?? dependencies.tools ?? [];
   const enableToolLoop = options.enableToolLoop ?? tools.length > 0;
-  let activeTools = createTurnTools(tools);
+  const discoveredTools = new Set<string>();
+  let activeTools = createTurnTools(tools, discoveredTools);
 
   const systemPrompt = buildChatSystemPrompt(activeTools, {
     basePrompt: options.systemPrompt,
@@ -208,33 +275,9 @@ export function createAgentChatSession(
     ),
     soul: options.soul,
     userContext: options.userContext,
+    userLanguage: options.userLanguage,
     userTimezone: options.userTimezone,
   });
-
-  // Bytes this session's optimiser kept out of the context. Session scope on
-  // purpose: the chip beside it reports this conversation, not the org, and
-  // showing an org total there would be read as this chat's saving.
-  let bytesKeptOut = 0;
-  // The denominator is every byte the handled tools produced this session,
-  // including calls where nothing was removed. Dividing only by the optimised
-  // calls would report a percentage of a set chosen after the fact.
-  let bytesProduced = 0;
-  const callerRecord = options.toolContext?.recordToolOutputSavings;
-  const callerTurnUsage = options.toolContext?.recordTurnUsage;
-
-  const toolContext: ToolContext = {
-    ...options.toolContext,
-    recordToolOutputSavings: (saving) => {
-      bytesKeptOut += Math.max(0, saving.bytesIn - saving.bytesOut);
-      bytesProduced += saving.bytesIn;
-      callerRecord?.(saving);
-    },
-    // The arm is session state, and the conversation loop is a module-level
-    // function that cannot see it, so it is filled in here and the loop's own
-    // value is ignored.
-    recordTurnUsage: (turn) =>
-      callerTurnUsage?.({ ...turn, optimized: bytesKeptOut > 0 }),
-  };
 
   const history: ChatMessage[] = options.initialHistory
     ? [...options.initialHistory]
@@ -282,10 +325,6 @@ export function createAgentChatSession(
 
     return {
       breakdown,
-      // Reported only once an optimiser has actually removed something in this
-      // session, so the chip stays silent rather than announcing a feature.
-      bytesKeptOut: bytesKeptOut > 0 ? bytesKeptOut : undefined,
-      bytesProduced: bytesKeptOut > 0 ? bytesProduced : undefined,
       contextWindow: options.compaction.contextWindow,
       source,
       usableContextTokens: usableContextTokens(options.compaction),
@@ -433,7 +472,8 @@ export function createAgentChatSession(
   return {
     clear() {
       history.length = 0;
-      activeTools = createTurnTools(tools);
+      discoveredTools.clear();
+      activeTools = createTurnTools(tools, discoveredTools);
       lastContextUsage = null;
       turnUsageCalls = [];
       bumpHistoryRevision();
@@ -461,7 +501,7 @@ export function createAgentChatSession(
       return aggregateTurnUsage();
     },
     async send(input, sendOptions) {
-      activeTools = createTurnTools(tools);
+      activeTools = createTurnTools(tools, discoveredTools);
       turnUsageCalls = [];
 
       return sendMessage(
@@ -481,13 +521,13 @@ export function createAgentChatSession(
           resolvePromptContext: options.resolvePromptContext,
           runCompaction,
           signal: sendOptions?.signal,
-          toolContext,
+          toolContext: options.toolContext,
           whatsappMessage: sendOptions?.whatsappMessage,
         }
       );
     },
     async sendStream(input, handlers, streamOptions) {
-      activeTools = createTurnTools(tools);
+      activeTools = createTurnTools(tools, discoveredTools);
       turnUsageCalls = [];
 
       return sendMessage(
@@ -508,7 +548,7 @@ export function createAgentChatSession(
           resolvePromptContext: options.resolvePromptContext,
           runCompaction,
           signal: streamOptions?.signal,
-          toolContext,
+          toolContext: options.toolContext,
           whatsappMessage: streamOptions?.whatsappMessage,
         }
       );
@@ -545,7 +585,8 @@ async function sendMessage(
       content: string | MessageContentPart[]
     ) => Promise<string | MessageContentPart[]>;
     rehydrateMessagesForProvider?: (
-      messages: readonly ChatMessage[]
+      messages: readonly ChatMessage[],
+      options: RehydrateMessagesOptions
     ) => Promise<ChatMessage[]>;
     signal?: AbortSignal;
     whatsappMessage?: ToolContext["whatsappMessage"];
@@ -575,8 +616,8 @@ async function sendMessage(
     const hasAttachments = multimodalTurn;
 
     const reply = hasAttachments
-      ? "Attachments require a configured provider. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY in Settings."
-      : "I'm running in offline mode. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY to chat with me. You can still use /create to draft automations locally.";
+      ? "Attachments require a configured provider. Add a provider in Settings → AI Providers (/settings/providers), or set OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY."
+      : "I'm running in offline mode. Add an AI provider in Settings → AI Providers (/settings/providers) to chat with me. You can still use /create to draft automations locally.";
 
     if (mode === "stream" && options.handlers) {
       options.handlers.onChunk(reply);
@@ -747,7 +788,8 @@ async function runConversation(
   handlers?: StreamHandlers,
   toolContext?: ToolContext,
   rehydrateMessagesForProvider?: (
-    messages: readonly ChatMessage[]
+    messages: readonly ChatMessage[],
+    options: RehydrateMessagesOptions
   ) => Promise<ChatMessage[]>,
   onContextUsage?: (
     usedTokens: number,
@@ -760,6 +802,12 @@ async function runConversation(
   let producedTokens = 0;
   let stoppedReply = "";
   let finalReplyOnly = false;
+  let thinkingOff = false;
+  let streamRetried = false;
+  let transientRetried = false;
+  let streamInterrupted = false;
+  let openTodoNudges = 0;
+  let openTodosReminder: string | null = null;
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
     signal?.throwIfAborted();
@@ -775,9 +823,19 @@ async function runConversation(
         ? toLlmToolDefinitions(iterationTools)
         : undefined;
 
-    const iterationPrompt = finalReplyOnly
+    let iterationPrompt = finalReplyOnly
       ? `${systemPrompt}\n\n${EMPTY_REPLY_NUDGE}`
       : systemPrompt;
+
+    if (openTodosReminder) {
+      iterationPrompt = `${iterationPrompt}\n\n${openTodosReminder}`;
+      openTodosReminder = null;
+    }
+
+    if (streamInterrupted) {
+      iterationPrompt = `${iterationPrompt}\n\n${STREAM_INTERRUPTED_NOTE}`;
+      streamInterrupted = false;
+    }
 
     const reservedTokens =
       estimateHistoryTokens(
@@ -790,6 +848,11 @@ async function runConversation(
     const releaseReservation =
       await toolContext?.assertCanStartLlmTurn?.(reservedTokens);
 
+    const { thinking: _thinking, ...optionsWithoutThinking } =
+      providerOptions ?? {};
+
+    const stepOptions = thinkingOff ? optionsWithoutThinking : providerOptions;
+
     const toolGroupId = createId("toolgroup");
     let result: Awaited<ReturnType<typeof generateReply>>;
 
@@ -799,9 +862,7 @@ async function runConversation(
         iterationPrompt,
         history,
         llmTools,
-        finalReplyOnly
-          ? { ...providerOptions, webSearch: false }
-          : providerOptions,
+        finalReplyOnly ? { ...stepOptions, webSearch: false } : stepOptions,
         mode,
         handlers,
         rehydrateMessagesForProvider,
@@ -823,21 +884,63 @@ async function runConversation(
         result.usage && !result.usage.estimated ? "provider" : "estimate"
       );
 
-      // The arm is what the optimiser did in this session, not what a setting
-      // says: a session where nothing was ever shortened belongs in the control
-      // arm even with the feature switched on, or the comparison flatters itself.
       try {
         toolContext?.recordTurnUsage?.({
           estimated: Boolean(result.usage?.estimated ?? !result.usage),
           inputTokens: result.usage?.inputTokens ?? 0,
-          // Overwritten by the session wrapper, which is the only scope that
-          // knows whether anything was shortened.
-          optimized: false,
           outputTokens: result.usage?.outputTokens ?? 0,
         });
       } catch {
         // never let accounting break a turn
       }
+    } catch (error) {
+      // A stream that broke mid-reply often works on the next try. Retry once
+      // per turn; the partial reply is already in history.
+      if (
+        error instanceof ProviderStreamInterruptedError &&
+        !streamRetried &&
+        !signal?.aborted
+      ) {
+        streamRetried = true;
+        streamInterrupted = true;
+        continue;
+      }
+
+      // Providers surface rate limits, gateways, and timeouts as one 502
+      // (buildProviderHttpError maps every non-auth HTTP status there, for
+      // the OpenAI-shaped adapters and now Gemini too), and a refused
+      // connection or failed DNS lookup arrives as Bun's TypeError before any
+      // HTTP happens. One bounded try per turn covers both; drops that land
+      // after a chunk or a tool call go through the interrupted path instead,
+      // and permanent failures still fail the turn.
+      if (
+        ((error instanceof AirinApiError &&
+          error.status >= 500 &&
+          !(error instanceof ProviderStreamInterruptedError)) ||
+          isTransientConnectionError(error)) &&
+        !transientRetried &&
+        !signal?.aborted
+      ) {
+        transientRetried = true;
+        await new Promise((resolve) =>
+          setTimeout(resolve, PROVIDER_RETRY_DELAY_MS)
+        );
+        continue;
+      }
+
+      // A dropped connection reaches the user in plain words, on every
+      // surface; the runtime's text stays on `cause` for the logs.
+      if (
+        error instanceof ProviderStreamInterruptedError ||
+        isTransientConnectionError(error)
+      ) {
+        throw Object.assign(
+          new ProviderStreamInterruptedError(MODEL_CONNECTION_CLOSED_MESSAGE),
+          { cause: error }
+        );
+      }
+
+      throw error;
     } finally {
       // The hold covers one provider call. Usage is on the ledger by now if the
       // call returned, and a call that threw or was aborted spent nothing.
@@ -874,18 +977,29 @@ async function runConversation(
       result.toolCalls.length === 0 &&
       !result.content.trim()
     ) {
+      // Thinking used the whole output limit. Try the same step again with
+      // the tools, and do not think for the rest of this turn.
+      if (result.truncated && !thinkingOff) {
+        thinkingOff = true;
+        continue;
+      }
+
       if (!finalReplyOnly) {
         finalReplyOnly = true;
         continue;
       }
 
-      history.push({ content: EMPTY_REPLY_NOTICE, role: "assistant" });
+      const notice = result.truncated
+        ? OUTPUT_LIMIT_NOTICE
+        : EMPTY_REPLY_NOTICE;
+
+      history.push({ content: notice, role: "assistant" });
 
       if (mode === "stream") {
-        handlers?.onChunk(EMPTY_REPLY_NOTICE);
+        handlers?.onChunk(notice);
       }
 
-      return EMPTY_REPLY_NOTICE;
+      return notice;
     }
 
     // Steps the provider already ran are saved in order, each with the text before it,
@@ -910,12 +1024,55 @@ async function runConversation(
         : result.assistantMessage
     );
 
+    if (enableToolLoop && result.truncated && result.toolCalls.length > 0) {
+      // The last call was cut off at the output limit, so its arguments are
+      // broken. Tell the model and let it try again in smaller parts.
+      for (const call of result.toolCalls) {
+        const toolResult = { error: TRUNCATED_TOOL_CALL_ERROR };
+
+        handlers?.onToolStart?.({
+          input: call.arguments,
+          tool: call.name,
+          toolCallId: call.id,
+          toolGroupId,
+        });
+        handlers?.onToolEnd?.({
+          result: toolResult,
+          tool: call.name,
+          toolCallId: call.id,
+          toolGroupId,
+        });
+        history.push({
+          content: JSON.stringify(toolResult),
+          name: call.name,
+          role: "tool",
+          toolCallId: call.id,
+        });
+      }
+
+      continue;
+    }
+
     if (!enableToolLoop || result.toolCalls.length === 0) {
+      if (
+        enableToolLoop &&
+        openTodoNudges < MAX_OPEN_TODO_NUDGES &&
+        producedTokens < MAX_TURN_OUTPUT_TOKENS
+      ) {
+        openTodosReminder = (await toolContext?.openTodosReminder?.()) ?? null;
+
+        if (openTodosReminder) {
+          openTodoNudges += 1;
+          continue;
+        }
+      }
+
       return result.content;
     }
 
     const toolHistoryStart = history.length;
-    await executeToolCalls(
+
+    const waitingForAnswers = await executeToolCalls(
       iterationTools,
       result.toolCalls,
       history,
@@ -924,11 +1081,16 @@ async function runConversation(
       preprocessUserContent,
       toolGroupId
     );
+
     // Check between batches: one batch can overshoot, but no next request runs.
     producedTokens += estimateHistoryTokens(
       history.slice(toolHistoryStart),
       ""
     );
+
+    if (waitingForAnswers) {
+      return result.content;
+    }
   }
 
   const reason =
@@ -955,7 +1117,7 @@ async function executeToolCalls(
   toolContext: ToolContext = {},
   preprocessUserContent?: AgentChatSessionOptions["preprocessUserContent"],
   toolGroupId?: string
-): Promise<void> {
+): Promise<boolean> {
   const contextForCall = (call: ToolCall): ToolContext => {
     if (!handlers?.onSubAgentActivity || call.name !== "sub_agent") {
       return toolContext;
@@ -982,7 +1144,7 @@ async function executeToolCalls(
           toolGroupId,
         });
 
-        const { result, attachments } = await prepareVisualToolResult(
+        const { result, attachments, images } = await prepareVisualToolResult(
           await executeToolCall(tools, call, contextForCall(call)),
           preprocessUserContent
         );
@@ -990,6 +1152,7 @@ async function executeToolCalls(
         const toolCompletedAt = Date.now();
 
         handlers?.onToolEnd?.({
+          images,
           result,
           tool: call.name,
           toolCallId: call.id,
@@ -1030,8 +1193,15 @@ async function executeToolCalls(
       throw failed.reason;
     }
 
-    return;
+    return results.some(
+      (entry) =>
+        entry.status === "fulfilled" &&
+        entry.value.call.name === "ask_user_question" &&
+        QuestionnaireToolResultSchema.safeParse(entry.value.result).success
+    );
   }
+
+  let waitingForAnswers = false;
 
   for (const call of toolCalls) {
     toolContext.signal?.throwIfAborted();
@@ -1043,7 +1213,7 @@ async function executeToolCalls(
       toolGroupId,
     });
 
-    const { result, attachments } = await prepareVisualToolResult(
+    const { result, attachments, images } = await prepareVisualToolResult(
       await executeToolCall(tools, call, contextForCall(call)),
       preprocessUserContent
     );
@@ -1051,6 +1221,7 @@ async function executeToolCalls(
     const toolCompletedAt = Date.now();
 
     handlers?.onToolEnd?.({
+      images,
       result,
       tool: call.name,
       toolCallId: call.id,
@@ -1072,13 +1243,27 @@ async function executeToolCalls(
     }
 
     history.push(message);
+
+    if (
+      call.name === "ask_user_question" &&
+      QuestionnaireToolResultSchema.safeParse(result).success
+    ) {
+      waitingForAnswers = true;
+    }
   }
+
+  return waitingForAnswers;
 }
 
 async function prepareVisualToolResult(
   result: ToolResult,
   preprocess?: AgentChatSessionOptions["preprocessUserContent"]
-): Promise<{ result: ToolResult; attachments?: MessageContentPart[] }> {
+): Promise<{
+  result: ToolResult;
+  attachments?: MessageContentPart[];
+  /** The tool's own images, so the chat UI can show them. */
+  images?: ImageAttachment[];
+}> {
   const parsed = VisualToolResultSchema.safeParse(result);
 
   if (!parsed.success) {
@@ -1111,10 +1296,12 @@ async function prepareVisualToolResult(
       attachments: Array.isArray(prepared)
         ? prepared
         : [{ text: prepared, type: "text" }],
+      images,
       result: metadata,
     };
   } catch (error) {
     return {
+      images,
       result: {
         ...metadata,
         content:
@@ -1145,7 +1332,8 @@ async function generateReply(
   mode: "send" | "stream",
   handlers?: StreamHandlers,
   rehydrateMessagesForProvider?: (
-    messages: readonly ChatMessage[]
+    messages: readonly ChatMessage[],
+    options: RehydrateMessagesOptions
   ) => Promise<ChatMessage[]>,
   signal?: AbortSignal,
   toolGroupId?: string
@@ -1160,8 +1348,13 @@ async function generateReply(
   );
 
   let attachments: MessageContentPart[] = [];
+  let turnStartIndex: number | undefined;
 
   for (const [index, message] of history.entries()) {
+    if (index === lastUserIndex) {
+      turnStartIndex = expanded.length;
+    }
+
     if (message.role === "tool" && message.attachments?.length) {
       const { attachments: parts, ...toolMessage } = message;
       expanded.push(toolMessage);
@@ -1190,7 +1383,10 @@ async function generateReply(
   const messages =
     rehydrateMessagesForProvider === undefined
       ? expanded
-      : await rehydrateMessagesForProvider(expanded);
+      : await rehydrateMessagesForProvider(expanded, {
+          toolNames: tools?.map((tool) => tool.name) ?? [],
+          turnStartIndex,
+        });
 
   const input = {
     messages,
@@ -1207,6 +1403,7 @@ async function generateReply(
     let thinking = "";
     let thinkingStartedAt: number | undefined;
     let thinkingDurationMs: number | undefined;
+    const pendingToolInputs = new Map<string, string>();
 
     const finishThinking = () => {
       if (thinkingStartedAt !== undefined) {
@@ -1248,10 +1445,12 @@ async function generateReply(
         onToolEnd: (event) => handlers.onToolEnd?.({ ...event, toolGroupId }),
         onToolInputDelta: (event) => {
           finishThinking();
+          pendingToolInputs.set(event.toolCallId, event.tool);
           handlers.onToolInputDelta?.({ ...event, toolGroupId });
         },
         onToolStart: (event) => {
           finishThinking();
+          pendingToolInputs.delete(event.toolCallId);
           handlers.onToolStart?.({ ...event, toolGroupId });
         },
       });
@@ -1269,7 +1468,50 @@ async function generateReply(
             },
           };
     } catch (error) {
-      if (signal?.aborted && (content || thinking)) {
+      // A connection or provider failure (5xx) that lands after a chunk or a
+      // tool call has gone out is the same shape as a broken stream: keep the
+      // partial reply in history, close the steps that never got their tool
+      // end, and let the interrupted path retry it once with its note, instead
+      // of the turn gate replaying the call from scratch and streaming the
+      // same text again. A step can make more than one request (Anthropic
+      // pause_turn), so a later request can fail after output.
+      const retryableFailure =
+        isTransientConnectionError(error) ||
+        (error instanceof AirinApiError && error.status >= 500);
+
+      const streamError =
+        (content || thinking || pendingToolInputs.size > 0) &&
+        retryableFailure &&
+        !(error instanceof ProviderStreamInterruptedError)
+          ? Object.assign(
+              new ProviderStreamInterruptedError(
+                MODEL_CONNECTION_CLOSED_MESSAGE
+              ),
+              { cause: error }
+            )
+          : error;
+
+      const interrupted = streamError instanceof ProviderStreamInterruptedError;
+
+      // Tool calls cut off by the broken stream never run; close their steps.
+      if (interrupted) {
+        for (const [toolCallId, tool] of pendingToolInputs) {
+          handlers.onToolEnd?.({
+            result: { error: streamError.message },
+            tool,
+            toolCallId,
+            toolGroupId,
+          });
+        }
+      }
+
+      // The retry replays history, and providers such as DeepSeek reject an
+      // assistant message with no content. Keep a cut-off reply only with text.
+      const keepPartial = interrupted
+        ? Boolean(content.trim())
+        : Boolean(content || thinking);
+
+      if ((signal?.aborted || interrupted) && keepPartial) {
         finishThinking();
 
         const message: ChatMessage = {
@@ -1288,7 +1530,7 @@ async function generateReply(
         history.push(message);
       }
 
-      throw error;
+      throw streamError;
     }
   }
 

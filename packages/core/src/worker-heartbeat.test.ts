@@ -10,7 +10,7 @@ import {
 
 describe("worker-heartbeat store", () => {
   test("only one worker acquires a connection and release permits a replacement", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-worker-lock-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-worker-lock-"));
     const first = createWorkerHeartbeatStore({ getDir: () => dir });
     const second = createWorkerHeartbeatStore({ getDir: () => dir });
 
@@ -30,6 +30,31 @@ describe("worker-heartbeat store", () => {
       await rm(dir, { force: true, recursive: true });
     }
   });
+  test("a reused pid in an old heartbeat does not count as a running worker", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "airin-worker-reused-pid-"));
+    const previous = createWorkerHeartbeatStore({ getDir: () => dir });
+    const checker = createWorkerHeartbeatStore({ getDir: () => dir });
+
+    try {
+      expect(await checker.isLeaseHeld()).toBe(false);
+      await previous.acquire();
+      await previous.write({
+        pid: process.pid,
+        updatedAt: new Date().toISOString(),
+      });
+      expect(await checker.isLeaseHeld()).toBe(true);
+      await previous.clear();
+      // The worker is gone, but its pid now names a live process.
+      await createWorkerHeartbeatStore({ getDir: () => dir }).write({
+        pid: process.pid,
+        updatedAt: new Date().toISOString(),
+      });
+      expect(await checker.isLeaseHeld()).toBe(false);
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
+  });
+
   test("isHeartbeatAlive rejects stale, missing, and invalid heartbeats", () => {
     expect(isHeartbeatAlive(null)).toBe(false);
     expect(
@@ -53,7 +78,7 @@ describe("worker-heartbeat store", () => {
   });
 
   test("write/read/clear round-trip", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-worker-heartbeat-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-worker-heartbeat-"));
     const store = createWorkerHeartbeatStore({ getDir: () => dir });
 
     try {
@@ -75,13 +100,13 @@ describe("worker-heartbeat store", () => {
 });
 
 test("a killed worker releases its operating-system connection lock", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "nakama-worker-crash-"));
+  const dir = await mkdtemp(join(tmpdir(), "airin-worker-crash-"));
 
   const modulePath = fileURLToPath(
     new URL("./worker-heartbeat.ts", import.meta.url)
   );
 
-  const script = `import {createWorkerHeartbeatStore} from ${JSON.stringify(modulePath)}; const store = createWorkerHeartbeatStore({getDir: () => process.argv[1]}); await store.acquire(); console.log("ready"); setInterval(() => {}, 1000);`;
+  const script = `import {createWorkerHeartbeatStore} from ${JSON.stringify(modulePath)}; const store = createWorkerHeartbeatStore({getDir: () => process.argv[1]}); await store.acquire(); console.log("ready"); setInterval(() => store.read(), 1000);`;
 
   const child = Bun.spawn([process.execPath, "-e", script, dir], {
     stderr: "pipe",
@@ -96,8 +121,10 @@ test("a killed worker releases its operating-system connection lock", async () =
     expect(new TextDecoder().decode(ready.value)).toContain("ready");
     reader.releaseLock();
     await expect(replacement.acquire()).rejects.toThrow();
+    expect(await replacement.isLeaseHeld()).toBe(true);
     child.kill("SIGKILL");
     await child.exited;
+    expect(await replacement.isLeaseHeld()).toBe(false);
     await replacement.acquire();
     await replacement.write({
       pid: process.pid,

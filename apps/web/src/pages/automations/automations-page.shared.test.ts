@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
-import type { AutomationRunRecord } from "@nakama/core/contract";
+import type { AutomationRunRecord } from "@airin/core/contract";
 import {
   automationRunMessages,
   describeTrigger,
   previewAutomationSchedule,
   readSchedulePreset,
+  schedulePresetTrigger,
+  summarizeAutomationListMeta,
 } from "./automations-page.shared";
 
 test("run conversations retain tools and text and only animate a running run", () => {
@@ -74,11 +76,59 @@ test("daily cron reads as plain words and other triggers stay readable", () => {
   expect(describeTrigger({ cron: "*/5 * * * *", type: "schedule" }).label).toBe(
     "Custom schedule"
   );
+  expect(describeTrigger({ cron: "5 * * * *", type: "schedule" }).label).toBe(
+    "Every hour at :05"
+  );
+  expect(
+    describeTrigger({ cron: "30 */3 * * *", type: "schedule" }).label
+  ).toBe("Every 3 hours at :30");
   expect(describeTrigger({ type: "manual" }).label).toBe("Manual only");
+});
+
+test("a webhook trigger is not treated as a schedule", () => {
+  const trigger = { type: "webhook" } as const;
+
+  expect(previewAutomationSchedule(trigger, "UTC")).toBeNull();
+  expect(schedulePresetTrigger("daily", trigger)).toEqual({
+    cron: "0 7 * * *",
+    timezone: undefined,
+    type: "schedule",
+  });
+  expect(
+    schedulePresetTrigger("webhook", {
+      cron: "0 7 * * *",
+      timezone: "Asia/Jakarta",
+      type: "schedule",
+    })
+  ).toEqual({ type: "webhook" });
+
+  const automation = {
+    createdAt: "2026-10-01T00:00:00Z",
+    description: "",
+    enabled: true,
+    id: "automation",
+    name: "Task",
+    profileId: "agent",
+    prompt: "Run task",
+    steps: [],
+    trigger,
+    updatedAt: "2026-10-01T00:00:00Z",
+    version: 1,
+  };
+
+  expect(summarizeAutomationListMeta(automation)).not.toBe(
+    summarizeAutomationListMeta({
+      ...automation,
+      trigger: { cron: "0 7 * * *", type: "schedule" },
+    })
+  );
 });
 
 test("schedule presets recognize supported frequencies without changing custom schedules", () => {
   for (const [cron, frequency] of [
+    ["15 * * * *", "hourly"],
+    ["0 */2 * * *", "hourly"],
+    ["0 */12 * * *", "hourly"],
     ["0 7 * * *", "daily"],
     ["30 12 * * 1-5", "weekdays"],
     ["0 18 * * 0", "weekly"],
@@ -92,11 +142,38 @@ test("schedule presets recognize supported frequencies without changing custom s
   for (const cron of [
     "*/15 * * * *",
     "0 7 1 * 1",
+    "0 * * * 1-5",
+    "0 * 1 * *",
+    "0 */5 * * *",
+    "0 */2 * * 1",
     "0 25 * * *",
     "60 7 * * *",
   ]) {
     expect(readSchedulePreset({ cron, type: "schedule" })).toBeNull();
   }
+});
+
+test("switching to and from hourly keeps the minute and resets the hour", () => {
+  const hourly = schedulePresetTrigger("hourly", {
+    cron: "30 18 * * 1-5",
+    type: "schedule",
+  });
+
+  expect(hourly).toEqual({ cron: "30 * * * *", type: "schedule" });
+  expect(schedulePresetTrigger("weekly", hourly)).toEqual({
+    cron: "30 7 * * 1",
+    type: "schedule",
+  });
+  expect(
+    schedulePresetTrigger("hourly", { cron: "0 */4 * * *", type: "schedule" })
+  ).toEqual({ cron: "0 */4 * * *", type: "schedule" });
+  expect(
+    schedulePresetTrigger("daily", { cron: "0 */4 * * *", type: "schedule" })
+  ).toEqual({ cron: "0 7 * * *", type: "schedule" });
+  expect(schedulePresetTrigger("hourly", { type: "manual" })).toEqual({
+    cron: "0 * * * *",
+    type: "schedule",
+  });
 });
 
 test("next-run preview uses the draft schedule and its time zone", () => {

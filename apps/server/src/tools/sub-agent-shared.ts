@@ -1,4 +1,5 @@
-import type { OrgRole } from "@nakama/core";
+import type { OrgRole } from "@airin/core";
+import type { AgentGroupMemoryChange } from "@airin/core/agent-groups";
 
 export const DEFAULT_SUB_AGENT_TIMEOUT_MS = 300_000;
 
@@ -15,6 +16,8 @@ export interface SubAgentRunInput {
   clientOrigin?: string;
   context?: string;
   onActivity?: (label: string) => void;
+  /** Answer text as the model writes it. */
+  onText?: (chunk: string) => void;
   orgId: string;
   orgRole?: OrgRole;
   profileId: string;
@@ -22,6 +25,16 @@ export interface SubAgentRunInput {
   task: string;
   timeoutMs?: number;
   userId?: string;
+}
+
+export interface GroupTurnRunInput
+  extends Omit<SubAgentRunInput, "clientOrigin" | "sessionId"> {
+  /** A group memory write the turn saved, in order. */
+  onGroupMemoryChange?: (change: AgentGroupMemoryChange) => void;
+  /** The group's shared folder, which the member's file tools may also use. */
+  sharedDir: string;
+  /** Aborts the turn, as when the user presses Stop. */
+  signal?: AbortSignal;
 }
 
 export interface SubAgentRunResult {

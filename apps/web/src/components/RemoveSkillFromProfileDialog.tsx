@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -6,8 +6,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 
 export function RemoveSkillFromProfileDialog({
   open,

@@ -2,18 +2,21 @@ import {
   builtinTools,
   type McpHttpConfig,
   type McpStdioConfig,
-} from "@nakama/core";
-import { preinstalledMcpServers } from "@nakama/core/mcp/preinstalled";
+} from "@airin/core";
+import { preinstalledMcpServers } from "@airin/core/mcp/preinstalled";
 import {
   BUILTIN_TOOL_IDS,
   SUB_AGENT_TOOL_ID,
-} from "@nakama/core/tools/protected";
+} from "@airin/core/tools/protected";
 import { ensureLocalClientAccess } from "./local-client";
 import {
   ensureBashToolDefinition,
+  ensureBrowserToolDefinitions,
   ensureGenerateImageToolDefinition,
-  ensureOrgSuperBotProfiles,
+  ensureOrgSuperAirinProfiles,
+  ensureSaveArtifactToolDefinition,
   ensureSessionToolDefinitions,
+  type SuperAirinSeedOptions,
 } from "./org-profiles";
 import type { DatabaseAdapter } from "./types";
 
@@ -40,11 +43,16 @@ const SUPPORTED_TOOL_HANDLER_TYPES = new Set([
   "python",
   "sub_agent",
   "generate_image",
+  "save_artifact",
   "session",
+  "browser",
   "plugin",
 ]);
 
-export async function seedDatabase(db: DatabaseAdapter): Promise<void> {
+export async function seedDatabase(
+  db: DatabaseAdapter,
+  options: SuperAirinSeedOptions = {}
+): Promise<void> {
   await removeLegacyBuiltinTools(db);
   await removeDeprecatedBuiltinTools(db);
   await removeDeprecatedServerTools(db);
@@ -52,11 +60,13 @@ export async function seedDatabase(db: DatabaseAdapter): Promise<void> {
   await ensureBuiltinToolDefinitions(db);
   await ensureSubAgentToolDefinition(db);
   await ensureSessionToolDefinitions(db);
+  await ensureBrowserToolDefinitions(db);
   await ensureBashToolDefinition(db);
   await ensureGenerateImageToolDefinition(db);
+  await ensureSaveArtifactToolDefinition(db);
   await ensurePreinstalledMcpServers(db);
   await ensureLocalClientAccess(db);
-  await ensureOrgSuperBotProfiles(db);
+  await ensureOrgSuperAirinProfiles(db, options);
 }
 
 async function removeToolsMatching(
@@ -150,7 +160,7 @@ export async function ensureSubAgentToolDefinition(
   await db.upsertTool({
     createdAt: existing?.createdAt ?? now,
     description:
-      "Run a focused same-profile sub-agent for delegated research, review, planning, or debugging. Returns a structured result for the parent to summarize. Not for repo coding work — use bash with coding-agent for that.",
+      "Run a focused same-profile sub-agent for delegated research, review, planning, or debugging, in its own chat under this one, and get its result back. With background, return at once instead, for when the user wants separate chats to open later. For repo coding work, use bash with coding-agent instead.",
     handlerConfig: {},
     handlerType: "sub_agent",
     id: SUB_AGENT_TOOL_ID,

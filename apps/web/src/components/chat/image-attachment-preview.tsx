@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { Cancel01Icon, Image01Icon } from "hugeicons-react";
 import { useEffect, useId } from "react";
 import { useOptionalChatAttachmentPanel } from "@/context/use-chat-attachment-panel";

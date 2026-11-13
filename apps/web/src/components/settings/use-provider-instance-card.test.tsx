@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type {
+  ChatgptOAuthCredentials,
   ProviderInstanceSummary,
   ProviderModelOption,
   UpdateProviderRequest,
-} from "@nakama/core/contract";
-import { DISCOVERY_MODEL_PROVIDERS } from "@nakama/core/discovery-providers";
+} from "@airin/core/contract";
+import { DISCOVERY_MODEL_PROVIDERS } from "@airin/core/discovery-providers";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -165,17 +166,15 @@ describe("provider model management", () => {
       await act(async () => card.openEdit());
       await act(async () =>
         container
-          .querySelector<HTMLButtonElement>(
-            'button[aria-label="Remove model"]'
-          )!
+          .querySelector<HTMLButtonElement>('button[aria-label^="Remove "]')!
           .click()
       );
       expect(
-        container.querySelectorAll('input[placeholder="llama3.2"]')
+        container.querySelectorAll('input[aria-label^="Model ID"]')
       ).toHaveLength(0);
       await act(async () => card.saveCompatible());
       expect(updates).toEqual([]);
-      expect(card!.dialogError).not.toBeNull();
+      expect(card!.editFieldErrors.models).not.toBeNull();
       await act(async () =>
         card.handleManageModelsChange([{ id: "replacement" }])
       );
@@ -242,5 +241,45 @@ describe("provider model management", () => {
         supportsVision: false,
       },
     ]);
+  });
+
+  test("reconnect saves the new sign-in and closes the dialog", async () => {
+    let card: ReturnType<typeof useProviderInstanceCard>;
+    const updates: UpdateProviderRequest[] = [];
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    const chatgptOAuth: ChatgptOAuthCredentials = {
+      accessToken: "access",
+      accountId: "account",
+      expiresAt: "2026-12-01T00:00:00Z",
+      refreshToken: "refresh",
+    };
+
+    function Probe() {
+      card = useProviderInstanceCard({
+        catalog: [],
+        instance,
+        onDelete: async () => {},
+        onError: () => {},
+        onUpdate: async (_, request) => {
+          updates.push(request);
+        },
+      });
+
+      return null;
+    }
+
+    try {
+      await act(async () => root.render(<Probe />));
+      await act(async () => card.setReplaceKeyOpen(true));
+      await act(async () => card.reconnect({ chatgptOAuth }));
+      expect(updates).toEqual([{ chatgptOAuth }]);
+      expect(card!.replaceKeyOpen).toBe(false);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
   });
 });

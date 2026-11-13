@@ -93,7 +93,7 @@ describe("chat history route helpers", () => {
 
   test("buildNewChatPath carries profile so ChatPage remount keeps the selection", () => {
     const path = buildNewChatPath("gary-vee");
-    const url = new URL(path, "http://nakama.local");
+    const url = new URL(path, "http://airin.local");
     expect(url.pathname).toBe("/chat");
     expect(url.searchParams.get("new")).toBe("1");
     expect(url.searchParams.get("profile")).toBe("gary-vee");
@@ -308,7 +308,7 @@ describe("chat history route helpers", () => {
 
     try {
       writeStoredActiveChatProfileId("super", "org-a");
-      store.set("nakama:active-chat-profile", "global-profile");
+      store.set("airin:active-chat-profile", "global-profile");
 
       expect(
         readInitialDraftChatProfileId({
@@ -316,7 +316,7 @@ describe("chat history route helpers", () => {
           search: "",
         })
       ).toBe("");
-      expect(store.has("nakama:active-chat-profile")).toBe(false);
+      expect(store.has("airin:active-chat-profile")).toBe(false);
 
       expect(
         readInitialDraftChatProfileId({

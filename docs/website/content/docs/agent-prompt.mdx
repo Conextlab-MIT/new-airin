@@ -1,9 +1,9 @@
 ---
 title: "How Agent Prompts Work"
-description: "Understand how Nakama builds the final system prompt from soul files, tools, bundled system skills, and runtime context."
+description: "Understand how Airin builds the final system prompt from soul files, tools, bundled system skills, and runtime context."
 ---
 
-When a user starts chatting with a profile, Nakama builds one system prompt from several sources.
+When a user starts chatting with a profile, Airin builds one system prompt from several sources.
 
 The short version:
 
@@ -12,20 +12,20 @@ Profile soul/system prompt
 + skills catalog
 + knowledge base catalog
 + org memory summary
-+ super bot rules, when enabled
++ super airin rules, when enabled
 + USER.md context
 + timezone
 + tool instructions
 + channel instructions
-+ per-turn todo and matched skill context
++ per-turn todo and /skill context
 + current date
 ```
 
 ## Main profile prompt
 
-Nakama first resolves the profile's main prompt.
+Airin first resolves the profile's main prompt.
 
-If the profile has soul files, Nakama uses them:
+If the profile has soul files, Airin uses them:
 
 | File | Injected as |
 |------|-------------|
@@ -34,30 +34,30 @@ If the profile has soul files, Nakama uses them:
 | `INSTRUCTIONS.md` | Operating instructions |
 | `MEMORY.md` | Continuity |
 
-If there are no soul files, Nakama uses the profile's stored `systemPrompt`.
+If there are no soul files, Airin uses the profile's stored `systemPrompt`.
 
 If both exist and they are different, the stored `systemPrompt` is appended as extra profile instructions.
 
 ## Extra profile context
 
-After the main profile prompt, Nakama may append:
+After the main profile prompt, Airin may append:
 
 - Assigned skills catalog
 - Knowledge base catalog
 - Org memory summary for organization members — pinned bullets under `## Org Memory`, capped at **2048 bytes** with an overflow hint to use `org_memory_search` when truncated (see [Org memory](/org-memory))
-- Super Bot tool-authoring rules, only for super profiles
+- Airin tool-authoring rules, only for super profiles
 
 ## Chat wrapper
 
 The chat runtime then wraps the profile prompt with general chat instructions:
 
-- User context from `USER.md`, when available (filled in at setup step 4 or from **Control center → Workspace → Settings**). Setup answers and `USER.md` are stored per authenticated user within the active organization, not shared organization-wide.
+- User context from `USER.md`, when available (filled in at setup step 4 or from **Settings → Workspace → Preferences**). Setup answers and `USER.md` are stored per authenticated user within the active organization, not shared organization-wide.
 - The user's timezone
 - Tool-use guidance for assigned tools
 - Memory and skill rules when `read_file` and `edit_file` are available (bundled `update-profile-memory` and `archive-profile-memory` skills)
-- Artifact guidance when `write_file` is available (bundled `save-artifact` skill)
+- Artifact save rules when `save_artifact` or `write_file` is available (the bundled `artifact-design` skill adds layout and styling)
 - Word-document guidance when `write_docx` is available (use Markdown input; never target `.docx` paths with `write_file`)
-- Coding-agent harness context when `coding-agent` matches ([Coding agent](/coding-agent))
+- Coding-agent harness context when the agent loads `coding-agent` ([Coding agent](/coding-agent))
 - Telegram or WhatsApp behavior when the message comes from those channels
 - Discord behavior when the message comes from a server channel (public replies)
 - Slack behavior when the message comes from a Slack DM or channel thread, including the channel audience and Slack Markdown rules
@@ -66,20 +66,20 @@ An API-key session with an `appUserId` is separate from the authenticated
 organization user's session. It does not load that user's `USER.md`; its private
 workspace and artifacts are scoped to the stable app-user id, so keep each app
 user's session and files separate.
-When soul is active, Nakama tells the agent to use tools while staying in character.
+When soul is active, Airin tells the agent to use tools while staying in character.
 
 ## Per-turn context
 
-On each user message, Nakama can add fresh context for that turn:
+On each user message, Airin can add fresh context for that turn:
 
 - Active todo/task state
-- Skills matched to the current user message
+- The skill the user names with `/skill <name>`
 
 This context is not permanent. It is attached only when relevant for the current turn.
 
 ## Current date
 
-Right before sending the request to the LLM, Nakama appends the current date:
+Right before sending the request to the LLM, Airin appends the current date:
 
 ```text
 Today is <current date>.
@@ -93,9 +93,10 @@ Profiles do not use dedicated memory or artifact builtins. The chat wrapper nudg
 |-------|-------------|---------|
 | `update-profile-memory` | `read_file` + `edit_file` | Append facts and preferences to active `MEMORY.md` |
 | `archive-profile-memory` | `read_file` + `edit_file` | Move bullets from `MEMORY.md` into `memory-archive/` without deleting them |
-| `save-artifact` | `write_file` or `write_docx` | Save files the agent produces under `artifacts/` with metadata for the dashboard; on web chat, paired saves also show as message attachment chips with in-chat preview |
+| `artifact-design` | `save_artifact` or `write_file` | Design rules for HTML pages, reports, and dashboards the agent saves under `artifacts/`; on web chat, saved files show as message attachment chips with in-chat preview |
+| `slide-deck-design` | `save_artifact` or `write_file` | A tested deck template: one 16:9 slide at a time on screen, Prev/Next controls, and one slide per page in PDF |
 
-The skills catalog is always visible. When a user message matches a skill description, Nakama can attach the full skill body for that turn (`include-body-on-match: true`).
+The skills catalog is always visible. When a request matches a skill description, the agent loads the full skill with `load_skill`.
 
 Active `MEMORY.md` is also composed into the soul stack. Archived content under `memory-archive/` is not loaded automatically. The agent uses `search_files` or `read_file` to retrieve it. Artifact files under `artifacts/` are not loaded into the agent prompt. Users browse them from **Browse Files → Artifacts**, download via the API, or open them from web chat attachment chips on assistant messages (HTML, Markdown, Word, code, and text previews are rendered by content type).
 

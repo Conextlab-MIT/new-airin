@@ -1,28 +1,28 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
-  NakamaClient,
+  AirinClient,
   SendMessageArg,
   SendStreamOptions,
   StreamHandlers,
-} from "@nakama/client";
+} from "@airin/client";
 import {
   assertBridgeClientMethods,
   parseListProfilesResponse,
   parseListUserOrgsResponse,
-} from "@nakama/core/bridge-api";
-import type { ChannelOrgStore } from "@nakama/core/channel-org";
+} from "@airin/core/bridge-api";
+import type { ChannelOrgStore } from "@airin/core/channel-org";
 import {
   createDefaultTestOrgs,
   createMultiTestOrgs,
   createTestOrgStore as createSharedTestOrgStore,
   withTempHome as withSharedTempHome,
-} from "@nakama/core/channel-test-helpers";
+} from "@airin/core/channel-test-helpers";
 import type {
   ChatMessage,
   ProfileSummary,
   UserOrgSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
 export interface MockStreamControl {
   complete(reply?: string): void;
@@ -44,6 +44,12 @@ export function createMockClient(
     steps?: StreamStep[];
     autoComplete?: boolean;
     profiles?: ProfileSummary[];
+    /** What listProfiles answers for one org; other calls get `profiles`. */
+    profilesByOrgId?: Record<
+      string,
+      Array<Pick<ProfileSummary, "id" | "model" | "name">>
+    >;
+    providerConfigured?: boolean;
     orgs?: UserOrgSummary[];
     messages?: ChatMessage[];
     toolEvents?: Parameters<NonNullable<StreamHandlers["onToolEnd"]>>[0][];
@@ -237,12 +243,22 @@ export function createMockClient(
       provider: null,
       providers: [],
     }),
-    health: async () => ({ ok: true, providerConfigured: false }),
-    listProfiles: async () => {
+    health: async () => ({
+      ok: true,
+      providerConfigured: options.providerConfigured ?? false,
+    }),
+    listProfiles: async (orgId?: string) => {
       calls.listProfiles += 1;
 
+      const scoped = orgId ? options.profilesByOrgId?.[orgId] : undefined;
+
       return parseListProfilesResponse({
-        profiles: options.profiles ?? [createDefaultProfileSummary()],
+        profiles: scoped
+          ? scoped.map((profile) => ({
+              ...createDefaultProfileSummary(),
+              ...profile,
+            }))
+          : (options.profiles ?? [createDefaultProfileSummary()]),
       });
     },
     listUserOrgs: async () => {
@@ -277,7 +293,7 @@ export function createMockClient(
   };
 
   // SAFETY: Tests call only the client methods supplied by this mock.
-  const client = clientFixture as NakamaClient;
+  const client = clientFixture as AirinClient;
 
   assertBridgeClientMethods(client);
 
@@ -320,11 +336,11 @@ export async function writeWhatsAppConfigIni(
     requireGroupMention?: boolean;
   }
 ): Promise<void> {
-  const dir = path.join(homeDir, ".nakama", "whatsapp");
+  const dir = path.join(homeDir, ".airin", "whatsapp");
   await mkdir(dir, { recursive: true });
 
   const lines = [
-    "# Nakama WhatsApp bridge",
+    "# Airin WhatsApp bridge",
     `phone_number=${config.phoneNumber}`,
     `profile_id=${config.profileId ?? "default"}`,
   ];
@@ -387,5 +403,5 @@ export function createTestOrgStore(homeDir: string): ChannelOrgStore {
 export async function withTempHome<T>(
   run: (homeDir: string) => Promise<T>
 ): Promise<T> {
-  return withSharedTempHome("nakama-whatsapp-home-", run);
+  return withSharedTempHome("airin-whatsapp-home-", run);
 }

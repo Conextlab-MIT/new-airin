@@ -4,11 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 source "$(dirname "$0")/capture-common.sh"
 SCREENSHOT_DIR="$(cd "$(dirname "$0")/.." && pwd)/public/screenshots"
-TEMP_CONFIG="/tmp/nakama-docs-mcp-screenshots-$$"
-COOKIE_JAR="/tmp/nakama-docs-mcp-cookies-$$.txt"
+TEMP_CONFIG="/tmp/airin-docs-mcp-screenshots-$$"
+COOKIE_JAR="/tmp/airin-docs-mcp-cookies-$$.txt"
 PORT=4314
 BASE_URL="http://127.0.0.1:${PORT}"
-SESSION=nakama-docs-mcp-screenshots
+SESSION=airin-docs-mcp-screenshots
 SERVER_PID=""
 VIEWPORT_WIDTH=1280
 VIEWPORT_HEIGHT=900
@@ -32,8 +32,8 @@ trap cleanup EXIT
 mkdir -p "$SCREENSHOT_DIR" "$TEMP_CONFIG"
 ensure_current_web_build "$ROOT"
 
-NAKAMA_CONFIG_DIR="$TEMP_CONFIG" NAKAMA_PORT="$PORT" \
-  bun run "$ROOT/apps/server/src/index.ts" > /tmp/nakama-docs-mcp-screenshot-server.log 2>&1 &
+AIRIN_CONFIG_DIR="$TEMP_CONFIG" AIRIN_PORT="$PORT" \
+  bun run "$ROOT/apps/server/src/index.ts" > /tmp/airin-docs-mcp-screenshot-server.log 2>&1 &
 SERVER_PID=$!
 
 for _ in $(seq 1 60); do
@@ -53,8 +53,8 @@ curl -sf -c "$COOKIE_JAR" -X POST "${BASE_URL}/v1/auth/setup" \
     \"webPublicUrl\": \"${BASE_URL}\"
   }" >/dev/null
 
-CSRF_VAL=$(awk '$6=="nakama_csrf"{print $7}' "$COOKIE_JAR")
-SESSION_VAL=$(awk '$6=="nakama_session"{print $7}' "$COOKIE_JAR")
+CSRF_VAL=$(awk '$6=="airin_csrf"{print $7}' "$COOKIE_JAR")
+SESSION_VAL=$(awk '$6=="airin_session"{print $7}' "$COOKIE_JAR")
 
 curl -sf -b "$COOKIE_JAR" -X POST "${BASE_URL}/v1/providers" \
   -H 'Content-Type: application/json' \
@@ -62,11 +62,11 @@ curl -sf -b "$COOKIE_JAR" -X POST "${BASE_URL}/v1/providers" \
   -d '{"type":"ollama","apiKey":"","hostMode":"local","model":"llama3.2"}' >/dev/null
 
 $AB --session "$SESSION" close 2>/dev/null || true
-$AB --session "$SESSION" cookies set nakama_session "$SESSION_VAL" \
+$AB --session "$SESSION" cookies set airin_session "$SESSION_VAL" \
   --url "${BASE_URL}/" --httpOnly --sameSite Lax
-$AB --session "$SESSION" cookies set nakama_csrf "$CSRF_VAL" \
+$AB --session "$SESSION" cookies set airin_csrf "$CSRF_VAL" \
   --url "${BASE_URL}/" --sameSite Lax
-$AB --session "$SESSION" open "${BASE_URL}/customize/mcp"
+$AB --session "$SESSION" open "${BASE_URL}/settings/mcp"
 $AB --session "$SESSION" wait 3000
 $AB --session "$SESSION" set viewport "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT"
 $AB --session "$SESSION" set media light
@@ -74,7 +74,9 @@ $AB --session "$SESSION" snapshot -i >/dev/null
 $AB --session "$SESSION" find role button click --name "Add server" --exact
 $AB --session "$SESSION" wait 1200
 $AB --session "$SESSION" snapshot -i >/dev/null
-$AB --session "$SESSION" find role tab click --name "HTTP" --exact
+# Server types are buttons with a label and a hint (HTTP / Header).
+$AB --session "$SESSION" eval "[...document.querySelectorAll('[role=dialog] button')].find((el) => el.textContent.trim().startsWith('HTTP')).click()"
+$AB --session "$SESSION" wait 400
 $AB --session "$SESSION" find placeholder "server name" fill "exa"
 $AB --session "$SESSION" find placeholder "https://example.com/mcp" fill "https://mcp.exa.ai/mcp"
 $AB --session "$SESSION" fill '[aria-label="Header name 1"]' "x-api-key"

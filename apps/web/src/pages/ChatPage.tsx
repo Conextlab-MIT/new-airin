@@ -1,9 +1,18 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
+import { useActiveChatProfileStore } from "@/context/active-chat-profile-store";
+import { useBtwChatStore } from "@/context/btw-chat-store";
 import { ChatPageContent } from "@/pages/chat/chat-page-content";
 import { useChatPage } from "@/pages/chat/use-chat-page";
 
+const BtwChatPanel = lazy(async () => ({
+  default: (await import("@/components/chat/btw-chat")).BtwChatPanel,
+}));
+
 export function ChatPage() {
   const state = useChatPage();
+  const openBtw = useBtwChatStore((store) => store.open);
+  const btwOpen = useBtwChatStore((store) => store.chat !== null);
+
   useEffect(() => {
     const focusComposer = (event: KeyboardEvent) => {
       if (
@@ -36,5 +45,23 @@ export function ChatPage() {
     return () => document.removeEventListener("keydown", focusComposer);
   }, []);
 
-  return <ChatPageContent {...state} />;
+  return (
+    <ChatPageContent
+      {...state}
+      below={
+        btwOpen ? (
+          <Suspense fallback={null}>
+            <BtwChatPanel />
+          </Suspense>
+        ) : null
+      }
+      onBtw={(question) =>
+        openBtw({
+          orgId: useActiveChatProfileStore.getState().orgId,
+          profileId: state.profileId || null,
+          question,
+        })
+      }
+    />
+  );
 }

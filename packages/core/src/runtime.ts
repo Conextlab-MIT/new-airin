@@ -54,9 +54,7 @@ export function resolveServerUrl(
   env: Record<string, string | undefined> = process.env
 ): string {
   return normalizeBaseUrl(
-    env.NAKAMA_SERVER_URL?.trim() ||
-      readRuntimeServerUrl() ||
-      DEFAULT_SERVER_URL
+    env.AIRIN_SERVER_URL?.trim() || readRuntimeServerUrl() || DEFAULT_SERVER_URL
   );
 }
 
@@ -65,7 +63,7 @@ export function resolveWebPublicUrl(
   env: Record<string, string | undefined> = process.env
 ): string | undefined {
   const configured =
-    env.NAKAMA_WEB_PUBLIC_URL?.trim() || env.NAKAMA_PUBLIC_URL?.trim();
+    env.AIRIN_WEB_PUBLIC_URL?.trim() || env.AIRIN_PUBLIC_URL?.trim();
 
   if (configured) {
     return normalizeBaseUrl(configured);
@@ -76,7 +74,7 @@ export function resolveWebPublicUrl(
   // The desktop app serves its UI on loopback only, on a new port each launch.
   // A public URL in its config came from another install's restored backup,
   // and honouring it would refuse the desktop UI's own origin.
-  if (saved && env.NAKAMA_DESKTOP === "1" && !isLoopbackUrl(saved)) {
+  if (saved && env.AIRIN_DESKTOP === "1" && !isLoopbackUrl(saved)) {
     return;
   }
 

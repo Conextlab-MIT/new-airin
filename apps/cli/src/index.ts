@@ -1,9 +1,9 @@
-import { NakamaApiError, NakamaClient } from "@nakama/client";
+import { AirinApiError, AirinClient } from "@airin/client";
 import {
   loadLocalAuthToken,
   rotateLocalAuthToken,
-} from "@nakama/core/local-auth";
-import { resolveServerUrl } from "@nakama/core/runtime";
+} from "@airin/core/local-auth";
+import { resolveServerUrl } from "@airin/core/runtime";
 import { runChat, runCleanupThenExit } from "./chat";
 import {
   loadSavedCliServerUrl,
@@ -35,7 +35,7 @@ if (
     .slice(2)
     .some((arg) => ["--helper", "--help", "-h"].includes(arg))
 ) {
-  console.log(`Usage: nakama [command] [options]
+  console.log(`Usage: airin [command] [options]
 
 Commands:
   login                   Sign in and open chat
@@ -49,10 +49,10 @@ Options:
   --helper, --help, -h    Show this help
 
 Examples:
-  nakama login
-  nakama login --server https://nakama.example.com
-  nakama
-  nakama logout
+  airin login
+  airin login --server https://airin.example.com
+  airin
+  airin logout
 
 Without a command, start chat using the saved server.
 In chat, use /org to list organizations or /org <slug> to switch.
@@ -88,11 +88,11 @@ async function resolveTheme(): Promise<Theme> {
     throw error;
   }
 
-  if (process.env.NAKAMA_THEME === "light") {
+  if (process.env.AIRIN_THEME === "light") {
     return "light";
   }
 
-  if (process.env.NAKAMA_THEME === "dark") {
+  if (process.env.AIRIN_THEME === "dark") {
     return "dark";
   }
 
@@ -123,13 +123,13 @@ try {
 
   let serverUrl = normalizeServerUrl(
     connectionArgs.serverUrl ??
-      (process.env.NAKAMA_SERVER_URL?.trim() || undefined) ??
+      (process.env.AIRIN_SERVER_URL?.trim() || undefined) ??
       (await loadSavedCliServerUrl()) ??
       resolveServerUrl()
   );
 
   const remote = !isLocalServer(serverUrl);
-  let client: NakamaClient;
+  let client: AirinClient;
 
   if (remote) {
     const connection = await createRemoteConnection(serverUrl);
@@ -169,7 +169,7 @@ try {
     try {
       user = await client.getMe();
     } catch (error) {
-      if (!(error instanceof NakamaApiError && error.status === 401)) {
+      if (!(error instanceof AirinApiError && error.status === 401)) {
         throw error;
       }
 
@@ -186,8 +186,8 @@ try {
       process.exit(0);
     }
 
-    client = new NakamaClient({
-      authToken: (await loadLocalAuthToken("cli@nakama.internal")) ?? undefined,
+    client = new AirinClient({
+      authToken: (await loadLocalAuthToken("cli@airin.internal")) ?? undefined,
       baseUrl: serverUrl,
     });
   }

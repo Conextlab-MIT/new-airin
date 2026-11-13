@@ -1,6 +1,6 @@
-import { parseOrgMemoryContent } from "@nakama/core/soul/org-memory";
-import { Button } from "@nakama/ui/button";
-import { Card } from "@nakama/ui/card";
+import { parseOrgMemoryContent } from "@airin/core/soul/org-memory";
+import { Button } from "@airin/ui/button";
+import { Card } from "@airin/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -8,12 +8,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { Textarea } from "@nakama/ui/textarea";
-import { toast } from "@nakama/ui/toast";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { Textarea } from "@airin/ui/textarea";
+import { toast } from "@airin/ui/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import { PencilIcon, PinIcon } from "hugeicons-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -66,18 +66,17 @@ function OrgMemoryTabButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      className={cn(
-        "-mb-px border-b-2 px-0 py-2.5 text-sm transition-colors",
-        active
-          ? "border-foreground font-semibold text-foreground"
-          : "border-transparent font-normal text-muted-foreground hover:text-foreground"
-      )}
+    <Button
+      aria-selected={active}
+      className={active ? undefined : "text-muted-foreground"}
       onClick={onClick}
+      role="tab"
+      size="sm"
       type="button"
+      variant={active ? "secondary" : "ghost"}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -255,8 +254,8 @@ function OrgMemoryCardTabs({
   onTabChange: (tab: OrgMemoryTab) => void;
 }) {
   return (
-    <div className="border-border border-b px-4">
-      <div className="flex gap-5">
+    <div className="border-border border-b px-4 py-2">
+      <div className="flex gap-1">
         <OrgMemoryTabButton
           active={activeTab === "live"}
           onClick={() => onTabChange("live")}
@@ -402,7 +401,9 @@ function OrgMemoryCardForOrg({ org }: { org: AuthContextValue["activeOrg"] }) {
         <div className="border-border border-b px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-0.5">
-              <p className="font-medium text-foreground text-sm">Org Memory</p>
+              <p className="font-semibold text-foreground text-sm">
+                Org memory
+              </p>
               <p className="max-w-prose text-muted-foreground text-xs leading-relaxed">
                 Shared facts for every agent. Review proposals before they go
                 live.

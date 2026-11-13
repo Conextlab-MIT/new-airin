@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getProfileSoulDir, NakamaApiError } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { AirinApiError, getProfileSoulDir } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { SkillProposalService } from "./skill-proposal-service";
 import { SkillsService } from "./skills-service";
 import {
@@ -23,12 +23,12 @@ describe("SkillProposalService", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-proposals-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-proposals-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("shared references reject proposals and approval while preserving pending records and files", async () => {
@@ -286,6 +286,127 @@ describe("SkillProposalService", () => {
     expect(result.outcome).toBe("created");
   });
 
+  test("stage patch refuses an old_string that cannot apply", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    const profile = await seedOrg(db);
+    const skills = new SkillsService(db);
+    const service = new SkillProposalService(db, skills);
+
+    await skills.createSkill(ORG_ID, {
+      body: "Run the checklist. Run the checklist.",
+      description: "Notes about deploy process.",
+      name: "deploy-notes",
+      profileId: profile.id,
+    });
+
+    for (const oldString of ["Notes about depl…", "Run the checklist."]) {
+      await expect(
+        service.stageProposal({
+          action: "patch",
+          newString: "replacement",
+          oldString,
+          orgId: ORG_ID,
+          profileId: profile.id,
+          skillName: "deploy-notes",
+        })
+      ).rejects.toMatchObject({ name: "AirinApiError", status: 409 });
+    }
+
+    expect(await db.listSkillProposals(ORG_ID, { status: "pending" })).toEqual(
+      []
+    );
+  });
+
+  test("approving a patch the skill has outgrown returns 409 and stays pending", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    const profile = await seedOrg(db);
+    const skills = new SkillsService(db);
+    const service = new SkillProposalService(db, skills);
+
+    const created = await skills.createSkill(ORG_ID, {
+      body: "Run the deploy checklist before shipping.",
+      description: "Notes about deploy process.",
+      name: "deploy-notes",
+      profileId: profile.id,
+    });
+
+    const staged = await service.stageProposal({
+      action: "patch",
+      newString: "release checklist",
+      oldString: "deploy checklist",
+      orgId: ORG_ID,
+      profileId: profile.id,
+      skillName: "deploy-notes",
+    });
+
+    await skills.patchAssignedProfileSkill(
+      ORG_ID,
+      profile.id,
+      "deploy-notes",
+      "deploy checklist",
+      "launch checklist"
+    );
+
+    await expect(
+      service.approveProposal(ORG_ID, staged.proposalId!, "admin_user")
+    ).rejects.toMatchObject({ name: "AirinApiError", status: 409 });
+    expect(
+      (await db.getSkillProposal(ORG_ID, staged.proposalId!))?.status
+    ).toBe("pending");
+    expect((await skills.getSkill(created.skill.id)).skill.body).toContain(
+      "launch checklist"
+    );
+  });
+
+  test("stage patch refuses a rename, even when another proposal is pending", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    const profile = await seedOrg(db);
+    const skills = new SkillsService(db);
+    const service = new SkillProposalService(db, skills);
+
+    await skills.createSkill(ORG_ID, {
+      body: "Run the deploy checklist before shipping.",
+      description: "Notes about deploy process.",
+      name: "deploy-notes",
+      profileId: profile.id,
+    });
+
+    const staged = await service.stageProposal({
+      action: "patch",
+      newString: "release checklist",
+      oldString: "deploy checklist",
+      orgId: ORG_ID,
+      profileId: profile.id,
+      skillName: "deploy-notes",
+    });
+
+    await expect(
+      service.stageProposal({
+        action: "patch",
+        newString: "name: other-notes",
+        oldString: "name: deploy-notes",
+        orgId: ORG_ID,
+        profileId: profile.id,
+        skillName: "deploy-notes",
+      })
+    ).rejects.toMatchObject({ name: "AirinApiError", status: 400 });
+    await expect(
+      service.stageProposal({
+        action: "patch",
+        newString: "x",
+        oldString: "not in the file",
+        orgId: ORG_ID,
+        profileId: profile.id,
+        skillName: "deploy-notes",
+      })
+    ).rejects.toMatchObject({ name: "AirinApiError", status: 409 });
+    expect(
+      (await db.listSkillProposals(ORG_ID, { status: "pending" })).map(
+        (proposal) => proposal.id
+      )
+    ).toEqual([staged.proposalId!]);
+  });
+
   test("approve patch applies old_string/new_string", async () => {
     const db = createInMemoryDatabaseAdapter();
     const profile = await seedOrg(db);
@@ -367,7 +488,7 @@ describe("SkillProposalService", () => {
 
     await expect(
       service.approveProposal("org_other", staged.proposalId!, "admin_user")
-    ).rejects.toBeInstanceOf(NakamaApiError);
+    ).rejects.toBeInstanceOf(AirinApiError);
     await expect(
       service.approveProposal("org_other", staged.proposalId!, "admin_user")
     ).rejects.toMatchObject({ status: 404 });
@@ -375,7 +496,7 @@ describe("SkillProposalService", () => {
 
   test("stage and approve write_file creates supporting file", async () => {
     const { readFile } = await import("node:fs/promises");
-    const { getProfileSkillsDir } = await import("@nakama/core");
+    const { getProfileSkillsDir } = await import("@airin/core");
 
     const db = createInMemoryDatabaseAdapter();
     const profile = await seedOrg(db);
@@ -418,10 +539,10 @@ describe("SkillProposalService", () => {
   });
 
   test("approve edit with consolidate losers archives them without delete", async () => {
-    const { pathExists } = await import("@nakama/core");
+    const { pathExists } = await import("@airin/core");
 
     const { getProfileSkillsArchiveDir, getProfileSkillsDir } = await import(
-      "@nakama/core"
+      "@airin/core"
     );
 
     const db = createInMemoryDatabaseAdapter();

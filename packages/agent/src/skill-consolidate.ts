@@ -1,4 +1,4 @@
-import type { ProviderClient } from "@nakama/core";
+import type { ProviderClient } from "@airin/core";
 
 const PROMPT_CHAR_MAX = 24_000;
 

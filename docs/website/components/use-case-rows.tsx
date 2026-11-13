@@ -1,7 +1,7 @@
 const useCases = [
   {
     details:
-      "Use Nakama as the agent backend for your customer-facing application.",
+      "Use Airin as the agent backend for your customer-facing application.",
     title: "Build an AI product",
   },
   {

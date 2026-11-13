@@ -18,6 +18,7 @@ export const USER_PROVIDER_NAMES: readonly UserProviderName[] = [
   "ollama",
   "openai_compatible",
   "opencode_go",
+  "command_code",
   "cloudflare",
   "chatgpt",
   "xai_oauth",
@@ -28,8 +29,12 @@ export const USER_PROVIDER_NAMES: readonly UserProviderName[] = [
   "zhipu",
   "zhipu_cn",
   "xai",
+  "groq",
+  "cheaper_inference",
+  "standardcompute",
   "together",
   "xiaomi",
+  "meta",
   "qwen",
   "qwen_cn",
   "vercel_ai_gateway",
@@ -60,6 +65,7 @@ export function parseProviderName(
     normalized === "ollama" ||
     normalized === "openai_compatible" ||
     normalized === "opencode_go" ||
+    normalized === "command_code" ||
     normalized === "cloudflare" ||
     normalized === "chatgpt" ||
     normalized === "xai_oauth" ||
@@ -70,8 +76,12 @@ export function parseProviderName(
     normalized === "zhipu" ||
     normalized === "zhipu_cn" ||
     normalized === "xai" ||
+    normalized === "groq" ||
+    normalized === "cheaper_inference" ||
+    normalized === "standardcompute" ||
     normalized === "together" ||
     normalized === "xiaomi" ||
+    normalized === "meta" ||
     normalized === "qwen" ||
     normalized === "qwen_cn" ||
     normalized === "vercel_ai_gateway"
@@ -93,7 +103,7 @@ export function apiKeyEnvVarForProvider(
     case "gemini":
       return "GEMINI_API_KEY";
     case "deepseek":
-      return null;
+      return "DEEPSEEK_API_KEY";
     case "netra":
       return "NETRA_API_KEY";
     case "doubao":
@@ -114,6 +124,8 @@ export function apiKeyEnvVarForProvider(
       return "OPENAI_COMPATIBLE_API_KEY";
     case "opencode_go":
       return "OPENCODE_GO_API_KEY";
+    case "command_code":
+      return "CMD_API_KEY";
     case "cloudflare":
       return "CLOUDFLARE_API_KEY";
     case "xai_oauth":
@@ -133,10 +145,18 @@ export function apiKeyEnvVarForProvider(
       return "ZHIPU_CN_API_KEY";
     case "xai":
       return "XAI_API_KEY";
+    case "groq":
+      return "GROQ_API_KEY";
+    case "cheaper_inference":
+      return "CHEAPER_INFERENCE_API_KEY";
+    case "standardcompute":
+      return "STANDARDCOMPUTE_API_KEY";
     case "together":
       return "TOGETHER_API_KEY";
     case "xiaomi":
       return "XIAOMI_API_KEY";
+    case "meta":
+      return "META_API_KEY";
     case "qwen":
       return "QWEN_API_KEY";
     case "qwen_cn":
@@ -157,7 +177,7 @@ export function resolveProvider(
   const env = options.env ?? process.env;
 
   const explicitEnvProvider = parseProviderName(
-    readEnvValue(env, "NAKAMA_PROVIDER")
+    readEnvValue(env, "AIRIN_PROVIDER")
   );
 
   if (explicitEnvProvider) {

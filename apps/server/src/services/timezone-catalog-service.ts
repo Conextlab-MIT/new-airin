@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { ListTimezonesResponse, TimezoneCatalogEntry } from "@nakama/core";
+import type { ListTimezonesResponse, TimezoneCatalogEntry } from "@airin/core";
 import { getTimezoneCityAliases } from "./timezone-city-aliases";
 
 const countryNames = new Intl.DisplayNames(["en"], { type: "region" });

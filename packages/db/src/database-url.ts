@@ -1,9 +1,9 @@
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { getUserConfigDir, PRIVATE_DIR_MODE } from "@nakama/core";
+import { getUserConfigDir, PRIVATE_DIR_MODE } from "@airin/core";
 
 export interface ResolveDatabasePathOptions {
-  /** Anchor relative file: paths (defaults to ~/.nakama). */
+  /** Anchor relative file: paths (defaults to ~/.airin). */
   baseDir?: string;
 }
 

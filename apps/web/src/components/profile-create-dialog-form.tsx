@@ -1,17 +1,19 @@
-import type { AcpAgentPresetSummary, ToolSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
+import type { AgentCharacterId } from "@airin/core/agent-marketplace";
+import type { AcpAgentPresetSummary, ToolSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Textarea } from "@nakama/ui/textarea";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/select";
+import { Textarea } from "@airin/ui/textarea";
+import { cn } from "@airin/ui/utils";
 import { Tick02Icon } from "hugeicons-react";
 import { type ChangeEvent, type RefObject, useState } from "react";
+import { AgentCharacterPicker } from "@/components/AgentCharacterPicker";
 
 /** Select items cannot be empty strings, so the built-in chat uses a sentinel. */
 export const BUILT_IN_AGENT = "builtin";
@@ -65,6 +67,7 @@ export function ProfileCreateDialogForm({
   profileIdHelpText,
   avatarPreview,
   avatarInputRef,
+  characterId,
   agentId,
   agentPresets,
   tools,
@@ -74,6 +77,7 @@ export function ProfileCreateDialogForm({
   onAgentChange,
   onAvatarSelected,
   onClearAvatar,
+  onCharacterSelect,
   onToolToggle,
   onToolsChange,
 }: {
@@ -88,6 +92,7 @@ export function ProfileCreateDialogForm({
   profileIdHelpText: string;
   avatarPreview: string | null;
   avatarInputRef: RefObject<HTMLInputElement | null>;
+  characterId: AgentCharacterId | null;
   agentId: string;
   agentPresets: AcpAgentPresetSummary[];
   tools: ToolSummary[];
@@ -97,13 +102,14 @@ export function ProfileCreateDialogForm({
   onAgentChange: (agentId: string) => void;
   onAvatarSelected: (event: ChangeEvent<HTMLInputElement>) => void;
   onClearAvatar: () => void;
+  onCharacterSelect: (characterId: AgentCharacterId) => void;
   onToolToggle: (toolId: string, checked: boolean) => void;
   onToolsChange: (toolIds: string[]) => void;
 }) {
   const [changing, setChanging] = useState(false);
 
   const agentLabel =
-    agentPresets.find((preset) => preset.id === agentId)?.label ?? "Nakama";
+    agentPresets.find((preset) => preset.id === agentId)?.label ?? "Airin";
 
   const selectedTools = tools.filter((tool) => selectedToolIds.has(tool.id));
 
@@ -226,6 +232,20 @@ export function ProfileCreateDialogForm({
           value={name}
         />
       </div>
+
+      <AgentCharacterPicker
+        busy={busy}
+        onSelect={onCharacterSelect}
+        selectedId={characterId}
+      />
+
+      <AvatarPicker
+        avatarInputRef={avatarInputRef}
+        avatarPreview={avatarPreview}
+        busy={busy}
+        onAvatarSelected={onAvatarSelected}
+        onClearAvatar={onClearAvatar}
+      />
     </div>
   );
 }
@@ -338,7 +358,7 @@ function AgentFields({
             <SelectValue>{agentLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={BUILT_IN_AGENT}>Nakama</SelectItem>
+            <SelectItem value={BUILT_IN_AGENT}>Airin</SelectItem>
             {agentPresets.map((preset) => (
               <SelectItem key={preset.id} value={preset.id}>
                 {preset.label}

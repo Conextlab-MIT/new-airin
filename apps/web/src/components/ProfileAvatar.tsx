@@ -1,21 +1,17 @@
-import { getProfileAvatarUrl } from "@nakama/client";
-import type { ProfileSummary } from "@nakama/core/contract";
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { hashToSeeds, oklchToCss } from "hashvatar";
 import { Hashvatar } from "hashvatar/react";
 import { useEffect, useMemo, useState } from "react";
-import { moodstoneIndexes, moodstoneSvg } from "./moodstone";
-
-type ProfileAvatarProfile = Pick<
-  ProfileSummary,
-  "id" | "name" | "hasAvatar" | "updatedAt" | "isSuper"
-> &
-  Partial<Pick<ProfileSummary, "createdAt">>;
-
-const SUPER_AGENT_DEFAULT_AVATAR = "/super-agent.png";
-
-/** Profiles created before Moodstone shipped keep their Hashvatar look. */
-const MOODSTONE_SINCE = Date.parse("2026-10-10T00:00:00Z");
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import {
+  type AgentActivity,
+  isPreMoodstone,
+  moodForActivity,
+  moodstoneIndexes,
+  moodstoneSvg,
+  type ProfileAvatarProfile,
+  resolveAvatarSrc,
+} from "./moodstone";
 
 const sizeClasses = {
   lg: "size-16",
@@ -34,6 +30,9 @@ const sizePixels = {
   xs: 20,
   xxs: 18,
 } as const;
+
+/** Skip the flicker between short tool calls; one loop restart per visible state. */
+const ACTIVITY_DEBOUNCE_MS = 160;
 
 /** Two OKLCH tones derived from the profile hash — same hash ⇒ same palette. */
 function tonesFromHash(hash: string): [string, string] {
@@ -54,55 +53,43 @@ function tonesFromHash(hash: string): [string, string] {
   ];
 }
 
-// create_profile chat cards carry only updatedAt, which is the creation time there.
-function isPreMoodstone(profile: ProfileAvatarProfile): boolean {
-  return Date.parse(profile.createdAt ?? profile.updatedAt) < MOODSTONE_SINCE;
-}
-
-function resolveAvatarSrc(
-  profile: ProfileAvatarProfile,
-  orgId?: string
-): string | null {
-  const uploaded = getProfileAvatarUrl(profile, orgId);
-
-  if (uploaded) {
-    return uploaded;
-  }
-
-  if (profile.isSuper) {
-    return SUPER_AGENT_DEFAULT_AVATAR;
-  }
-
-  return null;
-}
-
 export function ProfileAvatar({
   profile,
   size = "md",
   active = false,
+  activity = "idle",
   className,
   orgId,
+  squareMoodstone = false,
 }: {
   profile: ProfileAvatarProfile;
   size?: keyof typeof sizeClasses;
   /** Animate the generated avatar when this profile is selected in chat. */
   active?: boolean;
+  /** What the agent is doing; the animated face follows it when active. */
+  activity?: AgentActivity;
   className?: string;
   orgId?: string;
+  /** Draw the generated Moodstone avatar square; images and dithers stay round. */
+  squareMoodstone?: boolean;
 }) {
   const avatarUrl = resolveAvatarSrc(profile, orgId);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  // Start still on the server and before the motion preference is known.
-  const [reducedMotion, setReducedMotion] = useState(true);
+  const reducedMotion = useReducedMotion();
+  const [visibleActivity, setVisibleActivity] = useState(activity);
 
   useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReducedMotion(media.matches);
-    update();
-    media.addEventListener("change", update);
+    if (visibleActivity === activity) {
+      return;
+    }
 
-    return () => media.removeEventListener("change", update);
-  }, []);
+    const timer = setTimeout(
+      () => setVisibleActivity(activity),
+      ACTIVITY_DEBOUNCE_MS
+    );
+
+    return () => clearTimeout(timer);
+  }, [activity, visibleActivity]);
 
   const src = useMemo(() => {
     if (avatarUrl && avatarUrl !== failedUrl) {
@@ -113,26 +100,43 @@ export function ProfileAvatar({
       profile.id || profile.name || "?"
     );
 
-    const svg = moodstoneSvg(avatarIndex, colorIndex, active && !reducedMotion);
+    // Reduced motion keeps the state's key pose, only the loop is dropped.
+    const svg = moodstoneSvg(
+      avatarIndex,
+      colorIndex,
+      active && !reducedMotion,
+      moodForActivity(visibleActivity)
+    );
 
     // An image document isolates SVG gradient IDs, even for repeated profiles.
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-  }, [avatarUrl, failedUrl, profile.id, profile.name, active, reducedMotion]);
+  }, [
+    avatarUrl,
+    failedUrl,
+    profile.id,
+    profile.name,
+    active,
+    visibleActivity,
+    reducedMotion,
+  ]);
+
+  const showUploaded = avatarUrl !== null && avatarUrl !== failedUrl;
 
   const surfaceClass = cn(
-    "shrink-0 rounded-full outline outline-1 outline-black/10 -outline-offset-1 dark:outline-white/10",
+    "shrink-0 outline outline-1 outline-black/10 -outline-offset-1 dark:outline-white/10",
+    squareMoodstone && !showUploaded && !isPreMoodstone(profile)
+      ? "rounded-none"
+      : "rounded-full",
     sizeClasses[size],
     className
   );
-
-  const showUploaded = avatarUrl !== null && avatarUrl !== failedUrl;
 
   if (!showUploaded && isPreMoodstone(profile)) {
     const hash = profile.id || profile.name || "?";
 
     return (
       <Hashvatar
-        animated={active}
+        animated={active && !reducedMotion && visibleActivity !== "idle"}
         className={surfaceClass}
         hash={hash}
         mode="dither"
@@ -144,7 +148,7 @@ export function ProfileAvatar({
     );
   }
 
-  return (
+  const image = (
     <img
       alt=""
       className={cn(surfaceClass, "object-cover")}
@@ -154,4 +158,6 @@ export function ProfileAvatar({
       width={sizePixels[size]}
     />
   );
+
+  return image;
 }

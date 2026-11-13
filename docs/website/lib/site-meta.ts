@@ -1,18 +1,18 @@
-export const SITE_NAME = "Nakama";
+export const SITE_NAME = "Airin";
 
 const SITE_TAGLINE = "AI agents that work with your team.";
 
 export const SITE_DESCRIPTION =
-  "Nakama is an open-source platform for teams to build and run AI agents with their own memory, tools, and workspaces. Self-host or use managed hosting.";
+  "Airin is an open-source platform for teams to build and run AI agents with their own memory, tools, and workspaces. Self-host or use managed hosting.";
 
 export const SITE_URL =
-  process.env.NAKAMA_DOCS_SITE_URL ?? "https://ahmadrosid.github.io/nakama";
+  process.env.AIRIN_DOCS_SITE_URL ?? "https://ahmadrosid.github.io/airin";
 
 const AUTHOR_NAME = "Ahmad Rosid";
 
-const AUTHOR_ROLE = "Creator and maintainer of Nakama";
+const AUTHOR_ROLE = "Creator and maintainer of Airin";
 
-export const OG_IMAGE_URL = `${SITE_URL}/nakama-demo.png`;
+export const OG_IMAGE_URL = `${SITE_URL}/airin-demo.png`;
 
 export function slugToRelativePath(slug: string[]): string {
   if (slug.length === 1 && slug[0] === "docs") {
@@ -141,16 +141,16 @@ export function buildLlmsTxt(pages: PageMetadata[]) {
     "",
     `> ${SITE_DESCRIPTION} ${SITE_TAGLINE}`,
     "",
-    `${SITE_NAME} is AI agents that work with your team. Each profile is an agent with its own role, soul, tools, and memory. Organizations, skills, MCP servers, and channels like web, CLI, Telegram, WhatsApp, and Discord let you run your nakama from one deployment — self-hosted, in Docker, or on managed hosting at https://getnakama.cloud/.`,
+    `${SITE_NAME} is AI agents that work with your team. Each profile is an agent with its own role, soul, tools, and memory. Organizations, skills, MCP servers, and channels like web, CLI, Telegram, WhatsApp, and Discord let you run your airin from one deployment — self-hosted, in Docker, or on managed hosting at https://getairin.cloud/.`,
     "",
     `Maintainer: ${AUTHOR_NAME} (${AUTHOR_ROLE})`,
     `Website: ${SITE_URL}/`,
-    "Repository: https://github.com/ahmadrosid/nakama",
+    "Repository: https://github.com/ahmadrosid/airin",
     "",
     "## For AI agents",
     "",
-    "This file is the entry point for Nakama product documentation.",
-    "When a user asks about Nakama setup, behavior, integrations, or troubleshooting:",
+    "This file is the entry point for Airin product documentation.",
+    "When a user asks about Airin setup, behavior, integrations, or troubleshooting:",
     `1. You are reading the index now, or fetch ${SITE_URL}/llms.txt if you do not have it yet.`,
     "2. Pick the best page from the inventory below.",
     `3. web_fetch the matching .md page (for example ${SITE_URL}/telegram/index.md).`,

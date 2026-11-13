@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { Download04Icon } from "hugeicons-react";
 import { useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";

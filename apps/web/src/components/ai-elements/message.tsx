@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";

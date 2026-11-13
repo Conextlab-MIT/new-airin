@@ -47,7 +47,7 @@ describe("bridge API contract", () => {
             isDefault: false,
             isSuper: true,
             model: "local::research",
-            name: "Super Bot",
+            name: "Airin",
           },
         ],
       })
@@ -58,7 +58,7 @@ describe("bridge API contract", () => {
           isDefault: false,
           isSuper: true,
           model: "local::research",
-          name: "Super Bot",
+          name: "Airin",
         },
       ],
     });

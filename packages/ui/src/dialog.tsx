@@ -31,7 +31,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Backdrop
       className={cn(
-        "data-open:fade-in-0 data-closed:fade-out-0 fixed inset-0 isolate z-50 bg-black/10 duration-100 data-closed:animate-out data-open:animate-in supports-backdrop-filter:backdrop-blur-xs",
+        "data-open:fade-in-0 data-closed:fade-out-0 fixed inset-0 isolate z-50 bg-foreground/25 duration-150 data-closed:animate-out data-open:animate-in supports-backdrop-filter:backdrop-blur-sm",
         className
       )}
       data-slot="dialog-overlay"
@@ -43,17 +43,19 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  overlayClassName,
   showCloseButton = true,
   ...props
 }: DialogPrimitive.Popup.Props & {
+  overlayClassName?: string;
   showCloseButton?: boolean;
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Popup
         className={cn(
-          "data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl bg-popover p-4 text-popover-foreground text-sm outline-none ring-1 ring-foreground/10 duration-100 data-closed:animate-out data-open:animate-in sm:max-w-sm",
+          "data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-3xl bg-popover p-5 text-popover-foreground text-sm shadow-soft outline-none ring-1 ring-border duration-150 data-closed:animate-out data-open:animate-in sm:max-w-md",
           className
         )}
         data-slot="dialog-content"
@@ -80,6 +82,43 @@ function DialogContent({
   );
 }
 
+// A full-height panel that slides in from the right edge.
+function DialogSheetContent({
+  className,
+  children,
+  closeLabel = "Close",
+  ...props
+}: DialogPrimitive.Popup.Props & { closeLabel?: string }) {
+  return (
+    <DialogPortal>
+      <DialogOverlay className="transition-opacity duration-200 ease-out data-closed:animate-none data-open:animate-none data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none" />
+      <DialogPrimitive.Popup
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-border border-l bg-background text-foreground text-sm shadow-xl outline-none transition-transform duration-200 ease-out data-[ending-style]:translate-x-full data-[starting-style]:translate-x-full motion-reduce:transition-none",
+          className
+        )}
+        data-slot="dialog-sheet-content"
+        {...props}
+      >
+        {children}
+        <DialogPrimitive.Close
+          data-slot="dialog-close"
+          render={
+            <Button
+              aria-label={closeLabel}
+              className="absolute top-1 right-2 min-h-10 min-w-10"
+              size="icon"
+              variant="ghost"
+            />
+          }
+        >
+          <Cancel01Icon aria-hidden className="size-4" />
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Popup>
+    </DialogPortal>
+  );
+}
+
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -101,7 +140,7 @@ function DialogFooter({
   return (
     <div
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end sm:gap-3",
+        "-mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-3xl border-t bg-muted/40 p-5 sm:flex-row sm:justify-end sm:gap-3",
         className
       )}
       data-slot="dialog-footer"
@@ -121,7 +160,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       className={cn(
-        "font-heading font-medium text-base leading-none",
+        "font-heading font-semibold text-base text-foreground leading-tight tracking-tight",
         className
       )}
       data-slot="dialog-title"
@@ -234,6 +273,7 @@ export {
   DialogHeader,
   DialogOverlay,
   DialogPortal,
+  DialogSheetContent,
   DialogTitle,
   DialogTrigger,
 };

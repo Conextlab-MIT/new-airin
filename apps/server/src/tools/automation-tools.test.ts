@@ -3,13 +3,13 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AirinApiError,
   getDiscordConfigDir,
   getDiscordConfigPath,
   getTelegramConfigDir,
   getTelegramConfigPath,
-  NakamaApiError,
   type ToolContext,
-} from "@nakama/core";
+} from "@airin/core";
 import { AutomationRunner } from "../services/automation-runner";
 import { AutomationService } from "../services/automation-service";
 import {
@@ -400,13 +400,13 @@ describe("list_previous_automation_runs tool", () => {
 });
 
 describe("create_automation tool", () => {
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
   });
 
@@ -510,7 +510,7 @@ describe("create_automation tool", () => {
     expect(created.profileId).toBe(otherId);
   });
 
-  test("denies Super Bot profileId for members", async () => {
+  test("denies Airin profileId for members", async () => {
     const db = await createTestDb();
     const now = new Date().toISOString();
     const superId = "profile_super";
@@ -520,7 +520,7 @@ describe("create_automation tool", () => {
       isDefault: false,
       isSuper: true,
       model: null,
-      name: "Super Bot",
+      name: "Airin",
       orgId: ORG_ID,
       systemPrompt: "",
       updatedAt: now,
@@ -591,8 +591,8 @@ describe("create_automation tool", () => {
   });
 
   test("persists discord delivery and refuses a member channelId", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-discord-tool-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-discord-tool-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     await mkdir(getDiscordConfigDir({ orgId: ORG_ID, profileId: PROFILE_ID }), {
       recursive: true,
     });
@@ -645,20 +645,20 @@ describe("create_automation tool", () => {
       )
       .then(
         () => null,
-        (thrown: NakamaApiError) => thrown
+        (thrown: AirinApiError) => thrown
       );
 
     // A non-admin caller cannot pin delivery to a channel it never paired.
-    expect(withChannel).toBeInstanceOf(NakamaApiError);
-    // SAFETY: The preceding matcher checks this rejection is a NakamaApiError.
-    expect((withChannel as NakamaApiError).status).toBe(403);
+    expect(withChannel).toBeInstanceOf(AirinApiError);
+    // SAFETY: The preceding matcher checks this rejection is a AirinApiError.
+    expect((withChannel as AirinApiError).status).toBe(403);
 
     await rm(configDir, { force: true, recursive: true });
   });
 
   test("refuses a member telegram chatId outside the paired set", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-telegram-tool-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-telegram-tool-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const owner = { orgId: ORG_ID, profileId: PROFILE_ID };
     await mkdir(getTelegramConfigDir(owner), { recursive: true });
     await writeFile(
@@ -693,12 +693,12 @@ describe("create_automation tool", () => {
       )
       .then(
         () => null,
-        (thrown: NakamaApiError) => thrown
+        (thrown: AirinApiError) => thrown
       );
 
-    expect(foreign).toBeInstanceOf(NakamaApiError);
-    // SAFETY: The preceding matcher checks this rejection is a NakamaApiError.
-    expect((foreign as NakamaApiError).status).toBe(403);
+    expect(foreign).toBeInstanceOf(AirinApiError);
+    // SAFETY: The preceding matcher checks this rejection is a AirinApiError.
+    expect((foreign as AirinApiError).status).toBe(403);
 
     // SAFETY: The paired delivery is a created automation result with its delivery field.
     const paired = (await tool.run(

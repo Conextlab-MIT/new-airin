@@ -1,4 +1,4 @@
-import type { StreamEvent } from "@nakama/core";
+import type { StreamEvent } from "@airin/core";
 
 const MAX_BUFFER_EVENTS = 10_000;
 
@@ -21,6 +21,8 @@ type Subscriber = {
 };
 
 type ActiveTurn = {
+  /** Set by the stream running the turn; aborting it unwinds the turn cooperatively. */
+  abort?: AbortController;
   startedAt: string;
   events: StreamEvent[];
   bufferBytes: number;
@@ -30,7 +32,7 @@ type ActiveTurn = {
 
 function estimateEventBytes(event: StreamEvent): number {
   try {
-    return JSON.stringify(event).length;
+    return Buffer.byteLength(JSON.stringify(event), "utf8");
   } catch {
     return 256;
   }
@@ -53,18 +55,6 @@ function snapshotKey(event: StreamEvent): string | null {
       return "questionnaire_updated";
     default:
       return null;
-  }
-}
-
-function rebuildSnapshotIndexes(turn: ActiveTurn): void {
-  turn.snapshotIndexes.clear();
-
-  for (let index = 0; index < turn.events.length; index += 1) {
-    const key = snapshotKey(turn.events[index]!);
-
-    if (key) {
-      turn.snapshotIndexes.set(key, index);
-    }
   }
 }
 
@@ -92,20 +82,6 @@ function removeEventAt(turn: ActiveTurn, index: number): StreamEvent {
   return removed;
 }
 
-function onShiftFront(turn: ActiveTurn, removed: StreamEvent): void {
-  const removedKey = snapshotKey(removed);
-
-  if (removedKey) {
-    turn.snapshotIndexes.delete(removedKey);
-  }
-
-  for (const [key, index] of turn.snapshotIndexes) {
-    if (index > 0) {
-      turn.snapshotIndexes.set(key, index - 1);
-    }
-  }
-}
-
 function shouldReplaceOnPublish(event: StreamEvent): boolean {
   return (
     event.type === "tool_input_delta" ||
@@ -122,34 +98,15 @@ function publishSnapshotKey(event: StreamEvent): string | null {
   return snapshotKey(event);
 }
 
-function compactBuffer(events: StreamEvent[]): StreamEvent[] {
-  const snapshotIndexes = new Map<string, number>();
-
-  for (let index = 0; index < events.length; index += 1) {
-    const key = snapshotKey(events[index]!);
-
-    if (key) {
-      snapshotIndexes.set(key, index);
+/** Oldest event that is not a live snapshot and not the newest event, or -1. */
+function evictionIndex(turn: ActiveTurn): number {
+  for (let index = 0; index < turn.events.length - 1; index += 1) {
+    if (!shouldReplaceOnPublish(turn.events[index]!)) {
+      return index;
     }
   }
 
-  const keep = new Set<number>();
-
-  for (const index of snapshotIndexes.values()) {
-    keep.add(index);
-  }
-
-  for (
-    let index = events.length - 1;
-    index >= 0 && keep.size < MAX_BUFFER_EVENTS;
-    index -= 1
-  ) {
-    if (!keep.has(index)) {
-      keep.add(index);
-    }
-  }
-
-  return events.filter((_, index) => keep.has(index));
+  return -1;
 }
 
 function trimBuffer(turn: ActiveTurn): void {
@@ -157,25 +114,14 @@ function trimBuffer(turn: ActiveTurn): void {
     turn.events.length > MAX_BUFFER_EVENTS ||
     turn.bufferBytes > MAX_BUFFER_BYTES
   ) {
-    if (turn.events.length <= 1) {
+    const index = evictionIndex(turn);
+
+    if (index === -1) {
       break;
     }
 
-    turn.events = compactBuffer(turn.events);
-    rebuildSnapshotIndexes(turn);
-    turn.bufferBytes = turn.events.reduce(
-      (total, event) => total + estimateEventBytes(event),
-      0
-    );
-
-    if (turn.events.length > MAX_BUFFER_EVENTS) {
-      const removed = turn.events.shift();
-
-      if (removed) {
-        turn.bufferBytes -= estimateEventBytes(removed);
-        onShiftFront(turn, removed);
-      }
-    }
+    const removed = removeEventAt(turn, index);
+    turn.bufferBytes -= estimateEventBytes(removed);
   }
 }
 
@@ -214,6 +160,22 @@ export class SessionTurnRegistry {
 
   isActive(sessionId: string): boolean {
     return this.turns.has(sessionId);
+  }
+
+  attachAbort(sessionId: string, abort: AbortController): void {
+    const turn = this.turns.get(sessionId);
+
+    if (turn) {
+      turn.abort = abort;
+    }
+  }
+
+  /**
+   * Asks the running turn to stop. The turn still ends through its own
+   * endTurn, so history is never touched while a tool is mid-call.
+   */
+  stopTurn(sessionId: string): void {
+    this.turns.get(sessionId)?.abort?.abort();
   }
 
   cancelTurn(sessionId: string): void {

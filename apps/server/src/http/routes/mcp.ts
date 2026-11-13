@@ -1,15 +1,17 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   ListMcpServersResponse,
   McpServerResponse,
   ProfileResponse,
   TestMcpServerResponse,
-} from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
+} from "@airin/core";
+import { AirinApiError } from "@airin/core";
+import type { McpRegistrySearchResponse } from "@airin/core/contract";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   resolveCallbackBaseUrlFromRedirect,
   resolveComposioCallbackBaseUrl,
 } from "../../services/composio-callback-url";
+import { searchMcpRegistry } from "../../services/mcp-registry";
 import type { ServerOptions } from "../context";
 import {
   requireActiveOrgIdFromContext,
@@ -63,7 +65,7 @@ export function registerMcpOAuthRoutes(
       return mcpOAuthPage(
         "Authorization failed",
         error instanceof Error ? error.message : String(error),
-        error instanceof NakamaApiError ? error.status : 400
+        error instanceof AirinApiError ? error.status : 400
       );
     }
   });
@@ -142,6 +144,7 @@ export function registerMcpRoutes(app: HonoApp, options: ServerOptions): void {
       enabled: z.boolean().optional(),
       name: z.string(),
       serverId: z.string().optional(),
+      signIn: z.boolean().optional(),
       transport: transportSchema,
     })
     .passthrough()
@@ -393,6 +396,53 @@ export function registerMcpRoutes(app: HonoApp, options: ServerOptions): void {
       tags: ["Profiles", "MCP"],
     })
   );
+
+  const registrySearchSchema = z
+    .object({})
+    .passthrough()
+    .openapi("McpRegistrySearchResponse");
+
+  const registrySearchQuery = z.object({
+    search: z
+      .string()
+      .optional()
+      .openapi({
+        description: "Search query for MCP servers",
+        example: "github",
+        param: { in: "query", name: "search" },
+      }),
+  });
+
+  app.openAPIRegistry.registerPath(
+    createRoute({
+      method: "get",
+      operationId: "searchMcpRegistry",
+      path: "/v1/mcp/registry",
+      request: {
+        query: registrySearchQuery,
+      },
+      responses: {
+        200: {
+          content: { "application/json": { schema: registrySearchSchema } },
+          description: "Matching MCP servers from official registry",
+        },
+        502: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Registry unavailable",
+        },
+      },
+      summary: "Search official MCP registry",
+      tags: ["MCP"],
+    })
+  );
+
+  app.get("/v1/mcp/registry", async (c) => {
+    requirePlatformAdminFromContext(c);
+
+    return json<McpRegistrySearchResponse>(
+      await searchMcpRegistry(c.req.query("search") ?? "")
+    );
+  });
 
   app.get("/v1/mcp/servers", async (c) => {
     requirePlatformAdminFromContext(c);

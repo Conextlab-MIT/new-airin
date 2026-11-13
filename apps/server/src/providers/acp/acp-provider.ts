@@ -1,4 +1,4 @@
-import type * as acp from "@agentclientprotocol/sdk";
+import * as acp from "@agentclientprotocol/sdk";
 import type {
   AcpAgentConfig,
   ChatCompletionResult,
@@ -7,20 +7,21 @@ import type {
   GenerateTextResult,
   ProviderClient,
   StreamChatHandlers,
-} from "@nakama/core";
+} from "@airin/core";
+import { resolveAcpAgentLaunch } from "./acp-agent-presets";
 import {
   type AcpAgentProcess,
   startAcpAgentProcess,
 } from "./acp-agent-process";
 import { isEditInsideFolder } from "./acp-edit-policy";
-import { isNakamaToolPermission, moveAcpToolAccess } from "./acp-mcp-tools";
+import { isAirinToolPermission, moveAcpToolAccess } from "./acp-mcp-tools";
 import { createAcpUpdateMapper } from "./acp-session-events";
 
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
 export interface AcpProviderOptions {
   agent: AcpAgentConfig;
-  /** Absolute path. The agent works here; Nakama never runs its own tools in it. */
+  /** Absolute path. The agent works here; Airin never runs its own tools in it. */
   cwd: string;
   /** Settings applied once when the agent session starts, such as the model and effort. */
   initialSettings?: Record<string, string>;
@@ -49,8 +50,8 @@ const liveSessions = new Map<string, LiveSession>();
 
 /**
  * Chat provider backed by an ACP agent. The agent runs its own model loop and
- * tools. Nakama sends the new user message, shows the streamed updates, and
- * gets the Nakama tools through `mcpServers`.
+ * tools. Airin sends the new user message, shows the streamed updates, and
+ * gets the Airin tools through `mcpServers`.
  */
 export function createAcpProvider(options: AcpProviderOptions): ProviderClient {
   const generateChat = async (
@@ -78,13 +79,15 @@ export function createAcpProvider(options: AcpProviderOptions): ProviderClient {
     live.route.mapper = mapper;
 
     const onAbort = () => {
-      void live.process.connection.cancel({ sessionId });
+      void live.process.connection.notify(acp.methods.agent.session.cancel, {
+        sessionId,
+      });
     };
 
     input.signal?.addEventListener("abort", onAbort, { once: true });
 
     try {
-      await live.process.connection.prompt({
+      await live.process.connection.request(acp.methods.agent.session.prompt, {
         prompt: [{ text, type: "text" }],
         sessionId,
       });
@@ -141,11 +144,10 @@ export async function setAcpConfigOption(
   // SAFETY: ensureSession sets sessionId before it returns the live session.
   const sessionId = live.sessionId as string;
 
-  const response = await live.process.connection.setSessionConfigOption({
-    configId,
-    sessionId,
-    value,
-  });
+  const response = await live.process.connection.request(
+    acp.methods.agent.session.setConfigOption,
+    { configId, sessionId, value }
+  );
 
   live.configOptions = response.configOptions;
 
@@ -198,15 +200,29 @@ async function ensureSession(
 ): Promise<LiveSession> {
   const live = await getOrStartProcess(options);
 
-  if (live.sessionId === null) {
-    const created = await live.process.connection.newSession({
-      cwd: options.cwd,
-      mcpServers: options.mcpServers ?? [],
-    });
+  try {
+    if (live.sessionId === null) {
+      const created = await live.process.connection.request(
+        acp.methods.agent.session.new,
+        {
+          // Claude's agent also loads every MCP server of the host's own Claude
+          // Code config (user settings, plugins, claude.ai connectors), so the
+          // profile could reach tools it never attached. Strict keeps it to the
+          // servers below. Other agents ignore this `_meta`.
+          _meta: { claudeCode: { options: { strictMcpConfig: true } } },
+          cwd: options.cwd,
+          mcpServers: options.mcpServers ?? [],
+        }
+      );
 
-    live.sessionId = created.sessionId;
-    live.configOptions = created.configOptions ?? [];
-    await applyInitialSettings(live, options.initialSettings ?? {});
+      live.sessionId = created.sessionId;
+      live.configOptions = created.configOptions ?? [];
+      await applyInitialSettings(live, options.initialSettings ?? {});
+    }
+  } finally {
+    // A settings read starts an agent too, and may never be followed by a
+    // prompt. Arm the idle stop here so that agent does not run forever.
+    scheduleIdleStop(live);
   }
 
   return live;
@@ -230,12 +246,15 @@ async function applyInitialSettings(
       continue;
     }
 
-    const response = await live.process.connection.setSessionConfigOption({
-      configId,
-      // SAFETY: ensureSession sets sessionId before this runs.
-      sessionId: live.sessionId as string,
-      value,
-    });
+    const response = await live.process.connection.request(
+      acp.methods.agent.session.setConfigOption,
+      {
+        configId,
+        // SAFETY: ensureSession sets sessionId before this runs.
+        sessionId: live.sessionId as string,
+        value,
+      }
+    );
 
     live.configOptions = response.configOptions;
   }
@@ -258,11 +277,6 @@ async function getOrStartProcess(
   const existing = liveSessions.get(options.sessionKey);
 
   if (existing && sameAgent(existing, options)) {
-    if (existing.idleTimer) {
-      clearTimeout(existing.idleTimer);
-      existing.idleTimer = null;
-    }
-
     return existing;
   }
 
@@ -274,16 +288,16 @@ async function getOrStartProcess(
 
   const process = await startAcpAgentProcess(
     {
-      args: options.agent.args,
-      command: options.agent.command,
+      ...resolveAcpAgentLaunch(options.agent),
       cwd: options.cwd,
     },
-    {
-      requestPermission: async (params) => {
-        // Approved: the chat's own Nakama tools, and edits to files inside the
+    acp
+      .client()
+      .onRequest(acp.methods.client.session.requestPermission, ({ params }) => {
+        // Approved: the chat's own Airin tools, and edits to files inside the
         // profile folder. Commands and edits outside the folder are denied.
         const approve =
-          isNakamaToolPermission(route.key, params.toolCall) ||
+          isAirinToolPermission(route.key, params.toolCall) ||
           isEditInsideFolder(options.cwd, params.toolCall);
 
         const choice = params.options.find((option) =>
@@ -295,11 +309,10 @@ async function getOrStartProcess(
         return choice
           ? { outcome: { optionId: choice.optionId, outcome: "selected" } }
           : { outcome: { outcome: "cancelled" } };
-      },
-      sessionUpdate: async (notification) => {
-        route.mapper?.handle(notification);
-      },
-    }
+      })
+      .onNotification(acp.methods.client.session.update, ({ params }) => {
+        route.mapper?.handle(params);
+      })
   );
 
   const session: LiveSession = {
@@ -330,7 +343,8 @@ function scheduleIdleStop(live: LiveSession): void {
   }
 
   live.idleTimer = setTimeout(() => {
-    if (liveSessions.get(live.key) === live) {
+    // A mapper means a turn is running. Its end arms the timer again.
+    if (liveSessions.get(live.key) === live && !live.route.mapper) {
       stopAcpSession(live.key);
     }
   }, IDLE_TIMEOUT_MS);
@@ -360,8 +374,28 @@ function lastUserText(input: GenerateChatInput): string {
     }
 
     return content
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
+      .map((part) => {
+        if (part.type === "text") {
+          return part.text;
+        }
+
+        // The agent gets text only, so a text file goes in with its name and
+        // every other file is named, never dropped without a word.
+        if (part.type === "document") {
+          return part.mediaType.startsWith("text/")
+            ? `[File: ${part.filename}]\n${Buffer.from(part.data, "base64").toString("utf8")}`
+            : `[File: ${part.filename} (${part.mediaType}) is attached, but its contents cannot be sent to this agent.]`;
+        }
+
+        if (part.type === "image") {
+          return part.description
+            ? `[Image: ${part.description}]`
+            : "[An image is attached, but it cannot be sent to this agent.]";
+        }
+
+        return "";
+      })
+      .filter(Boolean)
       .join("\n");
   }
 

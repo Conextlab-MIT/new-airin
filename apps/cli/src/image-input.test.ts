@@ -16,21 +16,21 @@ const tinyPng = Buffer.from(
 
 const originalCwd = process.cwd();
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 afterEach(() => {
   process.chdir(originalCwd);
 
   if (originalConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+    process.env.AIRIN_CONFIG_DIR = originalConfigDir;
   }
 });
 
 describe("resolveAllowedImagePath", () => {
   test("allows a relative path under cwd", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-cli-img-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-cli-img-"));
     process.chdir(dir);
     await writeFile(join(dir, "shot.png"), tinyPng);
 
@@ -39,9 +39,9 @@ describe("resolveAllowedImagePath", () => {
     );
   });
 
-  test("allows a path under NAKAMA_CONFIG_DIR", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-cfg-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+  test("allows a path under AIRIN_CONFIG_DIR", async () => {
+    const configDir = await mkdtemp(join(tmpdir(), "airin-cfg-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const nested = join(configDir, "uploads");
     await mkdir(nested);
     await writeFile(join(nested, "shot.png"), tinyPng);
@@ -52,11 +52,9 @@ describe("resolveAllowedImagePath", () => {
   });
 
   test("rejects absolute paths outside cwd and config dir", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-cli-img-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-cli-img-"));
     process.chdir(dir);
-    process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
-      join(tmpdir(), "nakama-cfg-")
-    );
+    process.env.AIRIN_CONFIG_DIR = await mkdtemp(join(tmpdir(), "airin-cfg-"));
 
     expect(() => resolveAllowedImagePath("/etc/passwd")).toThrow(
       /outside allowed directories/i
@@ -64,15 +62,13 @@ describe("resolveAllowedImagePath", () => {
   });
 
   test("rejects a sibling path that only shares a string prefix with cwd", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "nakama-cli-pfx-"));
+    const parent = await mkdtemp(join(tmpdir(), "airin-cli-pfx-"));
     const cwdRoot = join(parent, "fo");
     const sibling = join(parent, "foo");
     await mkdir(cwdRoot);
     await mkdir(sibling);
     process.chdir(cwdRoot);
-    process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
-      join(tmpdir(), "nakama-cfg-")
-    );
+    process.env.AIRIN_CONFIG_DIR = await mkdtemp(join(tmpdir(), "airin-cfg-"));
     await writeFile(join(sibling, "shot.png"), tinyPng);
 
     expect(() => resolveAllowedImagePath(join(sibling, "shot.png"))).toThrow(
@@ -87,7 +83,7 @@ describe("parseImageLine", () => {
   });
 
   test("parses image path with message under cwd", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-cli-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-cli-"));
     process.chdir(dir);
     await writeFile(join(dir, "test.png"), tinyPng);
 
@@ -100,11 +96,9 @@ describe("parseImageLine", () => {
   });
 
   test("rejects image paths outside the allowlist", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-cli-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-cli-"));
     process.chdir(dir);
-    process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
-      join(tmpdir(), "nakama-cfg-")
-    );
+    process.env.AIRIN_CONFIG_DIR = await mkdtemp(join(tmpdir(), "airin-cfg-"));
 
     await expect(parseImageLine("@/etc/hosts look")).rejects.toThrow(
       /outside allowed directories/i

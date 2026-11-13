@@ -1,64 +1,181 @@
-import { Button } from "@nakama/ui/button";
-import { TooltipProvider } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
-import { ArrowLeft02Icon } from "hugeicons-react";
-import { useMemo } from "react";
-import { Link, Outlet, useLocation, useMatch } from "react-router-dom";
+import { Button } from "@airin/ui/button";
+import { TooltipProvider } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
+import {
+  ArrowLeft01Icon,
+  ArrowLeft02Icon,
+  ArrowRight01Icon,
+  Search01Icon,
+} from "hugeicons-react";
+import { lazy, Suspense, useMemo } from "react";
+import {
+  Link,
+  Outlet,
+  useLocation,
+  useMatch,
+  useNavigate,
+} from "react-router-dom";
 import { AppSidebar } from "@/components/AppSidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { MobileNavDrawer } from "@/components/MobileNavDrawer";
+import { WebPushPrompt } from "@/components/notifications/web-push-prompt";
+import { OwnerSidebarReopen } from "@/components/OwnerSidebarReopen";
+import { OwnerTeamSidebar } from "@/components/OwnerTeamSidebar";
 import { ProfileRail } from "@/components/ProfileRail";
 import { RouteBoundary } from "@/components/RouteBoundary";
+import { useBtwChatStore } from "@/context/btw-chat-store";
 import { useAppContext } from "@/context/use-app-context";
+import { useUiMode } from "@/context/use-ui-mode";
+import { useAgentGroupQuery } from "@/hooks/use-agent-groups";
 import { useOrgPlugins } from "@/hooks/use-plugins";
-import {
-  useHistorySessionsQuery,
-  useSessionSummaryQuery,
-} from "@/hooks/use-resource-mutations";
+import { useChatSessionSummary } from "@/hooks/use-resource-mutations";
+import { useOwnerSidebarHidden } from "@/hooks/use-sidebar-collapsed";
+import { useOrgFromNotification, usePushPresence } from "@/hooks/use-web-push";
 import {
   enabledPluginNavEntries,
   findNavItem,
+  groupRouteFromPath,
   PAGE_PATHS,
   type PageId,
   pageIdFromPath,
   pluginIdFromPath,
   SIDEBAR_PAGE_IDS,
+  sidebarPageId,
 } from "@/lib/navigation";
+
+const BtwChatHost = lazy(() =>
+  import("@/components/chat/btw-chat").then((module) => ({
+    default: module.BtwChatHost,
+  }))
+);
 
 export function Layout() {
   const shell = useAppShell();
+  usePushPresence();
+  const switchingOrg = useOrgFromNotification();
+  const btwOpen = useBtwChatStore((store) => store.chat !== null);
+  const { uiMode } = useUiMode();
+  const ownerMode = uiMode === "owner";
+
+  const { collapsed: ownerSidebarHidden, toggle: toggleOwnerSidebar } =
+    useOwnerSidebarHidden();
 
   return (
     <TooltipProvider delay={0}>
-      <div className="flex h-svh overflow-hidden bg-background pl-[env(safe-area-inset-left)]">
-        {/* The rail and sidebar cost a fixed 296px, so on a phone they live
-            in MobileNavDrawer instead of the layout. */}
-        <div className="hidden h-full sm:flex">
-          <ProfileRail />
-          <AppSidebar />
-        </div>
-        <div
-          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pr-[env(safe-area-inset-right)]"
-          data-app-shell-content=""
+      <div className="flex h-svh flex-col overflow-hidden bg-background">
+        <button
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:shadow"
+          onClick={() => document.getElementById("main-content")?.focus()}
+          type="button"
         >
-          <AppShellHeader
-            hideDesktop={
-              shell.pathname === PAGE_PATHS.profiles ||
-              shell.pathname.startsWith(`${PAGE_PATHS.profiles}/skills/`)
-            }
-            label={shell.headerLabel}
-            page={shell.page}
-          />
-          <AppShellError error={shell.error} />
-          <main className={appShellMainClassName(shell.page, shell.pathname)}>
-            <RouteBoundary resetKey={shell.pathname}>
-              <Outlet />
-            </RouteBoundary>
-          </main>
+          Skip to content
+        </button>
+        <DesktopTitleBar ownerMode={ownerMode} />
+        <div className="flex min-h-0 flex-1 overflow-hidden pl-[env(safe-area-inset-left)]">
+          {/* The rail and sidebar cost a fixed 296px, so on a phone they live
+            in MobileNavDrawer instead of the layout. Below lg, Owner can hide
+            the tablet sidebar and reopen it from the chat bar. */}
+          <div
+            className={cn(
+              "hidden h-full sm:flex",
+              ownerMode && ownerSidebarHidden && "max-lg:hidden"
+            )}
+          >
+            {ownerMode ? (
+              <OwnerTeamSidebar onHide={toggleOwnerSidebar} />
+            ) : (
+              <>
+                <ProfileRail />
+                <AppSidebar />
+              </>
+            )}
+          </div>
+          <div
+            className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pr-[env(safe-area-inset-right)]"
+            data-app-shell-content=""
+          >
+            <AppShellHeader
+              hideDesktop={
+                ownerMode ||
+                shell.pathname.startsWith(`${PAGE_PATHS.profiles}/skills/`) ||
+                // A group chat takes the full desktop column, like agent chat.
+                groupRouteFromPath(shell.pathname) !== null
+              }
+              label={shell.headerLabel}
+              ownerMode={ownerMode}
+              page={shell.page}
+            />
+            <AppShellError error={shell.error} />
+            <main
+              className={`${appShellMainClassName(shell.page, shell.pathname)} outline-none`}
+              id="main-content"
+              tabIndex={-1}
+            >
+              <RouteBoundary resetKey={shell.pathname}>
+                {switchingOrg ? null : <Outlet />}
+              </RouteBoundary>
+            </main>
+          </div>
         </div>
       </div>
-      <CommandPalette />
+      {ownerMode ? null : <CommandPalette />}
+      <WebPushPrompt />
+      {btwOpen ? (
+        <Suspense fallback={null}>
+          <BtwChatHost />
+        </Suspense>
+      ) : null}
     </TooltipProvider>
+  );
+}
+
+/**
+ * The desktop app's window title bar. CSS shows it only under
+ * `html[data-desktop]`, which the Electron preload sets.
+ */
+function DesktopTitleBar({ ownerMode }: { ownerMode: boolean }) {
+  const navigate = useNavigate();
+  const shortcut = navigator.userAgent.includes("Mac") ? "⌘K" : "Ctrl K";
+
+  return (
+    <div className="desktop-title-bar">
+      <Button
+        aria-label="Back"
+        className="text-muted-foreground hover:text-foreground"
+        onClick={() => navigate(-1)}
+        size="icon-sm"
+        title="Back"
+        variant="ghost"
+      >
+        <ArrowLeft01Icon aria-hidden="true" className="size-4" />
+      </Button>
+      <Button
+        aria-label="Forward"
+        className="text-muted-foreground hover:text-foreground"
+        onClick={() => navigate(1)}
+        size="icon-sm"
+        title="Forward"
+        variant="ghost"
+      >
+        <ArrowRight01Icon aria-hidden="true" className="size-4" />
+      </Button>
+      {ownerMode ? null : (
+        <button
+          className="desktop-title-bar-search"
+          // CommandPalette owns its open state and listens for this shortcut.
+          onClick={() =>
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", { ctrlKey: true, key: "k" })
+            )
+          }
+          type="button"
+        >
+          <Search01Icon aria-hidden="true" className="size-3.5" />
+          <span className="flex-1 text-left">Search</span>
+          <kbd className="font-sans text-2xs">{shortcut}</kbd>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -70,18 +187,15 @@ function useAppShell() {
   const chatProfileId = chatRoute?.params.profileId ?? "";
   const chatSessionId = chatRoute?.params.sessionId ?? null;
 
-  const { data: sessions, hasNextPage } =
-    useHistorySessionsQuery(chatProfileId);
-
-  const listedChat = sessions.find((session) => session.id === chatSessionId);
-
-  // An old chat opened by URL can sit on a page the sidebar has not loaded.
-  const { data: unlistedChat } = useSessionSummaryQuery(
+  const chatTitle = useChatSessionSummary(
     chatProfileId,
-    listedChat || !hasNextPage ? null : chatSessionId
-  );
+    chatSessionId
+  )?.title?.trim();
 
-  const chatTitle = (listedChat ?? unlistedChat)?.title?.trim();
+  // On a phone the header names the group.
+  const groupRoute = groupRouteFromPath(location.pathname);
+  const { data: group } = useAgentGroupQuery(groupRoute?.groupId ?? "");
+  const groupTitle = group?.name;
 
   const { data: orgPlugins = [] } = useOrgPlugins();
 
@@ -99,9 +213,10 @@ function useAppShell() {
   return {
     error,
     headerLabel:
-      (page === "chat" ? chatTitle : undefined) ||
+      chatTitle ||
+      groupTitle ||
       (activePlugin?.label ??
-        findNavItem(page)?.label ??
+        findNavItem(sidebarPageId(page))?.label ??
         activePluginId ??
         undefined),
     page,
@@ -115,6 +230,7 @@ function isFlushContentPage(page: PageId, pathname: string): boolean {
     page === "automations" ||
     page === "files" ||
     page === "plugins" ||
+    pathname.startsWith(`${PAGE_PATHS.groups}/`) ||
     pathname.startsWith(`${PAGE_PATHS.profiles}/skills/`) ||
     pathname.startsWith(`${PAGE_PATHS.soul}/playground/`)
   );
@@ -127,8 +243,8 @@ function appShellMainClassName(page: PageId, pathname: string): string {
   return cn(
     "min-h-0 flex-1",
     flush
-      ? "flex flex-col overflow-hidden"
-      : "overflow-y-auto overflow-x-hidden",
+      ? "flex flex-col overflow-hidden sm:[scrollbar-gutter:stable]"
+      : "overflow-y-auto overflow-x-hidden sm:[scrollbar-gutter:stable]",
     flush || skillDetail ? null : "p-4 sm:p-6"
   );
 }
@@ -136,36 +252,47 @@ function appShellMainClassName(page: PageId, pathname: string): string {
 function AppShellHeader({
   hideDesktop,
   label,
+  ownerMode,
   page,
 }: {
   hideDesktop: boolean;
   label: string | undefined;
+  ownerMode: boolean;
   page: PageId;
 }) {
   const hideTitle = page === "soul";
 
   const showCustomizeBack =
-    page !== "notifications" && !SIDEBAR_PAGE_IDS.includes(page);
+    page !== "notifications" && !SIDEBAR_PAGE_IDS.includes(sidebarPageId(page));
 
+  // SAFETY: PageId is a string union; the lookup falls back when the key is absent.
   const backLabel =
-    page === "customize" ? "Back to Chat" : "Back to Control center";
+    {
+      customize: "Back to Chat",
+      plugins: "Back to Plugins",
+    }[page as string] ?? "Back to Settings";
 
+  // SAFETY: PageId is a string union; the lookup falls back when the key is absent.
   const backPath =
-    page === "customize" ? PAGE_PATHS.chat : PAGE_PATHS.customize;
+    {
+      customize: PAGE_PATHS.chat,
+      plugins: PAGE_PATHS["plugin-management"],
+    }[page as string] ?? PAGE_PATHS.customize;
 
   return (
     <header
       className={cn(
-        "app-shell-header gap-2 bg-card px-3 sm:gap-4 sm:px-6",
+        "app-shell-header gap-2 bg-background px-3 sm:gap-4 sm:px-6",
         // Standalone on iOS the shell owns the status bar, so the bar grows by
         // the top inset and paints its own background under the notch.
-        "h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]",
+        "h-[calc(3rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]",
         // Chat uses the full desktop column; phones still need the header
         // to reach navigation.
         (page === "chat" || hideDesktop) && "sm:hidden"
       )}
     >
       <MobileNavDrawer className="sm:hidden" />
+      {ownerMode ? <OwnerSidebarReopen /> : null}
       {(showCustomizeBack || page === "customize") && (
         <Button
           aria-label={backLabel}
@@ -184,7 +311,7 @@ function AppShellHeader({
         </Button>
       )}
       {hideTitle ? null : (
-        <h1 className="min-w-0 truncate font-normal text-base text-foreground tracking-tight">
+        <h1 className="min-w-0 truncate font-semibold text-[15px] text-foreground tracking-tight">
           {label}
         </h1>
       )}

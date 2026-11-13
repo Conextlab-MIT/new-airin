@@ -1,5 +1,5 @@
 import type { PublishedKnowledgeBaseDocument } from "../contract";
-import { DEFAULT_KNOWLEDGE_SOURCES, NAKAMA_DOCS_LLMS_URL } from "./sources";
+import { AIRIN_DOCS_LLMS_URL, DEFAULT_KNOWLEDGE_SOURCES } from "./sources";
 import {
   getProfileSharedDocumentIds,
   listKnowledgeBaseDocuments,
@@ -71,8 +71,8 @@ export async function composeKnowledgeBaseCatalog(
 
   if (sources.length > 0) {
     sections.push(
-      "# Nakama documentation",
-      `For Nakama product questions, web_fetch ${NAKAMA_DOCS_LLMS_URL}, then web_fetch the matching .md page from that index. Do not use knowledge_base_search for inherited docs.`
+      "# Airin documentation",
+      `For Airin product questions, web_fetch ${AIRIN_DOCS_LLMS_URL}, then web_fetch the matching .md page from that index. Do not use knowledge_base_search for inherited docs.`
     );
   }
 

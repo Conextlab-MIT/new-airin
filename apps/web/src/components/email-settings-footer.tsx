@@ -1,7 +1,7 @@
-import { Button } from "@nakama/ui/button";
-import { DialogFooter } from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
+import { Button } from "@airin/ui/button";
+import { DialogFooter } from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
 
 export function EmailSettingsFooter({
   hint,

@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import path from "node:path";
-import { NakamaClient, type RemoteChatSession } from "@nakama/client";
+import { AirinClient, type RemoteChatSession } from "@airin/client";
 import {
   hasActiveStreams,
   resetActiveStreamsForTests,
-} from "@nakama/core/channel-active-stream";
-import { ChannelSessionStore as SessionStore } from "@nakama/core/channel-session-store";
-import type { ChatMessage, SendMessageInput } from "@nakama/core/contract";
-import { loadDiscordConfigFile } from "@nakama/core/discord-config";
+} from "@airin/core/channel-active-stream";
+import { ChannelSessionStore as SessionStore } from "@airin/core/channel-session-store";
+import type { ChatMessage, SendMessageInput } from "@airin/core/contract";
+import { loadDiscordConfigFile } from "@airin/core/discord-config";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "@airin/core/message-content";
 import type {
   ButtonInteraction,
   StringSelectMenuInteraction,
@@ -155,8 +156,9 @@ async function waitForCondition(
 async function createPairedHandler(
   homeDir: string,
   options: NonNullable<Parameters<typeof createMockClient>[0]> & {
-    apiClient?: NakamaClient;
+    apiClient?: AirinClient;
     configProfileId?: string;
+    owner?: { orgId: string; profileId: string };
     pairedUserIds?: string[];
     allowedUserIds?: string[];
   } = {}
@@ -174,13 +176,13 @@ async function createPairedHandler(
   const client = options.apiClient ?? mockClient.client;
 
   const sessionStore = new SessionStore(
-    path.join(homeDir, ".nakama", "discord", "chat-sessions.json")
+    path.join(homeDir, ".airin", "discord", "chat-sessions.json")
   );
 
   await sessionStore.load();
 
   const threadStore = new ThreadStore(
-    path.join(homeDir, ".nakama", "discord", "chat-threads.json")
+    path.join(homeDir, ".airin", "discord", "chat-threads.json")
   );
 
   await threadStore.load();
@@ -192,6 +194,7 @@ async function createPairedHandler(
     client,
     config: {
       botToken: "discord-bot-token",
+      owner: options.owner,
       profileId: options.configProfileId ?? "default",
     },
     orgStore,
@@ -241,8 +244,8 @@ describe("createChatHandler logging", () => {
   test("logs message metadata without private content when debug is on", async () => {
     await withTempHome(async (homeDir) => {
       const privateMessage = "private 🔒 message";
-      const previousDebug = process.env.NAKAMA_CH_DEBUG;
-      process.env.NAKAMA_CH_DEBUG = "1";
+      const previousDebug = process.env.AIRIN_CH_DEBUG;
+      process.env.AIRIN_CH_DEBUG = "1";
       const log = spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -263,9 +266,9 @@ describe("createChatHandler logging", () => {
         log.mockRestore();
 
         if (previousDebug === undefined) {
-          delete process.env.NAKAMA_CH_DEBUG;
+          delete process.env.AIRIN_CH_DEBUG;
         } else {
-          process.env.NAKAMA_CH_DEBUG = previousDebug;
+          process.env.AIRIN_CH_DEBUG = previousDebug;
         }
       }
     });
@@ -273,8 +276,8 @@ describe("createChatHandler logging", () => {
 
   test("stays quiet on message handle when debug is off", async () => {
     await withTempHome(async (homeDir) => {
-      const previousDebug = process.env.NAKAMA_CH_DEBUG;
-      delete process.env.NAKAMA_CH_DEBUG;
+      const previousDebug = process.env.AIRIN_CH_DEBUG;
+      delete process.env.AIRIN_CH_DEBUG;
       const log = spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -288,9 +291,9 @@ describe("createChatHandler logging", () => {
         log.mockRestore();
 
         if (previousDebug === undefined) {
-          delete process.env.NAKAMA_CH_DEBUG;
+          delete process.env.AIRIN_CH_DEBUG;
         } else {
-          process.env.NAKAMA_CH_DEBUG = previousDebug;
+          process.env.AIRIN_CH_DEBUG = previousDebug;
         }
       }
     });
@@ -329,7 +332,7 @@ describe("Discord selection pickers", () => {
           .find((button) => button.label === "Apply")?.disabled
       ).toBe(true);
 
-      const pick = createPickerInteraction("nakama:org:424242424242424242:0", [
+      const pick = createPickerInteraction("airin:org:424242424242424242:0", [
         "org_b",
       ]);
 
@@ -384,7 +387,7 @@ describe("Discord selection pickers", () => {
       try {
         await selectAndApply(
           handler,
-          "nakama:org:424242424242424242:0",
+          "airin:org:424242424242424242:0",
           "org_b"
         );
         expect(handler.sessionStore.get(key)).toBeUndefined();
@@ -407,9 +410,9 @@ describe("Discord selection pickers", () => {
 
       let firstStarted = false;
 
-      const apiClient = new NakamaClient({
+      const apiClient = new AirinClient({
         baseUrl: "http://discord-test.invalid",
-        // SAFETY: NakamaClient calls fetch with the standard Request input shape.
+        // SAFETY: AirinClient calls fetch with the standard Request input shape.
         fetch: (async (input, init) => {
           const request = new Request(input, init);
           const pathname = new URL(request.url).pathname;
@@ -492,7 +495,7 @@ describe("Discord selection pickers", () => {
         "org_b",
         "org_a",
       ]);
-      await selectAndApply(handler, "nakama:org:424242424242424242:0", "org_b");
+      await selectAndApply(handler, "airin:org:424242424242424242:0", "org_b");
       await send("thread_1", "continue");
       expect(sent.at(-1)?.orgId).toBe("org_b");
       expect(sent.at(-1)?.sessionId).not.toBe(sent[0]?.sessionId);
@@ -564,9 +567,9 @@ describe("Discord selection pickers", () => {
       const sibling =
         handler.sessionStore.getHotSession<RemoteChatSession>(siblingKey);
 
-      await selectAndApply(handler, "nakama:org:424242424242424242:0", "org_a");
+      await selectAndApply(handler, "airin:org:424242424242424242:0", "org_a");
       expect(handler.sessionStore.getHotSession(key)).toBeDefined();
-      await selectAndApply(handler, "nakama:org:424242424242424242:0", "org_b");
+      await selectAndApply(handler, "airin:org:424242424242424242:0", "org_b");
       expect(handler.sessionStore.get(key)).toBeUndefined();
       expect(handler.sessionStore.getHotSession(key)).toBeUndefined();
       expect(
@@ -585,7 +588,7 @@ describe("Discord selection pickers", () => {
     });
   });
 
-  test("profile picker excludes Super Bot and rejects stale or unavailable choices", async () => {
+  test("profile picker excludes Airin and rejects stale or unavailable choices", async () => {
     await withTempHome(async (homeDir) => {
       const handler = await createPairedHandler(homeDir, {
         orgs: createMultiTestOrgs(),
@@ -652,7 +655,7 @@ describe("Discord selection pickers", () => {
         orgs: createMultiTestOrgs(),
       });
 
-      const id = "nakama:org:424242424242424242:0";
+      const id = "airin:org:424242424242424242:0";
       const pick = createPickerInteraction(id, ["org_b"]);
       const preview = readPickerPayload(pick.interaction);
       await handler.handleSelectionInteraction(pick.interaction);
@@ -680,7 +683,7 @@ describe("Discord selection pickers", () => {
 
       await handler.handleSelectionInteraction(
         createPickerInteraction(
-          "nakama:org:888888888888888888:apply",
+          "airin:org:888888888888888888:apply",
           undefined,
           "888888888888888888",
           unauthorizedPayload
@@ -714,7 +717,7 @@ describe("createChatHandler artifact delivery", () => {
         {
           arguments: {
             content: metaJson,
-            path: "artifacts/report.md.nakama-meta.json",
+            path: "artifacts/report.md.airin-meta.json",
           },
           id: "tool_2",
           name: "write_file",
@@ -724,7 +727,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: 8,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md",
       }),
       name: "write_file",
       role: "tool",
@@ -733,7 +736,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: metaJson.length,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md.nakama-meta.json",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md.airin-meta.json",
       }),
       name: "write_file",
       role: "tool",
@@ -742,7 +745,7 @@ describe("createChatHandler artifact delivery", () => {
     { content: "Saved the report.", role: "assistant" },
   ];
 
-  test("auto-uploads a small artifact after a paired save-artifact turn", async () => {
+  test("auto-uploads a small artifact after a paired save_artifact turn", async () => {
     await withTempHome(async (homeDir) => {
       const { handleMessage, calls, sessionStore } = await createPairedHandler(
         homeDir,
@@ -768,173 +771,9 @@ describe("createChatHandler artifact delivery", () => {
       expect(calls.publishProfileArtifactShare).toBe(1);
       expect(calls.readProfileArtifactContent).toBe(1);
       expect(dm.fileSendCalls).toBe(1);
-      expect(
-        dm.sentMessages.some((reply) =>
-          reply.includes("https://app.example/s/tok_test")
-        )
-      ).toBe(true);
-    });
-  });
-
-  test("auto-uploads a PDF artifact after a paired save-artifact turn", async () => {
-    await withTempHome(async (homeDir) => {
-      const pdfMeta = JSON.stringify({
-        mimeType: "application/pdf",
-        savedAt: "2026-07-13T10:00:00.000Z",
-        sizeBytes: 270_000,
-      });
-
-      const pdfMessages: ChatMessage[] = [
-        { content: "save pitch deck", role: "user" },
-        {
-          content: "",
-          role: "assistant",
-          toolCalls: [
-            {
-              arguments: {
-                content: "%PDF-1.4",
-                path: "artifacts/nakama-pitch-deck.pdf",
-              },
-              id: "tool_1",
-              name: "write_file",
-            },
-            {
-              arguments: {
-                content: pdfMeta,
-                path: "artifacts/nakama-pitch-deck.pdf.nakama-meta.json",
-              },
-              id: "tool_2",
-              name: "write_file",
-            },
-          ],
-        },
-        {
-          content: JSON.stringify({
-            bytesWritten: 270_000,
-            path: "/home/.nakama/orgs/org/profiles/default/artifacts/nakama-pitch-deck.pdf",
-          }),
-          name: "write_file",
-          role: "tool",
-          toolCallId: "tool_1",
-        },
-        {
-          content: JSON.stringify({
-            bytesWritten: pdfMeta.length,
-            path: "/home/.nakama/orgs/org/profiles/default/artifacts/nakama-pitch-deck.pdf.nakama-meta.json",
-          }),
-          name: "write_file",
-          role: "tool",
-          toolCallId: "tool_2",
-        },
-        { content: "Saved the pitch deck.", role: "assistant" },
-      ];
-
-      const { handleMessage, calls, sessionStore } = await createPairedHandler(
-        homeDir,
-        {
-          artifactContentBytes: new TextEncoder().encode("%PDF-1.4"),
-          messages: pdfMessages,
-        }
+      expect(dm.sentMessages.join("\n")).toContain(
+        "https://app.example/s/tok_test"
       );
-
-      sessionStore.set("dm_channel_1", {
-        profileId: "default",
-        sessionId: "session_test",
-        updatedAt: new Date().toISOString(),
-      });
-      await sessionStore.save();
-
-      const dm = createDmMessage({
-        content: "thanks",
-        userId: "424242424242424242",
-      });
-
-      await handleMessage(dm.message);
-
-      expect(calls.publishProfileArtifactShare).toBe(1);
-      expect(calls.readProfileArtifactContent).toBe(1);
-      expect(dm.fileSendCalls).toBe(1);
-    });
-  });
-
-  test("auto-uploads a CSV artifact after a paired save-artifact turn", async () => {
-    await withTempHome(async (homeDir) => {
-      const csvMeta = JSON.stringify({
-        mimeType: "text/csv",
-        savedAt: "2026-07-13T10:00:00.000Z",
-        sizeBytes: 24,
-      });
-
-      const csvMessages: ChatMessage[] = [
-        { content: "export csv", role: "user" },
-        {
-          content: "",
-          role: "assistant",
-          toolCalls: [
-            {
-              arguments: {
-                content: "a,b\n1,2\n",
-                path: "artifacts/export.csv",
-              },
-              id: "tool_1",
-              name: "write_file",
-            },
-            {
-              arguments: {
-                content: csvMeta,
-                path: "artifacts/export.csv.nakama-meta.json",
-              },
-              id: "tool_2",
-              name: "write_file",
-            },
-          ],
-        },
-        {
-          content: JSON.stringify({
-            bytesWritten: 8,
-            path: "/home/.nakama/orgs/org/profiles/default/artifacts/export.csv",
-          }),
-          name: "write_file",
-          role: "tool",
-          toolCallId: "tool_1",
-        },
-        {
-          content: JSON.stringify({
-            bytesWritten: csvMeta.length,
-            path: "/home/.nakama/orgs/org/profiles/default/artifacts/export.csv.nakama-meta.json",
-          }),
-          name: "write_file",
-          role: "tool",
-          toolCallId: "tool_2",
-        },
-        { content: "Saved the CSV.", role: "assistant" },
-      ];
-
-      const { handleMessage, calls, sessionStore } = await createPairedHandler(
-        homeDir,
-        {
-          artifactContentBytes: new TextEncoder().encode("a,b\n1,2\n"),
-          messages: csvMessages,
-        }
-      );
-
-      sessionStore.set("dm_channel_1", {
-        profileId: "default",
-        sessionId: "session_test",
-        updatedAt: new Date().toISOString(),
-      });
-      await sessionStore.save();
-
-      const dm = createDmMessage({
-        content: "thanks",
-        userId: "424242424242424242",
-      });
-
-      await handleMessage(dm.message);
-
-      expect(calls.publishProfileArtifactShare).toBe(1);
-      expect(calls.readProfileArtifactContent).toBe(1);
-      expect(dm.fileSendCalls).toBe(1);
     });
   });
 
@@ -960,7 +799,7 @@ describe("createChatHandler artifact delivery", () => {
             {
               arguments: {
                 content: oversizedMeta,
-                path: "artifacts/clip.mp4.nakama-meta.json",
+                path: "artifacts/clip.mp4.airin-meta.json",
               },
               id: "tool_2",
               name: "write_file",
@@ -970,7 +809,7 @@ describe("createChatHandler artifact delivery", () => {
         {
           content: JSON.stringify({
             bytesWritten: 9 * 1024 * 1024,
-            path: "/home/.nakama/orgs/org/profiles/default/artifacts/clip.mp4",
+            path: "/home/.airin/orgs/org/profiles/default/artifacts/clip.mp4",
           }),
           name: "write_file",
           role: "tool",
@@ -979,7 +818,7 @@ describe("createChatHandler artifact delivery", () => {
         {
           content: JSON.stringify({
             bytesWritten: oversizedMeta.length,
-            path: "/home/.nakama/orgs/org/profiles/default/artifacts/clip.mp4.nakama-meta.json",
+            path: "/home/.airin/orgs/org/profiles/default/artifacts/clip.mp4.airin-meta.json",
           }),
           name: "write_file",
           role: "tool",
@@ -1012,11 +851,9 @@ describe("createChatHandler artifact delivery", () => {
       expect(calls.publishProfileArtifactShare).toBe(1);
       expect(calls.readProfileArtifactContent).toBe(0);
       expect(dm.fileSendCalls).toBe(0);
-      expect(
-        dm.sentMessages.some((reply) =>
-          reply.includes("https://app.example/s/tok_test")
-        )
-      ).toBe(true);
+      expect(dm.sentMessages.join("\n")).toContain(
+        "https://app.example/s/tok_test"
+      );
     });
   });
 
@@ -1041,7 +878,7 @@ describe("createChatHandler artifact delivery", () => {
             {
               content: JSON.stringify({
                 bytesWritten: 5,
-                path: "/home/.nakama/orgs/org/profiles/default/artifacts/draft.md",
+                path: "/home/.airin/orgs/org/profiles/default/artifacts/draft.md",
               }),
               name: "write_file",
               role: "tool",
@@ -1078,16 +915,16 @@ describe("createChatHandler artifact delivery", () => {
           artifactContentBytes: new TextEncoder().encode("%PDF-1.4"),
           onSendStream: async (_input, handlers) => {
             handlers?.onToolStart?.({
-              input: { path: "nakama-pitch-deck.pdf" },
+              input: { path: "airin-pitch-deck.pdf" },
               tool: "send_discord_artifact",
               toolCallId: "tool_1",
             });
             handlers?.onToolEnd?.({
               result: {
-                filename: "nakama-pitch-deck.pdf",
+                filename: "airin-pitch-deck.pdf",
                 mimeType: "application/pdf",
                 ok: true,
-                path: "nakama-pitch-deck.pdf",
+                path: "airin-pitch-deck.pdf",
                 sizeBytes: 8,
               },
               tool: "send_discord_artifact",
@@ -1129,9 +966,9 @@ describe("createChatHandler artifact delivery", () => {
           artifactContentBytes: new TextEncoder().encode("%PDF-1.4"),
           listedArtifacts: [
             {
-              filename: "nakama-pitch-deck.pdf",
+              filename: "airin-pitch-deck.pdf",
               mimeType: "application/pdf",
-              path: "/tmp/artifacts/nakama-pitch-deck.pdf",
+              path: "/tmp/artifacts/airin-pitch-deck.pdf",
               sizeBytes: 8,
               updatedAt: "2026-08-08T12:51:00.000Z",
             },
@@ -1251,7 +1088,7 @@ describe("createChatHandler early ack", () => {
     const { client } = createMockClient({ onSendStream });
 
     const sessionStore = new SessionStore(
-      path.join(homeDir, ".nakama", "discord", "chat-sessions.json")
+      path.join(homeDir, ".airin", "discord", "chat-sessions.json")
     );
 
     await sessionStore.load();
@@ -1971,6 +1808,61 @@ describe("createChatHandler guild thread routing", () => {
     });
   });
 
+  // The owner's agent is listed only in the owner's org, not the active one.
+  test("/status names the owner's agent from the owner's org", async () => {
+    await withTempHome(async (homeDir) => {
+      const { handleSlashCommand } = await createPairedHandler(homeDir, {
+        owner: { orgId: "org_owner", profileId: "agent_owner" },
+        profilesByOrgId: {
+          org_owner: [
+            { id: "agent_owner", model: "local::owned", name: "Owner Bot" },
+          ],
+        },
+        providerConfigured: true,
+      });
+
+      const statusCmd = createSlashInteraction({ commandName: "status" });
+      await handleSlashCommand(statusCmd.interaction);
+
+      const statusText = statusCmd.replies.join("\n");
+      expect(statusText).toContain("Profile: Owner Bot");
+      expect(statusText).toContain("Model: owned");
+    });
+  });
+
+  test("/status names the profile, model and this chat's session", async () => {
+    await withTempHome(async (homeDir) => {
+      const { handleSlashCommand } = await createPairedHandler(homeDir, {
+        profiles: [
+          {
+            id: "default",
+            isDefault: true,
+            model: "local::base",
+            name: "Default Bot",
+          },
+        ],
+        providerConfigured: true,
+      });
+
+      const newCmd = createSlashInteraction({ commandName: "new" });
+      await handleSlashCommand(newCmd.interaction);
+
+      const statusCmd = createSlashInteraction({ commandName: "status" });
+      await handleSlashCommand(statusCmd.interaction);
+
+      expect(statusCmd.replies.join("\n")).toBe(
+        [
+          "Server: ok",
+          "Provider configured: yes",
+          "Profile: Default Bot",
+          "Provider: unknown",
+          "Model: base",
+          "Session: session_",
+        ].join("\n")
+      );
+    });
+  });
+
   test("slash commands in threads still clear and start new sessions", async () => {
     await withTempHome(async (homeDir) => {
       const { handleSlashCommand, sessionStore } =
@@ -2387,40 +2279,6 @@ describe("createChatHandler guild thread routing", () => {
     });
   });
 
-  test("wedged chat lock recovers so follow-ups are not silenced forever", async () => {
-    chatLockOptions.waitMs = 40;
-
-    let releaseHang!: () => void;
-
-    const hang = new Promise<void>((resolve) => {
-      releaseHang = resolve;
-    });
-
-    const order: string[] = [];
-
-    const first = withChatLock("g:channel:t:thread_wedge", async () => {
-      order.push("first-start");
-      await hang;
-      order.push("first-end");
-    });
-
-    await Bun.sleep(5);
-    const secondStarted = Date.now();
-
-    const second = withChatLock("g:channel:t:thread_wedge", async () => {
-      order.push("second");
-    });
-
-    await second;
-    const waitedMs = Date.now() - secondStarted;
-    expect(waitedMs).toBeGreaterThanOrEqual(35);
-    expect(order).toEqual(["first-start", "second"]);
-
-    releaseHang();
-    await first;
-    expect(order).toEqual(["first-start", "second", "first-end"]);
-  });
-
   test("withChatLock removes map entries after the critical section", async () => {
     expect(getChatLockCountForTests()).toBe(0);
 
@@ -2473,13 +2331,13 @@ describe("createChatHandler guild thread routing", () => {
       const { client } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "discord", "chat-sessions.json")
+        path.join(homeDir, ".airin", "discord", "chat-sessions.json")
       );
 
       await sessionStore.load();
 
       const threadStore = new ThreadStore(
-        path.join(homeDir, ".nakama", "discord", "chat-threads.json")
+        path.join(homeDir, ".airin", "discord", "chat-threads.json")
       );
 
       await threadStore.load();
@@ -2636,12 +2494,15 @@ describe("createChatHandler inbound images", () => {
         const { handleMessage, calls } = await createPairedHandler(homeDir);
 
         const dm = createDmMessage({
-          attachments: Array.from({ length: 6 }, (_, index) => ({
-            contentType: "image/png",
-            name: `shot-${index}.png`,
-            size: 8,
-            url: `https://cdn.example/shot-${index}.png`,
-          })),
+          attachments: Array.from(
+            { length: MAX_ATTACHMENTS_PER_MESSAGE + 1 },
+            (_, index) => ({
+              contentType: "image/png",
+              name: `shot-${index}.png`,
+              size: 8,
+              url: `https://cdn.example/shot-${index}.png`,
+            })
+          ),
           content: "",
           userId: "424242424242424242",
         });
@@ -2826,9 +2687,8 @@ describe("Discord session history", () => {
       ]);
 
       await handler.handleSelectionInteraction(
-        createPickerInteraction("nakama:sessions:424242424242424242", [
-          "sess_a",
-        ]).interaction
+        createPickerInteraction("airin:sessions:424242424242424242", ["sess_a"])
+          .interaction
       );
       expect(handler.sessionStore.get(key)).toMatchObject({
         sessionId: "sess_a",

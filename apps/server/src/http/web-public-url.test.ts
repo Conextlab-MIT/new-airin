@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { loadUserWebPublicUrl, saveUserWebPublicUrl } from "@nakama/core";
+import { loadUserWebPublicUrl, saveUserWebPublicUrl } from "@airin/core";
 import { resolveComposioCallbackBaseUrl } from "../services/composio-callback-url";
 import { setupTestConfigDir, withTestEnv } from "../test-config-dir";
 import { createMinimalHonoApp } from "./test-app-helpers";
@@ -13,7 +13,7 @@ import {
   type TestBrowserSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-web-public-url-test-");
+setupTestConfigDir("airin-web-public-url-test-");
 
 const API_URL = "http://localhost:4310/v1/system/web-public-url";
 
@@ -97,22 +97,70 @@ describe("web public url settings", () => {
     expect(foreign.status).toBe(400);
     expect(await readSavedBaseUrl(app, session)).toBeNull();
 
-    // The origin the request was forwarded to is the deployment's own.
-    const forwarded = await app.fetch(
+    // A forwarded header is caller-controlled: without AIRIN_TRUST_PROXY it
+    // cannot pin the base an OAuth code is delivered to.
+    const forgedForward = await app.fetch(
       putRequest(
         session,
-        { webPublicUrl: "https://nakama.example.com" },
+        { webPublicUrl: "https://attacker.example" },
         session.orgId,
-        // No X-Forwarded-Proto: the check compares hosts, and the header would
-        // make the server look for the `__Host-` cookie this http session
-        // does not hold.
-        { "X-Forwarded-Host": "nakama.example.com" }
+        { "X-Forwarded-Host": "attacker.example" }
       )
     );
 
-    expect(forwarded.status).toBe(200);
+    expect(forgedForward.status).toBe(400);
+    expect(await readSavedBaseUrl(app, session)).toBeNull();
+
+    // The origin a trusted proxy forwards is the deployment's own.
+    await withTestEnv({ AIRIN_TRUST_PROXY: "true" }, async () => {
+      const forwarded = await app.fetch(
+        putRequest(
+          session,
+          { webPublicUrl: "https://airin.example.com" },
+          session.orgId,
+          // No X-Forwarded-Proto: the check compares hosts, and the header would
+          // make the server look for the `__Host-` cookie this http session
+          // does not hold.
+          { "X-Forwarded-Host": "airin.example.com" }
+        )
+      );
+
+      expect(forwarded.status).toBe(200);
+    });
+
     expect(await readSavedBaseUrl(app, session)).toBe(
-      "https://nakama.example.com"
+      "https://airin.example.com"
+    );
+  });
+
+  test("first-run setup accepts the origin a trusted proxy forwards", async () => {
+    await withTestEnv(
+      {
+        AIRIN_PUBLIC_URL: undefined,
+        AIRIN_TRUST_PROXY: "true",
+        AIRIN_WEB_PUBLIC_URL: undefined,
+      },
+      async () => {
+        const { app } = createMinimalHonoApp();
+
+        const response = await app.fetch(
+          new Request("http://airin-internal:4310/v1/auth/setup", {
+            body: JSON.stringify({
+              ...buildSetupAuthBody(),
+              webPublicUrl: "https://airin.example.com",
+            }),
+            headers: {
+              "Content-Type": "application/json",
+              "X-Forwarded-Host": "airin.example.com",
+              "X-Forwarded-Proto": "https",
+            },
+            method: "POST",
+          })
+        );
+
+        expect(response.status).toBe(201);
+        expect(await loadUserWebPublicUrl()).toBe("https://airin.example.com");
+      }
     );
   });
 
@@ -182,14 +230,14 @@ describe("web public url settings", () => {
 
   test("first-run setup keeps a base provisioned in the config file when a proxy hides the public host", async () => {
     await withTestEnv(
-      { NAKAMA_PUBLIC_URL: undefined, NAKAMA_WEB_PUBLIC_URL: undefined },
+      { AIRIN_PUBLIC_URL: undefined, AIRIN_WEB_PUBLIC_URL: undefined },
       async () => {
-        await saveUserWebPublicUrl("https://nakama.example.com");
+        await saveUserWebPublicUrl("https://airin.example.com");
         const { app } = createMinimalHonoApp();
 
         const setup = (webPublicUrl: string) =>
           app.fetch(
-            new Request("http://nakama-internal:4310/v1/auth/setup", {
+            new Request("http://airin-internal:4310/v1/auth/setup", {
               body: JSON.stringify({ ...buildSetupAuthBody(), webPublicUrl }),
               headers: { "Content-Type": "application/json" },
               method: "POST",
@@ -197,8 +245,8 @@ describe("web public url settings", () => {
           );
 
         expect((await setup("https://attacker.example")).status).toBe(400);
-        expect((await setup("https://nakama.example.com")).status).toBe(201);
-        expect(await loadUserWebPublicUrl()).toBe("https://nakama.example.com");
+        expect((await setup("https://airin.example.com")).status).toBe(201);
+        expect(await loadUserWebPublicUrl()).toBe("https://airin.example.com");
       }
     );
   });

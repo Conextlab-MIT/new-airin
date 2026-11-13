@@ -1,14 +1,15 @@
-import { z } from "@hono/zod-openapi";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type {
   ArtifactShareStatusResponse,
   PublishArtifactShareResponse,
   RevokeArtifactShareResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
+import { z } from "@hono/zod-openapi";
 import { ArtifactShareService } from "../../services/artifact-share-service";
 import { resolveRequestClientOrigin } from "../../services/composio-callback-url";
 import type { ServerOptions } from "../context";
 import {
+  artifactCreatorScopeFromContext,
   requireActiveOrgIdFromContext,
   requireOrgMemberFromContext,
 } from "../org-guards";
@@ -44,6 +45,13 @@ export function registerArtifactShareRoutes(
       return json({ error: "path is required" }, 400);
     }
 
+    await options.agent.requireArtifactCreator(
+      orgId,
+      profileId,
+      body.path.trim(),
+      (await artifactCreatorScopeFromContext(c, options.agent)) ?? undefined
+    );
+
     const clientOrigin = resolveRequestClientOrigin(
       c.req.raw,
       body.clientOrigin
@@ -77,6 +85,13 @@ export function registerArtifactShareRoutes(
       return json({ error: "path is required" }, 400);
     }
 
+    await options.agent.requireArtifactCreator(
+      orgId,
+      profileId,
+      sourcePath.trim(),
+      (await artifactCreatorScopeFromContext(c, options.agent)) ?? undefined
+    );
+
     const status = await service.getArtifactShareStatus({
       orgId,
       profileId,
@@ -96,6 +111,28 @@ export function registerArtifactShareRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
     const profileId = decodeURIComponent(c.req.param("profileId"));
     const shareId = decodeURIComponent(c.req.param("shareId"));
+
+    const createdByUserId = await artifactCreatorScopeFromContext(
+      c,
+      options.agent
+    );
+
+    if (createdByUserId) {
+      const share = await options.databaseAdapter?.getArtifactShareById(
+        orgId,
+        profileId,
+        shareId
+      );
+
+      if (share) {
+        await options.agent.requireArtifactCreator(
+          orgId,
+          profileId,
+          share.sourcePath,
+          createdByUserId
+        );
+      }
+    }
 
     return json<RevokeArtifactShareResponse>(
       await service.revokeArtifactShare({ orgId, profileId, shareId })
@@ -132,7 +169,7 @@ export function registerArtifactShareRoutes(
         },
       });
     } catch (error) {
-      if (error instanceof NakamaApiError && error.status === 404) {
+      if (error instanceof AirinApiError && error.status === 404) {
         return json({ error: "Not found" }, 404);
       }
 

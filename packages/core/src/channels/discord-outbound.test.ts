@@ -19,13 +19,13 @@ function parseJsonObject(text: string): JsonObject {
 }
 
 describe("createDiscordOutboundAdapter", () => {
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
   });
 
@@ -33,8 +33,8 @@ describe("createDiscordOutboundAdapter", () => {
     ini: string,
     run: () => Promise<void>
   ): Promise<void> {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-discord-outbound-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-discord-outbound-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     await mkdir(getDiscordConfigDir(owner), { recursive: true });
     await writeFile(getDiscordConfigPath(owner), ini, "utf8");
 

@@ -1,37 +1,22 @@
-import { Button } from "@nakama/ui/button";
-import { ConfirmDialog } from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import {
+  AlertCircleIcon,
   CheckmarkCircle01Icon,
   Copy01Icon,
   QrCodeScanIcon,
   RefreshIcon,
 } from "hugeicons-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { SettingsRow } from "@/components/integration-settings.shared";
-
-function pairingCodeDescription(
-  pairingCode: string | null,
-  paired: boolean
-): string {
-  if (pairingCode) {
-    return "Open Linked Devices in WhatsApp and enter this code. It expires in 10 minutes.";
-  }
-
-  if (paired) {
-    return "This number is linked. Generate a new code only if you need to relink.";
-  }
-
-  return "Optional — use this instead of scanning the QR code.";
-}
 
 function WhatsAppPairingCodeControls({
   copied,
   onCopyPairingCode,
   onRegeneratePairingCode,
-  paired,
   pairingCode,
   regeneratePending,
   savePending,
@@ -39,7 +24,6 @@ function WhatsAppPairingCodeControls({
   copied: boolean;
   onCopyPairingCode: () => void;
   onRegeneratePairingCode: () => void;
-  paired: boolean;
   pairingCode: string | null;
   regeneratePending: boolean;
   savePending: boolean;
@@ -86,27 +70,6 @@ function WhatsAppPairingCodeControls({
     );
   }
 
-  if (paired) {
-    return (
-      <Button
-        disabled={regeneratePending || savePending}
-        onClick={onRegeneratePairingCode}
-        size="sm"
-        type="button"
-        variant="outline"
-      >
-        {regeneratePending ? (
-          <Spinner />
-        ) : (
-          <>
-            <RefreshIcon aria-hidden="true" className="size-3.5" />
-            New code
-          </>
-        )}
-      </Button>
-    );
-  }
-
   return (
     <Button
       disabled={regeneratePending || savePending}
@@ -121,104 +84,69 @@ function WhatsAppPairingCodeControls({
           Generating…
         </>
       ) : (
-        "Generate pairing code"
+        "Get pairing code"
       )}
     </Button>
   );
 }
 
-function WhatsAppLinkStatus({
-  awaitingQr,
-  bridgeStarting,
-  compact,
-  linkingAfterScan,
-  qrCode,
-  rowClassName,
-  showQr,
+/**
+ * The QR scan links the agent's own number. A person who chats from another
+ * phone pairs it by sending this code to that number in a private chat.
+ */
+export function WhatsAppPairPhoneRow({
+  copied,
+  onCopyPairingCode,
+  onRegeneratePairingCode,
+  pairingCode,
+  regeneratePending,
+  savePending,
 }: {
-  awaitingQr: boolean;
-  bridgeStarting: boolean;
-  compact: boolean;
-  linkingAfterScan: boolean;
-  qrCode: string | null;
-  rowClassName?: string;
-  showQr: boolean;
+  copied: boolean;
+  onCopyPairingCode: () => void;
+  onRegeneratePairingCode: () => void;
+  pairingCode: string | null;
+  regeneratePending: boolean;
+  savePending: boolean;
 }) {
-  if (showQr) {
-    return (
-      <div
-        className={cn("space-y-3", rowClassName ?? (!compact && "px-4 py-3"))}
+  return (
+    <div>
+      <SettingsRow
+        description={
+          pairingCode
+            ? "The code works for 10 minutes and replaces the phone paired before."
+            : "Use this when the agent has its own number."
+        }
+        label="Chat from your own WhatsApp"
       >
-        <div className="flex items-center gap-2">
-          <QrCodeScanIcon aria-hidden className="size-4 text-primary" />
-          <p className="font-medium text-foreground text-sm">Scan QR code</p>
-        </div>
-        <div className="flex justify-center">
-          <div className="inline-flex rounded-xl border border-border bg-white p-3">
-            <QRCodeSVG size={180} value={qrCode!} />
-          </div>
-        </div>
+        <WhatsAppPairingCodeControls
+          copied={copied}
+          onCopyPairingCode={onCopyPairingCode}
+          onRegeneratePairingCode={onRegeneratePairingCode}
+          pairingCode={pairingCode}
+          regeneratePending={regeneratePending}
+          savePending={savePending}
+        />
+      </SettingsRow>
+      {pairingCode ? (
         <ol
-          aria-label="Steps to connect WhatsApp"
-          className="list-decimal space-y-1 pl-5 text-muted-foreground text-xs"
+          aria-label="Steps to pair your WhatsApp"
+          className="list-decimal space-y-1 px-4 pb-3 pl-8 text-muted-foreground text-xs"
         >
           <li>
-            <strong>Open WhatsApp</strong> on your phone
+            Open <strong>WhatsApp</strong> on the phone you chat from
           </li>
           <li>
-            Open <strong>Settings</strong>, then <strong>Linked Devices</strong>
+            Send this code as a message to the{" "}
+            <strong>{"agent’s WhatsApp number"}</strong>
           </li>
           <li>
-            Tap <strong>Link a Device</strong>, then scan this QR code
+            Wait for the reply <strong>Linked successfully</strong>
           </li>
         </ol>
-      </div>
-    );
-  }
-
-  if (linkingAfterScan) {
-    return (
-      <div
-        className={cn(
-          "flex items-center gap-2 text-muted-foreground text-sm",
-          rowClassName ?? (!compact && "px-4 py-3")
-        )}
-      >
-        <Spinner className="size-4" />
-        Linking your WhatsApp account…
-      </div>
-    );
-  }
-
-  if (bridgeStarting) {
-    return (
-      <div
-        className={cn(
-          "flex items-center gap-2 text-muted-foreground text-sm",
-          rowClassName ?? (!compact && "px-4 py-3")
-        )}
-      >
-        <Spinner className="size-4" />
-        Connecting — enter the code in WhatsApp
-      </div>
-    );
-  }
-
-  if (awaitingQr) {
-    return (
-      <div
-        className={cn(
-          "flex items-center gap-2 text-muted-foreground text-sm",
-          rowClassName ?? (!compact && "px-4 py-3")
-        )}
-      >
-        <Spinner className="size-4" />
-        Preparing QR code…
-      </div>
-    );
-  }
-
-  return null;
+      ) : null}
+    </div>
+  );
 }
 
 function WhatsAppReconnectRow({
@@ -271,126 +199,321 @@ function WhatsAppReconnectRow({
 
 export function WhatsAppSettingsLinkingSection({
   paired,
-  pairingCode,
-  copied,
   savePending,
   regeneratePending,
-  onCopyPairingCode,
-  onRegeneratePairingCode,
-  showQr,
-  qrCode,
-  linkingAfterScan,
-  bridgeStarting,
-  awaitingQr,
   showReconnect,
   reconnectPending,
   onReconnect,
   rowClassName,
-  compact = false,
 }: {
   paired: boolean;
-  pairingCode: string | null;
-  copied: boolean;
   savePending: boolean;
   regeneratePending: boolean;
-  onCopyPairingCode: () => void;
-  onRegeneratePairingCode: () => void;
-  showQr: boolean;
-  qrCode: string | null;
-  linkingAfterScan: boolean;
-  bridgeStarting: boolean;
-  awaitingQr: boolean;
   showReconnect: boolean;
   reconnectPending: boolean;
   onReconnect: () => void;
   rowClassName?: string;
-  compact?: boolean;
 }) {
-  const [relinkMethod, setRelinkMethod] = useState<"code" | "qr" | null>(null);
+  const [confirmRelink, setConfirmRelink] = useState(false);
+
+  if (!showReconnect) {
+    return null;
+  }
 
   return (
     <div className="divide-y divide-border border-border border-t">
-      {relinkMethod ? (
+      {confirmRelink ? (
         <ConfirmDialog
           confirmLabel="Relink WhatsApp"
           description="This will disconnect the current account. Your agent cannot receive WhatsApp messages until you link it again."
-          onClose={() => setRelinkMethod(null)}
+          onClose={() => setConfirmRelink(false)}
           onConfirm={async () => {
-            if (relinkMethod === "code") {
-              onRegeneratePairingCode();
-            } else {
-              onReconnect();
-            }
+            onReconnect();
           }}
           title="Relink WhatsApp?"
         />
       ) : null}
-      <WhatsAppLinkStatus
-        awaitingQr={awaitingQr}
-        bridgeStarting={bridgeStarting}
-        compact={compact}
-        linkingAfterScan={linkingAfterScan}
-        qrCode={qrCode}
+      <WhatsAppReconnectRow
+        onReconnect={() => (paired ? setConfirmRelink(true) : onReconnect())}
+        paired={paired}
+        reconnectPending={reconnectPending}
+        regeneratePending={regeneratePending}
         rowClassName={rowClassName}
-        showQr={showQr}
+        savePending={savePending}
       />
-      <details
-        className="px-4 py-3 text-sm"
-        open={paired || Boolean(pairingCode)}
-      >
-        <summary className="cursor-pointer text-muted-foreground">
-          Link with a code instead
-        </summary>
-        <SettingsRow
-          className={rowClassName}
-          description={pairingCodeDescription(pairingCode, paired)}
-          label="Link with a code"
-        >
-          <WhatsAppPairingCodeControls
-            copied={copied}
-            onCopyPairingCode={onCopyPairingCode}
-            onRegeneratePairingCode={() =>
-              paired ? setRelinkMethod("code") : onRegeneratePairingCode()
-            }
-            paired={paired}
-            pairingCode={pairingCode}
-            regeneratePending={regeneratePending}
-            savePending={savePending}
-          />
-        </SettingsRow>
+    </div>
+  );
+}
 
-        {pairingCode ? (
+type WhatsAppLinkView =
+  | "error"
+  | "idle"
+  | "linking"
+  | "preparing"
+  | "qr"
+  | "setup"
+  | "start";
+
+const LINK_BADGES: Record<
+  WhatsAppLinkView,
+  { label: string; tone: "danger" | "neutral" | "waiting" }
+> = {
+  error: { label: "Not linked", tone: "danger" },
+  idle: { label: "Not linked", tone: "neutral" },
+  linking: { label: "Linking", tone: "waiting" },
+  preparing: { label: "Getting QR code", tone: "neutral" },
+  qr: { label: "Waiting for scan", tone: "waiting" },
+  setup: { label: "Not set up", tone: "neutral" },
+  start: { label: "Offline", tone: "neutral" },
+};
+
+function resolveWhatsAppLinkView({
+  awaitingQr,
+  configured,
+  linkError,
+  linkingAfterScan,
+  running,
+  showQr,
+}: {
+  awaitingQr: boolean;
+  configured: boolean;
+  linkError: string | null;
+  linkingAfterScan: boolean;
+  running: boolean;
+  showQr: boolean;
+}): WhatsAppLinkView {
+  if (!configured) {
+    return "setup";
+  }
+
+  if (!running) {
+    return "start";
+  }
+
+  if (linkError) {
+    return "error";
+  }
+
+  if (showQr) {
+    return "qr";
+  }
+
+  if (linkingAfterScan) {
+    return "linking";
+  }
+
+  if (awaitingQr) {
+    return "preparing";
+  }
+
+  return "idle";
+}
+
+interface WhatsAppLinkOwner {
+  agentName: string;
+  orgName: string;
+}
+
+function WhatsAppLinkBody({
+  linkError,
+  linkOwner,
+  onReconnect,
+  qrCode,
+  reconnectPending,
+  savePending,
+  startConnection,
+  view,
+}: {
+  linkError: string | null;
+  linkOwner: WhatsAppLinkOwner | null;
+  onReconnect: () => void;
+  qrCode: string | null;
+  reconnectPending: boolean;
+  savePending: boolean;
+  startConnection: ReactNode;
+  view: WhatsAppLinkView;
+}) {
+  const reconnectIcon = reconnectPending ? (
+    <Spinner className="size-3" />
+  ) : (
+    <QrCodeScanIcon aria-hidden className="size-4" />
+  );
+
+  if (view === "start") {
+    return startConnection;
+  }
+
+  if (view === "setup") {
+    return (
+      <p className="px-4 py-5 text-muted-foreground text-sm">
+        Connect WhatsApp to let people message this agent.
+      </p>
+    );
+  }
+
+  if (view === "error") {
+    return (
+      <div className="flex gap-4 px-4 py-5" role="alert">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <AlertCircleIcon aria-hidden className="size-5" />
+        </span>
+        <div className="min-w-0 space-y-2">
+          <h2 className="font-semibold text-base">
+            Could not link this number
+          </h2>
+          {linkOwner ? (
+            <p className="text-pretty text-muted-foreground text-sm">
+              <strong className="text-foreground">{linkOwner.agentName}</strong>{" "}
+              in{" "}
+              <strong className="text-foreground">{linkOwner.orgName}</strong>{" "}
+              already uses this number. Scan with a different number, or unlink
+              it from {linkOwner.agentName} first.
+            </p>
+          ) : (
+            <p className="text-pretty text-muted-foreground text-sm">
+              {linkError} Scan again with a different WhatsApp number.
+            </p>
+          )}
+          <Button
+            className="mt-2"
+            disabled={reconnectPending || savePending}
+            onClick={onReconnect}
+            type="button"
+          >
+            {reconnectIcon}
+            Scan with another number
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "qr") {
+    return (
+      <div className="flex flex-wrap items-center gap-6 px-4 py-5">
+        <div className="rounded-xl border border-border bg-white p-3">
+          <QRCodeSVG size={180} title="WhatsApp QR code" value={qrCode!} />
+        </div>
+        <div className="min-w-56 flex-1 basis-56 space-y-3">
+          <h2 className="font-semibold text-base">Scan with your phone</h2>
           <ol
-            aria-label="Steps to connect WhatsApp with a pairing code"
-            className={cn(
-              "list-decimal space-y-1 pl-5 text-muted-foreground text-xs",
-              !compact && "px-4 py-3 pl-8"
-            )}
+            aria-label="Steps to connect WhatsApp"
+            className="list-decimal space-y-1.5 pl-5 text-muted-foreground text-sm"
           >
             <li>
-              <strong>Open WhatsApp</strong> on your phone
+              Open <strong className="text-foreground">WhatsApp</strong>
             </li>
             <li>
-              Open <strong>Settings</strong>, then{" "}
-              <strong>Linked Devices</strong>
+              Go to{" "}
+              <strong className="text-foreground">
+                Settings › Linked devices
+              </strong>
             </li>
             <li>
-              Choose <strong>Link with phone number</strong> and enter this code
+              Tap <strong className="text-foreground">Link a device</strong> and
+              scan this code
             </li>
           </ol>
-        ) : null}
-      </details>
+        </div>
+      </div>
+    );
+  }
 
-      {showReconnect ? (
-        <WhatsAppReconnectRow
-          onReconnect={() => (paired ? setRelinkMethod("qr") : onReconnect())}
-          paired={paired}
-          reconnectPending={reconnectPending}
-          regeneratePending={regeneratePending}
-          rowClassName={rowClassName}
-          savePending={savePending}
-        />
-      ) : null}
+  if (view === "idle") {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-5">
+        <p className="text-muted-foreground text-sm">No QR code yet.</p>
+        <Button
+          disabled={reconnectPending || savePending}
+          onClick={onReconnect}
+          type="button"
+          variant="outline"
+        >
+          {reconnectIcon}
+          Get a QR code
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-5 text-muted-foreground text-sm">
+      <Spinner className="size-4" />
+      {view === "linking" ? "Linking your account…" : "Getting a QR code…"}
     </div>
+  );
+}
+
+export function WhatsAppLinkStatusCard({
+  awaitingQr,
+  configured,
+  footer,
+  linkError,
+  linkOwner,
+  linkingAfterScan,
+  onReconnect,
+  qrCode,
+  reconnectPending,
+  running,
+  savePending,
+  showQr,
+  startConnection,
+}: {
+  awaitingQr: boolean;
+  configured: boolean;
+  footer: ReactNode;
+  linkError: string | null;
+  linkOwner: WhatsAppLinkOwner | null;
+  linkingAfterScan: boolean;
+  onReconnect: () => void;
+  qrCode: string | null;
+  reconnectPending: boolean;
+  running: boolean;
+  savePending: boolean;
+  showQr: boolean;
+  startConnection: ReactNode;
+}) {
+  const view = resolveWhatsAppLinkView({
+    awaitingQr,
+    configured,
+    linkError,
+    linkingAfterScan,
+    running,
+    showQr,
+  });
+
+  const badge = LINK_BADGES[view];
+
+  return (
+    <section
+      aria-label="WhatsApp link status"
+      className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card"
+    >
+      <div className="flex items-center justify-between gap-3 bg-muted/40 px-4 py-3">
+        <span className="font-medium text-sm">Link status</span>
+        <span
+          className={cn(
+            "rounded-full px-2.5 py-0.5 font-medium text-xs",
+            badge.tone === "danger" && "bg-destructive/10 text-destructive",
+            badge.tone === "waiting" &&
+              "bg-amber-500/10 text-amber-800 dark:text-amber-200",
+            badge.tone === "neutral" && "bg-muted text-muted-foreground"
+          )}
+        >
+          {badge.label}
+        </span>
+      </div>
+      <WhatsAppLinkBody
+        linkError={linkError}
+        linkOwner={linkOwner}
+        onReconnect={onReconnect}
+        qrCode={qrCode}
+        reconnectPending={reconnectPending}
+        savePending={savePending}
+        startConnection={startConnection}
+        view={view}
+      />
+      {footer}
+    </section>
   );
 }

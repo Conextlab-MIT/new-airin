@@ -1,7 +1,5 @@
-import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
+import { AgentGroupService } from "../services/agent-group-service";
 import { AuthService } from "../services/auth-service";
 import { OrgService } from "../services/org-service";
 import { SkillCuratorService } from "../services/skill-curator-service";
@@ -23,6 +21,7 @@ export type CreateMinimalHonoAppOverrides = {
   automationService?: ServerOptions["automationService"] | object;
   composioService?: ServerOptions["composioService"];
   databaseAdapter?: DatabaseAdapter;
+  googleMeetService?: ServerOptions["googleMeetService"];
   mcpService?: ServerOptions["mcpService"] | object;
   onBeforeDataRestore?: ServerOptions["onBeforeDataRestore"];
   onDataRestored?: ServerOptions["onDataRestored"];
@@ -55,14 +54,26 @@ export function createMinimalHonoApp(
       new SkillsService(databaseAdapter)
     );
 
+  const agent = overrides.agent ?? { ...defaultAgent };
+
+  // Group routes read the agent's one group service; a stub without one gets
+  // a service on itself, so replies use the stub.
+  if (!("groups" in agent)) {
+    // SAFETY: Route tests stub the agent methods their group requests call.
+    Object.assign(agent, {
+      groups: new AgentGroupService(databaseAdapter, agent as never),
+    });
+  }
+
   // SAFETY: Route tests provide every service method their requests call.
   const app = createHonoApp({
-    agent: (overrides.agent ?? defaultAgent) as ServerOptions["agent"],
+    agent: agent as ServerOptions["agent"],
     authService,
     automationService: (overrides.automationService ??
       {}) as ServerOptions["automationService"],
     composioService: overrides.composioService,
     databaseAdapter,
+    googleMeetService: overrides.googleMeetService,
     mcpService: (overrides.mcpService ?? {}) as ServerOptions["mcpService"],
     onBeforeDataRestore: overrides.onBeforeDataRestore,
     onDataRestored: overrides.onDataRestored,

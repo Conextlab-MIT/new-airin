@@ -4,6 +4,7 @@ import { BlockList, isIP } from "node:net";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 import robotsParser from "robots-parser";
 import { z } from "zod";
+import { AirinApiError } from "../api-error";
 import type { ImageAttachment, JsonSchema, ToolDefinition } from "../contract";
 import { type BunFetchInit, withDisabledFetchIdle } from "../fetch-idle";
 import { MAX_IMAGE_BYTES } from "../message-content";
@@ -78,8 +79,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
 
 const MAX_REDIRECTS = 5;
 
-const USER_AGENT =
-  "nakama-web_fetch/1.0 (+https://github.com/ahmadrosid/nakama)";
+const USER_AGENT = "airin-web_fetch/1.0 (+https://github.com/ahmadrosid/airin)";
 
 const NON_PUBLIC_IPV6_RANGES = new BlockList();
 
@@ -428,7 +428,12 @@ async function fetchWithRedirects(
   throw new Error(`web_fetch: exceeded ${MAX_REDIRECTS} redirects.`);
 }
 
-async function readBoundedBody(
+/**
+ * Read a response body, stopping at `maxBytes`. `response.text()` and
+ * `response.json()` buffer whatever the upstream sends, so one oversized
+ * answer from a configured endpoint can push the server past its memory.
+ */
+export async function readBoundedBody(
   response: Response,
   maxBytes: number
 ): Promise<Buffer<ArrayBuffer>> {
@@ -440,8 +445,9 @@ async function readBoundedBody(
 
     if (Number.isFinite(declared) && declared > maxBytes) {
       await response.body?.cancel();
-      throw new Error(
-        `web_fetch: response body exceeds ${maxBytes} bytes (Content-Length: ${declared}).`
+      throw new AirinApiError(
+        `Upstream response body exceeds ${maxBytes} bytes (Content-Length: ${declared}).`,
+        502
       );
     }
   }
@@ -466,7 +472,10 @@ async function readBoundedBody(
       received += value.byteLength;
 
       if (received > maxBytes) {
-        throw new Error(`web_fetch: response body exceeds ${maxBytes} bytes.`);
+        throw new AirinApiError(
+          `Upstream response body exceeds ${maxBytes} bytes.`,
+          502
+        );
       }
 
       chunks.push(value);
@@ -477,10 +486,35 @@ async function readBoundedBody(
   }
 }
 
-function validateImageUrl(url: URL): void {
+function validateHttpsUrl(url: URL): void {
   if (url.protocol !== "https:" || url.username || url.password || url.port) {
-    throw new Error("Images require HTTPS on port 443 without credentials.");
+    throw new Error(
+      "Remote files require HTTPS on port 443 without credentials."
+    );
   }
+}
+
+/**
+ * GET a public HTTPS file, for downloads from presigned storage URLs that
+ * can live on any host. Shares web_fetch's DNS pinning and redirect checks,
+ * so the URL cannot reach a private or loopback address.
+ */
+export async function fetchPublicHttps(
+  rawUrl: string,
+  signal: AbortSignal
+): Promise<Response> {
+  const url = parseUrl(rawUrl);
+  validateHttpsUrl(url);
+  const addresses = await resolvePublicAddresses(url.hostname, signal);
+
+  const { response } = await fetchWithRedirects(
+    url,
+    addresses,
+    signal,
+    validateHttpsUrl
+  );
+
+  return response;
 }
 
 /** Public raster images only; shares web_fetch's DNS pinning and redirect checks. */
@@ -490,7 +524,7 @@ export async function fetchRemoteImage(
   validateRedirect?: (url: URL) => void
 ) {
   const url = parseUrl(rawUrl);
-  validateImageUrl(url);
+  validateHttpsUrl(url);
   const addresses = await resolvePublicAddresses(url.hostname, signal);
 
   const { response } = await fetchWithRedirects(
@@ -498,7 +532,7 @@ export async function fetchRemoteImage(
     addresses,
     signal,
     (next) => {
-      validateImageUrl(next);
+      validateHttpsUrl(next);
       validateRedirect?.(next);
     }
   );
@@ -539,12 +573,48 @@ export async function fetchRemoteImage(
 }
 
 export async function convertHtmlToMarkdown(html: string): Promise<string> {
-  const removeCommentNoise = (value: string) =>
-    value.replace(/<!--(?:\[--|\]--|\[|\])?-->/g, "");
+  const removeCommentNoise = (value: string) => {
+    let current = value;
+    let previous: string;
+
+    // Repeat until stable, so a removal cannot join a new marker.
+    do {
+      previous = current;
+      current = previous.replace(/<!--(?:\[--|\]--|\[|\])?-->/g, "");
+    } while (current !== previous);
+
+    return current;
+  };
 
   // Strip whole comments before parsing: Word's conditional comments
   // (`<!--[if gte mso 9]>…<![endif]-->`) otherwise survive as visible text.
-  const cleanedHtml = html.replace(/<!--[\s\S]*?-->/g, "");
+  // A scan, not a lazy regex, so an unclosed `<!--` stays linear; that text
+  // is kept, as before. Repeat while a removal joins pieces into a new `<!--`.
+  let cleanedHtml = html;
+
+  for (;;) {
+    let out = "";
+    let cursor = 0;
+
+    for (;;) {
+      const open = cleanedHtml.indexOf("<!--", cursor);
+      const close = open === -1 ? -1 : cleanedHtml.indexOf("-->", open + 4);
+
+      if (close === -1) {
+        out += cleanedHtml.slice(cursor);
+        break;
+      }
+
+      out += cleanedHtml.slice(cursor, open);
+      cursor = close + 3;
+    }
+
+    if (out === cleanedHtml) {
+      break;
+    }
+
+    cleanedHtml = out;
+  }
 
   const markdown = NodeHtmlMarkdown.translate(cleanedHtml, {
     bulletMarker: "-",
@@ -590,7 +660,7 @@ export const webFetchTool: ToolDefinition<WebFetchInput, WebFetchOutput> = {
     const url = parseUrl(parsed.url);
 
     if (parsed.imageMetadata) {
-      validateImageUrl(url);
+      validateHttpsUrl(url);
     }
 
     const controller = new AbortController();

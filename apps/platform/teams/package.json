@@ -1,0 +1,17 @@
+{
+  "name": "@airin/teams",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir dist --target bun",
+    "dev": "bun run src/index.ts",
+    "start": "NODE_ENV=production bun run src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@airin/client": "workspace:*",
+    "@airin/core": "workspace:*",
+    "@microsoft/teams.apps": "2.2.0",
+    "zod": "^4.6.5"
+  }
+}

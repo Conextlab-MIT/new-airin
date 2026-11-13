@@ -1,11 +1,11 @@
 ---
 title: "Docker"
-description: "Run Nakama in a single Docker container with persistent data volumes."
+description: "Run Airin in a single Docker container with persistent data volumes."
 ---
 
 ## Requirements
 
-One container, one process tree. Measured on `ghcr.io/ahmadrosid/nakama:latest`
+One container, one process tree. Measured on `ghcr.io/ahmadrosid/airin:latest`
 (v0.4.20) with no LLM provider and no channel workers:
 
 | | |
@@ -20,29 +20,97 @@ One container, one process tree. Measured on `ghcr.io/ahmadrosid/nakama:latest`
 It starts and serves on **1 vCPU and 1 GB**. It also starts under a 512 MB cap,
 using 221 MB, but that leaves nothing for the rest of the box.
 
-Three things raise the figure and are not in the table:
+Two things raise the figure and are not in the table:
 
 - **Channel workers.** Telegram, WhatsApp, and Discord each run as their own
   process next to the server. WhatsApp carries Baileys and libsignal and is the
   heaviest of the three. Size for them separately if you enable them.
 - **A configured provider.** The numbers above come from offline mode, so no
   model traffic passed through the container.
-- **The MicroSandbox bash backend**, which needs a working hypervisor at
-  `/dev/kvm`. Most small VPS plans do not expose it. See
-  [MicroSandbox bash backend](#optional-microsandbox-bash-backend).
+
+## On a server
+
+Use Compose. It pins the version, keeps a daily encrypted backup, and can turn on the [Update button](#upgrade-from-settings). Set `AIRIN_VERSION` to the [latest release](https://github.com/ahmadrosid/airin/releases/latest).
+
+```bash
+curl -O https://raw.githubusercontent.com/ahmadrosid/airin/main/docker-compose.yaml
+umask 077
+printf 'AIRIN_SECRETS_KEY=%s\n' "$(openssl rand -base64 32)" > airin-secrets.env
+echo AIRIN_VERSION=0.4.65 > .env
+docker compose up -d
+```
+
+Put an HTTPS proxy in front before anyone else reaches it ([Deployment hardening](/deployment-hardening)).
 
 ## Quick run
 
-Pull the prebuilt image and start Nakama:
+To try Airin on your own machine, pull the prebuilt image and start it:
 
 ```bash
-docker pull ghcr.io/ahmadrosid/nakama:latest
-docker run -d -p 4310:4310 -v nakama-data:/nakama/data --name nakama ghcr.io/ahmadrosid/nakama:latest
+docker pull ghcr.io/ahmadrosid/airin:latest
+umask 077
+printf 'AIRIN_SECRETS_KEY=%s\n' "$(openssl rand -base64 32)" > airin-secrets.env
+docker run -d -p 4310:4310 -v airin-data:/airin/data \
+  --env-file airin-secrets.env --name airin ghcr.io/ahmadrosid/airin:latest
 ```
+
+Keep `airin-secrets.env` outside the data volume and back it up separately.
+Use the same file when you restart or upgrade this install.
 
 Open `http://localhost:4310`. The container serves the API, web dashboard, and platform workers together.
 
-Data is stored at `/nakama/data` inside the container. The `-v nakama-data:/nakama/data` volume persists orgs, profiles, sessions, provider settings, and the local SQLite database across restarts.
+If you open Airin from another machine, for example `http://203.0.113.10:4310` on a VPS, save that address as the public URL. Without it, Airin refuses to build OAuth callbacks, share links, and passkey sign-in for an origin it cannot verify, and those requests fail with `400`. A platform admin sets it in **System → Preferences → Public web URL**, or you pass `-e AIRIN_WEB_PUBLIC_URL=http://203.0.113.10:4310` to `docker run`.
+
+Data is stored at `/airin/data` inside the container. The `-v airin-data:/airin/data` volume persists orgs, profiles, sessions, provider settings, and the local SQLite database across restarts.
+
+## Upgrade
+
+The Compose file pins the image with `AIRIN_VERSION` and writes a daily encrypted backup to the `airin-backups` volume. Put the version in a `.env` file beside `docker-compose.yaml`:
+
+```bash
+echo AIRIN_VERSION=0.4.57 > .env
+docker compose up -d
+```
+
+To upgrade, check that a backup exists, then change the number:
+
+```bash
+docker compose exec airin ls -l /airin/backups
+sed -i 's/^AIRIN_VERSION=.*/AIRIN_VERSION=0.4.58/' .env
+docker compose pull && docker compose up -d
+```
+
+The newest backup can be up to a day old. For a fresh one, use **Export ZIP** in the dashboard first ([Backup and restore](/backup-restore)).
+
+To roll back, set the previous version and run `docker compose up -d` again. Database migrations only move forward, so if the newer version already started, restore the backup taken before the upgrade as well.
+
+### Upgrade a `docker run` install
+
+Check that you have a backup (**Export ZIP** in the dashboard), then replace the container. The data stays in the volume:
+
+```bash
+docker pull ghcr.io/ahmadrosid/airin:latest
+docker rm -f airin
+docker run -d -p 4310:4310 -v airin-data:/airin/data \
+  --env-file airin-secrets.env --name airin ghcr.io/ahmadrosid/airin:latest
+```
+
+### Upgrade from Settings
+
+The Compose file has an optional `updater` service. With it running, a platform admin sees **Update available** next to the version in the account menu, and **Settings → Version** shows an **Update to** button. Turn it on in `.env`:
+
+```bash
+echo COMPOSE_PROFILES=updater >> .env
+docker compose up -d
+```
+
+The updater downloads the new image, archives the data volume to `airin-backups` as `pre-upgrade-<version>-<time>.tar.gz` (the newest three are kept), starts the new version and compares the row count of every table. If the new version is not healthy within four minutes, or a table has fewer rows, it restores the archive and the previous version. The result shows in Settings.
+
+To go back by choice, **Settings → Version** lists the versions that have an archive under **Previous versions**. **Restore** returns to that version and to the data as it was when you left it. The current data is archived first, so it shows up in the same list and you can restore it again.
+
+The updater mounts the Docker socket, which gives it root on the host. It opens no port and only acts on requests from Airin. Leave the profile off if you prefer to upgrade by hand.
+
+Without `AIRIN_VERSION` the file follows `latest`, and `docker compose pull` takes whatever was released last.
 
 ## Build from source
 
@@ -56,29 +124,54 @@ The script uses `docker buildx` (default `linux/amd64`), then starts the contain
 
 The build helper reads these optional environment variables:
 
-- `NAKAMA_CONTAINER_NAME` sets the container name. The default is `nakama`.
-- `NAKAMA_IMAGE_NAME` sets the local image name. The default is `nakama`.
-- `NAKAMA_HOST_PORT` sets the published host port. The default is `4310`.
-- `NAKAMA_DATA_VOLUME` sets the Docker volume name. The default is
-  `nakama-data`.
+- `AIRIN_CONTAINER_NAME` sets the container name. The default is `airin`.
+- `AIRIN_IMAGE_NAME` sets the local image name. The default is `airin`.
+- `AIRIN_HOST_PORT` sets the published host port. The default is `4310`.
+- `AIRIN_DATA_VOLUME` sets the Docker volume name. The default is
+  `airin-data`.
 
 For example, this builds and starts an isolated local install on port 4311:
 
 ```bash
-NAKAMA_CONTAINER_NAME=nakama-dev \
-NAKAMA_IMAGE_NAME=nakama-dev \
-NAKAMA_HOST_PORT=4311 \
-NAKAMA_DATA_VOLUME=nakama-dev-data \
+AIRIN_CONTAINER_NAME=airin-dev \
+AIRIN_IMAGE_NAME=airin-dev \
+AIRIN_HOST_PORT=4311 \
+AIRIN_DATA_VOLUME=airin-dev-data \
 ./scripts/docker-build-run.sh
 ```
 
 ## Configuration
 
-The data root follows `NAKAMA_CONFIG_DIR` when set. If you set it, use an
-absolute path. Nakama rejects relative paths because they depend on the process
+### Saved secrets
+
+Airin encrypts provider keys, web search keys, tool keys, the Composio key, and the email password in SQLite.
+The `AIRIN_SECRETS_KEY` value unlocks them. Set it before upgrading an install that has those values in `config.ini`.
+Stop older Airin processes before the upgrade. The new server moves the values from the files during startup.
+If the key is missing or wrong, startup stops before Airin serves requests.
+
+Settings changes take effect for new work without a restart. Environment key changes need a restart.
+An environment value takes priority. Settings shows its source and blocks edits until you remove the override.
+If you remove an override, select a saved Settings key or enter a new one.
+
+In Kubernetes, mount the master key as a Secret-backed environment variable named `AIRIN_SECRETS_KEY`.
+Keep it outside the Airin data volume. Give every process that shares the database the same value.
+Set provider or integration overrides as separate Secret-backed variables or `_FILE` mounts.
+Back up the master key separately from data exports and volumes.
+To load it from Vault, AWS Secrets Manager or GCP Secret Manager, see [Secret managers](/secret-managers).
+
+To rotate the master key, stop every Airin process and make a backup.
+Start the server once with the old `AIRIN_SECRETS_KEY` and a new `AIRIN_SECRETS_KEY_NEXT`.
+The process re-encrypts saved values and exits. Start Airin with the new key.
+Keep the old key while older backups still need it.
+
+Host `bash`, custom host tools, and coding agents run with server file access.
+Use a separate sandbox or process identity when agent-run code must not read server secrets.
+
+The data root follows `AIRIN_CONFIG_DIR` when set. If you set it, use an
+absolute path. Airin rejects relative paths because they depend on the process
 working directory and can break profile isolation. The default inside the
-container is `/nakama/data`, which maps to the `nakama-data` volume. The build
-helper always mounts its data volume at `/nakama/data`.
+container is `/airin/data`, which maps to the `airin-data` volume. The build
+helper always mounts its data volume at `/airin/data`.
 
 On first run, complete the setup wizard in the browser and add your LLM provider. See [Providers](/providers) and [First-time setup](/first-time-setup).
 
@@ -86,39 +179,48 @@ On first run, complete the setup wizard in the browser and add your LLM provider
 
 Use readiness checks to keep traffic away from an unavailable database, and request IDs to connect an HTTP response with its logs.
 
-- Set `NAKAMA_LOG_FORMAT=json` for JSON lines on standard output. `NAKAMA_LOG_LEVEL` accepts `debug`, `info` (default), `warn`, `error`, or `silent`. These settings cover HTTP request logging and the initial worker lifecycle events; other existing logs remain unchanged.
-- HTTP responses include `X-Request-Id`. Nakama honors incoming IDs up to 255 characters or generates one. Response logs include this ID, method, status, and duration; `debug` also logs request start. URLs, request bodies, and credentials are not included in these HTTP logs. Streaming durations measure response setup, not the whole stream.
+- Set `AIRIN_LOG_FORMAT=json` for JSON lines on standard output. `AIRIN_LOG_LEVEL` accepts `debug`, `info` (default), `warn`, `error`, or `silent`. These settings cover HTTP request logging and the initial worker lifecycle events; other existing logs remain unchanged.
+- HTTP responses include `X-Request-Id`. Airin honors incoming IDs up to 255 characters or generates one. Response logs include this ID, method, status, and duration; `debug` also logs request start. URLs, request bodies, and credentials are not included in these HTTP logs. Streaming durations measure response setup, not the whole stream.
 - Use `/healthz` for liveness and `/readyz` for readiness on port 4310. Readiness returns 200 when the active connection can read the migrated database, or 503 when unavailable. It does not track restore progress and can remain ready while the old connection is still usable. Neither probe needs login or checks external providers or worker connectivity. The existing `/health` behavior is unchanged.
-- Set `NAKAMA_METRICS=true` to enable `/metrics`; otherwise it returns 404. It serves Prometheus-format HTTP response and server-error counters, which reset on process restart. Nakama sends nothing to an external collector. The endpoint needs no login and uses the same listener as the dashboard: restrict access through your network or reverse proxy before enabling it.
+- Set `AIRIN_METRICS=true` to enable `/metrics`; otherwise it returns 404. It serves Prometheus-format HTTP response and server-error counters, which reset on process restart. Airin sends nothing to an external collector. The endpoint needs no login and uses the same listener as the dashboard: restrict access through your network or reverse proxy before enabling it.
 
 ### HTTPS and session cookies
 
-On HTTPS, the session and CSRF cookies are issued as `__Host-nakama_session` and `__Host-nakama_csrf`. Browsers bind those to the exact host, so a sibling host under the same parent domain cannot plant or overwrite a session.
+On HTTPS, the session and CSRF cookies are issued as `__Host-airin_session` and `__Host-airin_csrf`. Browsers bind those to the exact host, so a sibling host under the same parent domain cannot plant or overwrite a session.
 
-- A proxy that terminates TLS must send `X-Forwarded-Proto: https`, otherwise Nakama treats the request as plain HTTP, issues the unprefixed `nakama_session` and `nakama_csrf` cookies, and loses the host binding.
+- A proxy that terminates TLS must send `X-Forwarded-Proto: https`, otherwise Airin treats the request as plain HTTP, issues the unprefixed `airin_session` and `airin_csrf` cookies, and loses the host binding.
+- OAuth callbacks, public share links, and passkey sign-in build on the request origin too. Behind a proxy, set `AIRIN_TRUST_PROXY=true` so forwarded `X-Forwarded-Host` and `X-Forwarded-Proto` name this deployment, or set `AIRIN_WEB_PUBLIC_URL` to the exact external origin. Without one of the two, a caller-named remote origin is refused and connect flows fail closed.
 - Unprefixed cookies are ignored on HTTPS, so the first sign-in after upgrading happens once more. Signing in again reissues the host-bound pair and clears the old cookies.
 - Plain HTTP deployments keep the unprefixed cookies, because browsers discard `Secure` cookies on `http://` origins.
 
 ### First-boot seed (optional)
 
-To skip the setup wizard on a fresh data volume, set all three admin seed variables before the first boot. Nakama creates the admin account and a `Personal` org (override with `NAKAMA_SEED_ORG_NAME`). No provider is created: after the first login, open `/setup` to add one. Self-hosted installs without these variables behave as today.
+To skip the setup wizard on a fresh data volume, set all three admin seed variables before the first boot. Airin creates the admin account and a `Personal` org (override with `AIRIN_SEED_ORG_NAME`). No provider is created: after the first login, open `/setup` to add one. Self-hosted installs without these variables behave as today.
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `NAKAMA_SEED_ADMIN_EMAIL` | Yes (with the other two) | Platform admin email |
-| `NAKAMA_SEED_ADMIN_NAME` | Yes (with the other two) | Platform admin display name |
-| `NAKAMA_SEED_ADMIN_PASSWORD` | Yes (with the other two) | Platform admin password (min 8 characters) |
-| `NAKAMA_SEED_ORG_NAME` | No | Organization name (default `Personal`) |
+| `AIRIN_SEED_ADMIN_EMAIL` | Yes (with the other two) | Platform admin email |
+| `AIRIN_SEED_ADMIN_NAME` | Yes (with the other two) | Platform admin display name |
+| `AIRIN_SEED_ADMIN_PASSWORD` | Yes (with the other two) | Platform admin password (min 8 characters) |
+| `AIRIN_SEED_ORG_NAME` | No | Organization name (default `Personal`) |
 
 Partial seed config fails boot with a clear error. Restarting a seeded instance is a no-op (idempotent).
 
 ```bash
-docker run -d -p 4310:4310 -v nakama-data:/nakama/data \
-  -e NAKAMA_SEED_ADMIN_EMAIL=admin@example.com \
-  -e NAKAMA_SEED_ADMIN_NAME=Admin \
-  -e NAKAMA_SEED_ADMIN_PASSWORD=seedpass123 \
-  --name nakama ghcr.io/ahmadrosid/nakama:latest
+docker run -d -p 4310:4310 -v airin-data:/airin/data \
+  -e AIRIN_SEED_ADMIN_EMAIL=admin@example.com \
+  -e AIRIN_SEED_ADMIN_NAME=Admin \
+  -e AIRIN_SEED_ADMIN_PASSWORD=seedpass123 \
+  --name airin ghcr.io/ahmadrosid/airin:latest
 ```
+
+### Goal prompt for new users (optional)
+
+A seeded instance skips the setup wizard, so a new user lands on an empty chat. Set `AIRIN_ENABLE_ONBOARDING=true` to ask that user "What is your goal?" first. The answer is saved to **Help with** in the user's personal context. The prompt shows only to members and admins who have no chats with the selected agent and no saved goal. It is off by default.
+
+### Release check (optional)
+
+Platform admins see **Update available** in the account menu, and **Settings** shows the release notes and the upgrade command. The server asks GitHub for the newest release at most every ten minutes. If your host upgrades instances itself, set `AIRIN_DISABLE_UPDATE_CHECK=true` to hide the check and stop the GitHub requests.
 
 ## Reset a local Docker install
 
@@ -129,39 +231,127 @@ To remove the default local resources and start fresh:
 ./scripts/docker-build-run.sh
 ```
 
-The reset script removes the container named `nakama`, every container that
-publishes port `4310` (including unrelated containers), the `nakama-data` and
-`nakama-config` volumes, and the local image named `nakama`. Stop any unrelated
+The reset script removes the container named `airin`, every container that
+publishes port `4310` (including unrelated containers), the `airin-data` and
+`airin-config` volumes, and the local image named `airin`. Stop any unrelated
 containers before running it if you still need them.
 
 The script does not remove the cached
-`ghcr.io/ahmadrosid/nakama:latest` image. It also uses the default names, so
+`ghcr.io/ahmadrosid/airin:latest` image. It also uses the default names, so
 custom names set through the build helper can remain unless you remove them
 yourself.
+
+## Claude, Codex, and OpenCode agents
+
+The Claude, Codex, and OpenCode [ACP agents](/acp-agents) need the Claude Code, Codex, and OpenCode binaries. They add about 900 MB, so the default image does not include them.
+
+| Tag | Claude, Codex, and OpenCode agents | Size (amd64) |
+| --- | --- | --- |
+| `latest`, `X.Y.Z` | Bring your own binary | ~620 MB |
+| `latest-full`, `X.Y.Z-full` | Included | ~1.5 GB |
+
+If you use these agents, run the full image:
+
+```bash
+docker run -d -p 4310:4310 -v airin-data:/airin/data --name airin ghcr.io/ahmadrosid/airin:latest-full
+```
+
+To build it from source, pass the build arg:
+
+```bash
+./scripts/docker-build-run.sh --build-arg INSTALL_CODING_AGENTS=true
+```
+
+To keep the default image, give the agents a binary through the data volume. Install the CLI once inside the container, then restart it with the path set:
+
+```bash
+docker exec airin bun add -g @openai/codex @anthropic-ai/claude-code opencode-ai
+docker rm -f airin
+docker run -d -p 4310:4310 -v airin-data:/airin/data \
+  -e CODEX_PATH=/airin/data/.bun/bin/codex \
+  -e CLAUDE_CODE_EXECUTABLE=/airin/data/.bun/bin/claude \
+  -e OPENCODE_PATH=/airin/data/.bun/bin/opencode \
+  --name airin ghcr.io/ahmadrosid/airin:latest
+```
 
 ## Optional: CloakBrowser with agent-browser
 
 The image does not include [CloakBrowser](https://github.com/CloakHQ/CloakBrowser). Stock Chrome from `agent-browser install` still works inside the container when you use the dashboard **Install** path.
 
-To use Cloak as the Chromium behind agent-browser, bind-mount the Cloak binary and pass the same host env Nakama's `bash` tool already inherits:
+To use Cloak as the Chromium behind agent-browser, bind-mount the Cloak binary and pass the same host env Airin's `bash` tool already inherits:
 
 ```bash
-docker run -d -p 4310:4310 -v nakama-data:/nakama/data \
+docker run -d -p 4310:4310 -v airin-data:/airin/data \
   -v /path/to/cloak-chromium:/cloak/chromium:ro \
   -e AGENT_BROWSER_EXECUTABLE_PATH=/cloak/chromium \
   -e AGENT_BROWSER_ARGS="<copy from Cloak's agent-browser example>" \
-  --name nakama ghcr.io/ahmadrosid/nakama:latest
+  --name airin ghcr.io/ahmadrosid/airin:latest
 ```
 
 See [Agent browser](/agent-browser#3-optional-cloakbrowser-for-antibot-sites).
 
-## Optional: MicroSandbox bash backend
+## Bash in Docker
 
-Stock `docker run` / `./scripts/docker-build-run.sh` does **not** pass `/dev/kvm` (or nested virtualization). Keep `NAKAMA_BASH_BACKEND=host` (the default) inside Docker unless you deliberately add hypervisor access.
+In Docker, Bash runs inside the Airin container with the server process's OS permissions. It can access mounted data outside the active profile workspace, including other profiles' files when permissions allow. The shared container does not isolate profiles from each other. Assign Bash only to trusted profiles.
 
-In Docker, host Bash runs inside the Nakama container with the server process's OS permissions. It can access mounted data outside the active profile workspace, including other profiles' files when permissions allow. The shared container does not isolate profiles from each other. Assign host Bash only to trusted profiles.
+### Remote bash backend
 
-If you set `NAKAMA_BASH_BACKEND=microsandbox` without a working MicroSandbox runtime / KVM device, **every** `bash` tool call fails closed — there is no silent host fallback. Coding-agent harness runs require `host` for now. See [Choose a MicroSandbox image](/builtin-tools#choose-a-microsandbox-image) for custom image setup.
+Use this when org admins are not the operator but profiles still need a shell, or when the host cannot run a sandbox itself. Bash then runs in a sandbox service you operate, not in the Airin container, so bash commands cannot reach `config.ini`, other profiles' files, or the server network. Code that would run on the Airin server for a tenant is turned off too, so it cannot reach those files either.
+
+```bash
+AIRIN_BASH_BACKEND=remote
+AIRIN_BASH_REMOTE_URL=https://sandbox.internal/v1/exec
+AIRIN_BASH_REMOTE_TOKEN=<shared secret>
+# Optional. Default is off.
+AIRIN_BASH_SANDBOX_NETWORK=public
+```
+
+What changes for profiles:
+
+- `/workspace` in the sandbox starts empty. It does not share files with `read_file`, `write_file`, or `edit_file`, which still use the profile workspace on the Airin server.
+- `codingAgent` runs are refused. Use `AIRIN_BASH_BACKEND=host` for the [coding agent](/coding-agent).
+- Custom tools (JavaScript and Python) are refused. So are tool modules and `scripts:` in profile skills, shared skills, and skills an org admin installed, even after an admin reviews the code. Only global skills, which ship with Airin or which you install on the server, still run on the server.
+- The `<skill>_run_python` tool is not offered, because it runs code the model writes on the server.
+- `AIRIN_TENANT_BASH=0` still turns bash off for both backends.
+- Skills that run through `bash` run in the sandbox. Install their CLIs there (for example `agent-browser`). Skill scripts in the profile workspace are not in `/workspace`, and files a skill writes there (such as `screenshot artifacts/<file>.png`) stay in the sandbox, so `save_artifact` and channel delivery cannot find them.
+- Bash from the [CLI](/cli) still runs on the Airin server, in the directory where the CLI was launched.
+- Airin checks `AIRIN_BASH_BACKEND` and `AIRIN_BASH_SANDBOX_NETWORK` at startup. An invalid value stops the server from starting.
+
+Airin fails closed. A missing URL or token, a rejected token, an unreachable service, or a malformed reply is an error. Airin never falls back to host bash.
+
+#### Service contract
+
+Any provider can implement the service. Airin sends one request per tool call:
+
+```http
+POST <AIRIN_BASH_REMOTE_URL>
+Authorization: Bearer <AIRIN_BASH_REMOTE_TOKEN>
+Content-Type: application/json
+
+{
+  "sandboxId": "airin-<orgId>-<profileId>",
+  "command": "ls -la",
+  "cwd": "/workspace/src",
+  "env": { "LANG": "C.UTF-8" },
+  "timeoutMs": 30000,
+  "network": "off"
+}
+```
+
+- `sandboxId` is stable per profile. Reuse one sandbox per id, and never share one between ids.
+- `cwd` is always `/workspace` or a path under it.
+- `env` holds only the tool call's own `env`. Airin removes keys that look like secrets (`*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_URL`, and similar) and never sends the server's environment.
+- `network` is `off` or `public`. Block outbound traffic when it is `off`.
+- Stop the command at `timeoutMs`.
+- If the client disconnects, kill the command.
+
+Reply `200` with:
+
+```json
+{ "stdout": "...", "stderr": "...", "exitCode": 0, "timedOut": false }
+```
+
+On timeout, reply with the output so far, `"exitCode": null` and `"timedOut": true`. Reply `401` or `403` for a bad token. Airin cancels the request when the user stops the turn, and gives up 10 seconds after `timeoutMs` with `timedOut: true` and no output.
 
 ## Next steps
 

@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Deck Title</title>
+    <style>
+    :root {
+      --page: #eceff4;
+      --bg: #ffffff;
+      --ink: #101214;
+      --muted: #586270;
+      --subtle: #6b7480;
+      --line: #e2e8f0;
+      --wash: #f8fafc;
+      --accent: #b45309;
+      --accent-ink: #92400e;
+      --accent-soft: #fffbeb;
+      --accent-line: #fcd34d;
+      --sans:
+        ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --w: min(100vw, 177.778dvh);
+      color-scheme: light;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html,
+    body {
+      height: 100dvh;
+      margin: 0;
+      overflow: hidden;
+      font-family: var(--sans);
+      color: var(--ink);
+      background: var(--page);
+    }
+    p {
+      margin: 0;
+    }
+    .deck {
+      display: grid;
+      place-items: center;
+      height: 100%;
+    }
+    .slide {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: var(--w);
+      height: calc(var(--w) * 9 / 16);
+      padding: calc(var(--w) * 0.052) calc(var(--w) * 0.064)
+        calc(var(--w) * 0.06);
+      container-type: inline-size;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .js .slide:not(.active),
+    .notes,
+    .notes-panel {
+      display: none;
+    }
+    .nav {
+      position: fixed;
+      top: 10px;
+      right: 12px;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      font: 12px var(--mono);
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      opacity: 0.35;
+    }
+    .nav:hover,
+    .nav:focus-within {
+      opacity: 1;
+    }
+    .nav button {
+      padding: 6px 9px;
+      font: inherit;
+      color: var(--ink);
+      cursor: pointer;
+      background: none;
+      border: 0;
+    }
+    .nav button:disabled {
+      opacity: 0.3;
+    }
+    .show-notes .notes-panel {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 6;
+      display: block;
+      max-height: 38vh;
+      padding: 16px 24px;
+      overflow: auto;
+      font-size: 15px;
+      line-height: 1.55;
+      color: #e6e9ee;
+      background: #101214;
+    }
+    .notes-panel p {
+      max-width: 960px;
+      margin-bottom: 8px;
+    }
+    .notes-panel .q {
+      color: var(--accent-line);
+    }
+    .notes-panel .hint {
+      font: 11px var(--mono);
+      color: var(--subtle);
+    }
+    .kicker,
+    .label {
+      font: 500 1.2cqw / 1.3 var(--sans);
+      color: var(--muted);
+    }
+    .label {
+      display: block;
+      margin-bottom: 1.2cqw;
+      font-size: 1.05cqw;
+      color: var(--subtle);
+    }
+    h1 {
+      margin: 1.3cqw 0 0;
+      font-size: 4.2cqw;
+      font-weight: 550;
+      line-height: 1.12;
+      letter-spacing: -0.035em;
+    }
+    .body {
+      font-size: 1.45cqw;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .fill {
+      margin-block: auto;
+    }
+    .source {
+      padding-top: 1.6cqw;
+      font-size: 1.15cqw;
+      color: var(--subtle);
+    }
+    .foot {
+      position: absolute;
+      right: calc(var(--w) * 0.064);
+      bottom: 2.4cqw;
+      left: calc(var(--w) * 0.064);
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.95cqw;
+      color: var(--subtle);
+    }
+    .mark,
+    .brand {
+      display: flex;
+      gap: 0.7cqw;
+      align-items: center;
+    }
+    .mark > * {
+      width: auto;
+      height: 1.4cqw;
+    }
+    .brand {
+      font-size: 1.7cqw;
+      font-weight: 600;
+    }
+    .brand > * {
+      width: auto;
+      height: 2.4cqw;
+    }
+    .av {
+      display: grid;
+      flex: none;
+      place-items: center;
+      width: 3.2cqw;
+      height: 3.2cqw;
+      font: 500 1.1cqw var(--mono);
+      color: var(--accent-ink);
+      object-fit: cover;
+      background: var(--accent-soft);
+      border-radius: 50%;
+    }
+    .panel {
+      background: var(--wash);
+      border: 1px solid var(--line);
+    }
+    .cover h1 {
+      max-width: 72cqw;
+      margin-top: auto;
+      font-size: 6.4cqw;
+      line-height: 1.05;
+    }
+    .meta {
+      margin-top: auto;
+      font-size: 1.3cqw;
+      color: var(--subtle);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 6cqw 1fr;
+      gap: 2cqw;
+      padding: 1.35cqw 0;
+      border-top: 1px solid var(--line);
+    }
+    .row:last-child {
+      border-bottom: 1px solid var(--line);
+    }
+    .row .n {
+      padding-top: 0.4cqw;
+      font: 1.2cqw var(--mono);
+      color: var(--accent-ink);
+    }
+    .row p {
+      font-size: 1.9cqw;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+    .row b {
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .say {
+      max-width: 88cqw;
+      font-size: 6.2cqw;
+      font-weight: 550;
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+    blockquote.say {
+      margin-inline: 0;
+    }
+    .say cite {
+      display: block;
+      margin-top: 2.4cqw;
+      font: 1.3cqw var(--sans);
+      font-style: normal;
+      color: var(--muted);
+      letter-spacing: 0;
+    }
+    @media screen and (max-width: 760px) and (orientation: portrait) {
+      html,
+      body {
+        height: auto;
+        overflow: auto;
+      }
+      .deck {
+        display: block;
+      }
+      .slide {
+        width: 100%;
+        height: auto;
+        min-height: 100dvh;
+        padding: 48px 22px 72px;
+      }
+      .kicker,
+      .source,
+      .foot,
+      .meta {
+        font-size: 11px;
+      }
+      .label,
+      .row .n {
+        font-size: 10px;
+      }
+      h1 {
+        margin: 10px 0 28px;
+        font-size: 28px;
+      }
+      .cover h1 {
+        font-size: 34px;
+      }
+      .body {
+        font-size: 14px;
+      }
+      .row {
+        grid-template-columns: 36px 1fr;
+        padding: 12px 0;
+      }
+      .row p {
+        font-size: 16px;
+      }
+      .say {
+        font-size: 32px;
+      }
+      .say cite {
+        font-size: 11px;
+      }
+      .brand {
+        font-size: 18px;
+      }
+      .mark > * {
+        height: 12px;
+      }
+      .brand > * {
+        height: 22px;
+      }
+      .av {
+        width: 28px;
+        height: 28px;
+        font-size: 10px;
+      }
+      .foot {
+        right: 22px;
+        bottom: 22px;
+        left: 22px;
+      }
+    }
+    @page {
+      size: 16in 9in;
+      margin: 0;
+    }
+    @media print {
+      :root {
+        --w: 16in;
+      }
+      html,
+      body {
+        height: auto;
+        overflow: visible;
+        background: #ffffff;
+      }
+      .deck {
+        display: block;
+      }
+      .js .slide:not(.active),
+      .slide {
+        display: flex;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        break-after: page;
+        break-inside: avoid;
+      }
+      .slide:last-child {
+        break-after: auto;
+      }
+      .nav,
+      .show-notes .notes-panel {
+        display: none;
+      }
+    }
+
+    /* Pattern CSS goes here */
+    </style>
+  </head>
+  <body>
+    <main aria-label="Deck Title" class="deck">
+      <section aria-label="Title" class="slide cover">
+        <div class="brand">Brand</div>
+        <h1>Deck title</h1>
+        <p class="meta">Subtitle · Date</p>
+      </section>
+      <section aria-label="Plan" class="slide">
+        <p class="kicker">Section</p>
+        <h1>One short claim.</h1>
+        <div class="fill">
+          <div class="row">
+            <span class="n">01</span>
+            <p><b>Item</b> and its detail</p>
+          </div>
+          <div class="row">
+            <span class="n">02</span>
+            <p><b>Item</b> and its detail</p>
+          </div>
+        </div>
+        <p class="source">Source, date</p>
+        <aside class="notes">
+          <p>Detail that does not fit.</p>
+          <p class="q"><b>Q:</b> Question and answer.</p>
+        </aside>
+      </section>
+      <section aria-label="Statement" class="slide">
+        <p class="say fill">One sentence, set large.</p>
+      </section>
+      <section aria-label="Quote" class="slide">
+        <blockquote class="say fill">
+          “A quote.”<cite>Name, role</cite>
+        </blockquote>
+      </section>
+    </main>
+    <nav aria-label="Slide navigation" class="nav">
+      <button aria-label="Previous slide" type="button">←</button>
+      <span aria-live="polite" class="count"></span>
+      <button aria-label="Next slide" type="button">→</button>
+      <button aria-label="Speaker notes" type="button">N</button>
+    </nav>
+    <div aria-live="polite" class="notes-panel"></div>
+    <script>
+    "use strict";
+    (() => {
+      document.documentElement.classList.add("js");
+      const $ = (selector) => document.querySelector(selector);
+      const slides = [...document.querySelectorAll(".slide")];
+      const [prev, next, notes] = document.querySelectorAll(".nav button");
+      const deckName = $("main").getAttribute("aria-label");
+      const mark = $(".brand > :first-child");
+      let index = 0;
+
+      for (const [i, slide] of slides.entries()) {
+        const name = slide.getAttribute("aria-label") || "Slide";
+        slide.setAttribute("aria-label", `Slide ${i + 1}: ${name}`);
+        if (!slide.classList.contains("cover")) {
+          const foot = document.createElement("div");
+          foot.className = "foot";
+          foot.innerHTML = `<span class="mark"></span><span>${String(i + 1).padStart(2, "0")}</span>`;
+          foot.firstChild.append(mark ? mark.cloneNode(true) : "", deckName);
+          slide.append(foot);
+        }
+      }
+
+      function show(n) {
+        index = Math.max(0, Math.min(slides.length - 1, n || 0));
+        for (const [i, slide] of slides.entries()) {
+          slide.classList.toggle("active", i === index);
+        }
+        $(".count").textContent = `${index + 1} / ${slides.length}`;
+        prev.disabled = index === 0;
+        next.disabled = index === slides.length - 1;
+        const hint = document.createElement("p");
+        hint.className = "hint";
+        hint.textContent = `SPEAKER NOTES · ${index + 1} · press N to close`;
+        const aside = slides[index].querySelector(".notes");
+        $(".notes-panel").replaceChildren(
+          hint,
+          ...(aside?.cloneNode(true).childNodes ?? [])
+        );
+        try {
+          history.replaceState(null, "", `#${index + 1}`);
+        } catch {
+          // A preview may block URL changes.
+        }
+      }
+
+      const toggleNotes = () => document.body.classList.toggle("show-notes");
+      const steps = {
+        " ": 1,
+        ArrowDown: 1,
+        ArrowLeft: -1,
+        ArrowRight: 1,
+        ArrowUp: -1,
+        End: slides.length,
+        Home: -slides.length,
+        PageDown: 1,
+        PageUp: -1,
+      };
+      prev.addEventListener("click", () => show(index - 1));
+      next.addEventListener("click", () => show(index + 1));
+      notes.addEventListener("click", toggleNotes);
+      addEventListener("keydown", (event) => {
+        const target = event.target.closest?.bind(event.target);
+        if (
+          event.altKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          target?.("input, select, textarea") ||
+          (event.key === " " && target?.("button, a"))
+        ) {
+          return;
+        }
+        if (event.key in steps) {
+          event.preventDefault();
+          show(index + steps[event.key]);
+        } else if (event.key.toLowerCase() === "n") {
+          event.preventDefault();
+          toggleNotes();
+        }
+      });
+      const fromHash = () => Number(location.hash.slice(1)) - 1;
+      addEventListener("hashchange", () => show(fromHash()));
+      show(fromHash());
+    })();
+    </script>
+  </body>
+</html>

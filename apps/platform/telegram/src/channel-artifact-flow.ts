@@ -1,13 +1,13 @@
-import type { NakamaClient } from "@nakama/client";
-import { getMostRecentDeliverableArtifact, isAttachIntent } from "@nakama/core";
-import type { ChannelSessionStore } from "@nakama/core/channel-session-store";
+import type { AirinClient } from "@airin/client";
+import { getMostRecentDeliverableArtifact, isAttachIntent } from "@airin/core";
+import type { ChannelSessionStore } from "@airin/core/channel-session-store";
 import type { Context } from "grammy";
 import type { TelegramRichMessenger } from "./rich-message";
 import { sendTelegramArtifactDocument } from "./send-artifact-document";
 
 export async function maybeSendRequestedTelegramArtifactAttachment(input: {
   ctx: Context;
-  client: NakamaClient;
+  client: AirinClient;
   conversationKey: string;
   profileId: string;
   /** Raw user text before group-context prefixing. */

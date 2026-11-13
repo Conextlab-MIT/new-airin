@@ -1,5 +1,5 @@
-import type { McpServerSummary } from "@nakama/core/contract";
-import { Spinner } from "@nakama/ui/spinner";
+import type { McpServerSummary } from "@airin/core/contract";
+import { Spinner } from "@airin/ui/spinner";
 import { McpToolList } from "@/components/soul-tools/McpToolList";
 import { useMcpServerDetailQuery } from "@/hooks/use-app-queries";
 import { formatError } from "@/lib/client";

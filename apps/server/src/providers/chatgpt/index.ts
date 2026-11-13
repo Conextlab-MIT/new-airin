@@ -5,11 +5,11 @@ import type {
   GenerateTextResult,
   ProviderClient,
   StreamChatHandlers,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   type ChatgptOAuthCredentials,
   chatgptOAuthNeedsRefresh,
-} from "@nakama/core";
+} from "@airin/core";
 import { generateOpenAIResponsesChat } from "../openai/responses";
 import { CHATGPT_CODEX_BASE_URL, refreshChatgptOAuthToken } from "./oauth";
 
@@ -26,7 +26,7 @@ async function resolveAccessToken(
 
   if (!current) {
     throw new Error(
-      "ChatGPT provider is not connected. Reconnect in Settings → LLM providers."
+      "ChatGPT provider is not connected. Reconnect in Settings → AI Providers (/settings/providers)."
     );
   }
 
@@ -57,12 +57,13 @@ export function createChatgptProvider(
       extraHeaders: {
         "ChatGPT-Account-ID": oauth.accountId,
         "OpenAI-Beta": "responses=v1",
-        originator: "nakama",
+        originator: "airin",
         version: "1.0.0",
       },
       input,
       label: "ChatGPT",
       model,
+      provider: "chatgpt",
       // Codex rejects non-streaming /responses calls.
       stream: true,
       supportsThinking: true,

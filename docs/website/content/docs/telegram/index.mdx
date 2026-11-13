@@ -1,21 +1,21 @@
 ---
 title: "Telegram"
-description: "Set up Nakama as a Telegram bot with pairing, commands, and group behavior."
+description: "Set up Airin as a Telegram bot with pairing, commands, and group behavior."
 ---
 
-Nakama can run as a Telegram bot so you can chat with the same agent from your phone, desktop Telegram, or a shared group.
+Airin can run as a Telegram bot so you can chat with the same agent from your phone, desktop Telegram, or a shared group.
 
 The mental model is simple:
 
-- Telegram is a **channel** for Nakama
-- The bridge talks to the same Nakama server as the web app
-- Pairing links a real Telegram user to your Nakama access
+- Telegram is a **channel** for Airin
+- The bridge talks to the same Airin server as the web app
+- Pairing links a real Telegram user to your Airin access
 
 ## What Telegram supports
 
 With Telegram enabled, users can:
 
-- chat with a Nakama profile in a private chat
+- chat with an Airin profile in a private chat
 - use the bot in Telegram groups
 - receive outbound webhook notifications in a group or topic
 - keep every conversation attached to the connection's agent
@@ -29,8 +29,8 @@ An organization admin can open **Agent → your agent → Channels → Telegram*
 
 1. Scan the QR code or select **Open Telegram to Create Bot**.
 2. If Telegram prompts you, press **Start**, then create the bot with the supplied button.
-3. Keep the suggested username so Nakama can match your bot securely.
-4. Return to Nakama and select **Connect bot** once the bot is ready.
+3. Keep the suggested username so Airin can match your bot securely.
+4. Return to Airin and select **Connect bot** once the bot is ready.
 
 The channel settings route is `/profiles/:profileId/channels/telegram`.
 
@@ -39,9 +39,9 @@ username, cancel and start again.
 
 ### Who can access the bot?
 
-By default, QR setup uses the shared manager at **getnakama.cloud**. Its operator can retrieve your managed bot's token and control the bot. Nakama saves your bot token on your own server; normal chats go directly between that server and Telegram. Ending the setup session does not remove the manager's access to the bot.
+By default, QR setup uses the shared manager at **getairin.cloud**. Its operator can retrieve your managed bot's token and control the bot. Airin saves your bot token on your own server; normal chats go directly between that server and Telegram. Ending the setup session does not remove the manager's access to the bot.
 
-The manager's [source code is public](https://github.com/ahmadrosid/nakama/tree/main/packages/telegram-manager). Operators can inspect and host it themselves, or configure their own manager. Public code does not verify which version a hosted service runs. Use the manual BotFather setup below if you do not want to grant a shared manager access.
+The manager's [source code is public](https://github.com/ahmadrosid/airin/tree/e23f0c3cd7991c7a1d631e94f3ae987b759aebac/packages/telegram-manager). Operators can inspect and host it themselves, or configure their own manager. Public code does not verify which version a hosted service runs. Use the manual BotFather setup below if you do not want to grant a shared manager access.
 
 ## Step 1: Create a bot manually with BotFather
 
@@ -55,9 +55,9 @@ For manual setup, create a bot token with `@BotFather`.
 
 Keep the token secret. Anyone with the token can control your Telegram bot.
 
-## Step 2: Save Telegram settings in Nakama
+## Step 2: Save Telegram settings in Airin
 
-Open **Agent → your agent → Channels → Telegram** in the Nakama web app, then:
+Open **Agent → your agent → Channels → Telegram** in the Airin web app, then:
 
 1. Paste the bot token
 2. Check that you opened the profile you want to connect
@@ -65,7 +65,7 @@ Open **Agent → your agent → Channels → Telegram** in the Nakama web app, t
 
 ![Paste the bot token from @BotFather on Agent → your agent → Channels → Telegram](/screenshots/telegram-bot-token.png)
 
-When you save for the first time, Nakama can generate a pairing code for linking your Telegram account.
+When you save for the first time, Airin can generate a pairing code for linking your Telegram account.
 
 ## One bot per profile
 
@@ -73,7 +73,7 @@ Each profile can own one Telegram bot. Its chats, pairing, worker controls, and 
 
 Organization admins and platform admins manage connections. **Stop** keeps the connection for later. **Disconnect** removes its credentials, pairings, and channel session/thread data. Disconnect channels before moving a profile to another organization. Cloning or exporting a profile does not copy its connections.
 
-Existing connections move automatically when Nakama can identify their owner. If ownership is unclear, it stays stopped until it is claimed for an agent through the API (`POST /v1/settings/channel-legacy/claim`). The dashboard has no claim control. Only a platform admin can claim an installation-wide connection.
+Existing connections move automatically when Airin can identify their owner. If ownership is unclear, it stays stopped until it is claimed for an agent through the API (`POST /v1/settings/channel-legacy/claim`). The dashboard has no claim control. Only a platform admin can claim an installation-wide connection.
 
 ## Step 3: Enable audio transcription for voice chat
 
@@ -81,7 +81,7 @@ Telegram voice notes and audio files are turned into text before they are sent t
 
 To enable that:
 
-1. Open **Control center → Agent tools → AI Providers** in the Nakama web app
+1. Open **Settings → Agent tools → AI Providers** in the Airin web app
 2. Add an **OpenAI** provider if you have not added one yet
 3. In **Audio transcription model**, choose an OpenAI model such as Whisper
 4. Wait for the `Saved` confirmation
@@ -92,7 +92,7 @@ If no OpenAI provider is connected, the audio transcription setting stays unavai
 
 ## Step 4: Pair your Telegram account
 
-Pairing is required so random Telegram users cannot talk to your internal Nakama bot.
+Pairing is required so random Telegram users cannot talk to your internal Airin bot.
 
 1. Copy the pairing code from **Agent → your agent → Channels → Telegram**
 2. Start a private chat with your bot
@@ -104,11 +104,11 @@ After a successful match, that Telegram user is linked and the pairing code is c
 
 ### Why pairing exists
 
-The bot token only connects Nakama to Telegram.
+The bot token only connects Airin to Telegram.
 
-Pairing connects **your Telegram user account** to Nakama permissions.
+Pairing connects **your Telegram user account** to Airin permissions.
 
-That means Nakama can:
+That means Airin can:
 
 - identify which Telegram user is talking
 - allow private chat safely
@@ -116,11 +116,11 @@ That means Nakama can:
 
 ## Step 5: Start the Telegram bridge
 
-Select **Start** in the profile's Telegram connection. Keep the Nakama server running. Starting or stopping this worker does not affect another profile's connections.
+Select **Start** in the profile's Telegram connection. Keep the Airin server running. Starting or stopping this worker does not affect another profile's connections.
 
 ## Optional: Direct allowlist instead of pairing
 
-Nakama also supports allowlisting Telegram user IDs directly.
+Airin also supports allowlisting Telegram user IDs directly.
 
 This is useful when you want to pre-authorize specific users without the one-time pairing flow.
 
@@ -139,7 +139,7 @@ To paste raw Telegram update JSON instead:
 5. Click **Add user**
 
 Use the Telegram user's `from.id`, not their `@username`.
-When you paste raw JSON, Nakama reads `message.from.id` and shows the username when it is present.
+When you paste raw JSON, Airin reads `message.from.id` and shows the username when it is present.
 
 For example, in this Telegram update payload:
 
@@ -181,12 +181,12 @@ After you replace a Telegram bot token, restart this profile's Telegram worker. 
 The dashboard manages the worker scope for you. For a direct local run, set both the organization and profile scope before starting it:
 
 ```bash
-NAKAMA_CHANNEL_ORG_ID="org_your_org" \
-NAKAMA_CHANNEL_PROFILE_ID="your-profile" \
+AIRIN_CHANNEL_ORG_ID="org_your_org" \
+AIRIN_CHANNEL_PROFILE_ID="your-profile" \
 bun run dev:telegram
 ```
 
-The profile must already have a saved Telegram connection in the same Nakama config directory. The worker also needs the normal `NAKAMA_SERVER_URL` and `NAKAMA_CONFIG_DIR` settings when the server or config root are not the local defaults.
+The profile must already have a saved Telegram connection in the same Airin config directory. The worker also needs the normal `AIRIN_SERVER_URL` and `AIRIN_CONFIG_DIR` settings when the server or config root are not the local defaults.
 
 ## Next steps
 

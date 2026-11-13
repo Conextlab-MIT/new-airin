@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { lstat, open, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  AirinApiError,
   createEmailOutboundAdapter,
   type EmailOutboundAdapter,
   ensureDir,
@@ -19,7 +20,6 @@ import {
   knowledgeBaseMutationLock,
   listOrganizationKnowledgeBaseDocuments,
   loadUserConfig,
-  NakamaApiError,
   parseSkillMarkdown,
   readProfileManifestForReference,
   resolveProfileSkillDirectory,
@@ -27,12 +27,12 @@ import {
   SKILL_FILE_NAME,
   SOUL_FILES,
   type SoulStackFiles,
-} from "@nakama/core";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
+} from "@airin/core";
+import { createChatLock } from "@airin/core/channel-chat-lock";
 import {
   listChannelOwners,
   removeChannelConnection,
-} from "@nakama/core/channel-config-shared";
+} from "@airin/core/channel-config-shared";
 import type {
   AcceptOrgInviteRequest,
   AddOrgMemberResponse,
@@ -40,6 +40,7 @@ import type {
   CreateOrganizationRequest,
   CreateOrganizationResponse,
   CreateTeamRequest,
+  ListOrgInvitesResponse,
   ListOrgMembersResponse,
   ListOrgSharedResourcesResponse,
   ListUserOrgsResponse,
@@ -55,8 +56,8 @@ import type {
   ResetPasswordRequest,
   UpdateOrganizationRequest,
   UpdateOrgMemberRequest,
-} from "@nakama/core/contract";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
+} from "@airin/core/contract";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
 import type {
   DatabaseAdapter,
   StoredMcpServerRecord,
@@ -67,14 +68,15 @@ import type {
   StoredProfileRecord,
   StoredToolRecord,
   StoredUserRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import {
   ensureLocalClientAccess,
   ORG_INVITE_EXPIRY_DAYS,
   ORG_ROLES,
   seedOrgDefaultProfile,
-  seedOrgSuperBotProfile,
-} from "@nakama/db";
+  seedOrgSuperAirinProfile,
+} from "@airin/db";
+import { isTenantBashEnabled } from "../tools/bash-config";
 import type { AuthService } from "./auth-service";
 import {
   deleteOrgToolCredentials,
@@ -118,7 +120,7 @@ const ORG_MEMBER_USER_ID_PATTERN = /^user_[A-Za-z0-9_]{1,64}$/;
 
 function assertOrgMemberUserId(userId: string): void {
   if (!ORG_MEMBER_USER_ID_PATTERN.test(userId)) {
-    throw new NakamaApiError("Invalid user id.", 400);
+    throw new AirinApiError("Invalid user id.", 400);
   }
 }
 
@@ -153,10 +155,52 @@ export class OrgService {
     const org = await this.databaseAdapter.getOrganizationById(orgId);
 
     if (!org || org.archivedAt || org.setupPending) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     return org;
+  }
+
+  private async isPlatformAdmin(userId: string): Promise<boolean> {
+    const user = await this.databaseAdapter.getUserById(userId);
+
+    return Boolean(user?.isPlatformAdmin);
+  }
+
+  /**
+   * A team also applies its parent's allowlist, so a new team cannot let an
+   * outside address in. A user who is already in the parent org skips that part.
+   */
+  private async assertMemberDomainAllowed(
+    email: string,
+    organization: StoredOrganizationRecord,
+    userId?: string
+  ): Promise<void> {
+    if (!isAllowedInviteDomain(email, organization)) {
+      throw new AirinApiError("Email domain is not allowed.", 400);
+    }
+
+    if (!organization.parentOrgId) {
+      return;
+    }
+
+    if (
+      userId &&
+      (await this.databaseAdapter.getOrgMember(
+        organization.parentOrgId,
+        userId
+      ))
+    ) {
+      return;
+    }
+
+    const parent = await this.databaseAdapter.getOrganizationById(
+      organization.parentOrgId
+    );
+
+    if (parent && !isAllowedInviteDomain(email, parent)) {
+      throw new AirinApiError("Email domain is not allowed.", 400);
+    }
   }
 
   private async requireParentAdmin(
@@ -166,7 +210,7 @@ export class OrgService {
     const parent = await this.requireActiveOrganization(orgId);
 
     if (parent.parentOrgId) {
-      throw new NakamaApiError("Requires a root organization.", 409);
+      throw new AirinApiError("Requires a root organization.", 409);
     }
 
     const user = await this.databaseAdapter.getUserById(userId);
@@ -177,7 +221,7 @@ export class OrgService {
       user.disabledAt ||
       (!user.isPlatformAdmin && membership?.role !== "admin")
     ) {
-      throw new NakamaApiError("Forbidden", 403);
+      throw new AirinApiError("Forbidden", 403);
     }
 
     return parent;
@@ -234,7 +278,7 @@ export class OrgService {
     ]);
 
     if (!user || user.disabledAt || !(user.isPlatformAdmin || membership)) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const parent = org.parentOrgId
@@ -242,7 +286,7 @@ export class OrgService {
       : org;
 
     if (parent.parentOrgId) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const publications = await this.databaseAdapter.listOrgSharedResources(
@@ -272,7 +316,7 @@ export class OrgService {
             const config = readHandlerConfig(tool.handlerConfig);
 
             if (!config) {
-              throw new NakamaApiError(
+              throw new AirinApiError(
                 "Tool configuration is unavailable.",
                 404
               );
@@ -294,7 +338,7 @@ export class OrgService {
       } catch (error) {
         if (
           !(
-            error instanceof NakamaApiError &&
+            error instanceof AirinApiError &&
             [400, 404, 409].includes(error.status)
           )
         ) {
@@ -333,7 +377,7 @@ export class OrgService {
     ]);
 
     if (!user || user.disabledAt) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const membershipByOrg = new Map(
@@ -341,7 +385,7 @@ export class OrgService {
     );
 
     if (!(user.isPlatformAdmin || membershipByOrg.has(orgId))) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const canReadAllTeams =
@@ -385,7 +429,7 @@ export class OrgService {
         knowledgeCount = (await listOrganizationKnowledgeBaseDocuments(team.id))
           .length;
       } catch {
-        throw new NakamaApiError("Team summary is unavailable.", 500);
+        throw new AirinApiError("Team summary is unavailable.", 500);
       }
 
       teams.push({
@@ -428,24 +472,24 @@ export class OrgService {
     ]);
 
     if (!user || user.disabledAt || !(membership || user.isPlatformAdmin)) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     if (
       !membership ||
       (membership.role !== "admin" && membership.role !== "member")
     ) {
-      throw new NakamaApiError("Forbidden", 403);
+      throw new AirinApiError("Forbidden", 403);
     }
 
     if (!team.parentOrgId) {
-      throw new NakamaApiError("Shared agents require a team.", 409);
+      throw new AirinApiError("Shared agents require a team.", 409);
     }
 
     const parent = await this.requireActiveOrganization(team.parentOrgId);
 
     if (parent.parentOrgId) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const publication = await this.databaseAdapter.getOrgSharedResource(
@@ -454,7 +498,7 @@ export class OrgService {
     );
 
     if (publication?.resourceKind !== "agent") {
-      throw new NakamaApiError("Shared agent is unavailable.", 404);
+      throw new AirinApiError("Shared agent is unavailable.", 404);
     }
 
     await this.validateSharedResourceSource(parent.id, publication);
@@ -476,7 +520,7 @@ export class OrgService {
       await ensureDir(resolved);
     } catch {
       // Keep the stable source link so a retry cannot replace existing team work.
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Team workspace setup failed. Retry the selection.",
         500
       );
@@ -508,7 +552,7 @@ export class OrgService {
     const team = await this.requireActiveOrganization(teamOrgId);
 
     if (team.parentOrgId !== instance.sourceOrgId) {
-      throw new NakamaApiError("Shared agent is unavailable.", 404);
+      throw new AirinApiError("Shared agent is unavailable.", 404);
     }
 
     const parent = await this.requireActiveOrganization(instance.sourceOrgId);
@@ -523,7 +567,7 @@ export class OrgService {
       publication?.resourceKind !== "agent" ||
       publication.resourceId !== instance.sourceProfileId
     ) {
-      throw new NakamaApiError("Shared agent is unavailable.", 404);
+      throw new AirinApiError("Shared agent is unavailable.", 404);
     }
 
     await this.validateSharedResourceSource(parent.id, publication);
@@ -543,7 +587,7 @@ export class OrgService {
       source.acpAgent ||
       source.acpSettings
     ) {
-      throw new NakamaApiError("Shared agent is unavailable.", 404);
+      throw new AirinApiError("Shared agent is unavailable.", 404);
     }
 
     return {
@@ -589,7 +633,7 @@ export class OrgService {
         const entry = await lstat(directory);
 
         if (!entry.isDirectory() || entry.isSymbolicLink()) {
-          throw new NakamaApiError("Shared agent is unavailable.", 404);
+          throw new AirinApiError("Shared agent is unavailable.", 404);
         }
       } catch (error) {
         if (
@@ -611,14 +655,14 @@ export class OrgService {
 
         try {
           if (!(await lstat(filePath)).isFile()) {
-            throw new NakamaApiError("Shared agent is unavailable.", 404);
+            throw new AirinApiError("Shared agent is unavailable.", 404);
           }
 
           const handle = await open(filePath, constants.O_NOFOLLOW);
 
           try {
             if (!(await handle.stat()).isFile()) {
-              throw new NakamaApiError("Shared agent is unavailable.", 404);
+              throw new AirinApiError("Shared agent is unavailable.", 404);
             }
 
             publishedSoul[key] =
@@ -639,7 +683,7 @@ export class OrgService {
         }
       }
     } catch {
-      throw new NakamaApiError("Shared agent is unavailable.", 404);
+      throw new AirinApiError("Shared agent is unavailable.", 404);
     }
 
     return publishedSoul;
@@ -659,11 +703,11 @@ export class OrgService {
       );
 
       if (!profile || profile.isDefault || profile.isSuper) {
-        throw new NakamaApiError("Agent is unavailable.", 404);
+        throw new AirinApiError("Agent is unavailable.", 404);
       }
 
       if (profile.acpAgent || profile.acpSettings) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Agent requires team-local ACP configuration.",
           409
         );
@@ -685,7 +729,7 @@ export class OrgService {
         servers.some((server) => server.orgId || !server.enabled) ||
         toolkits.length > 0
       ) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Agent requires a team-local integration.",
           409
         );
@@ -702,7 +746,7 @@ export class OrgService {
           const name = namespacedMcpToolName(server.name, tool.name);
 
           if (toolNames.has(name)) {
-            throw new NakamaApiError(
+            throw new AirinApiError(
               "Agent tool assignments are conflicting.",
               409
             );
@@ -717,7 +761,7 @@ export class OrgService {
           toolNames.has(tool.name) ||
           (tool.orgId && !published.has(`tool:${tool.id}`))
         ) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Agent tool assignments are unavailable or conflicting.",
             409
           );
@@ -739,7 +783,7 @@ export class OrgService {
           (skill.hasTool && toolNames.has(skill.name)) ||
           (skill.orgId && !published.has(`skill:${skill.id}`))
         ) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Agent skill assignments are unavailable or conflicting.",
             409
           );
@@ -784,7 +828,7 @@ export class OrgService {
         );
 
         if (manifest.documents.length > 0) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Agent requires private profile knowledge.",
             409
           );
@@ -792,7 +836,7 @@ export class OrgService {
 
         for (const documentId of manifest.sharedDocumentIds ?? []) {
           if (!published.has(`knowledge:${documentId}`)) {
-            throw new NakamaApiError(
+            throw new AirinApiError(
               "Agent knowledge assignment is unpublished.",
               409
             );
@@ -804,11 +848,11 @@ export class OrgService {
           });
         }
       } catch (error) {
-        if (error instanceof NakamaApiError) {
+        if (error instanceof AirinApiError) {
           throw error;
         }
 
-        throw new NakamaApiError("Agent knowledge is unavailable.", 404);
+        throw new AirinApiError("Agent knowledge is unavailable.", 404);
       }
 
       if (profile.model) {
@@ -832,7 +876,7 @@ export class OrgService {
           selected && modelExistsOnInstance(selected.instance, selected.modelId)
         )
       ) {
-        throw new NakamaApiError("Select a configured model.", 400);
+        throw new AirinApiError("Select a configured model.", 400);
       }
 
       resourceId = `${selected.instance.id}::${selected.modelId}`;
@@ -841,7 +885,7 @@ export class OrgService {
       const tool = await this.databaseAdapter.getTool(request.resourceId);
 
       if (!tool || (tool.orgId && tool.orgId !== parentOrgId)) {
-        throw new NakamaApiError("Tool is unavailable.", 404);
+        throw new AirinApiError("Tool is unavailable.", 404);
       }
 
       label = tool.name;
@@ -849,7 +893,7 @@ export class OrgService {
       const skill = await this.databaseAdapter.getSkill(request.resourceId);
 
       if (!(skill && skill.enabled) || skill.orgId !== parentOrgId) {
-        throw new NakamaApiError("Skill is unavailable.", 404);
+        throw new AirinApiError("Skill is unavailable.", 404);
       }
 
       label = skill.name;
@@ -874,7 +918,7 @@ export class OrgService {
         );
 
         if (!owner) {
-          throw new NakamaApiError("Skill is unavailable.", 404);
+          throw new AirinApiError("Skill is unavailable.", 404);
         }
 
         const { resolved } = await guardFilePath(
@@ -890,10 +934,10 @@ export class OrgService {
         );
 
         if (parsed.frontmatter.name !== skill.name) {
-          throw new NakamaApiError("Skill is unavailable.", 404);
+          throw new AirinApiError("Skill is unavailable.", 404);
         }
       } catch {
-        throw new NakamaApiError("Skill is unavailable.", 404);
+        throw new AirinApiError("Skill is unavailable.", 404);
       }
     } else if (request.resourceKind === "knowledge") {
       const dir = getOrgKnowledgeBaseDir(parentOrgId);
@@ -919,7 +963,7 @@ export class OrgService {
         );
 
         if (!document || document.status !== "ready") {
-          throw new NakamaApiError("Knowledge document is unavailable.", 404);
+          throw new AirinApiError("Knowledge document is unavailable.", 404);
         }
 
         label = document.filename;
@@ -936,13 +980,13 @@ export class OrgService {
         );
 
         if (!(await stat(resolved)).isFile()) {
-          throw new NakamaApiError("Knowledge document is unavailable.", 404);
+          throw new AirinApiError("Knowledge document is unavailable.", 404);
         }
       } catch {
-        throw new NakamaApiError("Knowledge document is unavailable.", 404);
+        throw new AirinApiError("Knowledge document is unavailable.", 404);
       }
     } else {
-      throw new NakamaApiError("Unsupported publication kind.", 400);
+      throw new AirinApiError("Unsupported publication kind.", 400);
     }
 
     return { label, resourceId };
@@ -972,7 +1016,7 @@ export class OrgService {
         (child) => child.parentOrgId === orgId && !child.archivedAt
       )
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Archive active teams before archiving their parent.",
         409
       );
@@ -986,7 +1030,7 @@ export class OrgService {
         memberships.length === 1 && memberships[0]?.organization.id === orgId;
 
       if (onlyMembership) {
-        throw new NakamaApiError(LAST_MEMBERSHIP_MESSAGE, 409);
+        throw new AirinApiError(LAST_MEMBERSHIP_MESSAGE, 409);
       }
     }
 
@@ -997,7 +1041,7 @@ export class OrgService {
         (entry) => !entry.archivedAt
       ).length <= 1
     ) {
-      throw new NakamaApiError(LAST_ORGANIZATION_MESSAGE, 409);
+      throw new AirinApiError(LAST_ORGANIZATION_MESSAGE, 409);
     }
 
     const releaseAdmission = await this.beforeArchiveChannels?.(orgId);
@@ -1010,10 +1054,10 @@ export class OrgService {
       const current = await this.databaseAdapter.getOrganizationById(orgId);
 
       if (!current || current.archivedAt) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
-      throw new NakamaApiError(LAST_ORGANIZATION_MESSAGE, 409);
+      throw new AirinApiError(LAST_ORGANIZATION_MESSAGE, 409);
     }
 
     return toOrganizationSummary({
@@ -1027,11 +1071,11 @@ export class OrgService {
     const organization = await this.databaseAdapter.getOrganizationById(orgId);
 
     if (!organization) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     if (!organization.archivedAt) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Archive the organization before deleting it permanently.",
         409
       );
@@ -1042,7 +1086,7 @@ export class OrgService {
         (child) => child.parentOrgId === orgId
       )
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Delete teams before deleting their parent.",
         409
       );
@@ -1053,6 +1097,7 @@ export class OrgService {
       "discord",
       "whatsapp",
       "slack",
+      "teams",
     ] as const) {
       for (const owner of await listChannelOwners(platform)) {
         if (owner.orgId === orgId) {
@@ -1063,7 +1108,7 @@ export class OrgService {
 
     // Keep the database row available for a safe retry if disk cleanup fails.
     await rm(getOrgConfigDir(orgId), { force: true, recursive: true });
-    await deleteOrgToolCredentials(orgId);
+    await deleteOrgToolCredentials(orgId, this.databaseAdapter);
     await rm(join(getUserConfigDir(), "retired-app-users", orgId), {
       force: true,
       recursive: true,
@@ -1071,7 +1116,7 @@ export class OrgService {
     const deleted = await this.databaseAdapter.deleteOrganization(orgId);
 
     if (!deleted) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
   }
 
@@ -1084,7 +1129,7 @@ export class OrgService {
     const name = request.name === undefined ? org.name : request.name.trim();
 
     if (request.name !== undefined && !name) {
-      throw new NakamaApiError("Organization name is required.", 400);
+      throw new AirinApiError("Organization name is required.", 400);
     }
 
     const now = new Date().toISOString();
@@ -1112,7 +1157,7 @@ export class OrgService {
       monthlyLlmWarningPercent < 1 ||
       monthlyLlmWarningPercent > 99
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Monthly LLM warning percent must be an integer from 1 to 99.",
         400
       );
@@ -1174,7 +1219,7 @@ export class OrgService {
     const org = await this.databaseAdapter.getOrganizationById(orgId);
 
     if (!org) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     await this.databaseAdapter.upsertOrganization({
@@ -1251,14 +1296,14 @@ export class OrgService {
     creatorUserId: string
   ): Promise<CreateOrganizationResponse> {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(request.requestId)) {
-      throw new NakamaApiError("Invalid team request ID.", 400);
+      throw new AirinApiError("Invalid team request ID.", 400);
     }
 
     const name = request.name.trim();
     const slug = request.slug.trim().toLowerCase();
 
     if (!(name && SLUG_PATTERN.test(slug))) {
-      throw new NakamaApiError("Invalid team name or slug.", 400);
+      throw new AirinApiError("Invalid team name or slug.", 400);
     }
 
     const adminUserId = request.adminUserId ?? creatorUserId;
@@ -1282,7 +1327,7 @@ export class OrgService {
           (previous.requestHash !== requestHash ||
             previous.creatorUserId !== creatorUserId)
         ) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Team request already has another result.",
             409
           );
@@ -1291,7 +1336,7 @@ export class OrgService {
         const admin = await this.databaseAdapter.getUserById(adminUserId);
 
         if (!admin || admin.disabledAt) {
-          throw new NakamaApiError("Team admin is unavailable.", 400);
+          throw new AirinApiError("Team admin is unavailable.", 400);
         }
 
         const organization = previous
@@ -1302,7 +1347,7 @@ export class OrgService {
             };
 
         if (!organization || organization.parentOrgId !== parentOrgId) {
-          throw new NakamaApiError("Team is unavailable.", 404);
+          throw new AirinApiError("Team is unavailable.", 404);
         }
 
         const pending = await this.databaseAdapter.beginOrgTeamCreation({
@@ -1326,7 +1371,7 @@ export class OrgService {
                 new Date().toISOString()
               ))
             ) {
-              throw new NakamaApiError("Team setup could not complete.", 409);
+              throw new AirinApiError("Team setup could not complete.", 409);
             }
           } catch (error) {
             // Keep the pending request if disk cleanup fails, so a retry can recover it.
@@ -1334,7 +1379,10 @@ export class OrgService {
               force: true,
               recursive: true,
             });
-            await deleteOrgToolCredentials(organization.id);
+            await deleteOrgToolCredentials(
+              organization.id,
+              this.databaseAdapter
+            );
             await this.databaseAdapter.abortOrgTeamCreation(
               parentOrgId,
               request.requestId,
@@ -1426,7 +1474,7 @@ export class OrgService {
     const user = await this.databaseAdapter.getUserById(input.userId);
 
     if (!(membership || user?.isPlatformAdmin)) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const organization = await this.requireActiveOrganization(input.orgId);
@@ -1509,7 +1557,7 @@ export class OrgService {
     const user = await this.databaseAdapter.getUserById(userId);
 
     if (!user) {
-      throw new NakamaApiError("Authentication required", 401);
+      throw new AirinApiError("Authentication required", 401);
     }
 
     const now = new Date().toISOString();
@@ -1530,7 +1578,7 @@ export class OrgService {
       email = normalizeEmail(input.email);
 
       if (!EMAIL_PATTERN.test(email)) {
-        throw new NakamaApiError("A valid email address is required.", 400);
+        throw new AirinApiError("A valid email address is required.", 400);
       }
 
       if (email !== user.email) {
@@ -1540,13 +1588,13 @@ export class OrgService {
         );
 
         if (!validPassword) {
-          throw new NakamaApiError("Current password is incorrect.", 401);
+          throw new AirinApiError("Current password is incorrect.", 401);
         }
 
         const existing = await this.databaseAdapter.getUserByEmail(email);
 
         if (existing && existing.id !== user.id) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "An account with that email already exists.",
             409
           );
@@ -1579,8 +1627,10 @@ export class OrgService {
     email: string;
     phone: string;
     role: OrgRole;
+    /** Platform admins may add an address outside the invite domain allowlist (#2075). */
+    bypassDomainAllowlist?: boolean;
   }): Promise<AddOrgMemberResponse> {
-    await this.requireActiveOrganization(input.orgId);
+    const organization = await this.requireActiveOrganization(input.orgId);
 
     const name = input.name.trim();
     const email = normalizeEmail(input.email);
@@ -1589,15 +1639,24 @@ export class OrgService {
     assertMemberName(name);
 
     if (!EMAIL_PATTERN.test(email)) {
-      throw new NakamaApiError("A valid email address is required.", 400);
+      throw new AirinApiError("A valid email address is required.", 400);
+    }
+
+    const existingUser = await this.databaseAdapter.getUserByEmail(email);
+
+    if (!input.bypassDomainAllowlist) {
+      await this.assertMemberDomainAllowed(
+        email,
+        organization,
+        existingUser?.id
+      );
     }
 
     if (!ORG_ROLES.includes(input.role)) {
-      throw new NakamaApiError("Invalid org role.", 400);
+      throw new AirinApiError("Invalid org role.", 400);
     }
 
     const now = new Date().toISOString();
-    const existingUser = await this.databaseAdapter.getUserByEmail(email);
 
     if (existingUser) {
       const member = await this.databaseAdapter.getOrgMember(
@@ -1606,7 +1665,7 @@ export class OrgService {
       );
 
       if (member) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "User is already a member of this organization.",
           409
         );
@@ -1667,11 +1726,11 @@ export class OrgService {
     const phone = normalizeOptionalPhone(input.admin.phone);
 
     if (!name) {
-      throw new NakamaApiError("Admin name is required.", 400);
+      throw new AirinApiError("Admin name is required.", 400);
     }
 
     if (!EMAIL_PATTERN.test(email)) {
-      throw new NakamaApiError("A valid email address is required.", 400);
+      throw new AirinApiError("A valid email address is required.", 400);
     }
 
     const organization = await this.buildOrganizationRecord(input.organization);
@@ -1703,7 +1762,7 @@ export class OrgService {
     });
 
     if (!claimed) {
-      throw new NakamaApiError("Admin user already exists", 409);
+      throw new AirinApiError("Admin user already exists", 409);
     }
 
     await this.seedOrgProfiles(organization.id);
@@ -1716,7 +1775,7 @@ export class OrgService {
     const team = await this.requireActiveOrganization(teamId);
 
     if (!team.parentOrgId) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const [parent, inTeam] = await Promise.all([
@@ -1728,7 +1787,11 @@ export class OrgService {
 
     return {
       members: parent.members
-        .filter((member) => !taken.has(member.userId))
+        .filter(
+          (member) =>
+            !taken.has(member.userId) &&
+            isAllowedInviteDomain(member.email, team)
+        )
         .map((member) => ({ ...member, phone: null })),
     };
   }
@@ -1737,7 +1800,7 @@ export class OrgService {
     const org = await this.databaseAdapter.getOrganizationById(orgId);
 
     if (!org) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const records = await this.databaseAdapter.listOrgMembers(orgId);
@@ -1765,13 +1828,20 @@ export class OrgService {
     await this.requireActiveOrganization(orgId);
     await this.assertCanChangeAdminMembership(orgId, userId);
 
+    // A webhook secret lets its maker start runs, so it ends with their access.
+    // Revoke first: a failed revoke keeps the member row, so a retry still works.
+    await this.databaseAdapter.deleteAutomationWebhookSecretsForUser(
+      userId,
+      orgId
+    );
+
     const deleted = await this.databaseAdapter.deleteOrgMember(orgId, userId);
 
     if (!deleted) {
       // The delete carries the last-admin guard, so a concurrent change between
       // the check above and here lands here rather than emptying the org.
       await this.assertCanChangeAdminMembership(orgId, userId);
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     // The org middleware stops org routes for a non-member, but the cookie stays
@@ -1791,7 +1861,7 @@ export class OrgService {
     const member = await this.databaseAdapter.getOrgMember(orgId, userId);
 
     if (!member) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     // disabled_at is install-wide, not per-org, so this has to check every org
@@ -1826,7 +1896,7 @@ export class OrgService {
       );
 
       if (!hasUsableAdmin) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Cannot disable the last active admin of an organization.",
           409
         );
@@ -1848,15 +1918,28 @@ export class OrgService {
       );
 
       if (!hasUsablePlatformAdmin) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Cannot disable the last active platform admin.",
           409
         );
       }
     }
 
+    // The checks above are read-then-write; the statement re-checks both rules
+    // so a concurrent disable, remove or demote cannot leave no usable admin.
     const now = new Date().toISOString();
-    await this.databaseAdapter.disableUser(userId, now);
+
+    await this.databaseAdapter.deleteAutomationWebhookSecretsForUser(userId);
+
+    const disabled = await this.databaseAdapter.disableUserUnlessLastAdmin(
+      userId,
+      now
+    );
+
+    if (!disabled) {
+      throw new AirinApiError("Cannot disable the last active admin.", 409);
+    }
+
     await this.databaseAdapter.revokeBrowserSessionsForUser(userId, now);
   }
 
@@ -1867,7 +1950,7 @@ export class OrgService {
     const member = await this.databaseAdapter.getOrgMember(orgId, userId);
 
     if (!member) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     await this.databaseAdapter.enableUser(userId);
@@ -1882,13 +1965,13 @@ export class OrgService {
     assertOrgMemberUserId(userId);
 
     if (userId === actorUserId) {
-      throw new NakamaApiError("You cannot erase your own account.", 409);
+      throw new AirinApiError("You cannot erase your own account.", 409);
     }
 
     const user = await this.databaseAdapter.getUserById(userId);
 
     if (!user) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const updatedAt = new Date().toISOString();
@@ -1901,7 +1984,7 @@ export class OrgService {
     });
 
     if (!erased) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Cannot erase the last active admin.", 409);
     }
   }
 
@@ -1915,7 +1998,7 @@ export class OrgService {
     const nextRole = input.role;
 
     if (nextRole !== undefined && !ORG_ROLES.includes(nextRole)) {
-      throw new NakamaApiError("Invalid org role.", 400);
+      throw new AirinApiError("Invalid org role.", 400);
     }
 
     const member = await this.assertCanChangeAdminMembership(
@@ -1927,7 +2010,7 @@ export class OrgService {
     const user = await this.databaseAdapter.getUserById(userId);
 
     if (!user) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const now = new Date().toISOString();
@@ -1953,6 +2036,14 @@ export class OrgService {
     }
 
     if (member.role !== role) {
+      // Only admins may hold secrets for email-capable profiles, so demotion revokes all of this user's secrets in the org.
+      if (role !== "admin") {
+        await this.databaseAdapter.deleteAutomationWebhookSecretsForUser(
+          userId,
+          orgId
+        );
+      }
+
       const updated = await this.databaseAdapter.updateOrgMemberRole(
         orgId,
         userId,
@@ -1961,7 +2052,7 @@ export class OrgService {
 
       if (!updated) {
         await this.assertCanChangeAdminMembership(orgId, userId, role);
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
     }
 
@@ -1985,16 +2076,22 @@ export class OrgService {
     const email = normalizeEmail(input.email);
 
     if (!EMAIL_PATTERN.test(email)) {
-      throw new NakamaApiError("A valid email address is required.", 400);
-    }
-
-    assertAllowedInviteDomain(email, organization);
-
-    if (!ORG_ROLES.includes(input.role)) {
-      throw new NakamaApiError("Invalid org role.", 400);
+      throw new AirinApiError("A valid email address is required.", 400);
     }
 
     const existingUser = await this.databaseAdapter.getUserByEmail(email);
+
+    if (!(await this.isPlatformAdmin(input.invitedByUserId))) {
+      await this.assertMemberDomainAllowed(
+        email,
+        organization,
+        existingUser?.id
+      );
+    }
+
+    if (!ORG_ROLES.includes(input.role)) {
+      throw new AirinApiError("Invalid org role.", 400);
+    }
 
     if (existingUser) {
       const member = await this.databaseAdapter.getOrgMember(
@@ -2003,7 +2100,7 @@ export class OrgService {
       );
 
       if (member) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "User is already a member of this organization.",
           409
         );
@@ -2016,7 +2113,7 @@ export class OrgService {
     );
 
     if (pendingInvite) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "An invite is already pending for this email.",
         409
       );
@@ -2068,6 +2165,31 @@ export class OrgService {
     };
   }
 
+  async listInvites(orgId: string): Promise<ListOrgInvitesResponse> {
+    await this.requireActiveOrganization(orgId);
+
+    const records = await this.databaseAdapter.listPendingOrgInvites(
+      orgId,
+      new Date().toISOString()
+    );
+
+    return { invites: records.map(toOrgInviteSummary) };
+  }
+
+  async revokeInvite(orgId: string, inviteId: string): Promise<void> {
+    await this.requireActiveOrganization(orgId);
+
+    const revoked = await this.databaseAdapter.revokeOrgInvite(
+      orgId,
+      inviteId,
+      new Date().toISOString()
+    );
+
+    if (!revoked) {
+      throw new AirinApiError("Not found", 404);
+    }
+  }
+
   async acceptInvite(request: AcceptOrgInviteRequest): Promise<{
     user: StoredUserRecord;
     orgId: string;
@@ -2076,7 +2198,7 @@ export class OrgService {
     const token = request.token?.trim();
 
     if (!token) {
-      throw new NakamaApiError("Invite token is required.", 400);
+      throw new AirinApiError("Invite token is required.", 400);
     }
 
     const invite = await this.databaseAdapter.getOrgInviteByTokenHash(
@@ -2084,27 +2206,33 @@ export class OrgService {
     );
 
     if (!invite) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     assertInviteUsable(invite);
 
     const organization = await this.requireActiveOrganization(invite.orgId);
-    assertAllowedInviteDomain(invite.email, organization);
+    let user = await this.databaseAdapter.getUserByEmail(invite.email);
+
+    // A platform admin's invite may name an address outside the allowlist,
+    // so it must also be accepted (#2075).
+    if (!(await this.isPlatformAdmin(invite.invitedByUserId))) {
+      await this.assertMemberDomainAllowed(
+        invite.email,
+        organization,
+        user?.id
+      );
+    }
 
     const password = request.password?.trim();
 
     if (!password) {
-      throw new NakamaApiError(
-        "Password is required to accept an invite.",
-        400
-      );
+      throw new AirinApiError("Password is required to accept an invite.", 400);
     }
 
     assertNewPassword(password);
 
     const now = new Date().toISOString();
-    let user = await this.databaseAdapter.getUserByEmail(invite.email);
 
     if (user) {
       const valid = await this.authService.verifyPassword(
@@ -2113,7 +2241,7 @@ export class OrgService {
       );
 
       if (!valid) {
-        throw new NakamaApiError("Invalid credentials", 401);
+        throw new AirinApiError("Invalid credentials", 401);
       }
     } else {
       user = {
@@ -2132,7 +2260,7 @@ export class OrgService {
     );
 
     if (existingMember) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "User is already a member of this organization.",
         409
       );
@@ -2160,7 +2288,7 @@ export class OrgService {
     const email = normalizeEmail(requestedEmail);
 
     if (!EMAIL_PATTERN.test(email)) {
-      throw new NakamaApiError("A valid email address is required.", 400);
+      throw new AirinApiError("A valid email address is required.", 400);
     }
 
     const user = await this.databaseAdapter.getUserByEmail(email);
@@ -2195,7 +2323,7 @@ export class OrgService {
 
     const deliveryPromise = Promise.resolve().then(() =>
       this.email.send({
-        subject: "Reset your Nakama password",
+        subject: "Reset your Airin password",
         text: [
           "A password reset was requested for your account.",
           "",
@@ -2221,28 +2349,31 @@ export class OrgService {
     return { delivered: delivery.ok, token: delivery.ok ? null : token };
   }
 
-  async resetPassword(request: ResetPasswordRequest): Promise<void> {
+  /** Returns the id of the user whose password was reset. */
+  async resetPassword(request: ResetPasswordRequest): Promise<string> {
     const token = request.token?.trim();
 
     if (!token) {
-      throw new NakamaApiError("Password reset token is required.", 400);
+      throw new AirinApiError("Password reset token is required.", 400);
     }
 
     const newPassword = request.newPassword?.trim() ?? "";
     assertNewPassword(newPassword);
 
-    const consumed = await this.databaseAdapter.consumePasswordResetToken(
+    const userId = await this.databaseAdapter.consumePasswordResetToken(
       this.authService.hashToken(token),
       await this.authService.hashPassword(newPassword),
       new Date().toISOString()
     );
 
-    if (!consumed) {
-      throw new NakamaApiError(
+    if (!userId) {
+      throw new AirinApiError(
         "Password reset token is invalid or has expired.",
         400
       );
     }
+
+    return userId;
   }
 
   async changePassword(input: {
@@ -2253,7 +2384,7 @@ export class OrgService {
     const user = await this.databaseAdapter.getUserById(input.userId);
 
     if (!user) {
-      throw new NakamaApiError("Authentication required", 401);
+      throw new AirinApiError("Authentication required", 401);
     }
 
     const currentPassword = input.currentPassword.trim();
@@ -2266,10 +2397,11 @@ export class OrgService {
     );
 
     if (!valid) {
-      throw new NakamaApiError("Current password is incorrect.", 401);
+      throw new AirinApiError("Current password is incorrect.", 401);
     }
 
     const now = new Date().toISOString();
+    await this.databaseAdapter.deleteAutomationWebhookSecretsForUser(user.id);
     await this.databaseAdapter.updateUserPassword(
       user.id,
       await this.authService.hashPassword(newPassword),
@@ -2291,7 +2423,7 @@ export class OrgService {
     const member = await this.databaseAdapter.getOrgMember(orgId, userId);
 
     if (!member) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     if (member.role !== "admin") {
@@ -2316,14 +2448,11 @@ export class OrgService {
     }
 
     if (nextRole !== undefined && nextRole !== "admin") {
-      throw new NakamaApiError(
-        "Cannot change role of the last org admin.",
-        409
-      );
+      throw new AirinApiError("Cannot change role of the last org admin.", 409);
     }
 
     if (nextRole === undefined) {
-      throw new NakamaApiError("Cannot remove the last org admin.", 409);
+      throw new AirinApiError("Cannot remove the last org admin.", 409);
     }
 
     return member;
@@ -2337,11 +2466,11 @@ export class OrgService {
     const slug = request.slug.trim().toLowerCase();
 
     if (!name) {
-      throw new NakamaApiError("Organization name is required.", 400);
+      throw new AirinApiError("Organization name is required.", 400);
     }
 
     if (!(slug && SLUG_PATTERN.test(slug))) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Organization slug must use lowercase letters, numbers, and hyphens.",
         400
       );
@@ -2350,7 +2479,7 @@ export class OrgService {
     const existing = await this.databaseAdapter.getOrganizationBySlug(slug);
 
     if (existing) {
-      throw new NakamaApiError("Organization slug already exists.", 409);
+      throw new AirinApiError("Organization slug already exists.", 409);
     }
 
     const now = new Date().toISOString();
@@ -2373,7 +2502,7 @@ export class OrgService {
       request.admin &&
       !(request.admin.name.trim() && request.admin.email.trim())
     ) {
-      throw new NakamaApiError("Admin name and email are required.", 400);
+      throw new AirinApiError("Admin name and email are required.", 400);
     }
 
     const record = await this.buildOrganizationRecord(request);
@@ -2392,26 +2521,27 @@ export class OrgService {
 
     await initSoulDirectory(getProfileSoulDir(orgId, defaultProfile.id));
 
-    const superBotProfile = await seedOrgSuperBotProfile(
+    const superAirinProfile = await seedOrgSuperAirinProfile(
       this.databaseAdapter,
-      orgId
+      orgId,
+      { grantBash: isTenantBashEnabled() }
     );
 
-    await initSoulDirectory(getProfileSoulDir(orgId, superBotProfile.id));
+    await initSoulDirectory(getProfileSoulDir(orgId, superAirinProfile.id));
   }
 }
 
 function assertMemberName(name: string): void {
   if (!name) {
-    throw new NakamaApiError("Member name is required.", 400);
+    throw new AirinApiError("Member name is required.", 400);
   }
 
   if (name.length > MAX_MEMBER_NAME_LENGTH) {
-    throw new NakamaApiError("Member name is too long.", 400);
+    throw new AirinApiError("Member name is too long.", 400);
   }
 
   if (MEMBER_NAME_CONTROL_CHARS.test(name)) {
-    throw new NakamaApiError("Member name contains invalid characters.", 400);
+    throw new AirinApiError("Member name contains invalid characters.", 400);
   }
 }
 
@@ -2421,20 +2551,20 @@ function normalizeEmail(email: string): string {
 
 function normalizeAllowedInviteDomains<T>(input: T): string[] {
   if (!Array.isArray(input)) {
-    throw new NakamaApiError("Allowed invite domains must be a list.", 400);
+    throw new AirinApiError("Allowed invite domains must be a list.", 400);
   }
 
   const domains = new Set<string>();
 
   for (const entry of input) {
     if (!isString(entry)) {
-      throw new NakamaApiError("Invalid invite domain.", 400);
+      throw new AirinApiError("Invalid invite domain.", 400);
     }
 
     const domain = entry.trim().toLowerCase();
 
     if (!INVITE_DOMAIN_PATTERN.test(domain)) {
-      throw new NakamaApiError("Invalid invite domain.", 400);
+      throw new AirinApiError("Invalid invite domain.", 400);
     }
 
     domains.add(domain);
@@ -2443,15 +2573,20 @@ function normalizeAllowedInviteDomains<T>(input: T): string[] {
   return [...domains];
 }
 
-function assertAllowedInviteDomain(
+/** An allowed domain also allows its subdomains: acme.com allows eng.acme.com. */
+function isAllowedInviteDomain(
   email: string,
   organization: StoredOrganizationRecord
-): void {
+): boolean {
   const domains = organization.allowedInviteDomains ?? [];
+  const domain = email.split("@")[1]?.toLowerCase() ?? "";
 
-  if (domains.length > 0 && !domains.includes(email.split("@")[1] ?? "")) {
-    throw new NakamaApiError("Email domain is not allowed.", 400);
-  }
+  return (
+    domains.length === 0 ||
+    domains.some(
+      (allowed) => domain === allowed || domain.endsWith(`.${allowed}`)
+    )
+  );
 }
 
 function normalizeOptionalPhone(
@@ -2464,7 +2599,7 @@ function normalizeOptionalPhone(
   }
 
   if (!PHONE_PATTERN.test(trimmed)) {
-    throw new NakamaApiError("Enter a valid phone number.", 400);
+    throw new AirinApiError("Enter a valid phone number.", 400);
   }
 
   return trimmed;
@@ -2486,15 +2621,15 @@ function generatePasswordResetToken(): string {
 
 function assertInviteUsable(invite: StoredOrgInviteRecord): void {
   if (invite.acceptedAt) {
-    throw new NakamaApiError("Invite has already been accepted.", 400);
+    throw new AirinApiError("Invite has already been accepted.", 400);
   }
 
   if (invite.revokedAt) {
-    throw new NakamaApiError("Invite is no longer valid.", 400);
+    throw new AirinApiError("Invite is no longer valid.", 400);
   }
 
   if (new Date(invite.expiresAt).getTime() <= Date.now()) {
-    throw new NakamaApiError("Invite has expired.", 400);
+    throw new AirinApiError("Invite has expired.", 400);
   }
 }
 
@@ -2509,7 +2644,7 @@ function assertSkillCuratorFreshnessClocks(
     staleAfterDays >= archiveAfterDays ||
     archiveAfterDays > 3650
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Skill curator days must be positive integers with stale before archive and archive at most 3650 days.",
       400
     );
@@ -2518,7 +2653,7 @@ function assertSkillCuratorFreshnessClocks(
 
 function assertMonthlyLlmTurnLimit(limit: number): void {
   if (!(Number.isInteger(limit) && limit >= 0 && limit <= 1_000_000)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Monthly LLM turn limit must be an integer from 0 to 1000000.",
       400
     );
@@ -2527,7 +2662,7 @@ function assertMonthlyLlmTurnLimit(limit: number): void {
 
 function assertNewPassword(password: string): void {
   if (password.length < 8) {
-    throw new NakamaApiError("Password must be at least 8 characters.", 400);
+    throw new AirinApiError("Password must be at least 8 characters.", 400);
   }
 }
 
@@ -2573,6 +2708,7 @@ function toOrgMemberSummary(
 ): OrgMemberSummary {
   return {
     createdAt,
+    disabledAt: user.disabledAt ?? null,
     email: user.email,
     name: user.name ?? null,
     phone: user.phone ?? null,

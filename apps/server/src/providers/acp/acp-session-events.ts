@@ -1,10 +1,15 @@
 import type * as acp from "@agentclientprotocol/sdk";
-import type { JsonValue, StreamChatHandlers, ToolCall } from "@nakama/core";
+import type { JsonValue, StreamChatHandlers, ToolCall } from "@airin/core";
+import { z } from "zod";
 import { readRecord } from "../shared";
 
-const NAKAMA_MCP_PREFIX = "mcp__nakama__";
+const AIRIN_MCP_PREFIX = "mcp__airin__";
 
-/** Claude's built-in tools, mapped to the names Nakama's step cards already know. */
+// Codex names an MCP step `mcp.airin.<tool>` and wraps its input as
+// `{ server, tool, arguments }`.
+const CODEX_AIRIN_MCP_PREFIX = "mcp.airin.";
+
+/** Claude's built-in tools, mapped to the names Airin's step cards already know. */
 const BUILT_IN_TOOLS = new Map([
   ["Bash", "bash"],
   ["Edit", "edit_file"],
@@ -25,7 +30,7 @@ interface ToolRecord {
 /**
  * Turns the ACP `session/update` stream into the handler calls the chat loop
  * already renders. The agent names a tool in `_meta.claudeCode.toolName`
- * (for example `mcp__nakama__read_file` or `Bash`), and its input often arrives
+ * (for example `mcp__airin__read_file` or `Bash`), and its input often arrives
  * on a later update, so a step starts once its input is known.
  */
 export function createAcpUpdateMapper(handlers: StreamChatHandlers) {
@@ -65,12 +70,12 @@ export function createAcpUpdateMapper(handlers: StreamChatHandlers) {
     };
 
     const acpName = claudeToolName(update) ?? update.title ?? record.tool;
-    record.tool = toNakamaToolName(acpName);
+    record.tool = toAirinToolName(acpName);
 
-    const input = readRecord(update.rawInput);
+    const input = unwrapCodexMcpInput(readRecord(update.rawInput));
 
     if (Object.keys(input).length > 0) {
-      record.input = toNakamaInput(record.tool, input);
+      record.input = toAirinInput(record.tool, input);
     }
 
     tools.set(update.toolCallId, record);
@@ -132,7 +137,9 @@ export function createAcpUpdateMapper(handlers: StreamChatHandlers) {
 
           start(update.toolCallId, record);
 
-          const result = update.rawOutput ?? update.content ?? null;
+          const result = toAirinResult(
+            update.rawOutput ?? update.content ?? null
+          );
 
           handlers.onToolEnd?.({
             result,
@@ -171,16 +178,76 @@ function claudeToolName(
   return name ? String(name) : null;
 }
 
-function toNakamaToolName(acpName: string): string {
-  if (acpName.startsWith(NAKAMA_MCP_PREFIX)) {
-    return acpName.slice(NAKAMA_MCP_PREFIX.length);
+function toAirinToolName(acpName: string): string {
+  if (acpName.startsWith(AIRIN_MCP_PREFIX)) {
+    return acpName.slice(AIRIN_MCP_PREFIX.length);
+  }
+
+  if (acpName.startsWith(CODEX_AIRIN_MCP_PREFIX)) {
+    return acpName.slice(CODEX_AIRIN_MCP_PREFIX.length);
   }
 
   return BUILT_IN_TOOLS.get(acpName) ?? acpName;
 }
 
-/** Renames the agent's input keys to the ones Nakama's cards read. Other keys are kept. */
-function toNakamaInput(tool: string, input: Record<string, JsonValue>) {
+function unwrapCodexMcpInput(
+  input: Record<string, JsonValue>
+): Record<string, JsonValue> {
+  return input.server === "airin" && input.arguments !== undefined
+    ? readRecord(input.arguments)
+    : input;
+}
+
+/**
+ * Gives an Airin MCP step the result its native tool returns, such as
+ * `{ path, bytesWritten }` for save_artifact, so the artifact chip shows.
+ * Codex wraps the MCP result as `{ result: { content }, error }`.
+ */
+function toAirinResult<Output>(output: Output): JsonValue | Output {
+  const codex = codexMcpResultSchema.safeParse(output);
+
+  if (codex.success) {
+    const { error, result } = codex.data;
+
+    if (error) {
+      return { error };
+    }
+
+    return (result && parseTextContent(result.content)) ?? output;
+  }
+
+  const content = mcpTextContentSchema.safeParse(output);
+
+  return (content.success && parseTextContent(content.data)) || output;
+}
+
+const mcpTextContentSchema = z.tuple([
+  z.object({ text: z.string(), type: z.literal("text") }),
+]);
+
+const codexMcpResultSchema = z.object({
+  error: z
+    .union([
+      z.string(),
+      z.object({ message: z.string() }).transform((value) => value.message),
+    ])
+    .nullable(),
+  result: z.object({ content: mcpTextContentSchema }).nullable(),
+});
+
+/** The tool's own JSON object, when the one text part holds one. */
+function parseTextContent(
+  content: z.infer<typeof mcpTextContentSchema>
+): JsonValue | undefined {
+  try {
+    const parsed: JsonValue = JSON.parse(content[0].text);
+
+    return readRecord(parsed) === parsed ? parsed : undefined;
+  } catch {}
+}
+
+/** Renames the agent's input keys to the ones Airin's cards read. Other keys are kept. */
+function toAirinInput(tool: string, input: Record<string, JsonValue>) {
   const filePath = input.file_path;
   const pattern = input.pattern;
 

@@ -1,4 +1,4 @@
-import { toast } from "@nakama/ui/toast";
+import { toast } from "@airin/ui/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/use-auth";
 import { useChannelProfileId } from "@/hooks/use-app-queries";

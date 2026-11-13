@@ -1,11 +1,11 @@
-# Nakama Threat Model
+# Airin Threat Model
 
 This document is the technical security model for the architecture in
 [`ARCHITECTURE.md`](./ARCHITECTURE.md). It is a review framework, not a
 certification or a claim that every residual risk is closed.
 
 **Reviewed revision:**
-[`1a1113fc`](https://github.com/ahmadrosid/nakama/commit/1a1113fc6eb59b938a501e1d9d7e2f05e522f06e)
+[`1a1113fc`](https://github.com/ahmadrosid/airin/commit/1a1113fc6eb59b938a501e1d9d7e2f05e522f06e)
 
 ## Scope
 
@@ -15,7 +15,7 @@ In scope:
 - the Hono HTTP server, authentication, organization context, and role guards
 - agent prompts, providers, tools, MCP, Composio, plugins, and coding harnesses
 - workers, automations, notifications, attachments, and public artifact shares
-- SQLite and the configured Nakama data root
+- SQLite and the configured Airin data root
 - operator-controlled ingress, egress, backups, and deployment configuration
 
 Out of scope:
@@ -23,19 +23,19 @@ Out of scope:
 - the internal security of external LLM, channel, SaaS, MCP, mail, or error
   tracking providers
 - the host, hypervisor, container runtime, DNS, reverse proxy, and identity
-  provider except where Nakama depends on their configuration
+  provider except where Airin depends on their configuration
 - guarantees made by a vulnerability-disclosure policy, DPA, or subprocessor
   list; those project commitments belong to
-  [#1118](https://github.com/ahmadrosid/nakama/issues/1118)
+  [#1118](https://github.com/ahmadrosid/airin/issues/1118)
 - arbitrary code run through host `bash`, custom tools, stdio MCP, plugins, or
-  coding agents after it leaves Nakama's own control flow
+  coding agents after it leaves Airin's own control flow
 
 ## Security objectives
 
 1. A request can read or mutate only the organizations and capabilities its
    authenticated principal is allowed to use.
 2. Credentials, messages, memory, files, and tool results do not cross an
-   organization boundary through Nakama's application paths.
+   organization boundary through Airin's application paths.
 3. External data flow happens only through a configured or explicitly invoked
    feature and is visible to the operator.
 4. Network and file inputs cannot silently turn into code execution with more
@@ -54,7 +54,7 @@ Out of scope:
 | Org membership and role assignments | They decide which tenant and mutations a principal can access. |
 | Soul, memory, session history, todos, knowledge files, and attachments | They contain user and organization data and influence agent behavior. |
 | Tool, skill, MCP, plugin, and automation configuration | They decide what code or external action an agent can invoke. |
-| SQLite records and the Nakama data root | They are the durable source for tenant state and recovery. |
+| SQLite records and the Airin data root | They are the durable source for tenant state and recovery. |
 | Audit events, request IDs, worker logs, and error reports | They support attribution and incident investigation. |
 | Public artifact-share tokens and snapshots | Possession grants unauthenticated access to a published copy until revocation. |
 
@@ -63,7 +63,7 @@ Out of scope:
 ```mermaid
 flowchart LR
   user[User or channel account] --> edge[HTTPS / channel provider]
-  edge --> server[Nakama HTTP server]
+  edge --> server[Airin HTTP server]
   server --> tenant[Org-scoped services and SQLite]
   server --> runtime[Agent and tool runtime]
   runtime --> provider[LLM / SaaS / MCP / mail providers]
@@ -72,9 +72,9 @@ flowchart LR
   server --> public[Public artifact snapshots]
 ```
 
-- TLS and public-port exposure are operator responsibilities. Nakama does not
+- TLS and public-port exposure are operator responsibilities. Airin does not
   terminate TLS itself.
-- The host and UID running Nakama are trusted. The stock container runs as
+- The host and UID running Airin are trusted. The stock container runs as
   non-root UID `1000`, but host-backed tools can access every mounted path that
   UID can access.
 - Platform admins are trusted across organizations. Org admins are trusted to
@@ -82,7 +82,7 @@ flowchart LR
   members, but they are not trusted with another organization's data.
 - Members can invoke assigned agents and capabilities.
 - External providers receive the data required by the feature. Their retention,
-  training, regional processing, and breach controls are outside Nakama.
+  training, regional processing, and breach controls are outside Airin.
 - LLM output and remote tool output are untrusted input even when returned by a
   configured provider.
 
@@ -141,12 +141,12 @@ Evidence anchors: `apps/server/src/services/agent-service.ts`,
 
 | STRIDE | Threat | Current control | Residual risk / verification |
 | --- | --- | --- | --- |
-| Spoofing | A fake MCP, OAuth endpoint, package, or executable impersonates the configured integration. | HTTP MCP uses the configured URL/headers and OAuth state. Composio sessions return scoped MCP details. npm plugin install accepts exact package versions from `registry.npmjs.org`. | Admin-supplied URLs and local executables remain trust decisions. Validate ownership and TLS outside Nakama. |
-| Tampering | A package or downloaded binary is replaced between selection and install. | npm plugins require published SHA-512 integrity and ignore install scripts. The runtime `omni` download is pinned and checked against release checksums. Official plugins ship with Nakama. | Checksums from the same release do not protect against a compromised publisher. Desktop, skill, git, and child-process supply chains remain external. |
-| Repudiation | A remote tool action or plugin side effect is not attributable. | Composio associates connections with Nakama users; tool calls remain in session history; plugin actions pass through the host request bridge. | Remote provider logs and arbitrary child-process effects are not normalized into one audit trail. |
+| Spoofing | A fake MCP, OAuth endpoint, package, or executable impersonates the configured integration. | HTTP MCP uses the configured URL/headers and OAuth state. Composio sessions return scoped MCP details. npm plugin install accepts exact package versions from `registry.npmjs.org`. | Admin-supplied URLs and local executables remain trust decisions. Validate ownership and TLS outside Airin. |
+| Tampering | A package or downloaded binary is replaced between selection and install. | npm plugins require published SHA-512 integrity and ignore install scripts. Official plugins ship with Airin. | Checksums from the same release do not protect against a compromised publisher. Desktop, skill, git, and child-process supply chains remain external. |
+| Repudiation | A remote tool action or plugin side effect is not attributable. | Composio associates connections with Airin users; tool calls remain in session history; plugin actions pass through the host request bridge. | Remote provider logs and arbitrary child-process effects are not normalized into one audit trail. |
 | Information disclosure | Tool arguments, workspace files, environment secrets, or SaaS data cross an unexpected boundary. | MCP and Composio are assigned per profile/toolkit; plugin packages declare contributions; secrets are masked in settings responses. Member-authored skill code requires approval before host execution. | Plugin workers, stdio MCP, skill scripts, custom JS/Python, `bash`, and coding agents can read and transmit anything available to the service UID. Review code and isolate egress. |
 | Denial of service | A server, plugin, or child process hangs, floods output, or consumes CPU/memory. | HTTP/tool deadlines, output limits, worker lifecycle management, and process cleanup bound selected paths. | A hostile process can still exhaust its container or host without external resource controls. |
-| Elevation of privilege | Installed code escapes the narrower HTTP/tool authorization model. | Plugin installation and lifecycle changes require administrative authority; profile assignment limits model-visible tools. | Once code runs under the Nakama UID, the UID is the effective boundary. Use a separate host/container for untrusted code. |
+| Elevation of privilege | Installed code escapes the narrower HTTP/tool authorization model. | Plugin installation and lifecycle changes require administrative authority; profile assignment limits model-visible tools. | Once code runs under the Airin UID, the UID is the effective boundary. Use a separate host/container for untrusted code. |
 
 Evidence anchors: `apps/server/src/services/mcp-client-manager.ts`,
 `apps/server/src/services/mcp-oauth.ts`,
@@ -160,7 +160,7 @@ Evidence anchors: `apps/server/src/services/mcp-client-manager.ts`,
 | STRIDE | Threat | Current control | Residual risk / verification |
 | --- | --- | --- | --- |
 | Spoofing | An unapproved Telegram, Discord, Slack, or WhatsApp account sends commands as a member. | Channel tokens authenticate the platform connection. Pairing/allowed-user configuration and org/profile mapping gate inbound identities. | A stolen channel account or bot token is valid to the upstream platform. Revoke it upstream and rotate local configuration. |
-| Tampering | A replayed, edited, or cross-org event mutates the wrong session or delivers to the wrong destination. | Channel mappings, owner claims, per-chat locks, platform message IDs, and org-scoped worker configuration bind events to a target. | Upstream delivery semantics and compromised platform accounts remain outside Nakama. |
+| Tampering | A replayed, edited, or cross-org event mutates the wrong session or delivers to the wrong destination. | Channel mappings, owner claims, per-chat locks, platform message IDs, and org-scoped worker configuration bind events to a target. | Upstream delivery semantics and compromised platform accounts remain outside Airin. |
 | Repudiation | A channel action lacks a human identity or delivery receipt. | Platform user/chat identifiers and session messages preserve the transport identity; automation runs store status and delivery results. | Shared channel accounts weaken attribution. Use individual accounts and upstream audit features where available. |
 | Information disclosure | Messages, attachments, artifact links, or typing state go to the wrong chat or platform. | Delivery adapters require configured destination IDs; artifact sharing publishes a snapshot only after an explicit action. | Public share links are bearer capabilities and channel providers receive message content and metadata. Verify destinations before enabling automations. |
 | Denial of service | Message floods, reconnect loops, or a stuck automation consume workers and provider quota. | Chat locks, reconnect backoff, worker state, run status, and provider/tool deadlines limit individual loops. | Upstream floods and shared quotas still need platform-side limits and host monitoring. |
@@ -192,7 +192,7 @@ Evidence anchors: `packages/core/src/channel-artifacts.ts`,
 
 | STRIDE | Threat | Current control | Residual risk / verification |
 | --- | --- | --- | --- |
-| Spoofing | A user connects to a fake Nakama origin or update feed. | The CLI pins saved sessions to the configured origin. Packaged desktop updates use the configured Nakama GitHub release feed. | Operators must provide trusted DNS/TLS. The software supply chain and code-signing policy are external review items. |
+| Spoofing | A user connects to a fake Airin origin or update feed. | The CLI pins saved sessions to the configured origin. Packaged desktop updates use the configured Airin GitHub release feed. | Operators must provide trusted DNS/TLS. The software supply chain and code-signing policy are external review items. |
 | Tampering | A proxy strips headers, buffers SSE, or a mutable image changes between environments. | Deployment docs specify public origin and SSE proxy behavior; release artifacts and plugin packages carry integrity metadata where supported. | Pin tested image tags/digests and control proxy configuration. `latest` is convenient, not immutable. |
 | Repudiation | Operational changes cannot be reconstructed. | Structured logs, request IDs, image versions, audit events, and automation history provide evidence. | Host firewall, proxy, container, and secret-manager changes need the operator's own audit trail. |
 | Information disclosure | Port `4310`, `/metrics`, the data volume, or debug output becomes public. | Metrics are off by default. The stock container is non-root and stores data under the mounted root. | TLS, firewalling, volume permissions, and metrics isolation are not automatic. Follow the hardening guide. |
@@ -207,14 +207,14 @@ Evidence anchors: `Dockerfile`, `docker-compose.yaml`, `apps/server/src/index.ts
 
 | ID | Risk | Owner / treatment |
 | --- | --- | --- |
-| R1 | TLS, firewalling, reverse proxy behavior, data-at-rest encryption, backup encryption, and host permissions are not enforced by Nakama. | Operator; follow [deployment hardening](./docs/website/content/docs/deployment-hardening.mdx); native secrets-at-rest work is tracked in [#364](https://github.com/ahmadrosid/nakama/issues/364). |
+| R1 | TLS, firewalling, reverse proxy behavior, data-at-rest encryption, backup encryption, and host permissions are not enforced by Airin. | Operator; follow [deployment hardening](./docs/website/content/docs/deployment-hardening.mdx); native secrets-at-rest work is tracked in [#364](https://github.com/ahmadrosid/airin/issues/364). |
 | R2 | Provider, channel, Composio, MCP, mail, and error-tracking services receive configured data and apply their own retention policy. | Operator/project policy; use the [outbound inventory](./docs/website/content/docs/outbound-connections.mdx) and #1118. |
 | R3 | Prompt injection can drive an assigned high-authority tool. | Org/profile admin; minimize assignments and require review for consequential actions. |
 | R4 | Host `bash`, skill scripts, custom code, stdio MCP, plugins, browser automation, and coding agents can create arbitrary egress and access service-readable mounts. | Operator; isolate the runtime or leave these capabilities unassigned. |
 | R5 | Public artifact shares are bearer links without automatic expiry. | Publisher/operator; distribute carefully and revoke manually. |
-| R6 | Org admins can still use the deliberate direct-add membership path outside the invite-domain slice. | Product decision tracked in [#375](https://github.com/ahmadrosid/nakama/issues/375). |
+| R6 | Org admins can still use the deliberate direct-add membership path outside the invite-domain slice. | Product decision tracked in [#375](https://github.com/ahmadrosid/airin/issues/375). |
 | R7 | The default deployment is a single host and SQLite database without a complete per-org resource quota claim. | Operator/product; monitor capacity, apply external limits, and test restores. |
-| R8 | Vulnerability response commitments and legal processor/subprocessor statements are not defined by this technical model. | Project maintainers in [#1118](https://github.com/ahmadrosid/nakama/issues/1118). |
+| R8 | Vulnerability response commitments and legal processor/subprocessor statements are not defined by this technical model. | Project maintainers in [#1118](https://github.com/ahmadrosid/airin/issues/1118). |
 
 ## Security-review map
 
@@ -229,7 +229,7 @@ This is the short route through common CAIQ-style questions:
 | Storage, backup, restore, and deletion boundaries | STRIDE sections 2 and 6 in this document; recovery controls in [Deployment hardening](./docs/website/content/docs/deployment-hardening.mdx) |
 | Logging, auditability, and error reporting | STRIDE sections 1 and 6 in this document |
 | Secure configuration and operational verification | [Deployment hardening](./docs/website/content/docs/deployment-hardening.mdx) |
-| Vulnerability disclosure, response commitments, DPA, and subprocessor policy | [#1118](https://github.com/ahmadrosid/nakama/issues/1118) |
+| Vulnerability disclosure, response commitments, DPA, and subprocessor policy | [#1118](https://github.com/ahmadrosid/airin/issues/1118) |
 
 ## Maintenance rule
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import { streamInstallEvents } from "./coding-harness-install-stream";
 
 type TestEvent = { type: string; message?: string; error?: string };
@@ -65,7 +65,7 @@ describe("streamInstallEvents", () => {
 
   test("reports an executor's intentional failure as an error event", async () => {
     const response = streamInstallEvents<TestEvent>(() =>
-      Promise.reject(new NakamaApiError("installer exited with code 1", 502))
+      Promise.reject(new AirinApiError("installer exited with code 1", 502))
     );
 
     const events = await readEvents(response);
@@ -78,7 +78,7 @@ describe("streamInstallEvents", () => {
     const response = streamInstallEvents<TestEvent>(() =>
       Promise.reject(
         new Error(
-          "ENOENT: no such file or directory, open '/home/nakama/.config/nakama/nakama.db'"
+          "ENOENT: no such file or directory, open '/home/airin/.config/airin/airin.db'"
         )
       )
     );

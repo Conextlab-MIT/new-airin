@@ -1,5 +1,5 @@
-import type { McpServerSummary, McpTransport } from "@nakama/core/contract";
-import { isPreinstalledMcpServerId } from "@nakama/core/mcp/preinstalled";
+import type { McpServerSummary, McpTransport } from "@airin/core/contract";
+import { isPreinstalledMcpServerId } from "@airin/core/mcp/preinstalled";
 
 const REDACTED_SECRET_VALUE = "••••••••";
 

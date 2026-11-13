@@ -1,16 +1,75 @@
+import {
+  assertHtmlArtifactSize,
+  MAX_HTML_ARTIFACT_BYTES,
+} from "@airin/core/artifact-mime";
+
 const HIDDEN_SCROLLBAR_STYLE =
-  "<style data-nakama-html-preview>html,body{scrollbar-width:none;-ms-overflow-style:none}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}</style>";
+  "<style data-airin-html-preview>html,body{scrollbar-width:none;-ms-overflow-style:none}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}</style>";
 
 /** Scripts run inside the iframe, but without same-origin access to the host app. */
-export const ARTIFACT_HTML_IFRAME_SANDBOX =
-  "allow-scripts allow-forms allow-popups";
+export const ARTIFACT_HTML_IFRAME_SANDBOX = "allow-scripts";
 
 /** Served by the API with its own CSP; see `ARTIFACT_FRAME_HTML` on the server. */
 export const ARTIFACT_FRAME_URL = "/artifact-frame";
 
-export const ARTIFACT_FRAME_READY = "nakama-artifact-frame-ready";
+export const ARTIFACT_FRAME_READY = "airin-artifact-frame-ready";
+
+const ARTIFACT_PRINT_DONE = "airin-artifact-print-done";
+
+/** Runs inside the frame: wait for fonts, open the print dialog, then report back. */
+const PRINT_SCRIPT = `<script>(() => {
+  const go = () => document.fonts.ready.then(() => setTimeout(() => {
+    addEventListener("afterprint", () => parent.postMessage("${ARTIFACT_PRINT_DONE}", "*"));
+    print();
+  }, 100));
+  document.readyState === "complete" ? go() : addEventListener("load", go);
+})();</script>`;
+
+/**
+ * Prints an HTML artifact with the browser's own print dialog, where the user
+ * picks "Save as PDF". The browser renders it the same way as the preview.
+ */
+export function printArtifactHtml(html: string): void {
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.setAttribute("sandbox", `${ARTIFACT_HTML_IFRAME_SANDBOX} allow-modals`);
+  frame.src = ARTIFACT_FRAME_URL;
+  frame.style.cssText =
+    "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+
+  const cleanup = () => {
+    window.removeEventListener("message", onMessage);
+    frame.remove();
+  };
+
+  function onMessage(event: MessageEvent) {
+    if (event.source !== frame.contentWindow) {
+      return;
+    }
+
+    if (event.data === ARTIFACT_FRAME_READY) {
+      frame.contentWindow?.postMessage(
+        {
+          airinArtifactHtml: `${htmlForArtifactPreview(html)}${PRINT_SCRIPT}`,
+        },
+        "*"
+      );
+    } else if (event.data === ARTIFACT_PRINT_DONE) {
+      cleanup();
+    }
+  }
+
+  window.addEventListener("message", onMessage);
+  document.body.append(frame);
+  // Some browsers never send afterprint; do not keep the frame forever.
+  window.setTimeout(cleanup, 10 * 60_000);
+}
 
 export function htmlForArtifactPreview(html: string): string {
+  if (new TextEncoder().encode(html).byteLength > MAX_HTML_ARTIFACT_BYTES) {
+    return `<p role="alert">HTML artifacts cannot exceed ${MAX_HTML_ARTIFACT_BYTES} bytes.</p>`;
+  }
+
   if (/<head[\s>]/i.test(html)) {
     return html.replace(
       /<head(\s[^>]*)?>/i,
@@ -79,6 +138,11 @@ export async function resolveArtifactHtmlAssets(
   ) => Promise<{ data: ArrayBuffer; contentType: string }>,
   signal: AbortSignal
 ): Promise<string> {
+  assertHtmlArtifactSize(
+    artifactPath,
+    new TextEncoder().encode(html).byteLength,
+    "text/html"
+  );
   const document = new DOMParser().parseFromString(html, "text/html");
   const cache = new Map<string, string>();
   signal.throwIfAborted();
@@ -246,5 +310,12 @@ export async function resolveArtifactHtmlAssets(
     }
   }
 
-  return `${document.doctype ? "<!DOCTYPE html>" : ""}${document.documentElement.outerHTML}`;
+  const output = `${document.doctype ? "<!DOCTYPE html>" : ""}${document.documentElement.outerHTML}`;
+  assertHtmlArtifactSize(
+    artifactPath,
+    new TextEncoder().encode(output).byteLength,
+    "text/html"
+  );
+
+  return output;
 }

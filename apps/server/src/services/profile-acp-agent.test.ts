@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { ProfileService } from "./profile-service";
 
 const ORG_ID = "org_acp_agent";

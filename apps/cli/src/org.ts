@@ -1,5 +1,5 @@
-import type { NakamaClient } from "@nakama/client";
-import { type AgentChannel, pickProfileForOrg } from "@nakama/core";
+import type { AirinClient } from "@airin/client";
+import { type AgentChannel, pickProfileForOrg } from "@airin/core";
 import {
   loadSavedCliOrgId,
   saveCliOrgId,
@@ -7,7 +7,7 @@ import {
 } from "./cli-config";
 
 export async function switchChatOrg(
-  client: NakamaClient,
+  client: AirinClient,
   orgRef: string,
   channel: AgentChannel,
   write: (line: string) => void,
@@ -123,12 +123,12 @@ export function parseCliOrgArgs(argv = process.argv.slice(2)): CliOrgOptions {
 }
 
 export async function resolveCliOrgId(
-  client: NakamaClient,
+  client: AirinClient,
   options: CliOrgOptions = {}
 ): Promise<string> {
   const explicitOrgId =
     options.orgId?.trim() ||
-    process.env.NAKAMA_ORG_ID?.trim() ||
+    process.env.AIRIN_ORG_ID?.trim() ||
     (await loadSavedCliOrgId());
 
   if (explicitOrgId) {
@@ -165,7 +165,7 @@ export async function resolveCliOrgId(
   throw new Error(
     [
       "Multiple organizations are available.",
-      "Pass --org <id> (or set NAKAMA_ORG_ID).",
+      "Pass --org <id> (or set AIRIN_ORG_ID).",
       "",
       ...orgs.map((org) => `  ${org.id}  ${org.name}`),
     ].join("\n")
@@ -173,7 +173,7 @@ export async function resolveCliOrgId(
 }
 
 async function assertOrgMembership(
-  client: NakamaClient,
+  client: AirinClient,
   orgRef: string
 ): Promise<string> {
   const { orgs } = await client.listUserOrgs();

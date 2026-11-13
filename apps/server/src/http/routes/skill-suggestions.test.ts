@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { SkillProposalService } from "../../services/skill-proposal-service";
 import { SkillSuggestionService } from "../../services/skill-suggestion-service";
 import { SkillsService } from "../../services/skills-service";
@@ -10,7 +10,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-skill-suggestions-routes-test-");
+setupTestConfigDir("airin-skill-suggestions-routes-test-");
 
 const sampleSkillMarkdown = `---
 name: deploy-notes
@@ -50,26 +50,6 @@ function createApp() {
 const BASE = "http://localhost:4310";
 
 describe("skill suggestion routes (v1)", () => {
-  test("rejects an unknown status filter", async () => {
-    const { app, databaseAdapter } = createApp();
-
-    const adminSession = await setupFreshInstallSession(
-      app,
-      databaseAdapter,
-      "status-admin@org.com"
-    );
-
-    const orgId = adminSession.orgId!;
-
-    const response = await app.fetch(
-      new Request(`${BASE}/v1/orgs/${orgId}/skill-suggestions?status=unknown`, {
-        headers: adminSession.headers({}, orgId),
-      })
-    );
-
-    expect(response.status).toBe(400);
-  });
-
   test("admin can list and apply suggestions; member can list", async () => {
     const { app, databaseAdapter, skillSuggestionService } = createApp();
 

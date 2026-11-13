@@ -1,3 +1,4 @@
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type {
   AutomationDeliveryStatus,
   AutomationRunRecord,
@@ -6,33 +7,43 @@ import type {
   CreateAutomationRequest,
   StoredAutomation,
   UpdateAutomationRequest,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   computeAutomationNextRunAt,
   createId,
   DEFAULT_TIMEZONE,
-  isAutomationRunUnread,
   isWorkerSchedulable,
-  NakamaApiError,
   normalizeAutomationDelivery,
   resolveScheduleTimezone,
+  resolveWebPublicUrl,
   summarizeAutomationUnreadCounts,
   validateAutomationDelivery,
   validateAutomationInput,
-} from "@nakama/core";
-import { canAccessSuperBotProfile } from "@nakama/core/profiles";
-import { type DatabaseAdapter, DatabaseAutomationStore } from "@nakama/db";
-import { z } from "zod";
+} from "@airin/core";
+import { type DatabaseAdapter, DatabaseAutomationStore } from "@airin/db";
+import {
+  assertCanAutomateMailbox,
+  type ProfileAccess,
+  resolveProfileId,
+} from "./automation-profile-access";
+import {
+  automationBelongsToOrg,
+  normalizeToolLimit,
+  toRunRecord,
+} from "./automation-records";
+import type { ManagedSecrets } from "./managed-secrets";
 
-const DeliveryStatusSchema = z.enum(["sent", "failed", "skipped"]).nullish();
-
-/** Caller role context used to gate access to admin-only profiles (e.g. Super Bot). */
-export type ProfileAccess = Parameters<typeof canAccessSuperBotProfile>[0];
+const WEBHOOK_SIGNATURE_PATTERN = /^sha256=([0-9a-f]{64})$/;
 
 export interface AutomationServiceOptions {
   canSendEmail?: (profileId: string, orgId: string) => Promise<boolean>;
   getUserTimezone: () => Promise<string>;
   onChange?: () => void | Promise<void>;
+  secrets?: Pick<
+    ManagedSecrets,
+    "decryptWebhookSecret" | "encryptWebhookSecret"
+  >;
 }
 
 export class AutomationService {
@@ -48,6 +59,7 @@ export class AutomationService {
     orgId: string
   ) => Promise<boolean>;
   private onChange?: () => void | Promise<void>;
+  private readonly secrets?: AutomationServiceOptions["secrets"];
 
   constructor(db: DatabaseAdapter, options: AutomationServiceOptions) {
     this.db = db;
@@ -55,6 +67,7 @@ export class AutomationService {
     this.getUserTimezone = options.getUserTimezone;
     this.canSendEmail = options.canSendEmail;
     this.onChange = options.onChange;
+    this.secrets = options.secrets;
   }
 
   setOnChange(onChange: () => void | Promise<void>): void {
@@ -127,13 +140,15 @@ export class AutomationService {
       trigger,
     });
 
-    const profileId = await this.resolveProfileId(
+    const profileId = await resolveProfileId(
+      this.db,
       orgId,
       profileIdOverride ?? input.profileId,
       access
     );
 
-    await this.assertProfileAutomationEnabled(profileId);
+    await this.assertCanAutomateMailbox(profileId, access);
+
     const delivery = normalizeAutomationDelivery(input.delivery);
     await validateAutomationDelivery(delivery, {
       access: {
@@ -158,6 +173,7 @@ export class AutomationService {
       orgId,
       profileId,
       prompt: input.prompt.trim(),
+      runAsUserId: access?.userId ?? null,
       steps: [],
       trigger,
       updatedAt: now,
@@ -168,7 +184,27 @@ export class AutomationService {
       automation.delivery = delivery;
     }
 
+    if (input.toolLimit) {
+      automation.toolLimit = normalizeToolLimit(input.toolLimit);
+    }
+
+    const profile = await this.db.getProfile(profileId);
+
+    const isFirstAutomation = !(
+      await this.db.listAutomationsForOrg(orgId)
+    ).some((existing) => existing.profileId === profileId);
+
     await this.store.save(automation);
+
+    // The first automation is the user's consent to run automations.
+    if (profile && profile.automationsEnabled === false && isFirstAutomation) {
+      await this.db.upsertProfile({
+        ...profile,
+        automationsEnabled: true,
+        updatedAt: now,
+      });
+    }
+
     await this.notifyChange();
 
     return this.enrichAutomation(automation);
@@ -205,7 +241,18 @@ export class AutomationService {
         throw new Error("Profile id is required.");
       }
 
-      profileId = await this.resolveProfileId(orgId, input.profileId, access);
+      profileId = await resolveProfileId(
+        this.db,
+        orgId,
+        input.profileId,
+        access
+      );
+    }
+
+    // Only the runner updates without `access`, to switch a runAt job off.
+    // Any other change (delivery included) can redirect mailbox output.
+    if (access) {
+      await this.assertCanAutomateMailbox(profileId, access);
     }
 
     let delivery = existing.delivery;
@@ -229,6 +276,26 @@ export class AutomationService {
       profileId,
     });
 
+    let toolLimit = existing.toolLimit;
+
+    if (input.toolLimit === null) {
+      toolLimit = undefined;
+    } else if (input.toolLimit !== undefined) {
+      toolLimit = normalizeToolLimit(input.toolLimit);
+    }
+
+    const prompt = input.prompt?.trim() || existing.prompt;
+
+    // Whoever changes what a run does lends their Composio sign-ins, so
+    // nobody can steer another person's accounts. A pause, rename, or new
+    // schedule keeps the current person. The runner saves with no access.
+    const steers =
+      prompt !== existing.prompt ||
+      profileId !== existing.profileId ||
+      JSON.stringify(delivery) !== JSON.stringify(existing.delivery) ||
+      JSON.stringify(toolLimit) !== JSON.stringify(existing.toolLimit) ||
+      (trigger.type === "webhook" && existing.trigger.type !== "webhook");
+
     const updated: StoredAutomation = {
       ...existing,
       delivery,
@@ -236,16 +303,153 @@ export class AutomationService {
       enabled: input.enabled ?? existing.enabled,
       name: input.name?.trim() || existing.name,
       profileId,
-      prompt: input.prompt?.trim() || existing.prompt,
+      prompt,
+      runAsUserId:
+        access && steers ? (access.userId ?? null) : existing.runAsUserId,
+      toolLimit,
       trigger,
       updatedAt: new Date().toISOString(),
       version: existing.version + 1,
     };
 
+    // Before the save: a failed delete keeps the row, so no old secret revives.
+    if (existing.trigger.type !== "webhook" && trigger.type === "webhook") {
+      await this.db.deleteAutomationWebhookSecret(id);
+    }
+
     await this.store.save(updated);
+
+    // After the save: a failed save keeps the secret.
+    // Runs after the row change, so it only logs. The next switch to webhook deletes a leftover.
+    if (existing.trigger.type === "webhook" && trigger.type !== "webhook") {
+      try {
+        await this.db.deleteAutomationWebhookSecret(id);
+      } catch (error) {
+        console.error("Automation webhook secret could not be deleted:", error);
+      }
+    }
+
     await this.notifyChange();
 
     return this.enrichAutomation(updated);
+  }
+
+  /** New secret; the old one stops at once. Runs now use the caller's sign-ins. */
+  async createWebhookSecret(
+    id: string,
+    orgId: string,
+    userId: string
+  ): Promise<string> {
+    const automation = await this.get(id, orgId);
+
+    if (!automation) {
+      throw new AirinApiError("Automation not found.", 404);
+    }
+
+    if (automation.trigger.type !== "webhook") {
+      throw new AirinApiError("Set the trigger to webhook first.", 400);
+    }
+
+    if (!this.secrets) {
+      throw new AirinApiError(
+        "Set AIRIN_SECRETS_KEY before saving secrets.",
+        400
+      );
+    }
+
+    const secret = randomBytes(32).toString("base64url");
+    let encryptedValue: string;
+
+    try {
+      encryptedValue = this.secrets.encryptWebhookSecret(id, secret);
+    } catch (error) {
+      // ManagedSecrets throws this exact copy when the key is unset.
+      if (
+        error instanceof Error &&
+        error.message.includes("AIRIN_SECRETS_KEY")
+      ) {
+        throw new AirinApiError(
+          `${error.message} Create a key with \`openssl rand -base64 32\`.`,
+          400
+        );
+      }
+
+      throw error;
+    }
+
+    // The maker holds the secret, so revoking their access deletes it.
+    await this.db.putAutomationWebhookSecret({
+      automationId: id,
+      createdAt: new Date().toISOString(),
+      createdByUserId: userId,
+      encryptedValue,
+    });
+
+    // Last, so a failed encrypt or put leaves the old maker bound to the old secret.
+    if (automation.runAsUserId !== userId) {
+      await this.store.save({
+        ...automation,
+        runAsUserId: userId,
+        updatedAt: new Date().toISOString(),
+        version: automation.version + 1,
+      });
+    }
+
+    return secret;
+  }
+
+  /** Checks a GitHub-style `X-Hub-Signature-256` header against the raw body. */
+  async verifyWebhookSignature(
+    automation: StoredAutomation,
+    body: Uint8Array,
+    header: string | undefined
+  ): Promise<boolean> {
+    const match = WEBHOOK_SIGNATURE_PATTERN.exec(header ?? "");
+
+    if (!(match?.[1] && this.secrets)) {
+      return false;
+    }
+
+    const row = await this.db.getAutomationWebhookSecret(automation.id);
+
+    // Runs use runAsUserId's sign-ins, so only that person's secret may start one.
+    if (!row || row.createdByUserId !== automation.runAsUserId) {
+      return false;
+    }
+
+    let secret: string;
+
+    try {
+      secret = this.secrets.decryptWebhookSecret(row);
+    } catch (error) {
+      console.error("Automation webhook secret could not be read:", error);
+
+      return false;
+    }
+
+    const expected = createHmac("sha256", secret).update(body).digest();
+    const received = Buffer.from(match[1], "hex");
+
+    // The pattern fixes the length, so timingSafeEqual cannot throw here.
+    return timingSafeEqual(expected, received);
+  }
+
+  claimWebhookDelivery(
+    automationId: string,
+    deliveryId: string
+  ): Promise<boolean> {
+    return this.db.claimAutomationWebhookDelivery(
+      automationId,
+      deliveryId,
+      new Date().toISOString()
+    );
+  }
+
+  releaseWebhookDelivery(
+    automationId: string,
+    deliveryId: string
+  ): Promise<void> {
+    return this.db.releaseAutomationWebhookDelivery(automationId, deliveryId);
   }
 
   async delete(id: string, orgId: string): Promise<boolean> {
@@ -257,6 +461,7 @@ export class AutomationService {
 
     const deleted = await this.store.delete(id);
 
+    // The secret row goes with the automation (FK cascade).
     if (deleted) {
       await this.notifyChange();
     }
@@ -285,18 +490,41 @@ export class AutomationService {
         ? await this.db.getAutomationRunReadThrough(userId, orgId, automationId)
         : null;
 
-    return runs.map((run) => {
-      const record = toRunRecord(run, readThroughAt);
+    // The list shows one line per run, so a finished run leaves out its
+    // transcript. getRun returns it.
+    return runs.map((run) =>
+      run.status === "running"
+        ? this.withLiveProgress(toRunRecord(run, readThroughAt))
+        : toRunRecord({ ...run, progress: undefined }, readThroughAt)
+    );
+  }
 
-      const progress =
-        run.status === "running" ? this.runProgress.get(run.id) : undefined;
+  async getRun(
+    automationId: string,
+    orgId: string,
+    runId: string
+  ): Promise<AutomationRunRecord | null> {
+    const automation = await this.get(automationId, orgId);
 
-      if (progress) {
-        Object.assign(record, progress);
-      }
+    if (!automation) {
+      throw new Error("Automation not found.");
+    }
 
-      return record;
-    });
+    const run = await this.db.getAutomationRun(automationId, runId);
+
+    if (!run) {
+      return null;
+    }
+
+    return run.status === "running"
+      ? this.withLiveProgress(toRunRecord(run))
+      : toRunRecord(run);
+  }
+
+  private withLiveProgress(record: AutomationRunRecord): AutomationRunRecord {
+    const progress = this.runProgress.get(record.id);
+
+    return progress ? Object.assign(record, progress) : record;
   }
 
   setRunProgress(
@@ -349,18 +577,22 @@ export class AutomationService {
     return run ? toRunRecord(run) : null;
   }
 
-  async createRun(automationId: string): Promise<AutomationRunRecord> {
+  async createRun(
+    automationId: string,
+    webhook?: { input: string }
+  ): Promise<AutomationRunRecord> {
     const run = {
       automationId,
       completedAt: null,
       error: null,
       id: createId("run"),
       output: null,
+      source: webhook ? ("webhook" as const) : null,
       startedAt: new Date().toISOString(),
       status: "running" as const,
     };
 
-    await this.db.insertAutomationRun(run);
+    await this.db.insertAutomationRun({ ...run, input: webhook?.input });
 
     return toRunRecord(run);
   }
@@ -447,52 +679,34 @@ export class AutomationService {
     return computeAutomationNextRunAt(trigger, userTimezone);
   }
 
-  private async resolveProfileId(
-    orgId: string,
-    profileId?: string,
+  assertCanAutomateMailbox(
+    profileId: string,
     access?: ProfileAccess
-  ): Promise<string> {
-    const trimmed = profileId?.trim();
-
-    if (trimmed) {
-      const profile = await this.db.getProfileForOrg(trimmed, orgId);
-
-      if (profile) {
-        if (profile.isSuper && !canAccessSuperBotProfile(access ?? {})) {
-          throw new NakamaApiError(
-            "Super Bot is only available to org admins.",
-            403
-          );
-        }
-
-        return profile.id;
-      }
-
-      throw new Error("Profile not found.");
-    }
-
-    const defaultProfile = await this.db.getDefaultProfileForOrg(orgId);
-
-    if (!defaultProfile) {
-      throw new Error("No default profile exists for this organization.");
-    }
-
-    return defaultProfile.id;
+  ): Promise<void> {
+    return assertCanAutomateMailbox(this.db, profileId, access);
   }
 
   private async enrichAutomation(
     automation: StoredAutomation
   ): Promise<StoredAutomation> {
     const userTimezone = await this.getUserTimezone();
-    const runs = await this.db.listAutomationRuns(automation.id, 1);
+    const [stored] = await this.db.listAutomationRuns(automation.id, 1);
+    const lastRun = stored ? toRunRecord(stored) : null;
+
+    const publicUrl =
+      automation.trigger.type === "webhook" ? resolveWebPublicUrl() : undefined;
 
     return {
       ...automation,
-      lastRunAt: runs[0]?.startedAt ?? null,
-      lastRunStatus: runs[0]?.status ?? null,
+      lastRunAt: lastRun?.startedAt ?? null,
+      lastRunDeliveryStatus: lastRun?.deliveryStatus ?? null,
+      lastRunStatus: lastRun?.status ?? null,
       nextRunAt: isWorkerSchedulable(automation)
         ? this.computeNextRunAt(automation.trigger, userTimezone)
         : null,
+      ...(publicUrl && {
+        webhookUrl: `${publicUrl}/v1/automations/${encodeURIComponent(automation.id)}/webhook`,
+      }),
     };
   }
 
@@ -502,60 +716,7 @@ export class AutomationService {
     return profile?.automationsEnabled !== false;
   }
 
-  private async assertProfileAutomationEnabled(
-    profileId: string
-  ): Promise<void> {
-    if (!(await this.isProfileAutomationEnabled(profileId))) {
-      throw new NakamaApiError(
-        "Automations are disabled for this profile.",
-        403
-      );
-    }
-  }
-
   private async notifyChange(): Promise<void> {
     await this.onChange?.();
   }
-}
-
-function automationBelongsToOrg(
-  automation: StoredAutomation,
-  orgId: string
-): boolean {
-  return automation.orgId === orgId;
-}
-
-function toRunRecord(
-  run: {
-    id: string;
-    automationId: string;
-    status: AutomationRunRecord["status"];
-    startedAt: string;
-    completedAt: string | null;
-    output: string | null;
-    progress?: AutomationRunRecord["progress"];
-    error: string | null;
-    deliveryStatus?: string | null;
-    deliveryError?: string | null;
-  },
-  readThroughAt?: string | null
-): AutomationRunRecord {
-  const record: AutomationRunRecord = {
-    automationId: run.automationId,
-    completedAt: run.completedAt,
-    deliveryError: run.deliveryError ?? null,
-    deliveryStatus: DeliveryStatusSchema.parse(run.deliveryStatus) ?? null,
-    error: run.error,
-    id: run.id,
-    output: run.output,
-    progress: run.progress,
-    startedAt: run.startedAt,
-    status: run.status,
-  };
-
-  if (readThroughAt !== undefined) {
-    record.read = !isAutomationRunUnread(record, readThroughAt);
-  }
-
-  return record;
 }

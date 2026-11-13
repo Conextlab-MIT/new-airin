@@ -1,17 +1,19 @@
-import type { ProviderInstance, ProviderName } from "@nakama/core";
+import type { ProviderInstance, ProviderName } from "@airin/core";
 import {
+  AirinApiError,
   type CustomModelEntry,
   findCustomModel,
-  NakamaApiError,
   normalizeBaseUrl,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   defaultDiscoveryBaseUrl,
+  isDiscoveryModelProvider,
   NETRA_AGENT_MODEL_ID,
-} from "@nakama/core/discovery-providers";
+  resolveNetraModelId,
+} from "@airin/core/discovery-providers";
 import OpenAI from "openai";
-import type { ProviderModelOption } from "./models";
-import { AVAILABLE_MODELS } from "./models";
+import { z } from "zod";
+import { AVAILABLE_MODELS, type ProviderModelOption } from "./model-catalog";
 import { openRouterSlugSupportsThinking } from "./openrouter/thinking";
 import {
   type ProviderJsonRecord,
@@ -159,6 +161,14 @@ export function catalogCustomModelsToCatalog(
       model.default = true;
     }
 
+    if (entry.contextWindow !== undefined) {
+      model.contextWindow = entry.contextWindow;
+    }
+
+    if (entry.maxOutputTokens !== undefined) {
+      model.maxOutputTokens = entry.maxOutputTokens;
+    }
+
     if (entry.supportsVision !== undefined) {
       model.supportsVision = entry.supportsVision;
     } else if (provider === "chatgpt" || provider === "xai_oauth") {
@@ -172,11 +182,13 @@ export function catalogCustomModelsToCatalog(
       provider === "doubao" ||
       provider === "together" ||
       provider === "xiaomi" ||
+      provider === "meta" ||
       provider === "vercel_ai_gateway" ||
       provider === "mistral" ||
       provider === "qwen" ||
       provider === "qwen_cn" ||
-      provider === "perplexity"
+      provider === "perplexity" ||
+      provider === "cloudflare"
     ) {
       model.supportsThinking = false;
     }
@@ -268,17 +280,45 @@ export function getModelsForProviderInstance(
     }));
 
   if (instance.type === "netra") {
+    const entries = instance.customModels ?? [];
+
+    // A retired ID shows as V4.1 Flash once, unless V4.1 Flash is saved too.
+    const firstRetired = entries.findIndex(
+      (entry) =>
+        entry.id !== NETRA_AGENT_MODEL_ID &&
+        resolveNetraModelId(entry.id) === NETRA_AGENT_MODEL_ID
+    );
+
+    const hasAgentModel = entries.some(
+      (entry) => entry.id === NETRA_AGENT_MODEL_ID
+    );
+
     return annotate(
       customModelsToCatalog(
-        (instance.customModels ?? []).filter(
-          (entry) => entry.id === NETRA_AGENT_MODEL_ID
-        ),
+        entries.flatMap((entry, index) => {
+          if (resolveNetraModelId(entry.id) === entry.id) {
+            return [entry];
+          }
+
+          return index === firstRetired && !hasAgentModel
+            ? [
+                {
+                  default: entry.default,
+                  id: NETRA_AGENT_MODEL_ID,
+                  name: "DeepSeek V4.1 Flash",
+                  supportsThinking: true,
+                  supportsVision: false,
+                },
+              ]
+            : [];
+        }),
         "netra"
       )
     );
   }
 
-  if (instance.type === "openai_compatible") {
+  // Netra returns above; other discovery providers list only the saved models.
+  if (isDiscoveryModelProvider(instance.type)) {
     const entries = instance.customModels ?? [];
 
     return annotate(
@@ -334,6 +374,22 @@ export function getModelsForProviderInstance(
     );
   }
 
+  if (instance.type === "cloudflare") {
+    const entries = instance.customModels ?? [];
+
+    const staticModels = AVAILABLE_MODELS.filter(
+      (model) => model.provider === "cloudflare"
+    );
+
+    const catalog = entries.length
+      ? catalogCustomModelsToCatalog(entries, staticModels, "cloudflare")
+      : staticModels;
+
+    return annotate(
+      ensureCurrentModelInCatalog(catalog, currentModel, "cloudflare")
+    );
+  }
+
   if (instance.type === "ollama") {
     const entries = instance.customModels ?? [];
 
@@ -356,6 +412,7 @@ export function getModelsForProviderInstance(
     instance.type === "doubao" ||
     instance.type === "together" ||
     instance.type === "xiaomi" ||
+    instance.type === "meta" ||
     instance.type === "vercel_ai_gateway" ||
     instance.type === "mistral" ||
     instance.type === "qwen" ||
@@ -566,6 +623,8 @@ export async function fetchRemoteOpenAIModels(
   const client = new OpenAI({
     apiKey: apiKey || "not-needed",
     baseURL: normalized,
+    maxRetries: 0,
+    timeout: MODEL_LIST_TIMEOUT_MS,
   });
 
   try {
@@ -592,6 +651,111 @@ export async function fetchRemoteOpenAIModels(
   return fetchRemoteOpenAIModelsRaw(normalized, apiKey);
 }
 
+export type NetraModelLimits = {
+  contextWindow?: number;
+  maxOutputTokens?: number;
+};
+
+type NetraLimitsLookup = {
+  lookup: Promise<NetraModelLimits>;
+  failedAt?: number;
+};
+
+const netraModelLimits = new Map<string, NetraLimitsLookup>();
+
+const NETRA_MODELS_TIMEOUT_MS = 3000;
+
+const NETRA_MODELS_RETRY_MS = 10 * 60_000;
+
+const tokenCountSchema = z.number().int().positive().nullish();
+
+const netraModelsSchema = z.object({
+  data: z.array(
+    z.object({
+      context_length: tokenCountSchema,
+      id: z.string(),
+      top_provider: z
+        .object({
+          context_length: tokenCountSchema,
+          max_completion_tokens: tokenCountSchema,
+        })
+        .nullish(),
+    })
+  ),
+});
+
+/** The context and output limits `/v1/models` reports for a Netra model, read
+ * once per process and API key. A failed lookup resolves to no limits and is
+ * retried no sooner than NETRA_MODELS_RETRY_MS, so a down endpoint costs one
+ * request, not one per chat turn. */
+export function fetchNetraModelLimits(
+  apiKey: string,
+  modelId: string,
+  now = Date.now()
+): Promise<NetraModelLimits> {
+  const key = `${apiKey}\u0000${modelId}`;
+  const cached = netraModelLimits.get(key);
+
+  if (
+    cached &&
+    (cached.failedAt === undefined ||
+      now - cached.failedAt < NETRA_MODELS_RETRY_MS)
+  ) {
+    return cached.lookup;
+  }
+
+  const entry: NetraLimitsLookup = { lookup: Promise.resolve({}) };
+
+  entry.lookup = (async () => {
+    const response = await fetch(`${defaultDiscoveryBaseUrl("netra")}/models`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      // A chat request may wait on this lookup, so a slow /v1/models must
+      // not hold the reply: give up and use the fallbacks.
+      signal: AbortSignal.timeout(NETRA_MODELS_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Netra models request failed (${response.status}).`);
+    }
+
+    const { data } = netraModelsSchema.parse(await response.json());
+    const model = data.find((item) => item.id === modelId);
+    const limits: NetraModelLimits = {};
+
+    const contextWindow =
+      model?.top_provider?.context_length ?? model?.context_length;
+
+    const maxOutputTokens = model?.top_provider?.max_completion_tokens;
+
+    if (contextWindow) {
+      limits.contextWindow = contextWindow;
+    }
+
+    if (maxOutputTokens) {
+      limits.maxOutputTokens = maxOutputTokens;
+    }
+
+    // A list without this model or its limits may be a partial rollout:
+    // use the fallbacks now and ask again after the retry wait.
+    if (!(contextWindow && maxOutputTokens)) {
+      entry.failedAt = Date.now();
+    }
+
+    return limits;
+  })().catch((): NetraModelLimits => {
+    entry.failedAt = Date.now();
+
+    return {};
+  });
+
+  netraModelLimits.set(key, entry);
+
+  return entry.lookup;
+}
+
 export async function fetchNetraModels(
   apiKey: string
 ): Promise<CustomModelEntry[]> {
@@ -604,10 +768,21 @@ export async function fetchNetraModels(
     .filter((entry) => entry.id === NETRA_AGENT_MODEL_ID)
     .map((entry) => ({
       ...entry,
-      name: "DeepSeek V4 Flash 0731",
+      name: "DeepSeek V4.1 Flash",
       supportsThinking: true,
       supportsVision: false,
     }));
+}
+
+// A model list that takes longer is not coming; say so instead of spinning.
+const MODEL_LIST_TIMEOUT_MS = 10_000;
+
+function endpointHost(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return baseUrl;
+  }
 }
 
 async function fetchRemoteOpenAIModelsRaw(
@@ -623,9 +798,15 @@ async function fetchRemoteOpenAIModelsRaw(
       headers.set("Authorization", `Bearer ${apiKey}`);
     }
 
-    response = await fetch(`${baseUrl}/models`, { headers });
+    response = await fetch(`${baseUrl}/models`, {
+      headers,
+      signal: AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS),
+    });
   } catch {
-    throw new NakamaApiError("Could not reach the model endpoint.", 502);
+    throw new AirinApiError(
+      `Cannot reach ${endpointHost(baseUrl)}. Check the base URL and that the server is running.`,
+      502
+    );
   }
 
   if (!response.ok) {
@@ -636,13 +817,13 @@ async function fetchRemoteOpenAIModelsRaw(
     );
 
     if (response.status === 401 || response.status === 403) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "The model endpoint rejected this API key. Check the key and try again.",
         400
       );
     }
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Could not load models from this endpoint (${response.status}). Try again.`,
       502
     );

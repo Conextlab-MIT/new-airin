@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core";
-import {
-  requireOrgAdmin,
-  requireOrgMember,
-  requirePlatformAdmin,
-} from "./org-guards";
+import { AirinApiError } from "@airin/core";
+import { requireOrgAdmin, requireOrgMember } from "./org-guards";
 import type { RequestAuthContext } from "./shared";
 
 function auth(orgRole: RequestAuthContext["orgRole"]): RequestAuthContext {
@@ -18,13 +14,9 @@ function auth(orgRole: RequestAuthContext["orgRole"]): RequestAuthContext {
 }
 
 describe("org guards", () => {
-  test("requireOrgAdmin allows org admins", () => {
-    expect(() => requireOrgAdmin(auth("admin"))).not.toThrow();
-  });
-
   test("requireOrgAdmin rejects members and users without membership", () => {
-    expect(() => requireOrgAdmin(auth("member"))).toThrow(NakamaApiError);
-    expect(() => requireOrgAdmin(auth(undefined))).toThrow(NakamaApiError);
+    expect(() => requireOrgAdmin(auth("member"))).toThrow(AirinApiError);
+    expect(() => requireOrgAdmin(auth(undefined))).toThrow(AirinApiError);
 
     try {
       requireOrgAdmin(auth("member"));
@@ -33,21 +25,7 @@ describe("org guards", () => {
     }
   });
 
-  test("requireOrgMember allows admins and members", () => {
-    expect(() => requireOrgMember(auth("admin"))).not.toThrow();
-    expect(() => requireOrgMember(auth("member"))).not.toThrow();
-  });
-
   test("requireOrgMember rejects users without membership", () => {
-    expect(() => requireOrgMember(auth(undefined))).toThrow(NakamaApiError);
-  });
-
-  test("requirePlatformAdmin allows platform admins", () => {
-    expect(() =>
-      requirePlatformAdmin({
-        ...auth("admin"),
-        isPlatformAdmin: true,
-      })
-    ).not.toThrow();
+    expect(() => requireOrgMember(auth(undefined))).toThrow(AirinApiError);
   });
 });

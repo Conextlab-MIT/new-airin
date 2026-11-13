@@ -1,16 +1,16 @@
-import type { OrgMemoryChangeLogEntry } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { OrgMemoryChangeLogEntry } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { toast } from "@nakama/ui/toast";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { toast } from "@airin/ui/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import { EyeIcon, RotateLeft01Icon, TimelineIcon } from "hugeicons-react";
 import { useState } from "react";
 import { useOrgMembers } from "@/hooks/use-org-members";

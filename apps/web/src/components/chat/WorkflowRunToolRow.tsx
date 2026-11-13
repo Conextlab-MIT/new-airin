@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
   CancelCircleIcon,
@@ -124,6 +124,10 @@ function stepTitleTone(status: WorkflowStepView["status"]): string {
 function stepMetaTone(status: WorkflowStepView["status"]): string {
   if (status === "failed") {
     return "text-red-600 dark:text-red-400";
+  }
+
+  if (status === "skipped") {
+    return "text-muted-foreground";
   }
 
   return "text-emerald-600 dark:text-emerald-400";

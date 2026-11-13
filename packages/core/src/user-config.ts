@@ -1,8 +1,11 @@
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { z } from "zod";
-import { NakamaApiError } from "./api-error";
+
+import { AirinApiError } from "./api-error";
 import {
   isValidBaseUrl,
   normalizeBaseUrl,
@@ -13,6 +16,7 @@ import {
 } from "./compatible-provider-config";
 import { readEnvValue } from "./config";
 import type {
+  AppLanguage,
   ChatgptOAuthCredentials,
   CustomModelEntry,
   OpenRouterRoutingSettings,
@@ -36,6 +40,7 @@ import {
   parseProviderName,
   type UserProviderName,
 } from "./provider-resolution";
+import { THINKING_EFFORTS } from "./thinking-effort";
 
 export type { UserProviderName } from "./provider-resolution";
 
@@ -80,6 +85,7 @@ const XaiOAuthSchema = z.object({
 export interface UserConfig {
   defaultProviderId: string | null;
   imageModel?: string | null;
+  language?: AppLanguage;
   localAuthToken?: string;
   localAuthTokenHash?: string;
   providers: ProviderInstance[];
@@ -89,6 +95,13 @@ export interface UserConfig {
   transcriptionModel?: string | null;
   visionModel?: string | null;
 }
+
+export const APP_LANGUAGES = [
+  "id",
+  "en",
+] as const satisfies readonly AppLanguage[];
+
+export const DEFAULT_LANGUAGE: AppLanguage = "id";
 
 export const DEFAULT_TIMEZONE = "UTC";
 
@@ -102,11 +115,15 @@ const PROVIDER_TYPE_LABELS: Record<UserProviderName, string> = {
   anthropic: "Anthropic",
   cerebras: "Cerebras",
   chatgpt: "ChatGPT (Plus/Pro)",
+  cheaper_inference: "Cheaper Inference",
   cloudflare: "Cloudflare Worker AI",
+  command_code: "Command Code",
   deepseek: "DeepSeek",
   doubao: "Doubao (Volcengine)",
   fireworks: "Fireworks",
   gemini: "Gemini",
+  groq: "Groq",
+  meta: "Meta Model API",
   minimax: "MiniMax",
   minimax_cn: "MiniMax (CN)",
   mistral: "Mistral",
@@ -121,6 +138,7 @@ const PROVIDER_TYPE_LABELS: Record<UserProviderName, string> = {
   perplexity: "Perplexity Sonar",
   qwen: "Qwen (DashScope)",
   qwen_cn: "Qwen (DashScope CN)",
+  standardcompute: "Standard Compute",
   together: "Together AI",
   vercel_ai_gateway: "Vercel AI Gateway",
   xai: "xAI Grok",
@@ -281,19 +299,19 @@ export function getOrgConfigDir(orgId: string): string {
 }
 
 export function getUserConfigDir(): string {
-  const override = process.env.NAKAMA_CONFIG_DIR?.trim();
+  const override = process.env.AIRIN_CONFIG_DIR?.trim();
 
   if (override) {
     if (!isAbsolute(override)) {
       throw new Error(
-        "NAKAMA_CONFIG_DIR must be an absolute path; relative paths resolve against process.cwd() and break profile isolation."
+        "AIRIN_CONFIG_DIR must be an absolute path; relative paths resolve against process.cwd() and break profile isolation."
       );
     }
 
     return override;
   }
 
-  return join(homedir(), ".nakama");
+  return join(homedir(), ".airin");
 }
 
 export function getUserConfigPath(): string {
@@ -307,6 +325,98 @@ export async function ensureUserConfigDir(): Promise<string> {
   return dir;
 }
 
+/**
+ * Stored credentials (custom tool keys, MCP server config) are AES-256-GCM
+ * encrypted. The key lives in its own owner-only file, so a copy of
+ * config.ini or the database alone does not reveal them.
+ */
+const CREDENTIAL_KEY_FILE = "tool-credentials.key";
+
+const ErrorCodeSchema = z.object({ code: z.string().optional() });
+
+function hasErrorCode(error: Error, code: string): boolean {
+  return ErrorCodeSchema.safeParse(error).data?.code === code;
+}
+
+async function readCredentialEncryptionKey(): Promise<Buffer> {
+  const keyPath = join(getUserConfigDir(), CREDENTIAL_KEY_FILE);
+
+  try {
+    return Buffer.from((await readFile(keyPath, "utf8")).trim(), "base64url");
+  } catch (error) {
+    if (!(error instanceof Error && hasErrorCode(error, "ENOENT"))) {
+      throw error;
+    }
+  }
+
+  await ensureUserConfigDir();
+  const key = randomBytes(32);
+
+  try {
+    await writeFile(keyPath, key.toString("base64url"), {
+      flag: "wx",
+      mode: 0o600,
+    });
+
+    return key;
+  } catch (error) {
+    if (!(error instanceof Error && hasErrorCode(error, "EEXIST"))) {
+      throw error;
+    }
+
+    return Buffer.from((await readFile(keyPath, "utf8")).trim(), "base64url");
+  }
+}
+
+/**
+ * `scope` is bound as AAD, so a ciphertext copied to another scope (another
+ * org, another MCP server) does not decrypt there.
+ */
+export async function encryptCredential(
+  scope: string,
+  plaintext: string
+): Promise<string> {
+  const iv = randomBytes(12);
+
+  const cipher = createCipheriv(
+    "aes-256-gcm",
+    await readCredentialEncryptionKey(),
+    iv
+  );
+
+  cipher.setAAD(Buffer.from(scope, "utf8"));
+
+  const ciphertext = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
+
+  return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString(
+    "base64url"
+  );
+}
+
+export async function decryptCredential(
+  scope: string,
+  value: string
+): Promise<string> {
+  const encoded = Buffer.from(value, "base64url");
+
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    await readCredentialEncryptionKey(),
+    encoded.subarray(0, 12)
+  );
+
+  decipher.setAAD(Buffer.from(scope, "utf8"));
+  decipher.setAuthTag(encoded.subarray(12, 28));
+
+  return Buffer.concat([
+    decipher.update(encoded.subarray(28)),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
 export async function loadUserConfig(): Promise<UserConfig | null> {
   const raw = await readTextOrNull(getUserConfigPath());
 
@@ -316,6 +426,7 @@ export async function loadUserConfig(): Promise<UserConfig | null> {
 
   const parsed = parseIniWithSections(raw);
   const thinking = readThinkingSettings(parsed.global);
+  const language = readLanguage(parsed.global);
   const timezone = readTimezone(parsed.global);
   const providers = loadProvidersFromSections(parsed.sections);
 
@@ -328,6 +439,10 @@ export async function loadUserConfig(): Promise<UserConfig | null> {
     transcriptionModel: readTranscriptionModel(parsed.global),
     visionModel: readVisionModel(parsed.global),
   };
+
+  if (language) {
+    config.language = language;
+  }
 
   if (timezone) {
     config.timezone = timezone;
@@ -352,6 +467,67 @@ export async function loadUserTimezone(): Promise<string> {
   }
 
   return readTimezone(parseIniWithSections(raw).global) ?? DEFAULT_TIMEZONE;
+}
+
+export function isValidAppLanguage(value: string): value is AppLanguage {
+  // SAFETY: value is accepted only when it is a member of APP_LANGUAGES.
+  return (APP_LANGUAGES as readonly string[]).includes(value);
+}
+
+export function parseAppLanguage(
+  value: string | undefined
+): AppLanguage | undefined {
+  const trimmed = value?.trim().toLowerCase();
+
+  return trimmed && isValidAppLanguage(trimmed) ? trimmed : undefined;
+}
+
+export async function loadUserLanguage(): Promise<AppLanguage> {
+  const raw = await readTextOrNull(getUserConfigPath());
+
+  if (raw === null) {
+    return DEFAULT_LANGUAGE;
+  }
+
+  return readLanguage(parseIniWithSections(raw).global) ?? DEFAULT_LANGUAGE;
+}
+
+export async function saveUserLanguage(
+  language: string | undefined
+): Promise<AppLanguage> {
+  const parsed = parseAppLanguage(language);
+
+  if (!parsed) {
+    throw new AirinApiError(
+      language?.trim()
+        ? `Invalid language: ${language.trim()}`
+        : "Language is required.",
+      400
+    );
+  }
+
+  const existing = await loadUserConfig();
+
+  if (existing) {
+    await saveUserConfig({ ...existing, language: parsed });
+
+    return parsed;
+  }
+
+  const raw = await readTextOrNull(getUserConfigPath());
+
+  const file =
+    raw === null ? { global: {}, sections: {} } : parseIniWithSections(raw);
+
+  const lines = buildConfigIniLines(file.global, file.sections, {
+    language: parsed,
+  });
+
+  await writeTextFile(getUserConfigPath(), lines.join("\n"), {
+    ensureDir: getUserConfigDir(),
+  });
+
+  return parsed;
 }
 
 function readVisionModel(global: Record<string, string>): string | null {
@@ -460,11 +636,11 @@ export async function saveUserTimezone(
   const trimmed = timezone?.trim() ?? "";
 
   if (!trimmed) {
-    throw new NakamaApiError("Timezone is required.", 400);
+    throw new AirinApiError("Timezone is required.", 400);
   }
 
   if (!isValidTimezone(trimmed)) {
-    throw new NakamaApiError(`Invalid timezone: ${trimmed}`, 400);
+    throw new AirinApiError(`Invalid timezone: ${trimmed}`, 400);
   }
 
   const existing = await loadUserConfig();
@@ -525,7 +701,7 @@ export async function saveUserWebPublicUrl(
   const trimmed = webPublicUrl.trim();
 
   if (!(trimmed && isValidBaseUrl(trimmed))) {
-    throw new Error("webPublicUrl must be a valid http or https URL.");
+    throw new Error("Public web URL must be a valid http or https URL.");
   }
 
   const normalized = normalizeBaseUrl(trimmed);
@@ -575,6 +751,7 @@ export async function saveUserConfig(config: UserConfig): Promise<void> {
     ...existingParsed.global,
     default_provider_id: config.defaultProviderId ?? "",
     image_model: config.imageModel ?? "",
+    language: config.language,
     local_auth_token_hash: config.localAuthTokenHash,
     thinking: thinking.enabled ? "on" : "off",
     thinking_effort: thinking.effort,
@@ -602,7 +779,12 @@ export async function saveUserConfig(config: UserConfig): Promise<void> {
 
   for (const provider of providers) {
     const sectionName = `${PROVIDER_SECTION_PREFIX}${provider.id}`;
-    sections[sectionName] = buildProviderSectionValues(provider);
+    // Keep a legacy file key until the server migration moves it into the
+    // secret store; the CLI can save the config before the server starts.
+    const legacyApiKey = existingParsed.sections[sectionName]?.api_key;
+    sections[sectionName] = legacyApiKey
+      ? { ...buildProviderSectionValues(provider), api_key: legacyApiKey }
+      : buildProviderSectionValues(provider);
   }
 
   await writeParsedConfigIni(global, sections);
@@ -611,11 +793,12 @@ export async function saveUserConfig(config: UserConfig): Promise<void> {
 export async function writeParsedConfigIni(
   global: Record<string, string | undefined>,
   sections: Record<string, Record<string, string>>,
-  patch: Record<string, string | undefined> = {}
+  patch: Record<string, string | undefined> = {},
+  targetPath = getUserConfigPath()
 ): Promise<void> {
   const lines = buildConfigIniLines(global, sections, patch);
-  await writeTextFile(getUserConfigPath(), lines.join("\n"), {
-    ensureDir: getUserConfigDir(),
+  await writeTextFile(targetPath, lines.join("\n"), {
+    ensureDir: dirname(targetPath),
   });
 }
 
@@ -628,6 +811,7 @@ export function parseIniWithSections(raw: string): ParsedIniFile {
   const global: Record<string, string> = {};
   const sections: Record<string, Record<string, string>> = {};
   let currentSection: string | null = null;
+  let skipSection = false;
 
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -639,14 +823,23 @@ export function parseIniWithSections(raw: string): ParsedIniFile {
     const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
 
     if (sectionMatch) {
-      currentSection = sectionMatch[1]!.trim();
-      sections[currentSection] ??= {};
+      const name = sectionMatch[1]!.trim();
+      // These names resolve to Object.prototype members, so writing keys
+      // under them would pollute every object in the process.
+      skipSection =
+        name === "__proto__" || name === "constructor" || name === "prototype";
+      currentSection = skipSection ? null : name;
+
+      if (currentSection) {
+        sections[currentSection] ??= {};
+      }
+
       continue;
     }
 
     const separator = trimmed.indexOf("=");
 
-    if (separator <= 0) {
+    if (skipSection || separator <= 0) {
       continue;
     }
 
@@ -669,7 +862,7 @@ export function validateOpenRouterRoutingSettings<Value>(
   const parsed = OpenRouterRoutingSchema.safeParse(value);
 
   if (!parsed.success) {
-    throw new NakamaApiError("OpenRouter routing must be an object.", 400);
+    throw new AirinApiError("OpenRouter routing must be an object.", 400);
   }
 
   const settings: OpenRouterRoutingSettings = {};
@@ -690,7 +883,7 @@ export function validateOpenRouterRoutingSettings<Value>(
     } else if (key === "dataCollection" && collectionSetting.success) {
       settings.dataCollection = collectionSetting.data;
     } else {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Invalid OpenRouter routing setting: ${key}`,
         400
       );
@@ -718,7 +911,7 @@ function loadProvidersFromSections(
     }
 
     const label = normalizeProviderInstanceLabel(type, values.label, providers);
-    const apiKey = values.api_key ?? "";
+    const apiKey = "";
 
     const baseUrl = values.base_url?.trim()
       ? normalizeBaseUrl(values.base_url)
@@ -808,7 +1001,6 @@ function buildProviderSectionValues(
   provider: ProviderInstance
 ): ProviderSectionValues {
   const values: ProviderSectionValues = {
-    api_key: provider.apiKey,
     created_at: provider.createdAt,
     label: normalizeProviderInstanceLabel(provider.type, provider.label, []),
     type: provider.type,
@@ -873,7 +1065,7 @@ function buildConfigIniLines(
   patch: Record<string, string | undefined> = {}
 ): string[] {
   const mergedGlobal = { ...global, ...patch };
-  const lines = ["# Nakama user config"];
+  const lines = ["# Airin user config"];
 
   if (mergedGlobal.default_provider_id !== undefined) {
     lines.push(
@@ -881,8 +1073,26 @@ function buildConfigIniLines(
     );
   }
 
+  if (mergedGlobal.image_model?.trim()) {
+    lines.push(`image_model=${mergedGlobal.image_model.trim()}`);
+  }
+
+  if (mergedGlobal.transcription_model?.trim()) {
+    lines.push(
+      `transcription_model=${mergedGlobal.transcription_model.trim()}`
+    );
+  }
+
+  if (mergedGlobal.vision_model?.trim()) {
+    lines.push(`vision_model=${mergedGlobal.vision_model.trim()}`);
+  }
+
   if (mergedGlobal.timezone?.trim()) {
     lines.push(`timezone=${mergedGlobal.timezone.trim()}`);
+  }
+
+  if (mergedGlobal.language?.trim()) {
+    lines.push(`language=${mergedGlobal.language.trim()}`);
   }
 
   if (mergedGlobal.web_public_url?.trim()) {
@@ -933,16 +1143,17 @@ function readThinkingSettings(
 }
 
 function validateThinkingEffort(value: string | undefined): ThinkingEffort {
-  return z
-    .enum(["low", "medium", "high"])
-    .catch(DEFAULT_THINKING_EFFORT)
-    .parse(value);
+  return z.enum(THINKING_EFFORTS).catch(DEFAULT_THINKING_EFFORT).parse(value);
 }
 
 function readTimezone(values: Record<string, string>): string | undefined {
   const timezone = values.timezone?.trim();
 
   return timezone && isValidTimezone(timezone) ? timezone : undefined;
+}
+
+function readLanguage(values: Record<string, string>): AppLanguage | undefined {
+  return parseAppLanguage(values.language);
 }
 
 export function validateProviderInstanceLabel(
@@ -1008,7 +1219,7 @@ export function validateProviderApiKeyFormat(
       ? ` (expected it to start with "${rule.prefix}")`
       : ` (expected at least ${rule.minLength} characters)`;
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `That doesn't look like a valid ${label} API key${reason}.`,
       400
     );

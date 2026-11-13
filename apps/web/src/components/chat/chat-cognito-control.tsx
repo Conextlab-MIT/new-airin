@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import { IncognitoIcon } from "hugeicons-react";
 
 export function ChatCognitoControl({
@@ -31,7 +31,7 @@ export function ChatCognitoControl({
                 "size-8 rounded-full transition-colors",
                 cognito
                   ? "bg-foreground text-background hover:bg-foreground/90 hover:text-background"
-                  : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  : "bg-muted text-foreground/80 hover:bg-muted hover:text-foreground"
               )}
               disabled={disabled}
               id="chat-cognito-toggle"

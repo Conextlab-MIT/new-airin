@@ -4,14 +4,14 @@
  * - `version-history <profileId>`: a `patch` proposal on `campaign-reporting`
  *   (capture-skill-version-history-screenshots.sh)
  */
-import { getUserConfigDir } from "@nakama/core";
-import { createDatabase } from "@nakama/db";
+import { getUserConfigDir } from "@airin/core";
+import { createDatabase } from "@airin/db";
 import { SkillProposalService } from "../src/services/skill-proposal-service";
 import { SkillsService } from "../src/services/skills-service";
 
-const configDir = process.env.NAKAMA_CONFIG_DIR?.trim() || getUserConfigDir();
+const configDir = process.env.AIRIN_CONFIG_DIR?.trim() || getUserConfigDir();
 
-const database = await createDatabase("file:data/sqlite/nakama.sqlite", {
+const database = await createDatabase("file:data/sqlite/airin.sqlite", {
   baseDir: configDir,
 });
 

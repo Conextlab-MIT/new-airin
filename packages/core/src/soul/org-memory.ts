@@ -8,6 +8,17 @@
 
 import type { MemorySection } from "./memory-archive";
 
+/** Drop trailing newlines with a scan; `/\n+$/` is quadratic on long newline runs. */
+export function trimTrailingNewlines(text: string): string {
+  let end = text.length;
+
+  while (end > 0 && text[end - 1] === "\n") {
+    end--;
+  }
+
+  return text.slice(0, end);
+}
+
 export const ORG_MEMORY_HEADER = "## Org Memory";
 
 export const ORG_MEMORY_PREAMBLE = `${ORG_MEMORY_HEADER}
@@ -37,7 +48,10 @@ export function normalizeOrgMemoryDedupKey(bullet: string): string {
   return normalizeOrgMemoryBullet(bullet).toLowerCase();
 }
 
-export function detectOrgMemoryInjectionWarnings(bullet: string): string[] {
+export function detectOrgMemoryInjectionWarnings(
+  bullet: string,
+  { markup = true }: { markup?: boolean } = {}
+): string[] {
   const warnings: string[] = [];
 
   if (/ignore (all )?previous/i.test(bullet)) {
@@ -50,11 +64,18 @@ export function detectOrgMemoryInjectionWarnings(bullet: string): string[] {
     warnings.push("Contains a system-style prefix.");
   }
 
+  // Skills are markdown documents, so headings and tags are normal there.
+  if (!markup) {
+    return warnings;
+  }
+
   if (/^##\s/m.test(bullet)) {
     warnings.push("Contains markdown headings.");
   }
 
-  if (/<\/?[a-z][\s\S]*>/i.test(bullet)) {
+  const tagStart = bullet.search(/<\/?[a-z]/i);
+
+  if (tagStart !== -1 && bullet.includes(">", tagStart)) {
     warnings.push("Contains HTML-like markup.");
   }
 
@@ -128,7 +149,7 @@ export function parseOrgMemoryContent(
 
   return normalizeParsedOrgMemory({
     pinned,
-    preamble: preambleLines.join("\n").replace(/\n+$/, ""),
+    preamble: trimTrailingNewlines(preambleLines.join("\n")),
     sections,
   });
 }
@@ -138,7 +159,6 @@ function stripPinnedHeaderFromPreamble(preamble: string): string {
     .split(/\r?\n/)
     .filter((line) => !/^## Pinned\s*$/.test(line.trim()))
     .join("\n")
-    .replace(/\n+$/, "")
     .trim();
 }
 
@@ -194,7 +214,7 @@ export function rebuildOrgMemoryContent(parsed: ParsedOrgMemory): string {
     }
   }
 
-  const content = parts.join("\n").replace(/\n+$/, "");
+  const content = trimTrailingNewlines(parts.join("\n"));
 
   return content.length > 0 ? `${content}\n` : content;
 }

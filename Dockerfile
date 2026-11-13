@@ -1,4 +1,4 @@
-# Nakama — one container: API, web dashboard, automation + task workers
+# Airin — one container: API, web dashboard, automation + task workers
 # Build & run: ./scripts/docker-build-run.sh
 
 # Keep image references literal so Dependabot can update all three pins.
@@ -6,7 +6,7 @@
 # Verify each proposed multi-arch digest with: docker buildx imagetools inspect <image>
 
 # --- Build architecture-independent web and JavaScript bundles once ---
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS web-builder
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS web-builder
 WORKDIR /app
 
 COPY package.json bun.lock ./
@@ -16,13 +16,14 @@ COPY apps apps
 COPY packages packages
 
 RUN bun install --frozen-lockfile --ignore-scripts \
-  && bun run --filter @nakama/web build \
-  && bun run --filter @nakama/server build \
-  && bun run --filter @nakama/automation build \
-  && bun run --filter @nakama/telegram build \
-  && bun run --filter @nakama/whatsapp build \
-  && bun run --filter @nakama/discord build \
-  && bun run --filter @nakama/slack build
+  && bun run --filter @airin/web build \
+  && bun run --filter @airin/server build \
+  && bun run --filter @airin/automation build \
+  && bun run --filter @airin/telegram build \
+  && bun run --filter @airin/whatsapp build \
+  && bun run --filter @airin/discord build \
+  && bun run --filter @airin/slack build \
+  && bun run --filter @airin/teams build
 
 FROM scratch AS build-assets
 COPY --from=web-builder /app/apps/web/dist /app/apps/web/dist
@@ -32,78 +33,82 @@ COPY --from=web-builder /app/apps/platform/telegram/dist /app/apps/platform/tele
 COPY --from=web-builder /app/apps/platform/whatsapp/dist /app/apps/platform/whatsapp/dist
 COPY --from=web-builder /app/apps/platform/discord/dist /app/apps/platform/discord/dist
 COPY --from=web-builder /app/apps/platform/slack/dist /app/apps/platform/slack/dist
+COPY --from=web-builder /app/apps/platform/teams/dist /app/apps/platform/teams/dist
 
 # Production runtime dependencies are installed from a committed manifest and
 # lockfile. Re-resolving version ranges at image build time let two builds of
 # the same commit ship different transitive bytes, so the lockfile is the input.
-FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS runtime-deps
+FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS runtime-deps
 WORKDIR /runtime-deps
 
+# The Codex, Claude Code and OpenCode binaries are about 900 MB, over half the
+# image. The default image drops them; the -full tag keeps them. Without them,
+# the ACP agents use CODEX_PATH / CLAUDE_CODE_EXECUTABLE / OPENCODE_PATH.
+ARG INSTALL_CODING_AGENTS=false
 COPY .docker/runtime-deps/package.json .docker/runtime-deps/bun.lock ./
 RUN bun install --frozen-lockfile --production --ignore-scripts \
-  # The runtime is Debian (glibc); the SDK never picks its musl binary here.
-  && rm -rf node_modules/@anthropic-ai/claude-agent-sdk-linux-x64-musl
+  # The runtime is Debian (glibc); the SDKs never pick their musl binaries here.
+  # Keep OpenCode's x64 baseline build, not the AVX2 one: it also runs on CPUs
+  # without AVX2 (older Xeons, QEMU, emulated x64 on Apple Silicon).
+  && rm -rf node_modules/@anthropic-ai/claude-agent-sdk-linux-*-musl node_modules/opencode-linux-*-musl node_modules/opencode-linux-x64 \
+  && if [ "$INSTALL_CODING_AGENTS" != "true" ]; then \
+       rm -rf node_modules/@anthropic-ai/claude-agent-sdk-linux-* node_modules/@openai/codex-linux-* node_modules/opencode-linux-*; \
+     fi
+
+# Keep FFmpeg's video libraries out of the runtime image. These pinned static
+# binaries cover both published architectures without Debian's GUI dependencies.
+FROM --platform=$BUILDPLATFORM alpine:3.22 AS ffmpeg-binaries
+ARG TARGETARCH
+RUN set -eu; \
+  case "$TARGETARCH" in \
+    amd64) arch=x64; ffmpeg_sha=9eac5b2b5076db5ff853a6fa0dcd6b8de7d0cac8481eadda6c47cd935825f1ee; ffprobe_sha=065d3c56926052a76e884c4e4b51b7d95248da9391ab7effdcca6b94ceab98cf ;; \
+    arm64) arch=arm64; ffmpeg_sha=6e7b1d7d1aa8c35e3fedd78a140aa0968717aeb7386ecfb0ee00773d9f0a4503; ffprobe_sha=fd2aca1456f0261cabef4514b6d97a70fa342003347f51b39c473dd364328089 ;; \
+    *) echo "no FFmpeg build for $TARGETARCH" >&2; exit 1 ;; \
+  esac; \
+  base=https://github.com/shaka-project/static-ffmpeg-binaries/releases/download/n8.1.2-1; \
+  wget -q -O /ffmpeg "$base/ffmpeg-linux-$arch"; \
+  wget -q -O /ffprobe "$base/ffprobe-linux-$arch"; \
+  echo "$ffmpeg_sha  /ffmpeg" | sha256sum -c -; \
+  echo "$ffprobe_sha  /ffprobe" | sha256sum -c -; \
+  chmod +x /ffmpeg /ffprobe
 
 # --- Production runtime (server + workspace packages + built static assets) ---
-FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS runtime
+FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS runtime
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates sudo python3 \
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl sudo python3 python3-venv \
   && rm -rf /var/lib/apt/lists/*
+COPY --from=ffmpeg-binaries /ffmpeg /ffprobe /usr/local/bin/
 
-# Optional Google Meet audio-capture runtime. Chromium remains sandboxed and
-# runs as the existing non-root Nakama user. The manifest and lockfile are
-# copied unconditionally (two small files) so the install below can be
-# frozen; the packages themselves only land when the build arg is true.
+# Chrome is not installed by default. INSTALL_CHROMIUM=true adds Chromium for
+# agent PDF export (services/html-pdf.ts). INSTALL_MEET_DEPS is the old name and
+# still works. Docker's default seccomp profile blocks Chromium's sandbox for the
+# non-root Airin user, so run this image with AIRIN_CHROME_NO_SANDBOX=true.
+ARG INSTALL_CHROMIUM=false
 ARG INSTALL_MEET_DEPS=false
-COPY .docker/meet-deps/package.json .docker/meet-deps/bun.lock /opt/nakama-meet/
-RUN if [ "$INSTALL_MEET_DEPS" = "true" ]; then \
+RUN if [ "$INSTALL_CHROMIUM" = "true" ] || [ "$INSTALL_MEET_DEPS" = "true" ]; then \
       apt-get update && apt-get install -y --no-install-recommends \
-        chromium ffmpeg pulseaudio pulseaudio-utils fonts-liberation xvfb \
-      && rm -rf /var/lib/apt/lists/* \
-      && cd /opt/nakama-meet \
-      && bun install --frozen-lockfile --production --ignore-scripts; \
+        chromium fonts-liberation \
+      && rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Tool-output optimiser, on by default so the dashboard toggle works on a fresh
-# image without a rebuild. Just under 10 MB unpacked. Build with
-# --build-arg OMNI_VERSION= to leave it out; the server then fetches it on demand
-# when the toggle is switched on, unless NAKAMA_OMNI_AUTO_INSTALL=0.
-# The release is a static musl build, which runs on this glibc base, and the
-# published checksum is verified rather than the download trusted.
-ARG OMNI_VERSION="0.7.9"
-RUN if [ -n "$OMNI_VERSION" ]; then \
-      set -eu; \
-      apt-get update && apt-get install -y --no-install-recommends curl ca-certificates; \
-      case "$(dpkg --print-architecture)" in \
-        amd64) target=x86_64-unknown-linux-musl ;; \
-        arm64) target=aarch64-unknown-linux-musl ;; \
-        *) echo "no omni build for $(dpkg --print-architecture)" >&2; exit 1 ;; \
-      esac; \
-      base="https://github.com/fajarhide/omni/releases/download/v${OMNI_VERSION}"; \
-      archive="omni-v${OMNI_VERSION}-${target}.tar.gz"; \
-      curl -fsSL -o "/tmp/${archive}" "${base}/${archive}"; \
-      curl -fsSL -o /tmp/SHA256SUMS "${base}/SHA256SUMS"; \
-      (cd /tmp && grep " ${archive}\$" SHA256SUMS | sha256sum -c -); \
-      tar -xzf "/tmp/${archive}" -C /usr/local/bin omni; \
-      rm -rf "/tmp/${archive}" /tmp/SHA256SUMS /var/lib/apt/lists/*; \
-      omni --version; \
-    fi
-
-RUN mkdir -p /nakama/data \
+# A named volume copies this owner on first mount, so uid 1000 can write
+# backups and upgrade requests there.
+RUN mkdir -p /airin/data /airin/backups /airin/updates \
   && if getent group 1000 >/dev/null; then \
        G=$(getent group 1000 | cut -d: -f1); \
-       [ "$G" = nakama ] || groupmod -n nakama "$G"; \
-     else groupadd --system --gid 1000 nakama; fi \
-  && if getent passwd nakama >/dev/null; then \
-       usermod -d /nakama/data nakama; \
+       [ "$G" = airin ] || groupmod -n airin "$G"; \
+     else groupadd --system --gid 1000 airin; fi \
+  && if getent passwd airin >/dev/null; then \
+       usermod -d /airin/data airin; \
      elif getent passwd 1000 >/dev/null; then \
        U=$(getent passwd 1000 | cut -d: -f1); \
-       usermod -l nakama -g nakama -d /nakama/data "$U"; \
-     else useradd --system --uid 1000 --gid nakama --home-dir /nakama/data --create-home nakama; fi \
-  && chown nakama:nakama /nakama/data
+       usermod -l airin -g airin -d /airin/data "$U"; \
+     else useradd --system --uid 1000 --gid airin --home-dir /airin/data --create-home airin; fi \
+  && chown airin:airin /airin/data /airin/backups /airin/updates
 
 COPY --chown=1000:1000 package.json ./
+COPY --chown=1000:1000 scripts/airin-updater.sh scripts/airin-updater.sh
 COPY --chown=1000:1000 apps/server apps/server
 COPY --chown=1000:1000 packages packages
 COPY --chown=1000:1000 --from=build-assets /app/apps/web/dist apps/web/dist
@@ -113,6 +118,7 @@ COPY --chown=1000:1000 --from=build-assets /app/apps/platform/telegram/dist apps
 COPY --chown=1000:1000 --from=build-assets /app/apps/platform/whatsapp/dist apps/platform/whatsapp/dist
 COPY --chown=1000:1000 --from=build-assets /app/apps/platform/discord/dist apps/platform/discord/dist
 COPY --chown=1000:1000 --from=build-assets /app/apps/platform/slack/dist apps/platform/slack/dist
+COPY --chown=1000:1000 --from=build-assets /app/apps/platform/teams/dist apps/platform/teams/dist
 COPY --chown=1000:1000 --from=runtime-deps /runtime-deps/node_modules node_modules
 
 RUN test -f apps/server/src/services/javascript-tool-runner.js \
@@ -120,16 +126,16 @@ RUN test -f apps/server/src/services/javascript-tool-runner.js \
   && test -f node_modules/pm2/bin/pm2-runtime
 
 ENV NODE_ENV=production \
-    NAKAMA_HOST=0.0.0.0 \
-    NAKAMA_PORT=4310 \
-    NAKAMA_CONFIG_DIR=/nakama/data \
-    DATABASE_URL=file:/nakama/data/sqlite/nakama.sqlite \
-    BUN_INSTALL_BIN=/nakama/data/.bun/bin \
-    BUN_INSTALL_GLOBAL_DIR=/nakama/data/.bun/install/global
+    AIRIN_HOST=0.0.0.0 \
+    AIRIN_PORT=4310 \
+    AIRIN_CONFIG_DIR=/airin/data \
+    DATABASE_URL=file:/airin/data/sqlite/airin.sqlite \
+    BUN_INSTALL_BIN=/airin/data/.bun/bin \
+    BUN_INSTALL_GLOBAL_DIR=/airin/data/.bun/install/global
 
 EXPOSE 4310
 
-VOLUME ["/nakama/data"]
+VOLUME ["/airin/data"]
 
 USER 1000
 

@@ -1,8 +1,10 @@
 import {
   apiKeyEnvVarForProvider,
+  findCustomModel,
   getActiveProviderInstance,
   isChatgptProviderConnected,
   isOllamaCloudInstance,
+  normalizeBaseUrl,
   type ProviderClient,
   type ProviderInstance,
   type ProviderName,
@@ -10,21 +12,25 @@ import {
   readEnvValue,
   readXaiOAuthFromInstance,
   type UserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   ChatgptOAuthCredentials,
   XaiOAuthCredentials,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   defaultDiscoveryBaseUrl,
   NETRA_AGENT_MODEL_ID,
-} from "@nakama/core/discovery-providers";
+} from "@airin/core/discovery-providers";
 import { resolveDefaultModelForInstance } from "../services/provider-instance-helpers";
 import { createAnthropicProvider } from "./anthropic";
 import { CEREBRAS_CHAT_BASE_URL } from "./cerebras";
 import { createChatgptProvider } from "./chatgpt";
 import { createCloudflareProvider } from "./cloudflare";
-import { compatibleModelSupportsThinking } from "./compatible-models";
+import { createCommandCodeProvider } from "./command-code";
+import {
+  compatibleModelSupportsThinking,
+  fetchNetraModelLimits,
+} from "./compatible-models";
 import { FIREWORKS_INFERENCE_BASE_URL } from "./fireworks";
 import { createGeminiProvider } from "./gemini";
 import { resolveModel } from "./models";
@@ -35,6 +41,10 @@ import { createOpenCodeGoProvider } from "./opencode-go";
 import { createOpenRouterProvider } from "./openrouter";
 import { createXaiProvider } from "./xai-oauth";
 
+// Used when Netra's /v1/models cannot be read or reports no output limit, as
+// opencode does for models without a known limit.
+export const NETRA_MAX_OUTPUT_TOKENS = 32_000;
+
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 
 const DEFAULT_DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
@@ -42,6 +52,8 @@ const DEFAULT_DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
 const DEFAULT_TOGETHER_BASE_URL = "https://api.together.xyz/v1";
 
 const DEFAULT_XIAOMI_BASE_URL = "https://api.xiaomimimo.com/v1";
+
+const DEFAULT_META_BASE_URL = "https://api.meta.ai/v1";
 
 const DEFAULT_VERCEL_AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh/v1";
 
@@ -132,8 +144,11 @@ function createProvider(options: CreateProviderOptions): ProviderClient {
         providerName: "deepseek",
       });
     case "netra":
-      if (model !== NETRA_AGENT_MODEL_ID) {
-        throw new Error("This Netra model needs a verified tool-turn test.");
+      // Start the one lookup now, so it is usually done by the first request.
+      if (
+        !findCustomModel(options.instance?.customModels, model)?.maxOutputTokens
+      ) {
+        fetchNetraModelLimits(options.apiKey, model);
       }
 
       return createOpenAICompatibleProvider({
@@ -142,10 +157,20 @@ function createProvider(options: CreateProviderOptions): ProviderClient {
         displayName: "Netra Runtime",
         model,
         providerName: "netra",
-        supportsThinking: compatibleModelSupportsThinking(
-          model,
-          options.instance?.customModels
-        ),
+        // A limit saved on the model wins, then the one Netra reports.
+        resolveMaxOutputTokens: async () =>
+          findCustomModel(options.instance?.customModels, model)
+            ?.maxOutputTokens ??
+          (await fetchNetraModelLimits(options.apiKey, model))
+            .maxOutputTokens ??
+          NETRA_MAX_OUTPUT_TOKENS,
+        // V4.1 Flash always thinks; a model added by hand uses its saved flag.
+        supportsThinking:
+          model === NETRA_AGENT_MODEL_ID ||
+          compatibleModelSupportsThinking(
+            model,
+            options.instance?.customModels
+          ),
       });
     case "doubao":
       return createOpenAIProvider({
@@ -167,6 +192,13 @@ function createProvider(options: CreateProviderOptions): ProviderClient {
         baseUrl: baseUrlOverride ?? DEFAULT_XIAOMI_BASE_URL,
         model,
         providerName: "xiaomi",
+      });
+    case "meta":
+      return createOpenAIProvider({
+        apiKey: options.apiKey,
+        baseUrl: baseUrlOverride ?? DEFAULT_META_BASE_URL,
+        model,
+        providerName: "meta",
       });
     case "vercel_ai_gateway":
       return createOpenAIProvider({
@@ -209,6 +241,9 @@ function createProvider(options: CreateProviderOptions): ProviderClient {
     case "moonshot_cn":
     case "zhipu":
     case "zhipu_cn":
+    case "groq":
+    case "cheaper_inference":
+    case "standardcompute":
       return createOpenAIProvider({
         apiKey: options.apiKey,
         baseUrl: baseUrlOverride ?? discoveryBaseUrl,
@@ -225,6 +260,12 @@ function createProvider(options: CreateProviderOptions): ProviderClient {
     case "opencode_go":
       return createOpenCodeGoProvider({
         apiKey: options.apiKey,
+        model,
+      });
+    case "command_code":
+      return createCommandCodeProvider({
+        apiKey: options.apiKey,
+        baseUrl: baseUrlOverride,
         model,
       });
     case "cerebras":
@@ -286,6 +327,56 @@ function createProvider(options: CreateProviderOptions): ProviderClient {
       });
     }
   }
+}
+
+// A cheap authenticated read that answers 401/403 for a bad key. Null when the
+// provider has no such endpoint we know, or checks its key another way.
+export function apiKeyCheckRequest(
+  instance: ProviderInstance
+): { url: string; headers: Record<string, string> } | null {
+  const apiKey = instance.apiKey.trim();
+
+  const baseUrlOverride =
+    instance.baseUrl && normalizeBaseUrl(instance.baseUrl);
+
+  if (!apiKey) {
+    return null;
+  }
+
+  const bearer = { Authorization: `Bearer ${apiKey}` };
+
+  if (instance.type === "anthropic") {
+    return baseUrlOverride
+      ? null
+      : {
+          headers: { "anthropic-version": "2023-06-01", "x-api-key": apiKey },
+          url: "https://api.anthropic.com/v1/models",
+        };
+  }
+
+  if (instance.type === "openrouter") {
+    return { headers: bearer, url: "https://openrouter.ai/api/v1/key" };
+  }
+
+  const defaultBaseUrls: Partial<Record<ProviderInstance["type"], string>> = {
+    deepseek: DEFAULT_DEEPSEEK_BASE_URL,
+    mistral: DEFAULT_MISTRAL_BASE_URL,
+    openai: "https://api.openai.com/v1",
+    together: DEFAULT_TOGETHER_BASE_URL,
+    xai: DEFAULT_XAI_BASE_URL,
+  };
+
+  const defaultBaseUrl =
+    defaultBaseUrls[instance.type] ??
+    (instance.type === "netra" ? null : defaultDiscoveryBaseUrl(instance.type));
+
+  if (!(defaultBaseUrl || instance.type === "openai_compatible")) {
+    return null;
+  }
+
+  const baseUrl = baseUrlOverride || defaultBaseUrl;
+
+  return baseUrl ? { headers: bearer, url: `${baseUrl}/models` } : null;
 }
 
 export function readApiKeyForInstance(

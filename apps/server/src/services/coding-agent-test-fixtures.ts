@@ -1,29 +1,29 @@
 import { readFile } from "node:fs/promises";
-import type { ProviderInstance } from "@nakama/core";
+import type { ProviderInstance } from "@airin/core";
 import type { CodingAgentProviderRouting } from "./coding-agent-provider-routing";
 
 export async function withFastCliProbes<T>(run: () => Promise<T>): Promise<T> {
   const previous = {
-    grace: process.env.NAKAMA_CLI_SIGTERM_GRACE_MS,
-    timeout: process.env.NAKAMA_CLI_PROBE_TIMEOUT_MS,
+    grace: process.env.AIRIN_CLI_SIGTERM_GRACE_MS,
+    timeout: process.env.AIRIN_CLI_PROBE_TIMEOUT_MS,
   };
 
-  process.env.NAKAMA_CLI_PROBE_TIMEOUT_MS = "1000";
-  process.env.NAKAMA_CLI_SIGTERM_GRACE_MS = "100";
+  process.env.AIRIN_CLI_PROBE_TIMEOUT_MS = "1000";
+  process.env.AIRIN_CLI_SIGTERM_GRACE_MS = "100";
 
   try {
     return await run();
   } finally {
     if (previous.timeout === undefined) {
-      delete process.env.NAKAMA_CLI_PROBE_TIMEOUT_MS;
+      delete process.env.AIRIN_CLI_PROBE_TIMEOUT_MS;
     } else {
-      process.env.NAKAMA_CLI_PROBE_TIMEOUT_MS = previous.timeout;
+      process.env.AIRIN_CLI_PROBE_TIMEOUT_MS = previous.timeout;
     }
 
     if (previous.grace === undefined) {
-      delete process.env.NAKAMA_CLI_SIGTERM_GRACE_MS;
+      delete process.env.AIRIN_CLI_SIGTERM_GRACE_MS;
     } else {
-      process.env.NAKAMA_CLI_SIGTERM_GRACE_MS = previous.grace;
+      process.env.AIRIN_CLI_SIGTERM_GRACE_MS = previous.grace;
     }
   }
 }

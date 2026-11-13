@@ -9,7 +9,7 @@
  *   bun test apps/server/src/providers/perplexity.llm.test.ts
  */
 import { expect, test } from "bun:test";
-import type { ProviderInstance } from "@nakama/core";
+import type { ProviderInstance } from "@airin/core";
 import {
   cassetteFilePath,
   loadCassette,

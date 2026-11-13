@@ -2,7 +2,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_IMAGE_BYTES,
-} from "@nakama/core/message-content";
+} from "@airin/core/message-content";
 import type { Attachment, Message } from "discord.js";
 import { Collection } from "discord.js";
 import {

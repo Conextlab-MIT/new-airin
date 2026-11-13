@@ -1,6 +1,6 @@
-import type { ChatUsage } from "@nakama/core/contract";
+import type { ChatUsage } from "@airin/core/contract";
 
-export const CHAT_USAGE_VISIBLE_KEY = "nakama-chat-usage-visible";
+export const CHAT_USAGE_VISIBLE_KEY = "airin-chat-usage-visible";
 
 /** Defaults to hidden; only an explicit "true" shows it. */
 export function getInitialChatUsageVisible(): boolean {
@@ -87,13 +87,6 @@ export function formatChatUsageCost(usage: ChatUsage): string | null {
   }
 
   return `${usage.estimated ? "~" : ""}${formatUsd(usage.costUsd)}`;
-}
-
-export function formatChatUsage(usage: ChatUsage): string {
-  const tokens = `${formatCompactTokens(usage.inputTokens)} in · ${formatCompactTokens(usage.outputTokens)} out`;
-  const cost = usage.costUsd == null ? "" : ` · ${formatUsd(usage.costUsd)}`;
-
-  return `${usage.estimated ? "~" : ""}${tokens}${cost}`;
 }
 
 export function chatUsageTitle(usage: ChatUsage): string {

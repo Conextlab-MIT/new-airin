@@ -1,36 +1,31 @@
 import { describe, expect, test } from "bun:test";
-import { shouldAutoEnableThinking } from "./thinking-settings";
+import type { ProviderModelOption } from "@airin/core/contract";
+import { thinkingEffortOptionsFor } from "./thinking-settings";
 
-describe("thinking-settings helpers", () => {
-  test("shouldAutoEnableThinking respects guards", () => {
-    const disabled = { effort: "low" as const, enabled: false };
+const values = (model?: Pick<ProviderModelOption, "id" | "provider">) =>
+  thinkingEffortOptionsFor(model).map((option) => option.value);
 
-    expect(shouldAutoEnableThinking(disabled, true, false, false)).toBe(true);
-    expect(shouldAutoEnableThinking(disabled, true, true, false)).toBe(false);
-    expect(shouldAutoEnableThinking(disabled, false, false, false)).toBe(false);
-    expect(shouldAutoEnableThinking(disabled, true, false, true)).toBe(false);
+describe("thinkingEffortOptionsFor", () => {
+  test("adds only the higher levels the active model accepts", () => {
     expect(
-      shouldAutoEnableThinking(
-        { effort: "low", enabled: true },
-        true,
-        false,
-        false
-      )
-    ).toBe(false);
+      values({ id: "deepseek/deepseek-v4.1-flash", provider: "openrouter" })
+    ).toEqual(["low", "medium", "high", "max"]);
+    expect(values({ id: "gpt-6-luna", provider: "chatgpt" })).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ]);
     expect(
-      shouldAutoEnableThinking(disabled, true, false, false, {
-        hasRouteSession: true,
-      })
-    ).toBe(false);
+      values({ id: "google/gemini-3.6-flash", provider: "openrouter" })
+    ).toEqual(["low", "medium", "high"]);
+  });
+
+  test("keeps the base three when no model is selected or the host stops at high", () => {
+    expect(values()).toEqual(["low", "medium", "high"]);
     expect(
-      shouldAutoEnableThinking(disabled, true, false, false, {
-        hasMessages: true,
-      })
-    ).toBe(false);
-    expect(
-      shouldAutoEnableThinking(disabled, true, false, false, {
-        hasProfileId: false,
-      })
-    ).toBe(false);
+      values({ id: "deepseek-v4-flash:cloud", provider: "ollama" })
+    ).toEqual(["low", "medium", "high"]);
   });
 });

@@ -1,4 +1,4 @@
-import type { OrgRole } from "@nakama/core/contract";
+import type { OrgRole } from "@airin/core/contract";
 
 const ROLE_LABELS: Record<OrgRole, string> = {
   admin: "Admin",

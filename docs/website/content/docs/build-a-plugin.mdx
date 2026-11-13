@@ -5,16 +5,16 @@ description: "Create a plugin with an agent tool, a dashboard page, and a custom
 
 A plugin lets you ship a feature that people can use from both the dashboard and their agents. This guide builds **Greeting**: a small plugin with one tool, a page for trying it, and its own chat result card.
 
-You need Bun 1.3+, a running Nakama installation, and platform-admin access to install your package. Publishing requires an npm account and a package name you own. Use a Nakama build that includes React tool-renderer slots; older builds with page-only plugin support cannot load this example's custom renderer.
+You need Bun 1.3+, a running Airin installation, and platform-admin access to install your package. Publishing requires an npm account and a package name you own. Use an Airin build that includes React tool-renderer slots; older builds with page-only plugin support cannot load this example's custom renderer.
 
 ## 1. Create the package
 
 Create this directory structure:
 
 ```text
-nakama-greeting/
+airin-greeting/
   package.json
-  nakama.plugin.json
+  airin.plugin.json
   src/
     greet.js
     ui.js
@@ -24,21 +24,21 @@ Add `package.json`. Replace `@your-team` with your npm scope:
 
 ```json
 {
-  "name": "@your-team/nakama-greeting",
+  "name": "@your-team/airin-greeting",
   "version": "1.0.0",
   "type": "module",
-  "files": ["nakama.plugin.json", "actions", "ui"],
+  "files": ["airin.plugin.json", "actions", "ui"],
   "scripts": {
     "build": "bun build ./src/greet.js --outfile actions/greet.js --target bun && bun build ./src/ui.js --outfile ui/app.js --target browser"
   }
 }
 ```
 
-Nakama loads built JavaScript. It does not install your dependencies or run package build scripts. If your plugin needs libraries, put them in `devDependencies` and bundle them. Packages with nonempty `dependencies`, `optionalDependencies`, or `peerDependencies` are rejected.
+Airin loads built JavaScript. It does not install your dependencies or run package build scripts. If your plugin needs libraries, put them in `devDependencies` and bundle them. Packages with nonempty `dependencies`, `optionalDependencies`, or `peerDependencies` are rejected.
 
 ## 2. Declare the plugin
 
-Add `nakama.plugin.json`:
+Add `airin.plugin.json`:
 
 ```json
 {
@@ -47,7 +47,7 @@ Add `nakama.plugin.json`:
   "name": "Greeting",
   "description": "Greet someone from the dashboard or chat.",
   "version": "1.0.0",
-  "minNakamaVersion": "0.4.10",
+  "minAirinVersion": "0.4.10",
   "author": "Your team",
   "license": "MIT",
   "actions": [
@@ -76,7 +76,7 @@ Add `nakama.plugin.json`:
 }
 ```
 
-The two package versions must match. Keep `id` stable across updates. Set `minNakamaVersion` to the oldest release you actually support; the value above is the current development baseline, not a guarantee that every build of that version supports tool renderers.
+The two package versions must match. Keep `id` stable across updates. Set `minAirinVersion` to the oldest release you actually support; the value above is the current development baseline, not a guarantee that every build of that version supports tool renderers.
 
 `access` controls who can invoke the action: `member` allows members and admins; `admin` requires an org admin. Use `effect: "write"` for actions that change data. Setting `exposeAsTool` creates the agent tool `plugin_greeting__greet`; assignment to a profile is still required.
 
@@ -92,7 +92,7 @@ export async function run(input, context) {
 }
 ```
 
-Nakama validates the declared input schema before invoking the action. Check business rules inside `run`, such as rejecting a name containing only spaces.
+Airin validates the declared input schema before invoking the action. Check business rules inside `run`, such as rejecting a name containing only spaces.
 
 The host supplies `context.orgId`, `context.actor`, and `context.actionKey`. For files, use `context.dataDir`. Actions invoked as agent tools also receive profile and session context. Do not take organization identity, roles, or storage paths from user input.
 
@@ -176,9 +176,9 @@ export function apply(ctx) {
 }
 ```
 
-Use Nakama's React instance and shared UI controls; do not bundle React, React DOM, or `@nakama/ui`. This example uses `createElement` so no JSX configuration is needed. Declare each service you use in `inject`.
+Use Airin's React instance and shared UI controls; do not bundle React, React DOM, or `@airin/ui`. This example uses `createElement` so no JSX configuration is needed. Declare each service you use in `inject`.
 
-The `page` slot makes your page available under **Control center → Installed plugins**. The `tool:greet` slot customizes the result of your own `greet` action in chat. Use the original action key after `tool:`, not the full agent tool name. Exactly one page is required; tool renderers are optional.
+The `page` slot makes your page available under **Settings → Installed plugins**. The `tool:greet` slot customizes the result of your own `greet` action in chat. Use the original action key after `tool:`, not the full agent tool name. Exactly one page is required; tool renderers are optional.
 
 Tool renderers receive four props:
 
@@ -189,9 +189,35 @@ Tool renderers receive four props:
 | `result` | Returned tool result, when available |
 | `status` | `running` or `done`; `done` does not guarantee success |
 
-Nakama falls back to its standard tool display when a renderer is missing, disabled, or fails. Your renderer cannot replace native tools or another plugin's tools. Historical messages use the currently enabled release, so handle missing fields and older result shapes.
+Airin falls back to its standard tool display when a renderer is missing, disabled, or fails. Your renderer cannot replace native tools or another plugin's tools. Historical messages use the currently enabled release, so handle missing fields and older result shapes.
 
 Keep rendering free of mutations. Use explicit buttons for writes. For polling, return cleanup from your React effect. Use `ctx.effect(() => cleanup)` for activation resources. Each page or chat card has its own activation; organization, theme, and installation changes dispose the old one. Keep module-level code free of side effects and scope CSS under your plugin's `data-plugin-id` wrapper.
+
+### Shared UI controls
+
+Use `ctx.ui` controls so your page matches Airin in light and dark mode. Add `"ui"` to `inject` first.
+
+| Group | Controls |
+|---|---|
+| Buttons | `Button` — variants `default`, `outline`, `ghost`, `secondary`, `destructive`, `link`; sizes `default`, `xs`, `sm`, `lg`, `icon` |
+| Text | `Input`, `Textarea`, `ExpandableTextarea` |
+| Input groups | `InputGroup`, `InputGroupAddon`, `InputGroupInput`, `InputGroupTextarea`, `InputGroupText`, `InputGroupButton` |
+| Choices | `Checkbox`, `Switch`, `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem` |
+| Form layout | `FormField` |
+| Dialogs | `Dialog`, `DialogTrigger`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription`, `DialogFooter`, `DialogClose`, `DialogPortal`, `DialogOverlay`, `ConfirmDialog` |
+| Menus | `DropdownMenu`, `DropdownMenuTrigger`, `DropdownMenuContent`, `DropdownMenuItem`, `Popover`, `PopoverTrigger`, `PopoverContent`, `PopoverHeader` |
+| Tooltips | `TooltipProvider`, `Tooltip`, `TooltipTrigger`, `TooltipContent` |
+| Command palette | `Command`, `CommandDialog`, `CommandInput`, `CommandList`, `CommandEmpty`, `CommandGroup`, `CommandItem`, `CommandSeparator`, `CommandShortcut` |
+| Display | `CodeBlock`, `Spinner`, `Matrix` |
+| Cards | `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter` |
+
+Use React hooks from `ctx.React`, such as `useState`, `useEffect`, and `useRef`.
+
+Limits:
+
+- Tailwind classes in your plugin are not built. Put styles in your own CSS and load it with `ctx.styles(css)`.
+- Toasts, icons, and class helpers are not available. Airin already mounts `Toaster`.
+- Prefer a bordered panel over `Card`; Airin pages use borders, not shadows.
 
 ## 5. Build and check locally
 
@@ -203,11 +229,11 @@ bun -e 'const { run } = await import("./actions/greet.js"); const result = await
 npm pack --dry-run
 ```
 
-The action check should print a greeting for Ada. The package listing should include `nakama.plugin.json`, `actions/greet.js`, and `ui/app.js`.
+The action check should print a greeting for Ada. The package listing should include `airin.plugin.json`, `actions/greet.js`, and `ui/app.js`.
 
 Before releasing changes, test invalid inputs, action errors, and any data writes. For the UI, check loading, success, failure, navigation away during a request, and switching organizations. A successful action build does not verify its page or chat renderer.
 
-## 6. Publish and try it in Nakama
+## 6. Publish and try it in Airin
 
 When you are ready to make the package public:
 
@@ -216,15 +242,34 @@ npm login
 npm publish --access public
 ```
 
-1. As a platform admin, open **Control center → Agent tools → Plugins**. Enter your package name and exact version, choose **Preview package**, then install it.
+1. As a platform admin, open **Settings → Agent tools → Plugins**. Enter your package name and exact version, choose **Preview package**, then install it.
 2. As an org admin, add and enable Greeting in the active organization.
-3. Open **Greeting** from **Control center → Installed plugins**. Enter a name and click **Greet**.
+3. Open **Greeting** from **Settings → Installed plugins**. Enter a name and click **Greet**.
 4. As a platform admin, open **Agent**, select a profile, and assign the Greeting tool.
 5. Chat with that profile: “Use the Greeting plugin to greet Ada.” The result should use your `GreetingCard`.
 
 Assigned plugin tools are discovered through the agent's `find_tools` capability. Installing a package alone does not assign its tools to every profile.
 
-Custom packages currently install from the npm registry using exact versions. Local paths, Git URLs, other registries, and uploaded archives are not supported. To install a package that is not public, the operator sets `NAKAMA_PLUGIN_NPM_TOKEN` on the server to a read-only npm token that can read it. For your own plugin, test the action and bundle locally, then publish a new version to test installation. The **Official plugins → Reinstall** shortcut applies only to plugins bundled with Nakama, such as Workflows.
+Custom packages install from npm using exact versions. The npm installer does not accept local paths, Git URLs, other registries, or uploaded archives. To install a restricted package, the operator sets `AIRIN_PLUGIN_NPM_TOKEN` to a read-only npm token that can read it.
+
+Airin, or any agent assigned the `create-plugin` skill, can also prepare a local draft for review. Ask it to create your plugin, then use **System → Plugins → Install from folder** as a platform admin. Select the agent that built the draft, enter the draft ID, and review every source and built file before confirming installation. A fresh local installation stays disabled until an admin enables it. Changes require a new preview; reinstall preserves its previous enabled state after a successful update. Local drafts remain on the server and do not need npm publishing. See [Using plugins](/plugins) for the review steps and trust rules.
+
+The **Official plugins → Reinstall** shortcut applies only to plugins bundled with Airin, such as Workflows.
+
+## What a plugin can't do
+
+Know the limits before you ask for a plugin, so you ask for something that can ship.
+
+A plugin adds actions, a page, skills, workers, and its own data. It does not change how Airin itself works:
+
+- **Two access levels only.** Each action is `member` or `admin`. A plugin cannot add new roles to Airin, change org members, or change org settings.
+- **Roles inside a plugin stay inside the plugin.** You can build your own levels, such as Viewer, Editor, and Manager, in the plugin's database. Your actions check `context.actor.id` against that table before they run. These levels do not control who can open Airin pages or settings.
+- **Limited host calls.** An action can list profiles, list and run a profile's assigned tools, and ask for a summary. It cannot call other plugin tools.
+- **No secret store.** To use an outside API key, add an admin-only action with `exposeAsTool: false` that saves the key under `context.dataDir`.
+- **No runtime dependencies.** Bundle every library into the built files.
+- **Up to eight workers.**
+
+When you ask Airin for a plugin, it does not refuse a request because it is large. It asks up to five questions first, then builds the closest draft inside these limits. If a draft breaks a rule, the install check returns an error such as `invalid_manifest`. Airin fixes the draft and submits it again. A request that needs a change to Airin itself, such as a new org role, becomes a plugin-only version of that feature.
 
 ## Add persistent data
 
@@ -244,9 +289,9 @@ Add `"migrations"` to `package.json`'s `files` list. An initial migration could 
 CREATE TABLE notes (id TEXT PRIMARY KEY, body TEXT NOT NULL);
 ```
 
-Inside an action, open `context.databasePath` with Bun's `Database` from `bun:sqlite`, use parameterized queries, and close the database in `finally`. Nakama selects the organization's database generation. Do not construct storage paths from `process.cwd()` or accept them from callers.
+Inside an action, open `context.databasePath` with Bun's `Database` from `bun:sqlite`, use parameterized queries, and close the database in `finally`. Airin selects the organization's database generation. Do not construct storage paths from `process.cwd()` or accept them from callers.
 
-Add new migrations with new IDs. Do not edit previously released migrations: Nakama records their checksums. Updates run while the plugin is disabled; a failed update keeps the previous selected code and database generation available for recovery.
+Add new migrations with new IDs. Do not edit previously released migrations: Airin records their checksums. Updates run while the plugin is disabled; a failed update keeps the previous selected code and database generation available for recovery.
 
 ## Add agent instructions
 
@@ -266,4 +311,4 @@ Bump both manifest and package versions, rebuild, inspect the package, and publi
 
 Uninstall retains organization data. Deleting that data is a separate admin action. Installed plugins are trusted server and browser code, not sandboxed extensions; only approve code you trust.
 
-For complete context fields, supported input-schema keywords, and host operations, see the [plugin authoring reference](https://github.com/ahmadrosid/nakama/blob/main/docs/plugins.md). For the working official example, see [Workflows](https://github.com/ahmadrosid/nakama/tree/main/packages/plugins/workflows). For installation roles and backup behavior, see [Using plugins](/plugins).
+For complete context fields, supported input-schema keywords, and host operations, see the [plugin authoring reference](https://github.com/ahmadrosid/airin/blob/main/docs/plugins.md). For the working official example, see [Workflows](https://github.com/ahmadrosid/airin/tree/main/packages/plugins/workflows). For installation roles and backup behavior, see [Using plugins](/plugins).

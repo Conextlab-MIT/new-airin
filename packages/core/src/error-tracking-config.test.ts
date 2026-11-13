@@ -19,21 +19,21 @@ let configDir = "";
 let previousConfigDir: string | undefined;
 
 beforeEach(async () => {
-  previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-  configDir = await mkdtemp(join(tmpdir(), "nakama-error-tracking-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
-  delete process.env.NAKAMA_ERROR_TRACKING_DSN;
+  previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+  configDir = await mkdtemp(join(tmpdir(), "airin-error-tracking-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
+  delete process.env.AIRIN_ERROR_TRACKING_DSN;
   delete process.env.DO_NOT_TRACK;
 });
 
 afterEach(async () => {
   if (previousConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+    process.env.AIRIN_CONFIG_DIR = previousConfigDir;
   }
 
-  delete process.env.NAKAMA_ERROR_TRACKING_DSN;
+  delete process.env.AIRIN_ERROR_TRACKING_DSN;
   delete process.env.DO_NOT_TRACK;
   await rm(configDir, { force: true, recursive: true });
 });
@@ -106,12 +106,12 @@ test("DO_NOT_TRACK beats a stored DSN", () => {
 });
 
 test("the env DSN overrides the file, and an empty one means off", () => {
-  const env = { NAKAMA_ERROR_TRACKING_DSN: "https://other@example.com/9" };
+  const env = { AIRIN_ERROR_TRACKING_DSN: "https://other@example.com/9" };
   expect(resolveErrorTrackingDsn({ dsn: DSN }, env)).toBe(
     "https://other@example.com/9"
   );
   expect(
-    resolveErrorTrackingDsn({ dsn: DSN }, { NAKAMA_ERROR_TRACKING_DSN: "" })
+    resolveErrorTrackingDsn({ dsn: DSN }, { AIRIN_ERROR_TRACKING_DSN: "" })
   ).toBeNull();
 });
 

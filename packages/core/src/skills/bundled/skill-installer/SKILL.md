@@ -1,12 +1,11 @@
 ---
 name: skill-installer
 description: Find, list, and install reusable skills from GitHub or skills linked from articles and websites. Use when the user asks to install a skill from a link, add a skill from GitHub, browse available skills, or install a named curated skill.
-include-body-on-match: true
 ---
 
 # Skill Installer
 
-Install skills for the current Nakama profile using `skill_manage`. Do not install into Codex directories or run an external installer with bash.
+Install skills for the current Airin profile using `skill_manage`. Do not install into Codex directories or run an external installer with bash.
 
 ## Find a skill
 

@@ -1,16 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import type { ToolContext } from "@nakama/core";
-import type { DatabaseAdapter, StoredProfileRecord } from "@nakama/db";
-import {
-  createInMemoryDatabaseAdapter,
-  createSqliteDatabase,
-} from "@nakama/db";
+import type { ToolContext } from "@airin/core";
+import type { DatabaseAdapter, StoredProfileRecord } from "@airin/db";
+import { createInMemoryDatabaseAdapter, createSqliteDatabase } from "@airin/db";
 import { AgentService } from "../services/agent-service";
 import { createSessionTools } from "./session-tools";
 
 const ORG_A = "org_a";
 
 const ORG_B = "org_b";
+
+const USER_ID = "user_reader";
 
 function profile(id: string, orgId: string): StoredProfileRecord {
   const now = new Date().toISOString();
@@ -28,8 +27,8 @@ function profile(id: string, orgId: string): StoredProfileRecord {
   };
 }
 
-function context(orgId?: string): ToolContext {
-  return { orgId };
+function context(orgId?: string, userId = USER_ID): ToolContext {
+  return { orgId, userId };
 }
 
 async function captureError(promise: Promise<unknown>): Promise<Error | null> {
@@ -50,7 +49,8 @@ async function seedSession(
   const sessionId = await service.createSession(
     options.orgId,
     options.channel,
-    options.profileId
+    options.profileId,
+    USER_ID
   );
 
   await db.replaceMessagesForSession(
@@ -82,6 +82,13 @@ async function setUp(db: DatabaseAdapter) {
     });
   }
 
+  await db.createUser({
+    createdAt: now,
+    email: "reader@example.com",
+    id: USER_ID,
+    passwordHash: "unused",
+    updatedAt: now,
+  });
   await db.upsertProfile(profile("profile_reader", ORG_A));
   await db.upsertProfile(profile("profile_target", ORG_A));
   await db.upsertProfile(profile("profile_other_org", ORG_B));
@@ -111,6 +118,36 @@ async function setUp(db: DatabaseAdapter) {
 }
 
 describe("session reader tools", () => {
+  test("hides another user's sessions unless the caller is a platform admin", async () => {
+    const { listTool, readTool, webSessionId } = await setUp(
+      createInMemoryDatabaseAdapter()
+    );
+
+    // SAFETY: The tool result is the documented session-list shape asserted below.
+    const list = (await listTool.run(
+      { profileId: "profile_target" },
+      context(ORG_A, "user_someone_else")
+    )) as { sessions: unknown[] };
+
+    expect(list.sessions).toEqual([]);
+    expect(
+      await captureError(
+        readTool.run(
+          { sessionId: webSessionId },
+          context(ORG_A, "user_someone_else")
+        )
+      )
+    ).not.toBeNull();
+
+    // SAFETY: The tool result is the documented transcript shape asserted below.
+    const transcript = (await readTool.run(
+      { sessionId: webSessionId },
+      { isPlatformAdmin: true, orgId: ORG_A, userId: "user_someone_else" }
+    )) as { totalMessages: number };
+
+    expect(transcript.totalMessages).toBe(3);
+  });
+
   test("lists another profile's sessions in the same org", async () => {
     const { listTool, webSessionId } = await setUp(
       createInMemoryDatabaseAdapter()
@@ -225,7 +262,7 @@ describe("session reader tools", () => {
       (
         (await readTool.run(
           { sessionId: webSessionId },
-          { orgId: ORG_A, profileId }
+          { orgId: ORG_A, profileId, userId: USER_ID }
         )) as {
           messages: Array<{
             content: string;
@@ -378,5 +415,32 @@ describe("session reader tools", () => {
     await expect(
       readTool.run({ sessionId: webSessionId }, context(ORG_A))
     ).resolves.toMatchObject({ totalMessages: 3 });
+  });
+});
+
+describe("close_session", () => {
+  test("refuses to close the chat it runs in and closes another one", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    const { webSessionId, cliSessionId } = await setUp(db);
+
+    const closeTool = createSessionTools(new AgentService(null, null, db)).find(
+      (tool) => tool.name === "close_session"
+    );
+
+    expect(
+      await captureError(
+        closeTool!.run(
+          { sessionId: webSessionId },
+          { ...context(ORG_A), sessionId: webSessionId }
+        )
+      )
+    ).not.toBeNull();
+    expect((await db.getSession(webSessionId))?.closedAt ?? null).toBeNull();
+
+    await closeTool!.run(
+      { sessionId: cliSessionId },
+      { ...context(ORG_A), sessionId: webSessionId }
+    );
+    expect((await db.getSession(cliSessionId))?.closedAt).toBeString();
   });
 });

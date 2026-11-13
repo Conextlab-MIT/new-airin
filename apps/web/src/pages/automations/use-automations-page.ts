@@ -1,10 +1,10 @@
+import type { StoredAutomation } from "@airin/core/contract";
 import uFuzzy from "@leeoniya/ufuzzy";
-import type { StoredAutomation } from "@nakama/core/contract";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useActiveChatProfile } from "@/context/use-active-chat-profile";
 import { useAppNavigation } from "@/hooks/use-app-navigation";
-import { useProfilesQuery } from "@/hooks/use-app-queries";
+import { useProfileQuery, useProfilesQuery } from "@/hooks/use-app-queries";
 import {
   useAutomationRunsQuery,
   useAutomationsQuery,
@@ -13,8 +13,10 @@ import {
   useRunAutomationMutation,
   useUpdateAutomationMutation,
 } from "@/hooks/use-automations";
+import { useProfileComposioToolkits } from "@/hooks/use-composio";
 import { formatError } from "@/lib/client";
-import { findSuperBotProfile } from "@/lib/profiles";
+import { findSuperAirinProfile } from "@/lib/profiles";
+import type { AutomationToolOptions } from "@/pages/automations/automations-components";
 
 const EMPTY_AUTOMATIONS: StoredAutomation[] = [];
 
@@ -43,15 +45,15 @@ export function useAutomationsPage() {
   const { data: profiles = [], isLoading: profilesLoading } =
     useProfilesQuery();
 
-  const superBotProfile = findSuperBotProfile(profiles);
+  const superAirinProfile = findSuperAirinProfile(profiles);
 
   const automations = useMemo(() => {
     const all = automationsData?.automations ?? EMPTY_AUTOMATIONS;
 
-    return profileId && profileId === superBotProfile?.id
+    return profileId && profileId === superAirinProfile?.id
       ? all
       : all.filter((automation) => automation.profileId === profileId);
-  }, [automationsData?.automations, profileId, superBotProfile?.id]);
+  }, [automationsData?.automations, profileId, superAirinProfile?.id]);
 
   const [searchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -79,6 +81,33 @@ export function useAutomationsPage() {
   );
 
   const [editDraft, setEditDraft] = useState<StoredAutomation | null>(null);
+  const editProfileId = editDraft?.profileId ?? null;
+
+  const { data: editProfile } = useProfileQuery(editProfileId);
+
+  const { data: editComposio, isPending: editComposioPending } =
+    useProfileComposioToolkits(editProfileId);
+
+  // Wait for connectors too, or a new limit starts without them.
+  const toolOptions = useMemo<AutomationToolOptions | undefined>(
+    () =>
+      editProfile && !editComposioPending
+        ? {
+            composioToolkits: (editComposio?.assignments ?? []).map(
+              ({ toolkitSlug }) => ({ id: toolkitSlug, label: toolkitSlug })
+            ),
+            mcpServerIds: editProfile.mcpServers.map(({ id, name }) => ({
+              id,
+              label: name,
+            })),
+            toolIds: editProfile.tools.map(({ id, name }) => ({
+              id,
+              label: name,
+            })),
+          }
+        : undefined,
+    [editProfile, editComposio, editComposioPending]
+  );
 
   const busy = updateMutation.isPending || deleteMutation.isPending;
 
@@ -176,6 +205,32 @@ export function useAutomationsPage() {
     markReadMutation.mutateAsync,
   ]);
 
+  // The automation list polls fast and carries the last run, so a run that
+  // starts, ends or records its delivery refetches the run list, which polls
+  // slowly when idle.
+  const lastRun = selected
+    ? [
+        selected.lastRunAt,
+        selected.lastRunStatus,
+        selected.lastRunDeliveryStatus,
+      ].join("|")
+    : null;
+
+  const seenLastRun = useRef({ automationId: selectedId, lastRun });
+
+  useEffect(() => {
+    const seen = seenLastRun.current;
+    seenLastRun.current = { automationId: selectedId, lastRun };
+
+    if (
+      seen.automationId === selectedId &&
+      seen.lastRun !== null &&
+      seen.lastRun !== lastRun
+    ) {
+      void refetchRuns();
+    }
+  }, [selectedId, lastRun, refetchRuns]);
+
   async function handleSaveEdit() {
     if (!editDraft || busy) {
       return;
@@ -193,6 +248,7 @@ export function useAutomationsPage() {
           name: editDraft.name,
           profileId: editDraft.profileId,
           prompt: editDraft.prompt,
+          toolLimit: editDraft.toolLimit ?? null,
           trigger: editDraft.trigger,
         },
       });
@@ -275,7 +331,14 @@ export function useAutomationsPage() {
       return;
     }
 
-    setEditDraft({ ...editDraft, ...patch });
+    const next = { ...editDraft, ...patch };
+
+    // A limit holds the old agent's ids, so a new agent starts with all tools.
+    if (next.profileId !== editDraft.profileId) {
+      delete next.toolLimit;
+    }
+
+    setEditDraft(next);
   }
 
   async function refresh() {
@@ -286,22 +349,27 @@ export function useAutomationsPage() {
     ]);
   }
 
-  function goToCreateAutomation(draft?: string) {
+  function goToCreateAutomation(draft?: string, options?: { send?: boolean }) {
     if (profileId) {
-      navigateToNewChat(profileId, { draft, intent: "automation" });
+      navigateToNewChat(profileId, {
+        draft,
+        intent: "automation",
+        send: options?.send,
+      });
 
       return;
     }
 
-    if (!superBotProfile) {
-      setError("No super bot profile exists in this organization.");
+    if (!superAirinProfile) {
+      setError("No super airin profile exists in this organization.");
 
       return;
     }
 
-    navigateToNewChat(superBotProfile.id, {
+    navigateToNewChat(superAirinProfile.id, {
       draft,
       intent: "automation",
+      send: options?.send,
     });
   }
 
@@ -343,6 +411,7 @@ export function useAutomationsPage() {
     setEditDraft,
     setSearchQuery,
     setSelectedId,
+    toolOptions,
     trimmedSearch,
     unreadByAutomationId,
     updateEditDraft,

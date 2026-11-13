@@ -10,7 +10,7 @@
  *   2. The profile's chat agent is set (not the built-in chat).
  *   3. The agent's settings list Claude's models and effort levels.
  *   4. The composer shows the ACP agent group in its model picker.
- *   5. The Nakama MCP route is reachable without a login (it answers 404 for an
+ *   5. The Airin MCP route is reachable without a login (it answers 404 for an
  *      unknown token, not 401).
  */
 
@@ -86,7 +86,7 @@ async function mcpInit(): Promise<boolean> {
         method: "initialize",
         params: {
           capabilities: {},
-          clientInfo: { name: "nakama-check-acp", version: "1" },
+          clientInfo: { name: "airin-check-acp", version: "1" },
           protocolVersion: "2025-06-18",
         },
       })
@@ -299,7 +299,7 @@ async function checkMcpRoute(): Promise<void> {
   ).catch(() => null);
 
   record(
-    "Nakama MCP route is reachable without a login",
+    "Airin MCP route is reachable without a login",
     res?.status === 404,
     res
       ? `HTTP ${res.status} (404 means reachable; 401 would mean login is required)`

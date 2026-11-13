@@ -1,4 +1,4 @@
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import type {
   ChatMessage,
   DocumentAttachment,
@@ -13,7 +13,7 @@ import {
   toOpenAIResponsesDocumentBlock,
 } from "./document-content";
 
-export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
+export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -55,8 +55,10 @@ const ALLOWED_DOCUMENT_MEDIA_TYPES = new Set([
   "text/markdown",
 ]);
 
-const CANONICAL_BASE64_PATTERN =
-  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+// With a length that is a multiple of 4, this accepts the same strings as
+// `^(?:x{4})*(?:x{2}==|x{3}=)?$`. That repeated group is slow on Bun and
+// rejects valid base64 past about 8M characters (#1597).
+const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
 
 const DOCUMENT_EXTENSION_MEDIA_TYPES = {
   ".csv": "text/csv",
@@ -123,7 +125,7 @@ export function normalizeUserContent(
   }
 
   if (parts.length === 0) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Message must include text or at least one attachment.",
       400
     );
@@ -139,7 +141,7 @@ export function validateCombinedAttachmentCount(
   const total = imageCount + documentCount;
 
   if (total > MAX_ATTACHMENTS_PER_MESSAGE) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `At most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments per message.`,
       400
     );
@@ -148,7 +150,7 @@ export function validateCombinedAttachmentCount(
 
 export function validateImageAttachments(images: ImageAttachment[]): void {
   if (images.length > MAX_ATTACHMENTS_PER_MESSAGE) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `At most ${MAX_ATTACHMENTS_PER_MESSAGE} images per message.`,
       400
     );
@@ -156,7 +158,7 @@ export function validateImageAttachments(images: ImageAttachment[]): void {
 
   for (const image of images) {
     if (!ALLOWED_IMAGE_MEDIA_TYPES.has(image.mediaType)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Unsupported image type: ${image.mediaType}. Allowed: jpeg, png, gif, webp.`,
         400
       );
@@ -170,7 +172,7 @@ export function validateDocumentAttachments(
   documents: DocumentAttachment[]
 ): void {
   if (documents.length > MAX_ATTACHMENTS_PER_MESSAGE) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `At most ${MAX_ATTACHMENTS_PER_MESSAGE} documents per message.`,
       400
     );
@@ -180,13 +182,13 @@ export function validateDocumentAttachments(
     const filename = document.filename.trim();
 
     if (!filename) {
-      throw new NakamaApiError("Document filename must not be empty.", 400);
+      throw new AirinApiError("Document filename must not be empty.", 400);
     }
 
     const mediaType = normalizeDocumentMediaType(document.mediaType, filename);
 
     if (!ALLOWED_DOCUMENT_MEDIA_TYPES.has(mediaType)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Unsupported document type: ${document.mediaType}. Allowed: pdf, docx, xls, xlsx, xlsm, xlsb, csv, txt, md.`,
         400
       );
@@ -231,24 +233,24 @@ export function normalizeAttachmentBase64(
   const raw = data.trim();
 
   if (!raw) {
-    throw new NakamaApiError(`${label} data must not be empty.`, 400);
+    throw new AirinApiError(`${label} data must not be empty.`, 400);
   }
 
   const dataUrl = /^data:[^,]*;base64,([^,]+)$/is.exec(raw);
   const base64 = dataUrl?.[1] ?? raw;
 
-  if (!CANONICAL_BASE64_PATTERN.test(base64)) {
-    throw new NakamaApiError(`${label} data must be valid base64.`, 400);
+  if (!(base64.length % 4 === 0 && BASE64_PATTERN.test(base64))) {
+    throw new AirinApiError(`${label} data must be valid base64.`, 400);
   }
 
   const byteLength = estimateBase64DecodedLength(base64);
 
   if (byteLength === 0) {
-    throw new NakamaApiError(`${label} data must not be empty.`, 400);
+    throw new AirinApiError(`${label} data must not be empty.`, 400);
   }
 
   if (byteLength > maxBytes) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Each ${label} must be at most ${maxBytes / (1024 * 1024)} MB.`,
       400
     );
@@ -261,7 +263,7 @@ export function normalizeAttachmentBase64(
       throw new Error("noncanonical base64");
     }
   } catch {
-    throw new NakamaApiError(`${label} data must be valid base64.`, 400);
+    throw new AirinApiError(`${label} data must be valid base64.`, 400);
   }
 
   return base64;
@@ -273,19 +275,19 @@ function estimateBase64DecodedLength(base64: string): number {
   return Math.floor((base64.length * 3) / 4) - padding;
 }
 
+/**
+ * Text of a user turn. Parts are read structurally, so a stored payload with a
+ * part type this build does not know still yields its text.
+ */
 export function getUserMessageText(
-  content: string | MessageContentPart[]
+  content: string | Array<{ text?: string; type: string } | MessageContentPart>
 ): string {
   if (!Array.isArray(content)) {
     return content;
   }
 
   return content
-    .filter(
-      (part): part is Extract<MessageContentPart, { type: "text" }> =>
-        part.type === "text"
-    )
-    .map((part) => part.text)
+    .flatMap((part) => (part.type === "text" ? [part.text ?? ""] : []))
     .join("\n")
     .trim();
 }
@@ -395,10 +397,14 @@ export function stripImagesForCompaction(
   });
 }
 
-export function parseDataUrl(dataUrl: string): ImageAttachment | null {
-  const match = /^data:(?:([^;,]+))?(?:;[^,]*)*;base64,(.+)$/s.exec(
-    dataUrl.trim()
-  );
+/**
+ * `data:<type>[;param]*;base64,<data>`. The header has no comma, so one
+ * `[^,]*` keeps the match linear; the type is the header before its first `;`.
+ */
+function splitBase64DataUrl(
+  dataUrl: string
+): { data: string; mediaType: string | undefined } | null {
+  const match = /^data:([^,]*);base64,(.+)$/s.exec(dataUrl.trim());
 
   if (!match) {
     return null;
@@ -406,7 +412,20 @@ export function parseDataUrl(dataUrl: string): ImageAttachment | null {
 
   return {
     data: match[2]!,
-    mediaType: match[1] ?? "image/png",
+    mediaType: match[1]!.split(";")[0] || undefined,
+  };
+}
+
+export function parseDataUrl(dataUrl: string): ImageAttachment | null {
+  const match = splitBase64DataUrl(dataUrl);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    data: match.data,
+    mediaType: match.mediaType ?? "image/png",
   };
 }
 
@@ -414,18 +433,16 @@ export function parseDocumentDataUrl(
   dataUrl: string,
   filename: string
 ): DocumentAttachment | null {
-  const match = /^data:(?:([^;,]+))?(?:;[^,]*)*;base64,(.+)$/s.exec(
-    dataUrl.trim()
-  );
+  const match = splitBase64DataUrl(dataUrl);
 
   if (!match) {
     return null;
   }
 
-  const mediaType = normalizeDocumentMediaType(match[1] ?? "", filename);
+  const mediaType = normalizeDocumentMediaType(match.mediaType ?? "", filename);
 
   return {
-    data: match[2]!,
+    data: match.data,
     filename,
     mediaType,
   };

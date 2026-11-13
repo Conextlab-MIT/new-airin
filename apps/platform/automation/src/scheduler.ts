@@ -1,16 +1,13 @@
-import type { NakamaClient } from "@nakama/client";
-import { resolveCuratorScheduleAction } from "@nakama/core";
+import type { AirinClient } from "@airin/client";
+import { resolveCuratorScheduleAction } from "@airin/core";
 import {
   AutomationScheduler,
   type AutomationSchedulerStatus,
-} from "@nakama/core/automation-scheduler";
-import type { AutomationSchedule } from "@nakama/core/contract";
+} from "@airin/core/automation-scheduler";
+import type { AutomationSchedule } from "@airin/core/contract";
 
 async function tickSkillCurator(
-  client: Pick<
-    NakamaClient,
-    "listSkillCuratorOrgs" | "runSkillCuratorInternal"
-  >,
+  client: Pick<AirinClient, "listSkillCuratorOrgs" | "runSkillCuratorInternal">,
   now = new Date()
 ): Promise<{ ran: number; skipped: number }> {
   const { orgs } = await client.listSkillCuratorOrgs();
@@ -42,7 +39,7 @@ export class AutomationWorkerScheduler {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
-    private readonly client: NakamaClient,
+    private readonly client: AirinClient,
     private readonly onStatusChange?: (
       status: AutomationSchedulerStatus
     ) => void

@@ -11,41 +11,19 @@ function pick(pathname: string, search = "", activeProfileId = "alpha") {
 }
 
 describe("resolveProfileSwitch", () => {
-  test("Profiles swaps the agent in the URL, keeping the other params", () => {
-    expect(pick("/profiles", "?profile=alpha&tab=skills")).toEqual({
-      kind: "navigate",
-      replace: true,
-      to: "/profiles?profile=beta&tab=skills",
-    });
-  });
-
-  test("a Profiles subpage goes back to the agent's profile", () => {
-    expect(pick("/profiles/skills/web-search")).toEqual({
-      kind: "navigate",
-      replace: false,
-      to: "/profiles?profile=beta",
-    });
-  });
-
-  test("Files, Automations and the draft chat swap in place", () => {
-    for (const pathname of ["/files", "/automations", "/chat"]) {
-      expect(pick(pathname)).toEqual({ kind: "select" });
-    }
-  });
-
-  test("an open session is replaced by a fresh chat", () => {
+  test("an open session is replaced by a fresh chat for the picked agent", () => {
     expect(pick("/chat/alpha/session-1")).toEqual({
       kind: "navigate",
       replace: true,
-      to: "/chat",
+      to: "/chat?new=1&profile=beta",
     });
   });
 
-  test("any other page opens a fresh chat", () => {
-    expect(pick("/settings")).toEqual({
+  test("a draft chat swaps to a fresh chat for the picked agent", () => {
+    expect(pick("/chat")).toEqual({
       kind: "navigate",
-      replace: false,
-      to: "/chat",
+      replace: true,
+      to: "/chat?new=1&profile=beta",
     });
   });
 
@@ -59,11 +37,23 @@ describe("resolveProfileSwitch", () => {
     });
   });
 
+  test("on Profiles, a blocked deep link is left for the picked agent", () => {
+    expect(pick("/profiles", "?profile=hidden", "beta")).toEqual({
+      kind: "navigate",
+      replace: true,
+      to: "/profiles?profile=beta",
+    });
+  });
+
   test("the active agent picked outside chat still opens its chat", () => {
     expect(pick("/settings", "", "beta")).toEqual({
       kind: "navigate",
       replace: false,
-      to: "/chat",
+      to: "/chat?new=1&profile=beta",
     });
+  });
+
+  test("Files still swaps the agent in place", () => {
+    expect(pick("/files")).toEqual({ kind: "select" });
   });
 });

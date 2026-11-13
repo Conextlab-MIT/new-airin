@@ -3,8 +3,8 @@ import type {
   ChatCompletionResult,
   LlmToolDefinition,
   ProviderClient,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { LlmUsageTracker } from "../services/llm-usage-tracker";
 import { estimateUsageCostUsd } from "./pricing";
 import {

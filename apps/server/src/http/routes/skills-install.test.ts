@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { zipSync } from "fflate";
 import { asTestFetch } from "../../providers/test-helpers";
 import { SkillsService } from "../../services/skills-service";
@@ -13,7 +13,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-skills-install-routes-test-");
+setupTestConfigDir("airin-skills-install-routes-test-");
 
 const VALID_SKILL = `---
 name: github-weather
@@ -634,5 +634,60 @@ describe("POST /v1/skills/install", () => {
     // SAFETY: This test controls the fixture shape at this boundary.
     const body = (await second.json()) as { error: string };
     expect(body.error).toMatch(/already exists|cannot be attached/i);
+  });
+
+  // pip runs package build code on the host, so an org admin is not enough.
+  test("installing a skill's Python packages needs a platform admin", async () => {
+    const { app, databaseAdapter } = createApp();
+
+    const adminSession = await setupFreshInstallSession(
+      app,
+      databaseAdapter,
+      "admin@org.com"
+    );
+
+    const orgId = adminSession.orgId!;
+
+    const created = await app.fetch(
+      new Request(`${BASE}/v1/orgs/${orgId}/members`, {
+        body: JSON.stringify({
+          email: "orgadmin@org.com",
+          name: "Org Admin",
+          role: "admin",
+        }),
+        headers: adminSession.headers(
+          {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": adminSession.csrfToken,
+          },
+          orgId
+        ),
+        method: "POST",
+      })
+    );
+
+    // SAFETY: This test controls the fixture shape at this boundary.
+    const { temporaryPassword } = (await created.json()) as {
+      temporaryPassword: string;
+    };
+
+    const orgAdmin = await loginUserSession(
+      app,
+      "orgadmin@org.com",
+      temporaryPassword,
+      orgId
+    );
+
+    const response = await app.fetch(
+      new Request(`${BASE}/v1/skills/any-skill/python-packages`, {
+        headers: orgAdmin.headers(
+          { "X-CSRF-Token": orgAdmin.csrfToken },
+          orgId
+        ),
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(403);
   });
 });

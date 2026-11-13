@@ -1,4 +1,4 @@
-import type { ProfileSummary } from "@nakama/core/contract";
+import type { ProfileSummary } from "@airin/core/contract";
 import {
   pickKnownProfileId,
   resolveDefaultProfileId,
@@ -8,7 +8,7 @@ const FILES_VIEW_MODE_STORAGE_KEY = "files-view-mode";
 
 export type FilesViewMode = "list" | "grid";
 
-export function parseFilesViewMode(
+function parseFilesViewMode(
   value: string | null | undefined
 ): FilesViewMode | null {
   return value === "list" || value === "grid" ? value : null;

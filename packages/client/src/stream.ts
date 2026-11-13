@@ -1,10 +1,10 @@
-import { DEFAULT_CHAT_STREAM_TIMEOUT_MS } from "@nakama/core/chat-stream-timeout";
+import { DEFAULT_CHAT_STREAM_TIMEOUT_MS } from "@airin/core/chat-stream-timeout";
 import type {
   AgentBrowserInstallEvent,
   AgentBrowserStatusResponse,
   SendMessageInput,
   StreamEvent,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { readBrowserOrigin } from "./browser";
 import type {
   JsonValue,
@@ -122,6 +122,7 @@ export async function readStreamEvents(
 
       if (payload.type === "tool_end") {
         handlers.onToolEnd?.({
+          images: payload.images,
           result: payload.result,
           tool: payload.tool,
           toolCallId: payload.toolCallId,
@@ -150,7 +151,7 @@ export async function readStreamEvents(
 
       if (payload.type === "done") {
         sawDoneEvent = true;
-        handlers.onDone?.();
+        handlers.onDone?.(payload.reply);
         throwIfAborted(signal);
 
         if (payload.contextUsage) {

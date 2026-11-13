@@ -13,12 +13,12 @@ describe("dedupeSkillsByName", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-dedupe-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-dedupe-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("keeps the global copy when the same skill name exists in multiple directories", () => {
@@ -52,12 +52,12 @@ describe("isGlobalSkillSourcePath", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-dedupe-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-dedupe-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("detects global and profile skill directories", () => {

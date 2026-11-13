@@ -2,12 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { saveComposioConfig } from "@nakama/core";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AuthService } from "./auth-service";
 import type { ComposioApiClient } from "./composio-api-client";
-import { ComposioService } from "./composio-service";
+import { ComposioService, isSameSiteReturnPath } from "./composio-service";
 
 const TEST_API_KEY = "ck_test";
 
@@ -30,7 +29,7 @@ function createMockClient(): Pick<
       _allowedTools,
       connectedAccounts = {}
     ) {
-      expect(userId).toBe("nakama:user:user_admin");
+      expect(userId).toBe("airin:user:user_admin");
       expect(connectedAccounts).toEqual({});
 
       return {
@@ -40,6 +39,9 @@ function createMockClient(): Pick<
       };
     },
     async deleteConnectedAccount() {},
+    async executeTool() {
+      return {};
+    },
     async linkToolkitAccount(_userId, _toolkitSlug) {
       return {
         connectedAccountId: "ca_1",
@@ -101,7 +103,7 @@ async function seedOrgWithAdmin(
   });
   await db.createUser({
     createdAt: now,
-    email: "local-client@nakama.internal",
+    email: "local-client@airin.internal",
     id: LOCAL_CLIENT_USER_ID,
     passwordHash: "hash",
     updatedAt: now,
@@ -121,10 +123,11 @@ async function seedOrgWithAdmin(
 }
 
 async function createConfiguredService() {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-composio-service-"));
-  const previous = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = configDir;
-  await saveComposioConfig({ apiKey: TEST_API_KEY });
+  const configDir = await mkdtemp(join(tmpdir(), "airin-composio-service-"));
+  const previous = process.env.AIRIN_CONFIG_DIR;
+  const previousKey = process.env.COMPOSIO_API_KEY;
+  process.env.AIRIN_CONFIG_DIR = configDir;
+  process.env.COMPOSIO_API_KEY = TEST_API_KEY;
 
   const db = createInMemoryDatabaseAdapter();
   const service = new ComposioService(db, new AuthService());
@@ -134,9 +137,15 @@ async function createConfiguredService() {
     db,
     restore() {
       if (previous === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previous;
+        process.env.AIRIN_CONFIG_DIR = previous;
+      }
+
+      if (previousKey === undefined) {
+        delete process.env.COMPOSIO_API_KEY;
+      } else {
+        process.env.COMPOSIO_API_KEY = previousKey;
       }
     },
     service,
@@ -144,6 +153,120 @@ async function createConfiguredService() {
 }
 
 describe("ComposioService", () => {
+  test("lists only Gmail-linked Drive recordings from the member's connections", async () => {
+    const { db, service, restore } = await createConfiguredService();
+    const now = "2026-01-01T00:00:00.000Z";
+    const fileId = "recording_file_123";
+    const calls: string[] = [];
+
+    try {
+      await seedOrgWithAdmin(db);
+
+      for (const slug of ["gmail", "googledrive"]) {
+        const toolkit = await service.enableToolkit(ORG_ID, {
+          toolkitSlug: slug,
+        });
+
+        await db.upsertComposioUserConnection({
+          connectedAccountId: `ca_${slug}`,
+          createdAt: now,
+          id: `cuc_${slug}`,
+          lastError: null,
+          oauthStateHash: null,
+          orgId: ORG_ID,
+          sessionIdEnc: null,
+          status: "connected",
+          toolkitId: toolkit.id,
+          updatedAt: now,
+          userId: USER_ID,
+        });
+      }
+
+      injectMockComposioClient(service, {
+        ...createMockClient(),
+        async executeTool(slug, userId, accountId) {
+          expect(userId).toBe("airin:user:user_admin");
+          calls.push(`${slug}:${accountId}`);
+
+          if (slug === "GMAIL_FETCH_EMAILS") {
+            return {
+              data: { messages: [{ id: "msg_1", threadId: "thread_1" }] },
+            };
+          }
+
+          if (slug === "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID") {
+            return {
+              data: {
+                payload: {
+                  parts: [
+                    {
+                      body: {
+                        data: Buffer.from(
+                          `https://drive.google.com/file/d/${fileId}/view`
+                        ).toString("base64url"),
+                      },
+                    },
+                  ],
+                },
+              },
+            };
+          }
+
+          if (slug === "GOOGLEDRIVE_GET_FILE_METADATA") {
+            return {
+              data: { mimeType: "video/mp4", name: "Sprint.mp4", size: "100" },
+            };
+          }
+
+          return {
+            data: {
+              downloaded_file_content: {
+                url: "https://files.composio.dev/video",
+              },
+            },
+          };
+        },
+      });
+
+      const listed = await service.listMeetRecordings(ORG_ID, USER_ID);
+      expect(listed.recordings).toEqual([
+        {
+          date: "",
+          fileId,
+          messageId: "msg_1",
+          name: "Sprint.mp4",
+          size: 100,
+        },
+      ]);
+      await expect(
+        service.downloadMeetRecording(
+          ORG_ID,
+          USER_ID,
+          "msg_1",
+          "other_file_123"
+        )
+      ).rejects.toThrow();
+      expect(
+        calls.some((call) => call.startsWith("GOOGLEDRIVE_DOWNLOAD_FILE"))
+      ).toBe(false);
+
+      const downloaded = await service.downloadMeetRecording(
+        ORG_ID,
+        USER_ID,
+        "msg_1",
+        fileId
+      );
+
+      expect(downloaded.recording.name).toBe("Sprint.mp4");
+      expect(calls).toContain("GOOGLEDRIVE_DOWNLOAD_FILE:ca_googledrive");
+      const other = await service.listMeetRecordings(ORG_ID, "another_member");
+      expect(other.recordings).toEqual([]);
+      expect(other.gmailConnected).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
   test("teams use only their own personal connections and invalidate removed accounts", async () => {
     const { db, service, restore } = await createConfiguredService();
 
@@ -265,7 +388,7 @@ describe("ComposioService", () => {
       expect(sessionCalls).toEqual(
         [ORG_ID, "team_a", "team_b"].map((orgId) => ({
           accounts: { gmail: `account_${orgId}` },
-          userId: `nakama:user:${USER_ID}`,
+          userId: `airin:user:${USER_ID}`,
         }))
       );
 
@@ -327,6 +450,256 @@ describe("ComposioService", () => {
       restore();
     }
   });
+  test("a refused connected account is marked for reconnection and the other apps keep working", async () => {
+    const { db, service, restore } = await createConfiguredService();
+
+    try {
+      const now = "2026-01-01T00:00:00.000Z";
+      await seedOrgWithAdmin(db);
+
+      const profileId = "profile_stale";
+      await db.upsertProfile({
+        createdAt: now,
+        id: profileId,
+        isDefault: false,
+        isSuper: false,
+        model: null,
+        name: "Agent",
+        orgId: ORG_ID,
+        systemPrompt: "",
+        updatedAt: now,
+      });
+
+      const sessionCalls: Array<Record<string, string>> = [];
+      const refused = new Set(["ca_old_gmail"]);
+
+      injectMockComposioClient(service, {
+        async createProfileSession(_userId, _slugs, _actions, accounts = {}) {
+          sessionCalls.push(accounts);
+          const stale = Object.values(accounts).filter((id) => refused.has(id));
+
+          if (stale.length > 0) {
+            const details = {
+              code: 4306,
+              message: `Could not find connected account(s) ${stale.join(", ")} belonging to user "airin:user:${USER_ID}".`,
+              slug: "ToolRouterV2_InvalidConnectedAccountIds",
+            };
+
+            throw Object.assign(
+              new Error(`400 ${JSON.stringify({ error: details })}`),
+              { details, status: 400 }
+            );
+          }
+
+          return { sessionId: "sess_ok", url: "https://mcp.example.com/ok" };
+        },
+        async listCatalogToolkits() {
+          return ["gmail", "notion"].map((slug) => ({
+            description: slug,
+            logoUrl: null,
+            name: slug,
+            slug,
+          }));
+        },
+      });
+
+      const assignments = [];
+
+      for (const [slug, accountId] of [
+        ["gmail", "ca_old_gmail"],
+        ["notion", "ca_notion"],
+      ] as const) {
+        const toolkit = await service.enableToolkit(ORG_ID, {
+          toolkitSlug: slug,
+        });
+
+        assignments.push({
+          allowedActions: null,
+          profileId,
+          toolkitId: toolkit.id,
+        });
+        await db.upsertComposioUserConnection({
+          connectedAccountId: accountId,
+          createdAt: now,
+          id: `connection_${slug}`,
+          lastError: null,
+          oauthStateHash: null,
+          orgId: ORG_ID,
+          sessionIdEnc: null,
+          status: "connected",
+          toolkitId: toolkit.id,
+          updatedAt: now,
+          userId: USER_ID,
+        });
+      }
+
+      await db.replaceProfileComposioToolkits(profileId, assignments);
+
+      const endpoint = await service.getProfileSessionEndpoint(
+        ORG_ID,
+        USER_ID,
+        profileId
+      );
+
+      expect(endpoint?.sessionId).toBe("sess_ok");
+      expect(sessionCalls).toEqual([
+        { gmail: "ca_old_gmail", notion: "ca_notion" },
+        { notion: "ca_notion" },
+      ]);
+
+      const records = await service.getAssignedToolkitRecords(
+        ORG_ID,
+        USER_ID,
+        profileId
+      );
+
+      const bySlug = new Map(
+        records.map((record) => [
+          record.orgToolkit.toolkitSlug,
+          record.userConnection,
+        ])
+      );
+
+      expect(bySlug.get("gmail")).toMatchObject({
+        lastError: expect.stringContaining("Connect the app again"),
+        status: "error",
+      });
+      expect(bySlug.get("notion")?.status).toBe("connected");
+
+      // With every account refused there is no session, and no error. A new
+      // account id changes the cached session's fingerprint.
+      const notion = await db.getComposioUserConnection(
+        USER_ID,
+        assignments[1]!.toolkitId
+      );
+
+      await db.upsertComposioUserConnection({
+        ...notion!,
+        connectedAccountId: "ca_notion_v2",
+      });
+      refused.add("ca_notion_v2");
+
+      expect(
+        await service.getProfileSessionEndpoint(ORG_ID, USER_ID, profileId)
+      ).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test("an account connected again while Composio answers is kept, and the failure reaches the prompt", async () => {
+    const { db, service, restore } = await createConfiguredService();
+
+    try {
+      const now = "2026-01-01T00:00:00.000Z";
+      await seedOrgWithAdmin(db);
+
+      const profileId = "profile_race";
+      await db.upsertProfile({
+        createdAt: now,
+        id: profileId,
+        isDefault: false,
+        isSuper: false,
+        model: null,
+        name: "Agent",
+        orgId: ORG_ID,
+        systemPrompt: "",
+        updatedAt: now,
+      });
+
+      const connection = {
+        connectedAccountId: "ca_old_gmail",
+        createdAt: now,
+        id: "connection_gmail",
+        lastError: null,
+        oauthStateHash: null,
+        orgId: ORG_ID,
+        sessionIdEnc: null,
+        status: "connected" as const,
+        toolkitId: "",
+        updatedAt: now,
+        userId: USER_ID,
+      };
+
+      injectMockComposioClient(service, {
+        async createProfileSession(_userId, _slugs, _actions, accounts = {}) {
+          if (accounts.gmail !== "ca_old_gmail") {
+            return { sessionId: "sess_ok", url: "https://mcp.example.com/ok" };
+          }
+
+          // The user finishes OAuth again before Composio answers.
+          await db.upsertComposioUserConnection({
+            ...connection,
+            connectedAccountId: "ca_new_gmail",
+          });
+
+          const details = {
+            code: 4306,
+            message: "Could not find connected account(s) ca_old_gmail.",
+            slug: "ToolRouterV2_InvalidConnectedAccountIds",
+          };
+
+          throw Object.assign(
+            new Error(`400 ${JSON.stringify({ error: details })}`),
+            { details, status: 400 }
+          );
+        },
+        async listCatalogToolkits() {
+          return [
+            {
+              description: "gmail",
+              logoUrl: null,
+              name: "gmail",
+              slug: "gmail",
+            },
+          ];
+        },
+      });
+
+      const toolkit = await service.enableToolkit(ORG_ID, {
+        toolkitSlug: "gmail",
+      });
+
+      connection.toolkitId = toolkit.id;
+      await db.upsertComposioUserConnection(connection);
+      await db.replaceProfileComposioToolkits(profileId, [
+        { allowedActions: null, profileId, toolkitId: toolkit.id },
+      ]);
+
+      await expect(
+        service.getProfileSessionEndpoint(ORG_ID, USER_ID, profileId)
+      ).rejects.toThrow();
+
+      expect(
+        await db.getComposioUserConnection(USER_ID, toolkit.id)
+      ).toMatchObject({
+        connectedAccountId: "ca_new_gmail",
+        status: "connected",
+      });
+      expect(
+        await service.formatProfileConnectionsContext(
+          ORG_ID,
+          USER_ID,
+          profileId
+        )
+      ).toContain("ToolRouterV2_InvalidConnectedAccountIds");
+
+      expect(
+        (await service.getProfileSessionEndpoint(ORG_ID, USER_ID, profileId))
+          ?.sessionId
+      ).toBe("sess_ok");
+      expect(
+        await service.formatProfileConnectionsContext(
+          ORG_ID,
+          USER_ID,
+          profileId
+        )
+      ).not.toContain("ToolRouterV2_InvalidConnectedAccountIds");
+    } finally {
+      restore();
+    }
+  });
+
   test("shared profiles reject integration assignments and default auto-assignment after revocation", async () => {
     const { db, service, restore } = await createConfiguredService();
 
@@ -458,7 +831,7 @@ describe("ComposioService", () => {
         isDefault: false,
         isSuper: true,
         model: null,
-        name: "Super Bot",
+        name: "Airin",
         orgId: ORG_ID,
         systemPrompt: "",
         updatedAt: new Date().toISOString(),
@@ -471,7 +844,7 @@ describe("ComposioService", () => {
       const assigned = await db.listProfileComposioToolkits("profile_default");
       expect(assigned.map((entry) => entry.toolkitId)).toEqual([toolkit.id]);
 
-      // Super Bot and channel-facing profiles stay an explicit choice.
+      // Airin and channel-facing profiles stay an explicit choice.
       expect(await db.listProfileComposioToolkits("profile_super")).toEqual([]);
     } finally {
       restore();
@@ -513,6 +886,46 @@ describe("ComposioService", () => {
     }
   });
 
+  test("revision changes when toolkits or agent assignments change", async () => {
+    const { db, service, restore } = await createConfiguredService();
+
+    try {
+      await db.upsertProfile({
+        createdAt: new Date().toISOString(),
+        id: "profile_default",
+        isDefault: true,
+        isSuper: false,
+        model: null,
+        name: "Default",
+        orgId: ORG_ID,
+        systemPrompt: "",
+        updatedAt: new Date().toISOString(),
+      });
+
+      const seen = [service.revisionFor(ORG_ID)];
+
+      const toolkit = await service.enableToolkit(ORG_ID, {
+        toolkitSlug: "gmail",
+      });
+
+      seen.push(service.revisionFor(ORG_ID));
+
+      const profile = await db.getProfile("profile_default");
+      await service.updateProfileAssignments(ORG_ID, profile!, {
+        assignments: [{ toolkitId: toolkit.id }],
+      });
+      seen.push(service.revisionFor(ORG_ID));
+
+      await service.disableToolkit(ORG_ID, "gmail");
+      seen.push(service.revisionFor(ORG_ID));
+
+      expect(new Set(seen).size).toBe(seen.length);
+      expect(service.revisionFor("org_other")).toBe(seen[0]);
+    } finally {
+      restore();
+    }
+  });
+
   test("connectToolkit stores oauth state on user connection and returns redirect URL", async () => {
     const { service, restore } = await createConfiguredService();
 
@@ -535,6 +948,134 @@ describe("ComposioService", () => {
     }
   });
 
+  test("connectToolkit marks no-auth toolkits connected and syncs tools", async () => {
+    const { service, restore } = await createConfiguredService();
+
+    injectMockComposioClient(service, {
+      async linkToolkitAccount() {
+        throw new Error(
+          '400 {"error":{"message":"Cannot create an auth config for toolkit \\"hackernews\\" because it does not require authentication.","code":303,"slug":"Auth_Config_NoAuthApp","status":400}}'
+        );
+      },
+      async listSessionTools() {
+        return [
+          {
+            description: "Get top stories",
+            inputSchema: { properties: {}, type: "object" },
+            name: "Get Top Stories",
+            slug: "HACKERNEWS_GET_TOP_STORIES",
+          },
+        ];
+      },
+    });
+
+    try {
+      await service.enableToolkit(ORG_ID, { toolkitSlug: "hackernews" });
+
+      const response = await service.connectToolkit(
+        ORG_ID,
+        USER_ID,
+        "hackernews",
+        "http://localhost:4310"
+      );
+
+      expect(response).toEqual({ connected: true, redirectUrl: null });
+      const listed = await service.listToolkits(ORG_ID, USER_ID);
+      expect(listed.userConnections[0]?.status).toBe("connected");
+      expect(listed.orgToolkits[0]?.cachedTools?.[0]?.slug).toBe(
+        "HACKERNEWS_GET_TOP_STORIES"
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  test("Meet connect enables the toolkit and OAuth returns to Google Meet", async () => {
+    const { db, service, restore } = await createConfiguredService();
+    let callbackUrl = "";
+
+    injectMockComposioClient(service, {
+      async createProfileSession() {
+        return {
+          headers: {},
+          sessionId: "session_meet",
+          url: "https://mcp.composio.dev/session_meet",
+        };
+      },
+      async linkToolkitAccount(_userId, _toolkitSlug, url) {
+        callbackUrl = url;
+
+        return {
+          connectedAccountId: "ca_1",
+          redirectUrl: "https://example.com/oauth",
+        };
+      },
+    });
+
+    try {
+      await seedOrgWithAdmin(db);
+      await expect(
+        service.connectMeetRecordingSource(
+          ORG_ID,
+          USER_ID,
+          "slack",
+          "http://localhost:4310"
+        )
+      ).rejects.toThrow();
+
+      const response = await service.connectMeetRecordingSource(
+        ORG_ID,
+        USER_ID,
+        "gmail",
+        "http://localhost:4310"
+      );
+
+      expect(response.redirectUrl).toBe("https://example.com/oauth");
+      const toolkit = await db.getComposioToolkitBySlug(ORG_ID, "gmail");
+      expect(toolkit?.status).toBe("enabled");
+
+      const state = new URL(callbackUrl).searchParams.get("state") ?? "";
+      const result = await service.completeOAuth(state);
+
+      expect(result).toEqual({
+        orgId: ORG_ID,
+        returnTo: "/google-meet?import=recording",
+        toolkitSlug: "gmail",
+      });
+      const listed = await service.listToolkits(ORG_ID, USER_ID);
+      expect(listed.userConnections[0]?.status).toBe("connected");
+    } finally {
+      restore();
+    }
+  });
+
+  test("Meet recordings report when Composio is not configured", async () => {
+    const previous = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = await mkdtemp(
+      join(tmpdir(), "airin-composio-unset-")
+    );
+
+    try {
+      const service = new ComposioService(
+        createInMemoryDatabaseAdapter(),
+        new AuthService()
+      );
+
+      expect(await service.listMeetRecordings(ORG_ID, USER_ID)).toEqual({
+        composioConfigured: false,
+        driveConnected: false,
+        gmailConnected: false,
+        recordings: [],
+      });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AIRIN_CONFIG_DIR;
+      } else {
+        process.env.AIRIN_CONFIG_DIR = previous;
+      }
+    }
+  });
+
   test("listToolkits surfaces catalogError when catalog fetch fails", async () => {
     const { service, restore } = await createConfiguredService();
 
@@ -550,10 +1091,34 @@ describe("ComposioService", () => {
       expect(listed.configured).toBe(true);
       expect(listed.composioReachable).toBe(false);
       expect(listed.composioAvailable).toBe(false);
-      expect(listed.catalogError).toBe("Failed to fetch toolkits");
+      expect(listed.catalogError).toBe(
+        "Check your network and the project API key in Composio, then try again."
+      );
       expect(listed.catalog).toEqual([]);
       expect(listed.orgToolkits).toEqual([]);
       expect(listed.userConnections).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+
+  test("listToolkits names the project API key when Composio rejects it", async () => {
+    const { service, restore } = await createConfiguredService();
+
+    injectMockComposioClient(service, {
+      ...createMockClient(),
+      async listCatalogToolkits() {
+        throw new Error("Failed to fetch toolkits", {
+          cause: Object.assign(new Error("Unauthorized"), { status: 401 }),
+        });
+      },
+    });
+
+    try {
+      const listed = await service.listToolkits(ORG_ID, USER_ID);
+      expect(listed.catalogError).toBe(
+        "Composio rejected the project API key. Check the key in Composio, then save it again."
+      );
     } finally {
       restore();
     }
@@ -856,5 +1421,19 @@ describe("ComposioService", () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe("isSameSiteReturnPath", () => {
+  test("allows a path on this site", () => {
+    expect(isSameSiteReturnPath("/profiles?profile=p1")).toBe(true);
+    expect(isSameSiteReturnPath("/chat/p1/s1")).toBe(true);
+  });
+
+  test("refuses another origin", () => {
+    expect(isSameSiteReturnPath("https://evil.example/")).toBe(false);
+    expect(isSameSiteReturnPath("//evil.example/")).toBe(false);
+    expect(isSameSiteReturnPath("/\\evil.example/")).toBe(false);
+    expect(isSameSiteReturnPath("profiles")).toBe(false);
   });
 });

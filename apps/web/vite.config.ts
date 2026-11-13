@@ -6,7 +6,29 @@ import { defineConfig } from "vite";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 
-const serverUrl = process.env.NAKAMA_SERVER_URL ?? "http://127.0.0.1:4310";
+const serverUrl = process.env.AIRIN_SERVER_URL ?? "http://127.0.0.1:4310";
+
+const publicWebUrl =
+  process.env.AIRIN_WEB_PUBLIC_URL?.trim() ||
+  process.env.AIRIN_PUBLIC_URL?.trim();
+
+let allowedHosts: string[] | undefined;
+
+if (publicWebUrl) {
+  try {
+    const url = new URL(publicWebUrl);
+
+    if (!(url.hostname && ["http:", "https:"].includes(url.protocol))) {
+      throw new TypeError("Invalid public web URL");
+    }
+
+    allowedHosts = [url.hostname];
+  } catch {
+    console.warn(
+      "Public web URL must be an absolute HTTP(S) URL; Vite will use its default allowed hosts."
+    );
+  }
+}
 
 export default defineConfig({
   // `scripts/build-sw.ts` reads the manifest to build the service worker's
@@ -35,12 +57,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(root, "src"),
-      "@nakama/core/local-auth": path.resolve(
+      "@airin/core/local-auth": path.resolve(
         root,
         "src/shims/core-local-auth.ts"
       ),
-      "@nakama/core/runtime": path.resolve(root, "src/shims/core-runtime.ts"),
-      "@nakama/core/thinking-content": path.resolve(
+      "@airin/core/runtime": path.resolve(root, "src/shims/core-runtime.ts"),
+      "@airin/core/thinking-content": path.resolve(
         root,
         "../../packages/core/src/thinking-content.ts"
       ),
@@ -51,11 +73,13 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts,
     port: 3003,
     proxy: {
       "/artifact-frame": serverUrl,
       "/health": serverUrl,
-      "/v1": serverUrl,
+      // ws: the Meet extension's capture socket is /v1/meet/capture.
+      "/v1": { target: serverUrl, ws: true },
     },
   },
 });

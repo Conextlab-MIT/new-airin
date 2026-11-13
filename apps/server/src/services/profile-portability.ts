@@ -10,6 +10,8 @@ import {
 } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
+  AIRIN_API_VERSION,
+  AirinApiError,
   createId,
   discoverSkillDirectory,
   getCustomToolsDir,
@@ -19,8 +21,6 @@ import {
   hasProfileAvatar,
   initSoulDirectory,
   isGlobalSkillSourcePath,
-  NAKAMA_API_VERSION,
-  NakamaApiError,
   type ProfilePackCustomTool,
   type ProfilePackManifest,
   type ProfilePackMeta,
@@ -33,7 +33,7 @@ import {
   saveProfileAvatar,
   slugifyProfileName,
   writePrivateBytesFile,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   DatabaseAdapter,
   StoredMcpServerRecord,
@@ -41,7 +41,7 @@ import type {
   StoredProfileRecord,
   StoredSkillRecord,
   StoredToolRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { unzipSync, zipSync } from "fflate";
 import { getCustomToolHandler, isCustomToolType } from "./custom-tool-handlers";
 import { readHandlerModulePath } from "./custom-tool-shared";
@@ -89,9 +89,9 @@ async function findMcpServerForOrg(
   return profiles.some((profile) => profile.orgId === orgId) ? server : null;
 }
 
-export const PROFILE_PACK_KIND = "nakama-profile-export" as const;
+export const PROFILE_PACK_KIND = "airin-profile-export" as const;
 
-const PROFILE_PACK_MANIFEST_FILENAME = "nakama-profile-export.json";
+const PROFILE_PACK_MANIFEST_FILENAME = "airin-profile-export.json";
 
 const PROFILE_PACK_FORMAT_VERSION = 1;
 
@@ -130,7 +130,7 @@ const IN_PROCESS_SKILL_SOURCE_EXTENSIONS = new Set([
 ]);
 
 const IN_PROCESS_SKILL_SOURCE_REASON =
-  "Executable JavaScript/TypeScript skill sources run inside the Nakama server process and are never installed from a profile pack.";
+  "Executable JavaScript/TypeScript skill sources run inside the Airin server process and are never installed from a profile pack.";
 
 const AVATAR_EXTENSION_MEDIA_TYPES = new Map([
   ["gif", "image/gif"],
@@ -142,6 +142,14 @@ const AVATAR_EXTENSION_MEDIA_TYPES = new Map([
 
 const NOT_ALLOWLISTED_REASON =
   "Not part of the profile pack allowlist (secrets and generated data are excluded).";
+
+// A skill's `tool.py` and the `.py` scripts it declares under `scripts:` are
+// executed as subprocesses by the chat runtime, so a pack must not be able to
+// install host-level Python through the ordinary org-admin import. They are
+// written only when a platform admin approves the import, the same gate
+// custom tool source already passes through.
+const PYTHON_SKILL_SCRIPT_REASON =
+  "Python skill script skipped: it runs as a subprocess on the server and requires a platform admin to approve the import.";
 
 const PROFILE_ID_ATTEMPTS = 50;
 
@@ -185,6 +193,7 @@ export interface CreateProfilePackOptions {
 }
 
 export interface PreviewProfilePackImportOptions {
+  allowPythonSkillTools?: boolean;
   isPlatformAdmin?: boolean;
   restoreCustomTools?: boolean;
 }
@@ -197,6 +206,7 @@ export interface CreateProfilePackResult {
 
 export interface ImportProfilePackOptions {
   actorUserId?: string | null;
+  allowPythonSkillTools?: boolean;
   confirm: boolean;
   isPlatformAdmin?: boolean;
   name?: string;
@@ -221,17 +231,17 @@ export async function createProfilePackExport(
   const profile = await db.getProfileForOrg(profileId, orgId);
 
   if (!profile) {
-    throw new NakamaApiError("Profile not found.", 404);
+    throw new AirinApiError("Profile not found.", 404);
   }
 
   if (profile.isSuper) {
-    throw new NakamaApiError("Super Bot cannot be exported.", 400);
+    throw new AirinApiError("Airin cannot be exported.", 400);
   }
 
   const soulDir = getProfileSoulDir(orgId, profileId);
 
   if ((await pathExists(soulDir)) && !(await isDirectExportPath(soulDir))) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Linked profile workspaces cannot be exported.",
       400
     );
@@ -288,7 +298,7 @@ export async function createProfilePackExport(
     .sort();
 
   const manifest: ProfilePackManifest = {
-    apiVersion: NAKAMA_API_VERSION,
+    apiVersion: AIRIN_API_VERSION,
     createdAt,
     kind: PROFILE_PACK_KIND,
     meta,
@@ -305,7 +315,7 @@ export async function createProfilePackExport(
 
   return {
     data: Buffer.from(zipSync(entries)),
-    filename: `nakama-profile-export-${slugifyProfileName(profile.name)}-${createdAt.replace(/[:.]/g, "-")}.zip`,
+    filename: `airin-profile-export-${slugifyProfileName(profile.name)}-${createdAt.replace(/[:.]/g, "-")}.zip`,
     manifest,
   };
 }
@@ -320,6 +330,11 @@ export async function previewProfilePackImport(
   const manifest = readProfilePackManifest(entries);
 
   const skippedAssignments: ProfilePackSkippedItem[] = [];
+  previewBlockedPythonSkillScripts(
+    entries,
+    options.allowPythonSkillTools === true,
+    skippedAssignments
+  );
 
   if (!manifest.meta.sharedAgent) {
     await previewToolAssignments(
@@ -402,18 +417,18 @@ export async function importProfilePack(
   const entries = readProfilePackZip(archive);
   const manifest = readProfilePackManifest(entries);
   const name = options.name?.trim() || manifest.meta.name || "Imported profile";
-  const profileId = await resolveImportedProfileId(db, name);
   const now = (options.now ?? new Date()).toISOString();
 
   const ownerUserId = options.ownerUserId ?? null;
 
   if (ownerUserId && manifest.meta.sharedAgent) {
-    throw new NakamaApiError("Shared agents cannot be imported here.", 403);
+    throw new AirinApiError("Shared agents cannot be imported here.", 403);
   }
 
-  const profile: StoredProfileRecord = {
+  // Allocation and insertion are one atomic statement: a concurrent import may
+  // win the id, and we retry the next suffix instead of overwriting its row.
+  const profileId = await createImportedProfile(db, name, {
     createdAt: now,
-    id: profileId,
     isDefault: false,
     isSuper: false,
     model: manifest.meta.model,
@@ -430,9 +445,7 @@ export async function importProfilePack(
     thinkingEffort: manifest.meta.thinkingEffort,
     thinkingEnabled: manifest.meta.thinkingEnabled,
     updatedAt: now,
-  };
-
-  await db.upsertProfile(profile);
+  });
 
   let createdSkillIds: string[] = [];
   const createdCustomTools: CreatedCustomTool[] = [];
@@ -455,6 +468,7 @@ export async function importProfilePack(
       orgId,
       profileId,
       entries,
+      options.allowPythonSkillTools === true,
       skippedAssignments
     );
 
@@ -1174,7 +1188,7 @@ function isProfilePackManifest<T>(value: T): value is T & ProfilePackManifest {
 
             return isString(id) && id.trim().length > 0 && id.length <= 256;
           }))) &&
-      manifest.get("apiVersion") === NAKAMA_API_VERSION &&
+      manifest.get("apiVersion") === AIRIN_API_VERSION &&
       isString(manifest.get("createdAt")) &&
       manifest.get("kind") === PROFILE_PACK_KIND &&
       isString(manifest.get("sourceProfileId")) &&
@@ -1280,6 +1294,7 @@ async function writePackedWorkspaceFiles(
   orgId: string,
   profileId: string,
   entries: ProfilePackZipEntry[],
+  allowPythonSkillTools: boolean,
   skipped: ProfilePackSkippedItem[]
 ): Promise<void> {
   const soulDir = getProfileSoulDir(orgId, profileId);
@@ -1303,8 +1318,40 @@ async function writePackedWorkspaceFiles(
       continue;
     }
 
+    if (!allowPythonSkillTools && isPackedPythonSkillScript(entry.name)) {
+      skipped.push({ path: entry.name, reason: PYTHON_SKILL_SCRIPT_REASON });
+      continue;
+    }
+
     const targetPath = join(soulDir, entry.name);
     await writePrivateBytesFile(targetPath, entry.data);
+  }
+}
+
+/** Every `.py` a skill could run: the skill root tool and declared scripts. */
+function isPackedPythonSkillScript(relativePath: string): boolean {
+  const [first, second] = relativePath.split("/");
+
+  if (first !== "skills" || !second) {
+    return false;
+  }
+
+  return relativePath.toLowerCase().endsWith(".py");
+}
+
+function previewBlockedPythonSkillScripts(
+  entries: ProfilePackZipEntry[],
+  allowPythonSkillTools: boolean,
+  skipped: ProfilePackSkippedItem[]
+): void {
+  if (allowPythonSkillTools) {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (isPackedPythonSkillScript(entry.name)) {
+      skipped.push({ path: entry.name, reason: PYTHON_SKILL_SCRIPT_REASON });
+    }
   }
 }
 
@@ -1506,7 +1553,7 @@ async function rollbackFailedImport(
   }
 
   try {
-    await db.deleteProfile(profileId);
+    await db.deleteProfileForOrg(profileId, orgId);
   } catch {
     // Best-effort cleanup only; the original error is what matters.
   }
@@ -1521,21 +1568,23 @@ async function rollbackFailedImport(
   }
 }
 
-async function resolveImportedProfileId(
+async function createImportedProfile(
   db: DatabaseAdapter,
-  name: string
+  name: string,
+  profile: Omit<StoredProfileRecord, "id">
 ): Promise<string> {
   const base = slugifyProfileName(name);
 
   for (let suffix = 1; suffix <= PROFILE_ID_ATTEMPTS; suffix++) {
-    const candidate = suffix === 1 ? base : `${base}-${suffix}`;
+    const id = suffix === 1 ? base : `${base}-${suffix}`;
+    const created = await db.createProfileIfAbsent({ ...profile, id });
 
-    if (!(await db.getProfile(candidate))) {
-      return candidate;
+    if (created) {
+      return id;
     }
   }
 
-  throw new NakamaApiError(
+  throw new AirinApiError(
     `Could not find a free profile id for "${name}".`,
     409
   );
@@ -1595,14 +1644,14 @@ function readProfilePackZip(
     entryCount += 1;
 
     if (entryCount > MAX_PROFILE_PACK_ENTRY_COUNT) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Profile pack exceeds the ${MAX_PROFILE_PACK_ENTRY_COUNT} entry limit.`,
         413
       );
     }
 
     if (size > MAX_IMPORT_ENTRY_BYTES) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Profile pack entry ${name} exceeds the ${MAX_IMPORT_ENTRY_BYTES / (1024 * 1024)} MB limit.`,
         413
       );
@@ -1611,7 +1660,7 @@ function readProfilePackZip(
     uncompressedTotal += size;
 
     if (uncompressedTotal > MAX_IMPORT_UNCOMPRESSED_BYTES) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Profile pack exceeds the ${MAX_IMPORT_UNCOMPRESSED_BYTES / (1024 * 1024)} MB uncompressed limit.`,
         413
       );
@@ -1631,7 +1680,7 @@ function readProfilePackZip(
         const entryPath = validateProfilePackEntryPath(name);
 
         if (isInProcessSkillSource(entryPath)) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             `Profile pack entry ${entryPath} is not importable. ${IN_PROCESS_SKILL_SOURCE_REASON}`,
             400
           );
@@ -1640,19 +1689,19 @@ function readProfilePackZip(
         return { data: Buffer.from(data), name: entryPath };
       });
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       throw error;
     }
 
     if (error instanceof Error) {
       if (error.message === "invalid zip data") {
-        throw new NakamaApiError("Invalid ZIP archive.", 400);
+        throw new AirinApiError("Invalid ZIP archive.", 400);
       }
 
       throw error;
     }
 
-    throw new NakamaApiError("Invalid ZIP archive.", 400);
+    throw new AirinApiError("Invalid ZIP archive.", 400);
   }
 }
 
@@ -1664,7 +1713,7 @@ function readProfilePackManifest(
   );
 
   if (!manifestEntry) {
-    throw new Error("Archive is missing the Nakama profile pack manifest.");
+    throw new Error("Archive is missing the Airin profile pack manifest.");
   }
 
   let manifest: ProfilePackManifest;
@@ -1678,16 +1727,16 @@ function readProfilePackManifest(
 
     manifest = parsed;
   } catch {
-    throw new Error("Nakama profile pack manifest is not valid JSON.");
+    throw new Error("Airin profile pack manifest is not valid JSON.");
   }
 
   if (manifest.kind !== PROFILE_PACK_KIND) {
-    throw new Error("Archive is not a Nakama profile pack.");
+    throw new Error("Archive is not an Airin profile pack.");
   }
 
   if (manifest.version !== PROFILE_PACK_FORMAT_VERSION) {
     throw new Error(
-      `Unsupported Nakama profile pack version: ${manifest.version}`
+      `Unsupported Airin profile pack version: ${manifest.version}`
     );
   }
 

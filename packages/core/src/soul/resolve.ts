@@ -1,9 +1,9 @@
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { getUserConfigDir } from "../user-config";
 import { loadSoulStack } from "./load";
 import type { LoadedSoulStack } from "./types";
 
-/** Reject path segments that would escape `~/.nakama/orgs/{id}/...`. */
+/** Reject path segments that would escape `~/.airin/orgs/{id}/...`. */
 export function assertConfigPathSegment(value: string, label: string): string {
   const trimmed = value.trim();
 
@@ -33,10 +33,14 @@ export function assertYearMonth(value: string): string {
   return trimmed;
 }
 
-/** Per-profile soul stack: ~/.nakama/orgs/{orgId}/profiles/{profileId}/ */
-export function getProfileSoulDir(orgId: string, profileId: string): string {
+/** Per-profile soul stack: ~/.airin/orgs/{orgId}/profiles/{profileId}/ */
+export function getProfileSoulDir(
+  orgId: string,
+  profileId: string,
+  configDir = getUserConfigDir()
+): string {
   return join(
-    getUserConfigDir(),
+    configDir,
     "orgs",
     assertConfigPathSegment(orgId, "orgId"),
     "profiles",
@@ -51,6 +55,26 @@ export function getProfileArtifactsDir(
   return join(getProfileSoulDir(orgId, profileId), "artifacts");
 }
 
+/** Files every member of an agent group reads and writes: {orgDir}/groups/{groupId}/shared/ */
+export function getGroupSharedDir(orgId: string, groupId: string): string {
+  return join(
+    getUserConfigDir(),
+    "orgs",
+    assertConfigPathSegment(orgId, "orgId"),
+    "groups",
+    assertConfigPathSegment(groupId, "groupId"),
+    "shared"
+  );
+}
+
+/**
+ * A group's memory, beside its shared folder: {orgDir}/groups/{groupId}/memory.md.
+ * Keyed by the shared folder because that is the one group path a turn carries.
+ */
+export function getGroupMemoryPath(sharedDir: string): string {
+  return join(dirname(sharedDir), "memory.md");
+}
+
 export function getArtifactSharesDir(orgId: string): string {
   return join(
     getUserConfigDir(),
@@ -60,7 +84,7 @@ export function getArtifactSharesDir(orgId: string): string {
   );
 }
 
-/** Org-level memory dir: ~/.nakama/orgs/{orgId}/ (sibling of the profile dirs). */
+/** Org-level memory dir: ~/.airin/orgs/{orgId}/ (sibling of the profile dirs). */
 export function getOrgMemoryDir(
   orgId: string,
   configDir = getUserConfigDir()
@@ -74,7 +98,7 @@ export function getOrgMemoryDir(
   return join(configDir, "orgs", assertConfigPathSegment(orgId, "orgId"));
 }
 
-/** Live org memory file: ~/.nakama/orgs/{orgId}/MEMORY.md */
+/** Live org memory file: ~/.airin/orgs/{orgId}/MEMORY.md */
 export function getOrgMemoryFilePath(
   orgId: string,
   configDir?: string
@@ -82,7 +106,7 @@ export function getOrgMemoryFilePath(
   return join(getOrgMemoryDir(orgId, configDir), "MEMORY.md");
 }
 
-/** Org curator reports: ~/.nakama/orgs/{orgId}/logs/curator/ */
+/** Org curator reports: ~/.airin/orgs/{orgId}/logs/curator/ */
 export function getOrgCuratorLogDir(
   orgId: string,
   configDir = getUserConfigDir()
@@ -90,7 +114,7 @@ export function getOrgCuratorLogDir(
   return join(getOrgMemoryDir(orgId, configDir), "logs", "curator");
 }
 
-/** Org memory archive dir: ~/.nakama/orgs/{orgId}/memory-archive/ */
+/** Org memory archive dir: ~/.airin/orgs/{orgId}/memory-archive/ */
 export function getOrgMemoryArchiveDir(
   orgId: string,
   configDir?: string
@@ -98,7 +122,7 @@ export function getOrgMemoryArchiveDir(
   return join(getOrgMemoryDir(orgId, configDir), "memory-archive");
 }
 
-/** Org memory change history dir: ~/.nakama/orgs/{orgId}/memory-history/ */
+/** Org memory change history dir: ~/.airin/orgs/{orgId}/memory-history/ */
 export function getOrgMemoryHistoryDir(
   orgId: string,
   configDir?: string
@@ -106,7 +130,7 @@ export function getOrgMemoryHistoryDir(
   return join(getOrgMemoryDir(orgId, configDir), "memory-history");
 }
 
-/** Org memory archive file for a given year-month: ~/.nakama/orgs/{orgId}/memory-archive/YYYY-MM.md */
+/** Org memory archive file for a given year-month: ~/.airin/orgs/{orgId}/memory-archive/YYYY-MM.md */
 export function getOrgMemoryArchiveFilePath(
   orgId: string,
   yearMonth: string,

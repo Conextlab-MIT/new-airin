@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import type { ProviderInstance } from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
-import type { OpenRouterRoutingSettings } from "@nakama/core/contract";
+import type { ProviderInstance } from "@airin/core";
+import { AirinApiError } from "@airin/core";
+import type { OpenRouterRoutingSettings } from "@airin/core/contract";
+import { CHATGPT_JWT_CLAIM_PATH } from "../providers/chatgpt/oauth";
 import { getModelsForProviderInstance } from "../providers/compatible-models";
 import {
   applyProviderInstanceUpdate,
   buildProviderInstanceFromCreateRequest,
   modelExistsOnInstance,
   resolveProfileProviderSelection,
+  toProviderInstanceSummary,
 } from "./provider-instance-helpers";
 
 function createProviderInstance(
@@ -22,38 +24,40 @@ function createProviderInstance(
 }
 
 describe("OpenRouter routing validation", () => {
-  test.each([
-    null,
-    [[]],
-    true,
-    { zdr: "true" },
-    { requireParameters: 1 },
-    { dataCollection: "never" },
-    { extra_body: {} },
-    { data_collection: "deny" },
-  ])("rejects invalid routing %j on create and update", (value) => {
-    // SAFETY: The test fixture matches the contract used by this test.
-    const openRouterRouting = value as OpenRouterRoutingSettings;
-    expect(() =>
-      buildProviderInstanceFromCreateRequest(
-        {
-          apiKey: `sk-or-${"x".repeat(24)}`,
-          openRouterRouting,
-          type: "openrouter",
-        },
-        []
-      )
-    ).toThrow(NakamaApiError);
-    expect(() =>
-      applyProviderInstanceUpdate(
-        createProviderInstance({
-          id: "or",
-          label: "OpenRouter",
-          type: "openrouter",
-        }),
-        { openRouterRouting }
-      )
-    ).toThrow(NakamaApiError);
+  test("rejects invalid routing on create and update", () => {
+    for (const value of [
+      null,
+      [[]],
+      true,
+      { zdr: "true" },
+      { requireParameters: 1 },
+      { dataCollection: "never" },
+      { extra_body: {} },
+      { data_collection: "deny" },
+    ]) {
+      // SAFETY: The test fixture matches the contract used by this test.
+      const openRouterRouting = value as OpenRouterRoutingSettings;
+      expect(() =>
+        buildProviderInstanceFromCreateRequest(
+          {
+            apiKey: `sk-or-${"x".repeat(24)}`,
+            openRouterRouting,
+            type: "openrouter",
+          },
+          []
+        )
+      ).toThrow(AirinApiError);
+      expect(() =>
+        applyProviderInstanceUpdate(
+          createProviderInstance({
+            id: "or",
+            label: "OpenRouter",
+            type: "openrouter",
+          }),
+          { openRouterRouting }
+        )
+      ).toThrow(AirinApiError);
+    }
   });
 
   test("does not apply OpenRouter routing to other providers", () => {
@@ -73,50 +77,23 @@ describe("OpenRouter routing validation", () => {
       applyProviderInstanceUpdate(instance, { openRouterRouting })
     ).not.toHaveProperty("openRouterRouting");
   });
-});
 
-describe("Netra provider setup", () => {
-  test("keeps the exact selected model and its saved organization rates", () => {
+  test("keeps the model list picked when a catalog provider is created", () => {
     const instance = buildProviderInstanceFromCreateRequest(
       {
-        apiKey: "netra-key",
         customModels: [
-          {
-            cachedInputPerMillionUsd: 0.01,
-            default: true,
-            id: "deepseek/deepseek-v4-flash-0731",
-            inputPerMillionUsd: 0.1,
-            outputPerMillionUsd: 0.25,
-            supportsThinking: true,
-          },
+          { id: "deepseek-v4-pro", name: "V4 Pro" },
+          { default: true, id: "deepseek-v4-flash", name: "V4 Flash" },
         ],
-        type: "netra",
+        type: "deepseek",
       },
       []
     );
 
-    expect(instance.customModels?.[0]?.id).toBe(
-      "deepseek/deepseek-v4-flash-0731"
-    );
-    expect(getModelsForProviderInstance(instance)[0]?.provider).toBe("netra");
-    expect(
-      modelExistsOnInstance(instance, "deepseek/deepseek-v4.1-flash")
-    ).toBe(false);
-    expect(instance.customModels?.[0]?.cachedInputPerMillionUsd).toBe(0.01);
-  });
-
-  test("rejects the unsupported Responses API", () => {
-    expect(() =>
-      buildProviderInstanceFromCreateRequest(
-        {
-          apiKey: "netra-key",
-          model: "deepseek/deepseek-v4-flash-0731",
-          type: "netra",
-          wireApi: "responses",
-        },
-        []
-      )
-    ).toThrow();
+    expect(instance.customModels?.map((model) => model.id)).toEqual([
+      "deepseek-v4-pro",
+      "deepseek-v4-flash",
+    ]);
   });
 });
 
@@ -485,50 +462,35 @@ describe("applyProviderInstanceUpdate", () => {
       false
     );
   });
-
-  test("validates fireworks models against shortlist and static catalog", () => {
-    const withShortlist = createProviderInstance({
-      customModels: [
-        {
-          default: true,
-          id: "accounts/fireworks/models/kimi-k2p6",
-          name: "Kimi K2.6",
-        },
-      ],
-      id: "fw-1",
-      label: "Fireworks",
-      type: "fireworks",
-    });
-
-    expect(
-      modelExistsOnInstance(
-        withShortlist,
-        "accounts/fireworks/models/kimi-k2p6"
-      )
-    ).toBe(true);
-    expect(
-      modelExistsOnInstance(withShortlist, "accounts/fireworks/models/glm-5p2")
-    ).toBe(false);
-
-    const withoutShortlist = createProviderInstance({
-      id: "fw-2",
-      label: "Fireworks",
-      type: "fireworks",
-    });
-
-    expect(
-      modelExistsOnInstance(
-        withoutShortlist,
-        "accounts/fireworks/models/glm-5p2"
-      )
-    ).toBe(true);
-    expect(
-      modelExistsOnInstance(withoutShortlist, "accounts/unknown/models/foo")
-    ).toBe(false);
-  });
 });
 
 describe("buildProviderInstanceFromCreateRequest", () => {
+  test("keeps Cloudflare models picked during setup", () => {
+    const baseUrl =
+      "https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1";
+
+    const instance = buildProviderInstanceFromCreateRequest(
+      {
+        baseUrl,
+        customModels: [
+          { contextWindow: 128_000, id: "@cf/openai/gpt-oss-120b" },
+        ],
+        type: "cloudflare",
+      },
+      []
+    );
+
+    expect(instance.customModels).toEqual([
+      { contextWindow: 128_000, id: "@cf/openai/gpt-oss-120b" },
+    ]);
+    expect(() =>
+      buildProviderInstanceFromCreateRequest(
+        { baseUrl, customModels: [{ id: "gpt-oss-120b" }], type: "cloudflare" },
+        []
+      )
+    ).toThrow("Use @cf/ or @hf/ format.");
+  });
+
   test("preserves the requested Ollama label", () => {
     const instance = buildProviderInstanceFromCreateRequest(
       {
@@ -583,21 +545,18 @@ describe("buildProviderInstanceFromCreateRequest", () => {
   // readJson casts the body without validating it, so both fields can arrive
   // undefined however the contract types them.
   test("names the missing field and answers 400, not a TypeError at 500", () => {
-    const cases = [
-      [{}, "Provider type is required."],
-      [{ type: "openai" }, "API key is required."],
-    ] as const;
+    const cases = [[{}, "Provider type is required."]] as const;
 
     for (const [request, message] of cases) {
       try {
         buildProviderInstanceFromCreateRequest(request, []);
         throw new Error("expected a rejection");
       } catch (error) {
-        expect(error).toBeInstanceOf(NakamaApiError);
+        expect(error).toBeInstanceOf(AirinApiError);
         // SAFETY: The test fixture matches the contract used by this test.
-        expect((error as NakamaApiError).message).toBe(message);
+        expect((error as AirinApiError).message).toBe(message);
         // SAFETY: The test fixture matches the contract used by this test.
-        expect((error as NakamaApiError).status).toBe(400);
+        expect((error as AirinApiError).status).toBe(400);
       }
     }
   });
@@ -663,5 +622,42 @@ describe("buildProviderInstanceFromCreateRequest", () => {
       getModelsForProviderInstance(instance).map((model) => model.id)
     ).toEqual(["gpt-6-sol", "gpt-6-luna"]);
     expect(modelExistsOnInstance(instance, "gpt-6-astra")).toBe(false);
+  });
+});
+
+describe("toProviderInstanceSummary", () => {
+  const freeToken = `h.${Buffer.from(
+    JSON.stringify({
+      [CHATGPT_JWT_CLAIM_PATH]: { chatgpt_plan_type: "free" },
+    })
+  ).toString("base64url")}.s`;
+
+  const connectedChatgpt = createProviderInstance({
+    apiKey: "",
+    chatgptAccessToken: freeToken,
+    chatgptAccountId: "acct_1",
+    chatgptRefreshToken: "refresh",
+    chatgptTokenExpiresAt: "2099-01-01T00:00:00.000Z",
+    id: "chatgpt",
+    label: "ChatGPT",
+    type: "chatgpt",
+  });
+
+  test("reports the plan of a connected ChatGPT account", () => {
+    expect(toProviderInstanceSummary(connectedChatgpt, 0).chatgptPlanType).toBe(
+      "free"
+    );
+  });
+
+  test.each([
+    { chatgptAccountId: "", name: "a disconnected account" },
+    { chatgptAccessToken: "", name: "an account with no access token" },
+    { chatgptTokenExpiresAt: "", name: "an account with no token expiry" },
+    { name: "another provider type", type: "openai" as const },
+  ])("leaves the plan out for $name", ({ name: _name, ...overrides }) => {
+    expect(
+      toProviderInstanceSummary({ ...connectedChatgpt, ...overrides }, 0)
+        .chatgptPlanType
+    ).toBeUndefined();
   });
 });

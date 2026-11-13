@@ -8,7 +8,7 @@ describe("ThreadStore ownership", () => {
   test("tracks multiple owned thread ids independently", async () => {
     await withTempHome(async (homeDir) => {
       const store = new ThreadStore(
-        path.join(homeDir, ".nakama", "discord", "chat-threads.json")
+        path.join(homeDir, ".airin", "discord", "chat-threads.json")
       );
 
       await store.load();
@@ -32,7 +32,7 @@ describe("ThreadStore ownership", () => {
     await withTempHome(async (homeDir) => {
       const filePath = path.join(
         homeDir,
-        ".nakama",
+        ".airin",
         "discord",
         "chat-threads.json"
       );
@@ -54,7 +54,7 @@ describe("ThreadStore ownership", () => {
     await withTempHome(async (homeDir) => {
       const filePath = path.join(
         homeDir,
-        ".nakama",
+        ".airin",
         "discord",
         "chat-threads.json"
       );

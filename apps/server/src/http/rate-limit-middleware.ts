@@ -37,6 +37,8 @@ const AUTH_PATHS = new Set([
   "/v1/auth/passkey/login/options",
   "/v1/auth/mfa/totp/verify",
   "/v1/auth/mfa/passkey/verify",
+  // Public, and each call holds a pending pairing slot.
+  "/v1/meet/extension/pair",
 ]);
 
 export interface RateLimitOptions {
@@ -65,7 +67,13 @@ function clientAddress(
   trustProxy: boolean
 ): string | null {
   if (trustProxy) {
-    const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
+    // The proxy appends the address it saw, so only the last hop is
+    // trustworthy. Earlier hops come from the client and can be rotated.
+    const forwarded = c.req
+      .header("x-forwarded-for")
+      ?.split(",")
+      .at(-1)
+      ?.trim();
 
     if (forwarded) {
       return forwarded;

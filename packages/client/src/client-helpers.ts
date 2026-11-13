@@ -1,0 +1,230 @@
+import { AirinApiError, readApiErrorDetails } from "@airin/core/api-error";
+import type { OrgPluginSummary } from "@airin/core/contract";
+import type { AirinClientOptions, TransferProgress } from "./types";
+
+export type JsonValue =
+  | boolean
+  | JsonValue[]
+  | number
+  | null
+  | string
+  | { [key: string]: JsonValue };
+
+export type OfficialPluginInstallResponse = { install: OrgPluginSummary };
+
+export async function createApiError(
+  response: Response,
+  path: string
+): Promise<AirinApiError> {
+  const details = await readApiErrorDetails(response);
+
+  return new AirinApiError(details.message, response.status, path, undefined, {
+    code: details.code,
+    totpEnabled: details.totpEnabled,
+  });
+}
+
+export function isMutatingMethod(method: string): boolean {
+  return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
+}
+
+export async function encodeArchiveData(
+  data: Blob | BufferSource | string
+): Promise<string> {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This public helper accepts a typed string-or-binary union, not untrusted JSON.
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (isBlobLike(data)) {
+    return encodeArchiveData(await data.arrayBuffer());
+  }
+
+  const bytes =
+    data instanceof ArrayBuffer
+      ? new Uint8Array(data)
+      : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Feature detection selects browser btoa or the Node Buffer fallback.
+  if (typeof btoa === "function") {
+    let binary = "";
+
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+
+    return btoa(binary);
+  }
+
+  return Buffer.from(bytes).toString("base64");
+}
+
+/** fetch() reports no upload progress, so a browser upload that wants it uses XHR. */
+export function createUploadFetch(
+  onProgress: TransferProgress
+): NonNullable<AirinClientOptions["fetch"]> {
+  return (input, init) =>
+    new Promise<Response>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const signal = init?.signal;
+
+      if (signal?.aborted) {
+        reject(abortedError());
+
+        return;
+      }
+
+      xhr.open(init?.method ?? "POST", String(input));
+      xhr.withCredentials = init?.credentials === "include";
+
+      for (const [name, value] of new Headers(init?.headers)) {
+        xhr.setRequestHeader(name, value);
+      }
+
+      const abort = () => xhr.abort();
+      signal?.addEventListener("abort", abort, { once: true });
+
+      const fail = (error: Error) => {
+        signal?.removeEventListener("abort", abort);
+        reject(error);
+      };
+
+      const interrupted = () => {
+        fail(
+          new Error(
+            "The upload was interrupted. Check the connection and try again."
+          )
+        );
+      };
+
+      xhr.upload.onprogress = (event) => {
+        onProgress(event.loaded, event.lengthComputable ? event.total : 0);
+      };
+
+      xhr.onerror = interrupted;
+      xhr.ontimeout = interrupted;
+
+      xhr.onabort = () => {
+        if (signal?.aborted) {
+          fail(abortedError());
+        } else {
+          interrupted();
+        }
+      };
+
+      xhr.onload = () => {
+        signal?.removeEventListener("abort", abort);
+        resolve(
+          new Response(
+            NULL_BODY_STATUSES.has(xhr.status) ? null : xhr.responseText,
+            {
+              headers: parseXhrHeaders(xhr.getAllResponseHeaders()),
+              status: xhr.status,
+            }
+          )
+        );
+      };
+
+      // SAFETY: the only caller passes a Blob or BufferSource, both valid for XHR.
+      xhr.send(init?.body as XMLHttpRequestBodyInit);
+    });
+}
+
+function abortedError(): Error {
+  return new DOMException("The upload was aborted.", "AbortError");
+}
+
+// A Response with one of these statuses must not have a body.
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
+
+function parseXhrHeaders(raw: string): Headers {
+  const headers = new Headers();
+
+  for (const line of raw.trim().split(/[\r\n]+/)) {
+    const separator = line.indexOf(":");
+
+    if (separator > 0) {
+      headers.append(
+        line.slice(0, separator).trim(),
+        line.slice(separator + 1).trim()
+      );
+    }
+  }
+
+  return headers;
+}
+
+export function readContentDispositionFilename(
+  headers: Headers
+): string | null {
+  const contentDisposition = headers.get("content-disposition");
+  const match = contentDisposition?.match(/filename="([^"]+)"/i);
+
+  return match?.[1] ?? null;
+}
+
+function isBlobLike(value: Blob | BufferSource): value is Blob {
+  return typeof Blob !== "undefined" && value instanceof Blob;
+}
+
+export async function readBoundedFile(
+  response: Response,
+  options: { maxBytes: number; signal?: AbortSignal }
+): Promise<ArrayBuffer> {
+  const { maxBytes, signal } = options;
+
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
+    await response.body?.cancel();
+    throw new Error("maxBytes must be a nonnegative integer.");
+  }
+
+  const reader = response.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+
+  const onAbort = () => {
+    void reader?.cancel().catch(() => {});
+  };
+
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    if (Number(response.headers.get("Content-Length")) > maxBytes) {
+      throw new Error("Artifact exceeds the download byte budget.");
+    }
+
+    while (reader) {
+      signal?.throwIfAborted();
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      size += value.byteLength;
+
+      if (size > maxBytes) {
+        throw new Error("Artifact exceeds the download byte budget.");
+      }
+
+      chunks.push(value);
+    }
+
+    signal?.throwIfAborted();
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    return bytes.buffer;
+  } catch (error) {
+    await reader?.cancel().catch(() => {});
+    throw error;
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    reader?.releaseLock();
+  }
+}

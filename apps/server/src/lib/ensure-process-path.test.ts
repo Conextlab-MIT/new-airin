@@ -3,8 +3,8 @@ import path from "node:path";
 import { getToolExecutionEnv } from "./ensure-process-path";
 
 const saved = {
+  AIRIN_DISABLE_FIX_PATH: process.env.AIRIN_DISABLE_FIX_PATH,
   BUN_INSTALL_BIN: process.env.BUN_INSTALL_BIN,
-  NAKAMA_DISABLE_FIX_PATH: process.env.NAKAMA_DISABLE_FIX_PATH,
   PATH: process.env.PATH,
 };
 
@@ -22,20 +22,20 @@ function pathEntries(env: NodeJS.ProcessEnv): [string, string | undefined][] {
   return Object.entries(env).filter(([key]) => key.toUpperCase() === "PATH");
 }
 
-describe("getToolExecutionEnv with NAKAMA_DISABLE_FIX_PATH", () => {
+describe("getToolExecutionEnv with AIRIN_DISABLE_FIX_PATH", () => {
   afterEach(() => {
     restore("BUN_INSTALL_BIN");
-    restore("NAKAMA_DISABLE_FIX_PATH");
+    restore("AIRIN_DISABLE_FIX_PATH");
     restore("PATH");
   });
 
-  const bunBin = path.join(path.parse(process.cwd()).root, "nakama", "bin");
+  const bunBin = path.join(path.parse(process.cwd()).root, "airin", "bin");
   const systemBin = path.join(path.parse(process.cwd()).root, "system", "bin");
 
   test.skipIf(process.platform !== "win32")(
     "puts BUN_INSTALL_BIN first under the one PATH key on Windows",
     () => {
-      process.env.NAKAMA_DISABLE_FIX_PATH = "1";
+      process.env.AIRIN_DISABLE_FIX_PATH = "1";
       process.env.BUN_INSTALL_BIN = bunBin;
       process.env.PATH = systemBin;
 
@@ -48,7 +48,7 @@ describe("getToolExecutionEnv with NAKAMA_DISABLE_FIX_PATH", () => {
   test.skipIf(process.platform !== "win32")(
     "does not add BUN_INSTALL_BIN twice on Windows",
     () => {
-      process.env.NAKAMA_DISABLE_FIX_PATH = "1";
+      process.env.AIRIN_DISABLE_FIX_PATH = "1";
       process.env.BUN_INSTALL_BIN = bunBin;
       process.env.PATH = `${systemBin}${path.delimiter}${bunBin.toUpperCase()}`;
 
@@ -61,11 +61,75 @@ describe("getToolExecutionEnv with NAKAMA_DISABLE_FIX_PATH", () => {
   test.skipIf(process.platform === "win32")(
     "leaves PATH as the desktop app set it elsewhere",
     () => {
-      process.env.NAKAMA_DISABLE_FIX_PATH = "1";
+      process.env.AIRIN_DISABLE_FIX_PATH = "1";
       process.env.BUN_INSTALL_BIN = bunBin;
       process.env.PATH = systemBin;
 
       expect(pathEntries(getToolExecutionEnv())).toEqual([["PATH", systemBin]]);
     }
   );
+});
+
+test("does not pass the master key to child processes", () => {
+  const previous = process.env.AIRIN_SECRETS_KEY;
+  const previousProvider = process.env.OPENAI_API_KEY;
+  process.env.AIRIN_SECRETS_KEY = "private";
+  process.env.OPENAI_API_KEY = "provider-private";
+
+  try {
+    expect(getToolExecutionEnv().AIRIN_SECRETS_KEY).toBeUndefined();
+    expect(getToolExecutionEnv().OPENAI_API_KEY).toBeUndefined();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.AIRIN_SECRETS_KEY;
+    } else {
+      process.env.AIRIN_SECRETS_KEY = previous;
+    }
+
+    if (previousProvider === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = previousProvider;
+    }
+  }
+});
+
+describe("getToolExecutionEnv keeps Airin credentials out of tools", () => {
+  const LEAKED = [
+    "AIRIN_LOCAL_AUTH_TOKEN",
+    "AIRIN_PLUGIN_NPM_TOKEN",
+    "AIRIN_EMAIL_ATTACHMENT_SECRET",
+    "AIRIN_TELEGRAM_MANAGER_BOT_TOKEN",
+    "TELEGRAM_MANAGER_WEBHOOK_SECRET",
+    "AIRIN_WHATSAPP_CONTEXT_TOKEN",
+    "AIRIN_SEED_ADMIN_PASSWORD",
+  ];
+
+  afterEach(() => {
+    for (const key of [...LEAKED, "GITHUB_TOKEN", "AIRIN_PORT"]) {
+      delete process.env[key];
+    }
+  });
+
+  test("strips Airin's own tokens and secrets", () => {
+    for (const key of LEAKED) {
+      process.env[key] = "secret-value";
+    }
+
+    const env = getToolExecutionEnv();
+
+    for (const key of LEAKED) {
+      expect({ key, value: env[key] }).toEqual({ key, value: undefined });
+    }
+  });
+
+  test("keeps a user's own token and ordinary Airin settings", () => {
+    process.env.GITHUB_TOKEN = "user-token";
+    process.env.AIRIN_PORT = "4310";
+
+    const env = getToolExecutionEnv();
+
+    expect(env.GITHUB_TOKEN).toBe("user-token");
+    expect(env.AIRIN_PORT).toBe("4310");
+  });
 });

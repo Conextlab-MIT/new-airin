@@ -1,4 +1,4 @@
-import { toast } from "@nakama/ui/toast";
+import { toast } from "@airin/ui/toast";
 import { useEffect, useReducer, useState } from "react";
 import { useAuth } from "@/context/use-auth";
 import {

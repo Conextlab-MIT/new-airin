@@ -1,31 +1,34 @@
 import { join } from "node:path";
-import { NakamaClient } from "@nakama/client";
+import { AirinClient } from "@airin/client";
 import {
   installErrorHandlers,
   installErrorTrackingSink,
   log,
   splitTelegramChunks,
-} from "@nakama/core";
-import { hasActiveStreams } from "@nakama/core/channel-active-stream";
-import { channelOwnerFromEnv } from "@nakama/core/channel-config-shared";
-import { ChannelSessionStore } from "@nakama/core/channel-session-store";
+} from "@airin/core";
+import { hasActiveStreams } from "@airin/core/channel-active-stream";
+import { channelOwnerFromEnv } from "@airin/core/channel-config-shared";
+import { ChannelSessionStore } from "@airin/core/channel-session-store";
 import {
   ensureServerRunning,
   stopSpawnedServer,
-} from "@nakama/core/ensure-server";
-import { loadLocalAuthToken } from "@nakama/core/local-auth";
-import { resolveWebPublicUrl } from "@nakama/core/runtime";
+} from "@airin/core/ensure-server";
+import { loadLocalAuthToken } from "@airin/core/local-auth";
+import { resolveWebPublicUrl } from "@airin/core/runtime";
 import {
   callSlackApi,
   getSlackConfigDir,
   loadSlackConfigFile,
   type SlackMember,
-} from "@nakama/core/slack-config";
+} from "@airin/core/slack-config";
+import { createSlackWorkerHeartbeat } from "@airin/core/slack-worker";
 import {
-  createSlackWorkerHeartbeat,
-  isHeartbeatAlive,
-} from "@nakama/core/slack-worker";
-import { createChatHandler, type SlackApi } from "./chat-handler";
+  createChatHandler,
+  createSlackEventHandler,
+  type SlackApi,
+  SlackEventInbox,
+  wantsSlackEvent,
+} from "./chat-handler";
 import { connectSlackSocket } from "./socket";
 
 installErrorHandlers("worker:slack");
@@ -55,7 +58,7 @@ async function shutdown(code: number): Promise<never> {
 
   if (hasActiveStreams()) {
     console.warn(
-      "Leaving the spawned Nakama server running so in-flight agent turns can finish; the next worker start will reuse it."
+      "Leaving the spawned Airin server running so in-flight agent turns can finish; the next worker start will reuse it."
     );
   } else {
     stopSpawnedServer(spawnedChild);
@@ -126,13 +129,7 @@ function createSlackApi(botToken: string): SlackApi {
 }
 
 try {
-  const existing = await heartbeat.read();
-
-  if (existing && existing.pid !== process.pid && isHeartbeatAlive(existing)) {
-    throw new Error(
-      `Another Nakama Slack bridge already runs this connection (pid ${existing.pid}).`
-    );
-  }
+  await heartbeat.acquire();
 
   const config = await loadSlackConfigFile(owner);
 
@@ -145,8 +142,8 @@ try {
   const { serverUrl, spawnedChild: child } = await ensureServerRunning();
   spawnedChild = child;
 
-  const client = new NakamaClient({
-    authToken: (await loadLocalAuthToken("slack@nakama.internal")) ?? undefined,
+  const client = new AirinClient({
+    authToken: (await loadLocalAuthToken("slack@airin.internal")) ?? undefined,
     baseUrl: serverUrl,
     clientOrigin: resolveWebPublicUrl(),
   });
@@ -164,28 +161,35 @@ try {
 
   await sessionStore.load();
 
+  const slack = createSlackApi(config.botToken);
+
   const handleEvent = createChatHandler({
     botTeamId: identity.team_id,
     botUserId: identity.user_id,
     client,
     owner,
     sessionStore,
-    slack: createSlackApi(config.botToken),
+    slack,
   });
+
+  const inbox = new SlackEventInbox(
+    join(getSlackConfigDir(owner), "event-inbox.json")
+  );
+
+  await inbox.load();
+
+  const events = createSlackEventHandler({
+    handleEvent,
+    inbox,
+    slack,
+    wants: (event) => wantsSlackEvent(event, identity.user_id, sessionStore),
+  });
+
+  await events.recover();
 
   closeSocket = connectSlackSocket({
     appToken: config.appToken,
-    onEvent: (event) => {
-      if (process.env.NAKAMA_CH_DEBUG === "1") {
-        console.log(
-          `[slack] ${event.type} channel_type=${event.channel_type} subtype=${event.subtype ?? "-"} user=${event.user ?? "-"} thread=${event.thread_ts ? "yes" : "no"}`
-        );
-      }
-
-      handleEvent(event).catch((error) => {
-        console.error("Slack message handler error:", error);
-      });
-    },
+    onEvent: events.accept,
     onStatus: (next) => {
       connected = next;
       void heartbeat.write(connected);

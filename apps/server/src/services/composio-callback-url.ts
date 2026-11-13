@@ -1,22 +1,28 @@
 import {
+  AirinApiError,
   isValidBaseUrl,
   loadUserWebPublicUrl,
-  NakamaApiError,
   normalizeBaseUrl,
   resolveWebPublicUrl,
   saveUserWebPublicUrl,
   type WebPublicUrlSettingsResponse,
-} from "@nakama/core";
+} from "@airin/core";
 
 /**
  * The origin the caller claims. `clientOrigin` in the body, `Origin` and
  * `Referer` are all attacker-settable, and it ends up in an OAuth redirect_uri
  * and in share links, so an origin we cannot vouch for is refused rather than
  * echoed back into a generated URL.
+ *
+ * `dropUnvouched` is for a caller that only needs the origin for links: with a
+ * configured public URL to fall back on, an unvouched origin (an old domain)
+ * is dropped instead of refused. A malformed origin, or one with no configured
+ * URL to replace it, is still refused.
  */
 export function resolveRequestClientOrigin(
   request?: Request,
-  explicitOrigin?: string
+  explicitOrigin?: string,
+  options: { dropUnvouched?: boolean } = {}
 ): string | undefined {
   const candidate = readClaimedOrigin(request, explicitOrigin);
 
@@ -25,11 +31,21 @@ export function resolveRequestClientOrigin(
   }
 
   if (!isValidBaseUrl(candidate)) {
-    throw new NakamaApiError("Origin must be an http or https URL.", 400);
+    throw new AirinApiError("Origin must be an http or https URL.", 400);
   }
 
   if (!isAllowedClientOrigin(candidate, request)) {
-    throw new NakamaApiError("Origin is not allowed.", 400);
+    const configured = resolveWebPublicUrl();
+
+    if (options.dropUnvouched && configured) {
+      console.warn(
+        `Dropped client origin ${candidate}: not ${configured}. Links use the configured public URL.`
+      );
+
+      return;
+    }
+
+    throw new AirinApiError("Origin is not allowed.", 400);
   }
 
   return candidate;
@@ -91,8 +107,16 @@ function isAllowedClientOrigin(candidate: string, request?: Request): boolean {
     return true;
   }
 
+  if (isLoopbackComposioCallbackBaseUrl(candidate)) {
+    return true;
+  }
+
+  // A remote claim needs an origin the caller does not also control. Behind a
+  // trusted proxy the forwarded headers name the deployment; without one, no
+  // request signal vouches for a remote origin, because the caller controls
+  // `Host` (and therefore `request.url`) just as much as `X-Forwarded-Host`.
   return (
-    isLoopbackComposioCallbackBaseUrl(candidate) ||
+    trustForwardedHeaders() &&
     sameHost(candidate, resolveRequestSelfOrigin(request))
   );
 }
@@ -114,21 +138,28 @@ function sameHost(a: string, b?: string): boolean {
   }
 }
 
-/** Where the request actually landed: the proxy's host if there is one. */
-function resolveRequestSelfOrigin(request?: Request): string | undefined {
+/**
+ * Whether a trusted proxy owns the request's forwarding headers. Same contract
+ * as the rate limiter (`http/app.ts`) and the deployment hardening docs: the
+ * operator sets this only when the backend port is private and the proxy
+ * replaces untrusted forwarded values. It gates every forwarded header this
+ * file reads, `X-Forwarded-Host` and `X-Forwarded-Proto` alike. Without it a
+ * caller names no remote origin here, because it controls `Host` (and so
+ * `request.url`) just as much as the forwarded headers (issue #477).
+ */
+function trustForwardedHeaders(): boolean {
+  return process.env.AIRIN_TRUST_PROXY === "true";
+}
+
+/**
+ * The origin the request actually landed on the listener, with no proxy header
+ * involved. On a direct install this reflects the `Host` the caller sent, so
+ * it anchors a real browser's own origin but must never vouch for a
+ * caller-named remote origin on its own.
+ */
+function resolveRequestListenerOrigin(request?: Request): string | undefined {
   if (!request) {
     return;
-  }
-
-  const forwardedHost = request.headers.get("x-forwarded-host")?.trim();
-
-  if (forwardedHost) {
-    const proto = request.headers.get("x-forwarded-proto")?.trim() || "http";
-    const forwarded = `${proto}://${forwardedHost}`;
-
-    if (isValidBaseUrl(forwarded)) {
-      return forwarded;
-    }
   }
 
   try {
@@ -138,17 +169,41 @@ function resolveRequestSelfOrigin(request?: Request): string | undefined {
   } catch {}
 }
 
+/** Where the request landed: the proxy-named origin behind a trusted proxy, the listener otherwise. */
+export function resolveRequestSelfOrigin(
+  request?: Request
+): string | undefined {
+  if (!request) {
+    return;
+  }
+
+  if (trustForwardedHeaders()) {
+    const forwardedHost = request.headers.get("x-forwarded-host")?.trim();
+
+    if (forwardedHost) {
+      const proto = request.headers.get("x-forwarded-proto")?.trim() || "http";
+      const forwarded = `${proto}://${forwardedHost}`;
+
+      if (isValidBaseUrl(forwarded)) {
+        return forwarded;
+      }
+    }
+  }
+
+  return resolveRequestListenerOrigin(request);
+}
+
 /**
  * The host a persisted callback base may name: the env override, the host the
  * request landed on, or a loopback origin. The saved value is deliberately
  * absent: it is the thing being checked, and a poisoned one would vouch for
  * itself. Deployments that serve the web app from another host than the API
- * set `NAKAMA_WEB_PUBLIC_URL`, which is what that override is for.
+ * set `AIRIN_WEB_PUBLIC_URL`, which is what that override is for.
  */
 function isDeploymentOrigin(candidate: string, request?: Request): boolean {
   const envOverride =
-    process.env.NAKAMA_WEB_PUBLIC_URL?.trim() ||
-    process.env.NAKAMA_PUBLIC_URL?.trim();
+    process.env.AIRIN_WEB_PUBLIC_URL?.trim() ||
+    process.env.AIRIN_PUBLIC_URL?.trim();
 
   if (envOverride && sameHost(candidate, envOverride)) {
     return true;
@@ -158,8 +213,23 @@ function isDeploymentOrigin(candidate: string, request?: Request): boolean {
     return true;
   }
 
+  if (!request) {
+    return false;
+  }
+
+  // The listener host anchors a direct install's own origin: the browser on
+  // the page cannot lie about the `Host` it is talking to, and first-run setup
+  // has nothing configured yet to check against. Forwarded headers only count
+  // when the operator declared a trusted proxy; otherwise a caller could
+  // persist an origin it controls and every later redirect_uri and share link
+  // would use it (#477).
+  if (sameHost(candidate, resolveRequestListenerOrigin(request))) {
+    return true;
+  }
+
   return (
-    Boolean(request) && sameHost(candidate, resolveRequestSelfOrigin(request))
+    trustForwardedHeaders() &&
+    sameHost(candidate, resolveRequestSelfOrigin(request))
   );
 }
 
@@ -175,15 +245,15 @@ export async function persistWebPublicUrl(
   const trimmed = input.trim();
 
   if (!(trimmed && isValidBaseUrl(trimmed))) {
-    throw new NakamaApiError(
-      "webPublicUrl must be a valid http or https URL.",
+    throw new AirinApiError(
+      "Public web URL must be a valid http or https URL.",
       400
     );
   }
 
   if (!isDeploymentOrigin(trimmed, request)) {
-    throw new NakamaApiError(
-      "webPublicUrl must use this deployment's own origin. Set NAKAMA_WEB_PUBLIC_URL to serve the web app from another host.",
+    throw new AirinApiError(
+      "Public web URL must use this deployment's own origin. Set AIRIN_WEB_PUBLIC_URL to serve the web app from another host.",
       400
     );
   }
@@ -193,8 +263,8 @@ export async function persistWebPublicUrl(
 
 export async function getWebPublicUrlSettings(): Promise<WebPublicUrlSettingsResponse> {
   const envOverride =
-    process.env.NAKAMA_WEB_PUBLIC_URL?.trim() ||
-    process.env.NAKAMA_PUBLIC_URL?.trim();
+    process.env.AIRIN_WEB_PUBLIC_URL?.trim() ||
+    process.env.AIRIN_PUBLIC_URL?.trim();
 
   return {
     envOverride: envOverride ? normalizeBaseUrl(envOverride) : null,
@@ -204,10 +274,11 @@ export async function getWebPublicUrlSettings(): Promise<WebPublicUrlSettingsRes
 
 /**
  * OAuth callback base URL. A configured public URL is the operator's answer and
- * wins: clientOrigin, Origin, Referer and X-Forwarded-Host all come from the
- * caller, and this base ends up in the redirect_uri an OAuth code is delivered
- * to. They still decide when nothing is configured, which is how a dev install
- * on localhost works.
+ * wins: clientOrigin, Origin and Referer all come from the caller, and this
+ * base ends up in the redirect_uri an OAuth code is delivered to. They still
+ * decide when nothing is configured, which is how a dev install on localhost
+ * works — vouched for by loopback, or by the proxy-named origin when the
+ * operator declared a trusted proxy (`AIRIN_TRUST_PROXY`, issue #477).
  */
 export function resolveComposioCallbackBaseUrl(
   options: { clientOrigin?: string; request?: Request } = {}
@@ -245,13 +316,22 @@ export function resolveCallbackBaseUrlFromRedirect(request: Request): string {
 }
 
 function fallbackCallbackBaseUrl(request?: Request): string {
+  // Behind a trusted proxy the forwarded headers name the deployment, scheme
+  // included, so CLI and API requests without an `Origin` still build an
+  // https callback. On a direct install the caller controls `Host`, so
+  // `request.url` names whatever the caller sent; deriving a remote base from
+  // it would let the caller pin where an OAuth code is delivered (#477). Fail
+  // closed to loopback and let the operator name the origin instead.
   const self = resolveRequestSelfOrigin(request);
 
-  if (self) {
+  if (
+    self &&
+    (trustForwardedHeaders() || isLoopbackComposioCallbackBaseUrl(self))
+  ) {
     return self;
   }
 
-  const webPort = process.env.NAKAMA_WEB_PORT?.trim() || "3003";
+  const webPort = process.env.AIRIN_WEB_PORT?.trim() || "3003";
 
   return `http://127.0.0.1:${webPort}`;
 }

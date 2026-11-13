@@ -1,15 +1,16 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   type ListSkillsResponse,
   type ListSkillVersionsResponse,
-  NakamaApiError,
   type ProfileResponse,
   type PublishedSkillResponse,
   type SkillResponse,
   type SyncSkillsResponse,
-} from "@nakama/core";
+} from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { ServerOptions } from "../context";
 import {
+  profileResponseFor,
   requireActiveOrgIdFromContext,
   requireOrgAdminOrPlatformAdminFromContext,
   requirePlatformAdminFromContext,
@@ -96,7 +97,7 @@ export function registerSkillRoutes(
       const orgId = decodeURIComponent(c.req.param("orgId"));
 
       if (auth.activeOrgId !== orgId) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       const organization =
@@ -107,7 +108,7 @@ export function registerSkillRoutes(
         auth.orgRole !== "admin" &&
         !auth.isPlatformAdmin
       ) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       return json<PublishedSkillResponse>(
@@ -185,7 +186,7 @@ export function registerSkillRoutes(
         const orgId = decodeURIComponent(c.req.param("orgId"));
 
         if (auth.activeOrgId !== orgId) {
-          throw new NakamaApiError("Not found", 404);
+          throw new AirinApiError("Not found", 404);
         }
 
         const organization =
@@ -196,7 +197,7 @@ export function registerSkillRoutes(
           auth.orgRole !== "admin" &&
           !auth.isPlatformAdmin
         ) {
-          throw new NakamaApiError("Not found", 404);
+          throw new AirinApiError("Not found", 404);
         }
 
         const publicationId = decodeURIComponent(c.req.param("publicationId"));
@@ -515,6 +516,19 @@ export function registerSkillRoutes(
     );
   });
 
+  // Installing runs package build code on the host, so it takes the same
+  // platform admin the skill files routes do, and never happens on its own.
+  app.post("/v1/skills/:skillId/python-packages", async (c) => {
+    requirePlatformAdminFromContext(c);
+
+    return json(
+      await agent.installSkillPythonPackages(
+        requireActiveOrgIdFromContext(c),
+        decodeURIComponent(c.req.param("skillId"))
+      )
+    );
+  });
+
   app.get("/v1/skills/:skillId/versions", async (c) => {
     requirePlatformAdminFromContext(c);
 
@@ -616,7 +630,7 @@ export function registerSkillRoutes(
     const existing = await agent.getSkill(skillId);
 
     if (existing.skill.pluginId) {
-      throw new NakamaApiError("Plugin-owned skills cannot be edited.", 409);
+      throw new AirinApiError("Plugin-owned skills cannot be edited.", 409);
     }
 
     const body = await readJson(c.req.raw, patchSkillSchema);
@@ -636,7 +650,7 @@ export function registerSkillRoutes(
     const existing = await agent.getSkill(skillId);
 
     if (existing.skill.pluginId) {
-      throw new NakamaApiError("Plugin-owned skills cannot be deleted.", 409);
+      throw new AirinApiError("Plugin-owned skills cannot be deleted.", 409);
     }
 
     await agent.deleteSkill(skillId);
@@ -653,11 +667,14 @@ export function registerSkillRoutes(
     const body = await readJson(c.req.raw, assignSkillSchema);
 
     return json<ProfileResponse>(
-      await agent.assignSkill(
-        orgId,
-        decodeURIComponent(c.req.param("profileId")),
-        body,
-        { actorUserId: auth.user.id, source: "dashboard" }
+      profileResponseFor(
+        c,
+        await agent.assignSkill(
+          orgId,
+          decodeURIComponent(c.req.param("profileId")),
+          body,
+          { actorUserId: auth.user.id, source: "dashboard" }
+        )
       )
     );
   });
@@ -670,11 +687,14 @@ export function registerSkillRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
 
     return json<ProfileResponse>(
-      await agent.unassignSkill(
-        orgId,
-        decodeURIComponent(c.req.param("profileId")),
-        decodeURIComponent(c.req.param("skillId")),
-        { actorUserId: auth.user.id, source: "dashboard" }
+      profileResponseFor(
+        c,
+        await agent.unassignSkill(
+          orgId,
+          decodeURIComponent(c.req.param("profileId")),
+          decodeURIComponent(c.req.param("skillId")),
+          { actorUserId: auth.user.id, source: "dashboard" }
+        )
       )
     );
   });

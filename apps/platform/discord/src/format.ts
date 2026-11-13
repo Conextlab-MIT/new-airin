@@ -1,4 +1,4 @@
-import type { AgentTodo } from "@nakama/core/contract";
+import type { AgentTodo } from "@airin/core/contract";
 
 const DISCORD_MAX_MESSAGE_LENGTH = 2000;
 
@@ -111,7 +111,7 @@ function formatDiscordTodoLine(todo: AgentTodo): string {
   }
 }
 
-export const HELP_TEXT = `Nakama Discord commands:
+export const HELP_TEXT = `Airin Discord commands:
 
 /start — welcome and pairing help
 /help — show this message

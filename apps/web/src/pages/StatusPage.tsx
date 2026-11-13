@@ -4,10 +4,10 @@ import type {
   LlmUsageStats,
   LlmUsageStatus,
   SystemStatusResponse,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { cn } from "@airin/ui/utils";
 import type { Clock01Icon } from "hugeicons-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -100,7 +100,9 @@ function PluginWorkersSection() {
 
   return (
     <section aria-label="Plugin workers" className="space-y-3">
-      <h2 className="type-section-title">Plugin workers</h2>
+      <h2 className="type-section-title font-medium text-muted-foreground">
+        Plugin workers
+      </h2>
       <Card className="w-full overflow-hidden shadow-none">
         <CardContent className="divide-y divide-border p-0">
           {data.map((worker) => {
@@ -149,6 +151,7 @@ function StatusDashboard({
     whatsappWorker,
     discordWorker,
     slackWorker,
+    teamsWorker,
   } = status;
 
   const workerByTitle = new Map<
@@ -165,6 +168,7 @@ function StatusDashboard({
     ["Automation", { worker: automationWorker, workerName: "automation" }],
     ["Discord", { worker: discordWorker, workerName: "discord" }],
     ["Slack", { worker: slackWorker, workerName: "slack" }],
+    ["Microsoft Teams", { worker: teamsWorker, workerName: "teams" }],
     ["Telegram", { worker: telegramWorker, workerName: "telegram" }],
     [
       "WhatsApp",
@@ -190,7 +194,9 @@ function StatusDashboard({
   return (
     <div className="space-y-8">
       <section aria-label="Automation activity" className="space-y-3">
-        <h2 className="type-section-title">Automation activity</h2>
+        <h2 className="type-section-title font-medium text-muted-foreground">
+          Automation activity
+        </h2>
         <Card className="w-full overflow-hidden shadow-none">
           <CardContent className="divide-y divide-border p-0">
             <QuickStat
@@ -206,7 +212,9 @@ function StatusDashboard({
         </Card>
       </section>
       <section aria-label="Services" className="space-y-3">
-        <h2 className="type-section-title">Services</h2>
+        <h2 className="type-section-title font-medium text-muted-foreground">
+          Services
+        </h2>
         <Card className="w-full overflow-hidden shadow-none">
           <CardContent className="divide-y divide-border p-0">
             {workerRows.map((row) => (
@@ -230,14 +238,46 @@ function StatusDashboard({
 }
 
 export function LlmUsageTab() {
-  const { data: status, error, isLoading } = useSystemStatusQuery();
+  const {
+    data: status,
+    dataUpdatedAt,
+    error,
+    isLoading,
+  } = useSystemStatusQuery();
+
   const refreshSystemStatus = useRefreshSystemStatus();
   const errorMessage = error ? formatError(error) : null;
+  const isStale = Boolean(errorMessage && status);
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <OrgLlmQuotaCard />
-      {errorMessage ? (
+      {isStale ? (
+        <div
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/25 bg-primary/5 py-2.5 pr-2.5 pl-4"
+          role="status"
+        >
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <p className="font-medium text-sm">
+              Showing data from{" "}
+              {new Date(dataUpdatedAt).toLocaleTimeString(undefined, {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </p>
+            <p className="text-muted-foreground text-xs">{errorMessage}</p>
+          </div>
+          <Button
+            className="shrink-0 bg-background"
+            onClick={() => void refreshSystemStatus()}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            Retry
+          </Button>
+        </div>
+      ) : errorMessage ? (
         <div
           className="flex flex-wrap items-start justify-between gap-3 border-destructive/40 border-b bg-destructive/10 px-4 py-3"
           role="alert"
@@ -264,7 +304,9 @@ export function LlmUsageTab() {
           className="h-80 animate-pulse bg-muted/40"
         />
       ) : status ? (
-        <LlmUsageSection usage={status.llmUsage} />
+        <div className={cn(isStale && "opacity-60")}>
+          <LlmUsageSection usage={status.llmUsage} />
+        </div>
       ) : null}
     </div>
   );
@@ -283,6 +325,7 @@ function usesBrowsePricingHint(provider: LlmUsageStatus["provider"]): boolean {
   return (
     provider === "openrouter" ||
     provider === "cerebras" ||
+    provider === "cloudflare" ||
     provider === "fireworks"
   );
 }
@@ -301,7 +344,7 @@ function llmUsageCostNote(
       return `Based on pricing saved in Settings for ${modelLabel}. Actual billing may differ.`;
     }
 
-    return "Estimated cost uses Nakama's built-in model prices. Your provider may charge a different amount.";
+    return "Estimated cost uses Airin's built-in model prices. Your provider may charge a different amount.";
   }
 
   if (usesBrowsePricingHint(usage.provider)) {
@@ -760,7 +803,9 @@ function UsageGroupList({
 
   return (
     <div className="space-y-3">
-      <h2 className="type-section-title">{title}</h2>
+      <h2 className="type-section-title font-medium text-muted-foreground">
+        {title}
+      </h2>
       <Card className="w-full overflow-hidden shadow-none">
         <CardContent className="p-0">
           {groups.map((group) => (
@@ -819,8 +864,7 @@ function LlmUsageSection({ usage }: { usage: LlmUsageStatus }) {
 
       <div className="px-4">
         <p className="text-muted-foreground text-xs">
-          Tracking since {formatDate(usage.trackedSince)}. Figures reset when
-          the server restarts.
+          Tracking since {formatDate(usage.trackedSince)}.
         </p>
       </div>
     </section>
@@ -936,11 +980,11 @@ function QuickStat({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-3 px-4 py-3",
+        "flex min-h-13 items-center justify-between gap-3 px-4 py-3",
         active && "bg-primary/5 dark:bg-primary/10"
       )}
     >
-      <p className="font-medium text-foreground text-sm">{label}</p>
+      <p className="text-foreground text-sm">{label}</p>
       <p
         className={cn(
           "font-medium text-foreground text-sm tabular-nums",

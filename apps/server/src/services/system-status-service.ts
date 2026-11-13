@@ -1,25 +1,33 @@
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type {
+  AirinUpgradeResponse,
+  AirinVersionResponse,
   HealthResponse,
   LlmUsageStats,
   LlmUsageStatus,
   SystemStatusResponse,
   WorkerProcessInfo,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AIRIN_API_VERSION,
+  AirinApiError,
+  getAirinVersion,
   getAutomationWorkerHeartbeatStatus,
   getDiscordWorkerStatus,
-  getNakamaVersion,
   getTelegramWorkerStatus,
   getWhatsAppWorkerStatus,
   isComposioConfiguredAsync,
-  NAKAMA_API_VERSION,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   type ChannelConfigScope,
+  type ChannelOwner,
   isChannelOwner,
-} from "@nakama/core/channel-config-shared";
-import { getSlackWorkerStatus } from "@nakama/core/slack-worker";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core/channel-config-shared";
+import { getSlackWorkerStatus } from "@airin/core/slack-worker";
+import { getTeamsWorkerStatus } from "@airin/core/teams-worker";
+import type { DatabaseAdapter } from "@airin/db";
+import { z } from "zod";
 import type { AgentService } from "./agent-service";
 import type { AutomationRunner } from "./automation-runner";
 import type { ComposioService } from "./composio-service";
@@ -51,7 +59,10 @@ export class SystemStatusService {
    */
   async getStatus(
     orgId: ChannelConfigScope,
-    options: { includeUsageByActor?: boolean } = {}
+    options: {
+      includeUsageByActor?: boolean;
+      viewer?: { isPlatformAdmin: boolean; userId: string };
+    } = {}
   ): Promise<SystemStatusResponse> {
     const providerConfigured = this.agent.providerConfigured;
     const models = await this.agent.getModels();
@@ -97,6 +108,15 @@ export class SystemStatusService {
       slackStatus.running = slackProcess.status === "online";
     }
 
+    const teamsProcess = statuses.teams;
+
+    const teamsStatus = await getTeamsWorkerStatus(orgId);
+
+    if (isChannelOwner(orgId) && teamsProcess?.managed) {
+      teamsStatus.process = teamsProcess;
+      teamsStatus.running = teamsProcess.status === "online";
+    }
+
     return {
       automationWorker: {
         activeRuns: this.automationRunner.getActiveRunCount(),
@@ -127,9 +147,48 @@ export class SystemStatusService {
         : { assignedProfileCount: 0, connectedCount: 0, serverCount: 0 },
       server: await this.getServerStatus(),
       slackWorker: slackStatus,
+      teamsWorker: teamsStatus,
       telegramWorker: telegramStatus,
-      whatsappWorker: whatsappStatus,
+      whatsappWorker: await this.nameWhatsAppLinkOwner(
+        whatsappStatus,
+        options.viewer
+      ),
     };
+  }
+
+  /**
+   * Orgs are tenants: name the agent that holds a rejected number only for a
+   * viewer who belongs to its org or runs the platform.
+   */
+  private async nameWhatsAppLinkOwner(
+    status: SystemStatusResponse["whatsappWorker"] & {
+      linkOwnerIds?: ChannelOwner;
+    },
+    viewer: { isPlatformAdmin: boolean; userId: string } | undefined
+  ): Promise<SystemStatusResponse["whatsappWorker"]> {
+    const { linkOwnerIds, ...rest } = status;
+    const db = this.databaseAdapter;
+
+    if (!(linkOwnerIds && viewer && db)) {
+      return rest;
+    }
+
+    const canSee =
+      viewer.isPlatformAdmin ||
+      (await db.getOrgMember(linkOwnerIds.orgId, viewer.userId)) !== null;
+
+    if (!canSee) {
+      return rest;
+    }
+
+    const [org, profile] = await Promise.all([
+      db.getOrganizationById(linkOwnerIds.orgId),
+      db.getProfileForOrg(linkOwnerIds.profileId, linkOwnerIds.orgId),
+    ]);
+
+    return org && profile
+      ? { ...rest, linkOwner: { agentName: profile.name, orgName: org.name } }
+      : rest;
   }
 
   private resolveWorkerStatus(
@@ -239,20 +298,238 @@ export class SystemStatusService {
     const humanUserCount = (await this.databaseAdapter?.countHumanUsers()) ?? 0;
 
     return {
-      apiVersion: NAKAMA_API_VERSION,
+      apiVersion: AIRIN_API_VERSION,
       // Live probe — intentional here; /health skips this to stay fast.
       composioAvailable: composioConfigured
         ? await (this.composioService?.isReachable() ?? false)
         : false,
       composioConfigured,
       ok: true,
+      onboardingEnabled: isOnboardingEnabled(),
       providerConfigured: this.agent.providerConfigured,
+      updateCheckEnabled: isUpdateCheckEnabled(),
       userConfigured: humanUserCount > 0,
-      version: getNakamaVersion(),
+      version: getAirinVersion(),
     };
   }
 }
 
+/** Off unless the operator turns it on with `AIRIN_ENABLE_ONBOARDING`. */
+export function isOnboardingEnabled(): boolean {
+  const value = process.env.AIRIN_ENABLE_ONBOARDING?.trim().toLowerCase();
+
+  return value === "1" || value === "true";
+}
+
+/** On unless the operator turns it off with `AIRIN_DISABLE_UPDATE_CHECK`, e.g. a host that upgrades instances itself. */
+export function isUpdateCheckEnabled(): boolean {
+  const value = process.env.AIRIN_DISABLE_UPDATE_CHECK?.trim().toLowerCase();
+
+  return !(value === "1" || value === "true");
+}
+
 function isString<T>(value: T): value is T & string {
   return Object.prototype.toString.call(value) === "[object String]";
+}
+
+// Written by the docs build from the root package.json. GitHub Pages has no
+// API rate limit, unlike api.github.com (60 calls per hour per IP).
+const LATEST_VERSION_URL = "https://ahmadrosid.github.io/airin/version.txt";
+
+const RELEASE_CACHE_MS = 10 * 60 * 1000;
+
+const RELEASE_FAILURE_CACHE_MS = 60 * 1000;
+
+let cachedRelease: { at: number; latest: string; releaseUrl: string } | null =
+  null;
+
+let releaseFailedAt: number | null = null;
+
+function versionParts(version: string): number[] | null {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(version.trim());
+
+  return match ? match.slice(1).map(Number) : null;
+}
+
+function isNewer(latest: string, current: string): boolean {
+  const a = versionParts(latest);
+  const b = versionParts(current);
+
+  if (!(a && b)) {
+    return false;
+  }
+
+  const diff = a.map((part, index) => part - (b[index] ?? 0)).find(Boolean);
+
+  return (diff ?? 0) > 0;
+}
+
+/** Cached for 10 minutes; a failure is cached for 1 minute. */
+export async function checkAirinVersion(
+  current: string,
+  now = Date.now()
+): Promise<AirinVersionResponse> {
+  if (!cachedRelease || now - cachedRelease.at > RELEASE_CACHE_MS) {
+    let parts: number[] | null = null;
+
+    if (
+      releaseFailedAt === null ||
+      now - releaseFailedAt > RELEASE_FAILURE_CACHE_MS
+    ) {
+      // The timeout also covers the body read, so text() can reject too.
+      try {
+        const response = await fetch(LATEST_VERSION_URL, {
+          signal: AbortSignal.timeout(10_000),
+        });
+
+        parts = response.ok ? versionParts(await response.text()) : null;
+      } catch {
+        parts = null;
+      }
+
+      releaseFailedAt = parts ? null : now;
+    }
+
+    if (!parts) {
+      throw new AirinApiError("Could not read the latest Airin version.", 502);
+    }
+
+    const latest = parts.join(".");
+
+    cachedRelease = {
+      at: now,
+      latest,
+      releaseUrl: `https://github.com/ahmadrosid/airin/releases/tag/v${latest}`,
+    };
+  }
+
+  return {
+    current,
+    latest: cachedRelease.latest,
+    releaseUrl: cachedRelease.releaseUrl,
+    updateAvailable: isNewer(cachedRelease.latest, current),
+  };
+}
+
+const UPDATER_STALE_MS = 30_000;
+
+const upgradeStatusSchema = z.object({
+  at: z.string(),
+  message: z.string(),
+  progress: z.object({ done: z.number(), total: z.number() }).optional(),
+  state: z.enum(["running", "done", "failed", "rolled_back"]),
+  version: z.string(),
+});
+
+function updaterDir(): string | null {
+  return process.env.AIRIN_UPDATER_DIR?.trim() || null;
+}
+
+const ARCHIVE_NAME = /^pre-upgrade-(\d+\.\d+\.\d+)-(\d{8}T\d{6}Z)\.tar\.gz$/;
+
+/** The updater archives the data each time it leaves a version. */
+async function listRollbacks(
+  current: string
+): Promise<AirinUpgradeResponse["rollbacks"]> {
+  const dir = process.env.AIRIN_BACKUP_DIR?.trim();
+  const names = dir ? await readdir(dir).catch(() => []) : [];
+  const newest = new Map<string, string>();
+
+  for (const name of names.sort().reverse()) {
+    const [, version, stamp] = ARCHIVE_NAME.exec(name) ?? [];
+
+    if (version && stamp && version !== current && !newest.has(version)) {
+      newest.set(version, stamp);
+    }
+  }
+
+  return [...newest].map(([version, stamp]) => ({
+    at: stamp.replace(
+      /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
+      "$1-$2-$3T$4:$5:$6Z"
+    ),
+    version,
+  }));
+}
+
+/** The updater touches its heartbeat every two seconds while it waits. */
+export async function readUpgradeState(
+  current: string,
+  now = Date.now()
+): Promise<AirinUpgradeResponse> {
+  const dir = updaterDir();
+
+  if (!dir) {
+    return { available: false, rollbacks: [], status: null };
+  }
+
+  const beat = await stat(join(dir, "heartbeat")).catch(() => null);
+
+  const status = upgradeStatusSchema.safeParse(
+    await readFile(join(dir, "status.json"), "utf8")
+      .then(JSON.parse)
+      .catch(() => null)
+  );
+
+  const available = beat !== null && now - beat.mtimeMs < UPDATER_STALE_MS;
+
+  // The updater takes a request within two seconds. Until then the last run's
+  // status is all there is, and the button would look like the click did nothing.
+  const waiting = available
+    ? await readFile(join(dir, "request"), "utf8").catch(() => null)
+    : null;
+
+  if (waiting) {
+    return {
+      available,
+      rollbacks: await listRollbacks(current),
+      status: {
+        at: new Date(now).toISOString(),
+        message: "Starting.",
+        state: "running",
+        version: waiting.trim().split(" ").at(-1) ?? "",
+      },
+    };
+  }
+
+  return {
+    available,
+    rollbacks: await listRollbacks(current),
+    status: status.success ? status.data : null,
+  };
+}
+
+export async function requestUpgrade(
+  version: string,
+  current: string,
+  action: "upgrade" | "rollback" = "upgrade"
+): Promise<AirinUpgradeResponse> {
+  const state = await readUpgradeState(current);
+  const dir = updaterDir();
+
+  if (!(dir && state.available)) {
+    throw new AirinApiError("The updater service is not running.", 409);
+  }
+
+  if (state.status?.state === "running") {
+    throw new AirinApiError("An upgrade is already running.", 409);
+  }
+
+  if (
+    action === "rollback" &&
+    !state.rollbacks.some((entry) => entry.version === version)
+  ) {
+    throw new AirinApiError(`There is no archive of ${version}.`, 400);
+  }
+
+  if (action === "upgrade" && !isNewer(version, current)) {
+    throw new AirinApiError(
+      `${version} is not a release newer than ${current}.`,
+      400
+    );
+  }
+
+  await writeFile(join(dir, "request"), `${action} ${version}\n`);
+
+  return state;
 }

@@ -1,5 +1,7 @@
-import { inferArtifactMimeType } from "@nakama/core/artifact-mime";
+import { inferArtifactMimeType } from "@airin/core/artifact-mime";
 import type { ChatListItem } from "@/lib/chat-history";
+
+export const FILE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 
 export {
   artifactCodeLanguage,
@@ -15,9 +17,9 @@ export {
   isVideoArtifactMimeType,
   looksLikeUtf8Text,
   resolveArtifactMimeType,
-} from "@nakama/core/artifact-mime";
+} from "@airin/core/artifact-mime";
 
-const ARTIFACT_META_SUFFIX = ".nakama-meta.json";
+const ARTIFACT_META_SUFFIX = ".airin-meta.json";
 
 const ARTIFACTS_SEGMENT = "/artifacts/";
 
@@ -59,7 +61,9 @@ function isWriteFileTool(message: ChatListItem): boolean {
   // an artifact chip too.
   return (
     message.role === "tool" &&
-    (message.tool === "write_file" || message.tool === "write_docx")
+    (message.tool === "write_file" ||
+      message.tool === "write_docx" ||
+      message.tool === "save_artifact")
   );
 }
 
@@ -135,7 +139,7 @@ function isUnderArtifactsDir(resolvedPath: string): boolean {
 function isArtifactMetaRelativePath(relativePath: string): boolean {
   return (
     relativePath.endsWith(ARTIFACT_META_SUFFIX) ||
-    relativePath.includes(".nakama-meta")
+    relativePath.includes(".airin-meta")
   );
 }
 
@@ -143,7 +147,7 @@ function isArtifactMetaResolvedPath(resolvedPath: string): boolean {
   return (
     isUnderArtifactsDir(resolvedPath) &&
     (resolvedPath.endsWith(ARTIFACT_META_SUFFIX) ||
-      resolvedPath.includes(".nakama-meta"))
+      resolvedPath.includes(".airin-meta"))
   );
 }
 
@@ -159,7 +163,7 @@ export function isArtifactMetaSidecarTool(message: ChatListItem): boolean {
 
   if (
     inputPath &&
-    (inputPath.includes(".nakama-meta") ||
+    (inputPath.includes(".airin-meta") ||
       inputPath.endsWith(ARTIFACT_META_SUFFIX))
   ) {
     return true;
@@ -175,7 +179,7 @@ export function isArtifactMetaSidecarTool(message: ChatListItem): boolean {
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
   if (typeof result?.path === "string") {
     return (
-      result.path.includes(".nakama-meta") ||
+      result.path.includes(".airin-meta") ||
       result.path.endsWith(ARTIFACT_META_SUFFIX)
     );
   }
@@ -330,6 +334,83 @@ function getGenerateImageResult(
   return message.toolResult as GenerateImageResult;
 }
 
+function artifactRefFromToolArtifactPath(
+  message: ChatListItem
+): ChatArtifactRef | null {
+  if (
+    message.role !== "tool" ||
+    message.toolStatus === "running" ||
+    isWriteFileTool(message) ||
+    isGenerateImageTool(message)
+  ) {
+    return null;
+  }
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+  if (typeof message.toolResult !== "object" || message.toolResult === null) {
+    return null;
+  }
+
+  // SAFETY: The enclosing parser checks the value before this conversion.
+  const result = message.toolResult as {
+    artifactPath?: string;
+    error?: string;
+    mediaType?: string;
+    mimeType?: string;
+    ok?: boolean;
+    sizeBytes?: number;
+  };
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+  if (typeof result.error === "string" || result.ok === false) {
+    return null;
+  }
+
+  const rawPath =
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    typeof result.artifactPath === "string" ? result.artifactPath.trim() : "";
+
+  if (!rawPath) {
+    return null;
+  }
+
+  const normalized = rawPath.replace(/^\.\//, "");
+
+  const relativePath =
+    toArtifactsRelativePath(normalized) ??
+    (normalized.startsWith(ARTIFACTS_PREFIX)
+      ? normalized.slice(ARTIFACTS_PREFIX.length)
+      : null);
+
+  if (!relativePath || isArtifactMetaRelativePath(relativePath)) {
+    return null;
+  }
+
+  const mimeType =
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    (typeof result.mediaType === "string" && result.mediaType.trim()
+      ? result.mediaType.trim()
+      : null) ??
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    (typeof result.mimeType === "string" && result.mimeType.trim()
+      ? result.mimeType.trim()
+      : inferArtifactMimeType(relativePath.split("/").pop() ?? relativePath));
+
+  const sizeBytes =
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    typeof result.sizeBytes === "number" &&
+    Number.isInteger(result.sizeBytes) &&
+    result.sizeBytes >= 0
+      ? result.sizeBytes
+      : 0;
+
+  return buildArtifactRef(relativePath, {
+    mimeType,
+    savedAt: "",
+    sizeBytes,
+  });
+}
+
 function artifactRefFromGenerateImage(
   message: ChatListItem
 ): ChatArtifactRef | null {
@@ -427,7 +508,7 @@ export function extractArtifactPathsFromText(
 
 /**
  * Extract artifact chips from an assistant turn's tool messages and text.
- * Prefers content + `.nakama-meta.json` sidecar pairs; falls back to content-only
+ * Prefers content + `.airin-meta.json` sidecar pairs; falls back to content-only
  * writes under artifacts/ and `artifacts/...` mentions in assistant text.
  */
 export function extractTurnArtifacts(
@@ -515,11 +596,15 @@ export function extractTurnArtifacts(
   for (const message of messages) {
     const generated = artifactRefFromGenerateImage(message);
 
-    if (!generated) {
-      continue;
+    if (generated) {
+      artifactsByPath.set(generated.path, generated);
     }
 
-    artifactsByPath.set(generated.path, generated);
+    const fromArtifactPath = artifactRefFromToolArtifactPath(message);
+
+    if (fromArtifactPath) {
+      artifactsByPath.set(fromArtifactPath.path, fromArtifactPath);
+    }
   }
 
   for (const message of messages) {

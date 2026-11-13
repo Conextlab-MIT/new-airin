@@ -1,23 +1,36 @@
-import type { NakamaClient, RemoteChatSession } from "@nakama/client";
-import { deliverTurnArtifactShares } from "@nakama/core";
-import { formatClientError } from "@nakama/core/api-error";
+import { randomInt, randomUUID } from "node:crypto";
+import type { AirinClient, RemoteChatSession } from "@airin/client";
+import { deliverTurnArtifactShares } from "@airin/core";
+import {
+  formatAgentQuestionnaireAnswersMessage,
+  hasActiveAgentQuestionnaire,
+} from "@airin/core/agent-questionnaire";
+import { formatClientError } from "@airin/core/api-error";
 import {
   clearActiveStream,
   isAbortError,
   registerActiveStream,
   stopActiveStream,
-} from "@nakama/core/channel-active-stream";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
+} from "@airin/core/channel-active-stream";
+import { createChatLock } from "@airin/core/channel-chat-lock";
+import { describeChannelStatus } from "@airin/core/channel-commands";
 import {
   type ChannelOrgStore,
   findOrgBySelectionInput,
   formatOrgSelectionPrompt,
   formatOrgSwitchConfirmation,
   prepareChannelOrgContext,
-} from "@nakama/core/channel-org";
-import type { ChannelSessionStore } from "@nakama/core/channel-session-store";
-import { createTypingLoop } from "@nakama/core/channel-typing-loop";
-import type { SendMessageInput } from "@nakama/core/contract";
+} from "@airin/core/channel-org";
+import type {
+  ChannelOpenQuestions,
+  ChannelSessionStore,
+} from "@airin/core/channel-session-store";
+import { createTypingLoop } from "@airin/core/channel-typing-loop";
+import type {
+  AgentQuestionItem,
+  AgentQuestionnaire,
+  SendMessageInput,
+} from "@airin/core/contract";
 import {
   filterProfilesForChatAccess,
   formatProfileSelectionPrompt,
@@ -27,12 +40,17 @@ import {
   pickProfileForOrg,
   resolveProfileInput,
   resolveProfileInScopes,
-} from "@nakama/core/profiles";
+} from "@airin/core/profiles";
 import {
   hasActiveHandshakeCode,
   looksLikePairingCode,
-} from "@nakama/core/telegram-config";
-import type { Context } from "grammy";
+} from "@airin/core/telegram-config";
+import {
+  renderTelegramPlainText,
+  renderTelegramRichText,
+  splitTelegramRichChunks,
+} from "@airin/core/telegram-rich-text";
+import { type Context, InlineKeyboard } from "grammy";
 import {
   buildTelegramDocumentInput,
   DOWNLOAD_FAILED_REPLY,
@@ -47,11 +65,7 @@ import {
 import type { TelegramAuthStore } from "./auth-store";
 import { maybeSendRequestedTelegramArtifactAttachment } from "./channel-artifact-flow";
 import type { TelegramBridgeConfig } from "./config";
-import {
-  HELP_TEXT,
-  prepareTelegramReply,
-  splitTelegramMessage,
-} from "./format";
+import { HELP_TEXT, prepareTelegramReply } from "./format";
 import {
   explainGroupMessageHandling,
   isTelegramGroupChat,
@@ -82,7 +96,7 @@ export async function replyAsChat(
     return;
   }
 
-  const bubbles = splitTelegramMessage(prepared);
+  const bubbles = splitTelegramRichChunks(prepared);
   const delayMs = options.delayMs ?? DEFAULT_BUBBLE_DELAY_MS;
 
   for (let index = 0; index < bubbles.length; index++) {
@@ -103,13 +117,13 @@ const LINK_IN_PRIVATE_REPLY =
   "Link your account in a private chat with this bot first.";
 
 const PAIRING_PROMPT =
-  "Welcome to Nakama.\n\n" +
+  "Welcome to Airin.\n\n" +
   "Paste your pairing code from Integrations → Telegram in the web dashboard. " +
   "You only need to do this once for this chat.";
 
 const NO_CODE_PROMPT =
   "This bot is not linked yet.\n\n" +
-  "Open Nakama Integrations → Telegram, save your bot token, and copy the pairing code. " +
+  "Open Airin Integrations → Telegram, save your bot token, and copy the pairing code. " +
   "Then send that code here.";
 
 const ACCESS_REQUESTED_NOTE =
@@ -117,14 +131,27 @@ const ACCESS_REQUESTED_NOTE =
 
 export interface ChatHandlerDeps {
   authStore: TelegramAuthStore;
-  client: NakamaClient;
+  client: AirinClient;
   config: TelegramBridgeConfig;
+  dispatchTurn?: (
+    key: string,
+    work: () => Promise<void>,
+    ctx: Context
+  ) => boolean;
   getBotInfo?: () => TelegramBotInfo | undefined;
   orgStore: ChannelOrgStore;
   sessionStore: ChannelSessionStore;
 }
 
 export function createChatHandler(deps: ChatHandlerDeps) {
+  // Each update owns its API client. The lock is per chat, so two chats run at
+  // once, and a shared client's setOrgId would send one chat's requests to
+  // the other chat's org.
+  return (ctx: Context) =>
+    createScopedChatHandler({ ...deps, client: deps.client.forOrg() })(ctx);
+}
+
+function createScopedChatHandler(deps: ChatHandlerDeps) {
   const {
     client,
     config,
@@ -132,6 +159,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
     sessionStore,
     orgStore,
     getBotInfo = () => undefined,
+    dispatchTurn,
   } = deps;
 
   return async function handleMessage(ctx: Context): Promise<void> {
@@ -147,6 +175,14 @@ export function createChatHandler(deps: ChatHandlerDeps) {
       return;
     }
 
+    const tapData = ctx.callbackQuery?.data;
+
+    if (tapData !== undefined) {
+      await handleQuestionTap(ctx, tapData, userId, telegram);
+
+      return;
+    }
+
     const text = ctx.message?.text?.trim();
     const isGroup = isTelegramGroupChat(ctx);
     const botInfo = resolveBotInfo(ctx, getBotInfo());
@@ -156,7 +192,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
       : null;
 
     if (groupDecision && !groupDecision.shouldHandle) {
-      if (process.env.NAKAMA_CH_DEBUG !== "1") {
+      if (process.env.AIRIN_CH_DEBUG !== "1") {
         return;
       }
 
@@ -194,7 +230,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
       return;
     }
 
-    await withChatLock(conversationKey, async () => {
+    const turn = async () => {
       await authStore.reload();
       const isAuthorized = authStore.isAuthorized(userId);
 
@@ -331,6 +367,44 @@ export function createChatHandler(deps: ChatHandlerDeps) {
         ? stripBotMention(text, botInfo?.username)
         : text;
 
+      // Text sent while questions are open answers the next open question.
+      const typed = recordTypedAnswer(
+        sessionStore,
+        conversationKey,
+        messageText
+      );
+
+      if (typed) {
+        await sessionStore.save();
+
+        if (typed.messageId !== undefined) {
+          await ctx.api
+            .editMessageText(
+              ctx.chat!.id,
+              typed.messageId,
+              `${typed.questionText}\n\n✅ ${typed.answer}`
+            )
+            .catch((error) =>
+              console.warn(
+                "Telegram: could not mark the question answered",
+                error
+              )
+            );
+        }
+
+        if (typed.answersMessage) {
+          await handleChatMessage(
+            ctx,
+            withGroupContext({ message: typed.answersMessage }, isGroup),
+            conversationKey,
+            telegram,
+            typed.answersMessage
+          );
+        }
+
+        return;
+      }
+
       await handleChatMessage(
         ctx,
         withGroupContext({ message: messageText }, isGroup),
@@ -338,8 +412,125 @@ export function createChatHandler(deps: ChatHandlerDeps) {
         telegram,
         messageText
       );
-    });
+    };
+
+    await startTurn(ctx, conversationKey, userId, telegram, turn);
   };
+
+  async function startTurn(
+    ctx: Context,
+    conversationKey: string,
+    userId: number,
+    telegram: TelegramRichMessenger,
+    turn: () => Promise<void>
+  ): Promise<boolean> {
+    const runTurn = () => withChatLock(conversationKey, turn);
+
+    if (!dispatchTurn) {
+      await runTurn();
+
+      return true;
+    }
+
+    if (dispatchTurn(conversationKey, runTurn, ctx)) {
+      return true;
+    }
+
+    await authStore.reload();
+
+    if (authStore.isAuthorized(userId)) {
+      await telegram.send("This bot is busy. Try again shortly.");
+    }
+
+    return false;
+  }
+
+  async function handleQuestionTap(
+    ctx: Context,
+    data: string,
+    userId: number,
+    telegram: TelegramRichMessenger
+  ): Promise<void> {
+    await authStore.reload();
+
+    if (!authStore.isAuthorized(userId)) {
+      await ctx.answerCallbackQuery();
+
+      return;
+    }
+
+    const chatId = String(ctx.chat?.id);
+    const isGroup = isTelegramGroupChat(ctx);
+    const conversationKey = resolveConversationKey(ctx, chatId, isGroup);
+    const tap = recordQuestionTap(sessionStore, conversationKey, data);
+
+    if (tap.kind === "closed") {
+      await answerTap(ctx, { show_alert: true, text: QUESTION_CLOSED_REPLY });
+      await ctx
+        .editMessageReplyMarkup()
+        .catch((error) =>
+          console.warn(
+            "Telegram: could not remove closed question buttons",
+            error
+          )
+        );
+
+      return;
+    }
+
+    if (tap.kind === "duplicate") {
+      // A double tap, or a tap that raced the edit: the first one counted.
+      await answerTap(ctx, { text: `✅ ${tap.answer}` });
+
+      return;
+    }
+
+    await sessionStore.save();
+    await answerTap(ctx);
+    await editQuestionMessage(ctx, `${tap.questionText}\n\n✅ ${tap.answer}`);
+
+    const message = tap.answersMessage;
+
+    if (!message) {
+      return;
+    }
+
+    // Until the agent turn takes the answers, they stay open; a refused turn
+    // puts the last question back so the user can tap again.
+    const reopen = async () => {
+      tap.undo();
+      await sessionStore.save();
+      await editQuestionMessage(ctx, tap.questionText, tap.keyboard);
+    };
+
+    const accepted = await startTurn(
+      ctx,
+      conversationKey,
+      userId,
+      telegram,
+      async () => {
+        const channelOrgKey = resolveChannelOrgKey(chatId, userId, isGroup);
+
+        if (!(await ensureOrgReady(telegram, channelOrgKey, undefined))) {
+          await reopen();
+
+          return;
+        }
+
+        await handleChatMessage(
+          ctx,
+          withGroupContext({ message }, isGroup),
+          conversationKey,
+          telegram,
+          message
+        );
+      }
+    );
+
+    if (!accepted) {
+      await reopen();
+    }
+  }
 
   async function requestAccess(ctx: Context, userId: number): Promise<void> {
     try {
@@ -547,35 +738,76 @@ export function createChatHandler(deps: ChatHandlerDeps) {
     );
 
     const todoStatus = new TelegramTodoStatusMessage(telegram);
+    const draft = createReplyDraft(ctx);
+    let todoStatusShown = false;
     let reply = "";
+    // The final reply holds only the text after the last tool call.
+    let segmentStart = 0;
+    // The latest open question from the stream; an array so the callback write
+    // keeps its type.
+    const shownQuestions: AgentQuestionnaire[] = [];
+
+    // A new turn closes buttons from the last one.
+    if (sessionStore.getOpenQuestions(conversationKey)) {
+      sessionStore.setOpenQuestions(conversationKey, undefined);
+      await sessionStore.save();
+    }
+
     const signal = registerActiveStream(conversationKey);
 
     try {
       typingLoop.start();
+      draft?.start();
 
       reply = await session.sendStream(
         input,
         {
           onChunk: (delta) => {
             reply += delta;
+            draft?.update(reply.slice(segmentStart));
+          },
+          onQuestionnaireUpdated: (next) => {
+            typingLoop.ping();
+            shownQuestions.length = 0;
+
+            if (next && hasActiveAgentQuestionnaire(next)) {
+              shownQuestions.push(next);
+            }
           },
           onThinking: () => {
             typingLoop.ping();
           },
           onTodosUpdated: (todos) => {
             typingLoop.ping();
-            void todoStatus.update(todos);
+
+            // The first todo update sends the status message, which clears
+            // the draft; once it is sent, a new draft id shows the draft
+            // again without replaying it.
+            const firstStatus = !todoStatusShown && todos.length > 0;
+
+            if (firstStatus) {
+              todoStatusShown = true;
+            }
+
+            void todoStatus.update(todos).then(() => {
+              if (firstStatus) {
+                draft?.restart();
+              }
+            });
           },
           onToolEnd: () => {
             typingLoop.ping();
           },
           onToolStart: () => {
             typingLoop.ping();
+            segmentStart = reply.length;
+            draft?.newSegment();
           },
         },
         { signal }
       );
 
+      await draft?.stop();
       await todoStatus.complete();
 
       if (signal.aborted) {
@@ -588,6 +820,8 @@ export function createChatHandler(deps: ChatHandlerDeps) {
         return;
       }
     } catch (error) {
+      await draft?.stop();
+
       if (isAbortError(error)) {
         await todoStatus.stop();
 
@@ -609,10 +843,21 @@ export function createChatHandler(deps: ChatHandlerDeps) {
       typingLoop.stop();
     }
 
+    const questionnaire = shownQuestions.at(0);
+
     if (reply.trim()) {
       await replyAsChat(telegram, reply);
-    } else {
+    } else if (!questionnaire) {
       await telegram.send("(empty reply)");
+    }
+
+    if (questionnaire) {
+      await sendQuestionButtons(
+        ctx,
+        sessionStore,
+        conversationKey,
+        questionnaire
+      );
     }
 
     if (profileId) {
@@ -875,42 +1120,24 @@ export function createChatHandler(deps: ChatHandlerDeps) {
   async function listSelectableProfiles(orgId?: string) {
     const { profiles } = await client.listProfiles(orgId);
 
-    return filterProfilesForChatAccess(profiles, { excludeSuperBot: true });
+    return filterProfilesForChatAccess(profiles, { excludeSuperAirin: true });
   }
 
   async function replyStatus(
     telegram: TelegramRichMessenger,
     chatId: string
   ): Promise<void> {
-    try {
-      const health = await client.health();
+    const status = await describeChannelStatus(client, {
+      findAgent: async () => {
+        const agent = await resolveSessionProfile(chatId);
 
-      const lines = [
-        `Server: ${health.ok ? "ok" : "degraded"}`,
-        `Provider configured: ${health.providerConfigured ? "yes" : "no"}`,
-      ];
+        return { agent, id: agent.id };
+      },
+      label: "Profile",
+      sessionId: sessionStore.get(chatId)?.sessionId,
+    });
 
-      if (health.providerConfigured) {
-        const models = await client.getModels();
-        const profiles = await listSelectableProfiles();
-        const profileId = await resolveSessionProfileId(chatId);
-        const profile = profiles.find((entry) => entry.id === profileId);
-
-        const modelLabel = profile?.model?.includes("::")
-          ? profile.model.slice(profile.model.indexOf("::") + 2)
-          : (profile?.model ?? "none");
-
-        lines.push(`Profile: ${profile?.name ?? profileId}`);
-        lines.push(`Provider: ${models.provider ?? "unknown"}`);
-        lines.push(`Model: ${modelLabel}`);
-      } else {
-        lines.push("Chat runs in offline mode without an API key.");
-      }
-
-      await replyChunks(telegram, lines.join("\n"));
-    } catch (error) {
-      await telegram.send(formatClientError(error));
-    }
+    await replyChunks(telegram, status);
   }
 
   async function resolveSession(chatId: string): Promise<RemoteChatSession> {
@@ -986,14 +1213,23 @@ export function createChatHandler(deps: ChatHandlerDeps) {
   }
 
   async function resolveSessionProfileId(chatId: string): Promise<string> {
+    return (await resolveSessionProfile(chatId)).id;
+  }
+
+  /** The chat's agent. An owner's connection looks it up in the owner's org. */
+  async function resolveSessionProfile(chatId: string) {
     if (config.owner) {
       const { profiles } = await client.listProfiles(config.owner.orgId);
 
-      if (!profiles.some((profile) => profile.id === config.owner!.profileId)) {
+      const ownerProfile = profiles.find(
+        (profile) => profile.id === config.owner!.profileId
+      );
+
+      if (!ownerProfile) {
         throw new Error("The connection owner is unavailable.");
       }
 
-      return config.owner.profileId;
+      return ownerProfile;
     }
 
     const profiles = await listSelectableProfiles();
@@ -1003,11 +1239,11 @@ export function createChatHandler(deps: ChatHandlerDeps) {
       const match = profiles.find((profile) => profile.id === storedProfileId);
 
       if (match) {
-        return match.id;
+        return match;
       }
     }
 
-    return pickProfileForOrg(profiles, config.profileId).id;
+    return pickProfileForOrg(profiles, config.profileId);
   }
 
   async function clearSessionArtifactState(
@@ -1065,7 +1301,7 @@ async function replyChunks(
   telegram: TelegramRichMessenger,
   text: string
 ): Promise<void> {
-  for (const chunk of splitTelegramMessage(text)) {
+  for (const chunk of splitTelegramRichChunks(text)) {
     await telegram.send(chunk);
   }
 }
@@ -1081,7 +1317,7 @@ function isStopCommand(text: string): boolean {
   return parseTelegramCommand(text) === "/stop";
 }
 
-export async function withChatLock(
+async function withChatLock(
   chatId: string,
   fn: () => Promise<void>
 ): Promise<void> {
@@ -1093,10 +1329,491 @@ export function resetChatLocksForTests(): void {
   chatLock.resetForTests();
 }
 
-/** @internal Test helper — seed a predecessor promise (rejection-safety tests). */
-export function seedChatLockForTests(
-  chatId: string,
-  promise: Promise<void>
-): void {
-  chatLock.seedForTests(chatId, promise);
+const DRAFT_FRAME_MS = 1000;
+
+const DRAFT_KEEPALIVE_MS = 20_000;
+
+/** How long the final reply waits for a draft request still in flight. */
+const DRAFT_STOP_WAIT_MS = 1000;
+
+const MAX_DRAFT_CHARS = 4000;
+
+interface ReplyDraft {
+  /** The reply restarts after a tool call; the final message holds only the new text. */
+  newSegment(): void;
+  /** Call after the bot sends a message: Telegram clears the draft then. */
+  restart(): void;
+  start(): void;
+  /** Waits briefly for a frame in flight, so no draft lands after the final message. */
+  stop(): Promise<void>;
+  update(text: string): void;
+}
+
+/**
+ * Live preview of the reply in a private chat (Bot API sendMessageDraft).
+ * It starts with the first stable words; Telegram shows an empty draft as a
+ * blank bubble, and typing covers the wait. A draft expires after about 30 s,
+ * so it is sent again while the agent works. The final message replaces it.
+ */
+function createReplyDraft(ctx: Context): ReplyDraft | null {
+  if (ctx.chat?.type !== "private") {
+    return null;
+  }
+
+  const abort = new AbortController();
+  // SAFETY: grammy types its signal with the abort-controller shim; Bun's
+  // AbortSignal is the object that shim describes at runtime.
+  const signal = abort.signal as Parameters<Context["replyWithDraft"]>[2];
+  let draftId = randomInt(1, 2 ** 31);
+  let text = "";
+  let formattedFor: string | null = null;
+  let formatted = { html: "", visible: "" };
+  let sentHtml: string | null = null;
+  let sentVisible = "";
+  let segmentPending = false;
+  let lastSentAt = 0;
+  let enabled = true;
+  let inFlight: Promise<void> | null = null;
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  const send = (html: string, visible: string) => {
+    inFlight = ctx
+      .replyWithDraft(html, { draft_id: draftId, parse_mode: "HTML" }, signal)
+      .then(() => {
+        sentHtml = html;
+        sentVisible = visible;
+        lastSentAt = Date.now();
+      })
+      .catch((error) => {
+        enabled = false;
+
+        if (!abort.signal.aborted) {
+          console.warn(
+            "Telegram: reply draft failed; sending the final message only",
+            error
+          );
+        }
+      })
+      .finally(() => {
+        inFlight = null;
+      });
+  };
+
+  const flush = () => {
+    if (!enabled || inFlight) {
+      return;
+    }
+
+    if (text !== formattedFor) {
+      formatted = formatReplyDraft(text);
+      formattedFor = text;
+    }
+
+    const { html, visible } = formatted;
+    const shown = segmentPending ? "" : sentVisible;
+
+    // Telegram animates a draft from the top when shown text changes, so a
+    // frame may only add text after what is already shown.
+    const grows =
+      visible.length > 0 &&
+      html !== sentHtml &&
+      visible.startsWith(shown) &&
+      visible.length <= MAX_DRAFT_CHARS;
+
+    if (grows) {
+      if (segmentPending) {
+        // A new id replaces the old text at once instead of replaying it.
+        draftId = randomInt(1, 2 ** 31);
+        segmentPending = false;
+      }
+
+      send(html, visible);
+    } else if (sentHtml && Date.now() - lastSentAt >= DRAFT_KEEPALIVE_MS) {
+      send(sentHtml, sentVisible);
+    }
+  };
+
+  return {
+    newSegment() {
+      segmentPending = true;
+      text = "";
+    },
+    restart() {
+      draftId = randomInt(1, 2 ** 31);
+      lastSentAt = 0;
+    },
+    start() {
+      flush();
+      timer = setInterval(flush, DRAFT_FRAME_MS);
+    },
+    async stop() {
+      enabled = false;
+
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+
+      if (inFlight) {
+        let waitTimer: ReturnType<typeof setTimeout> | undefined;
+
+        await Promise.race([
+          inFlight,
+          new Promise((resolve) => {
+            waitTimer = setTimeout(resolve, DRAFT_STOP_WAIT_MS);
+          }),
+        ]);
+        clearTimeout(waitTimer);
+      }
+
+      abort.abort();
+    },
+    update(next) {
+      text = next;
+    },
+  };
+}
+
+/** Line starts whose meaning depends on the rest of the line. */
+const BLOCK_LINE_START = /^\s*(?:[#>|`~*+-]|\d+[.)])/;
+
+/** Inline markup that changes earlier text once it closes. */
+const INLINE_MARKUP = /[*_`[~<\\|]/;
+
+/**
+ * The reply cut to the part that will not change (complete lines, plus the
+ * finished words of the current line before any markup; no open code block,
+ * no table still being written), as the rich HTML to send and the plain text
+ * the user sees.
+ */
+export function formatReplyDraft(text: string): {
+  html: string;
+  visible: string;
+} {
+  const end = text.lastIndexOf("\n");
+  const lines = end === -1 ? [] : text.slice(0, end).split("\n");
+  let partial = text.slice(end + 1);
+
+  const fenceCount = lines.filter((line) =>
+    line.trimStart().startsWith("```")
+  ).length;
+
+  if (fenceCount % 2 === 1) {
+    const openFence = lines.findLastIndex((line) =>
+      line.trimStart().startsWith("```")
+    );
+
+    lines.length = openFence;
+    partial = "";
+  }
+
+  while (lines.at(-1)?.trimStart().startsWith("|")) {
+    lines.pop();
+    partial = "";
+  }
+
+  lines.push(stableWords(partial));
+
+  const stable = lines.join("\n").trim();
+
+  return stable
+    ? {
+        html: renderTelegramRichText(stable),
+        visible: renderTelegramPlainText(stable),
+      }
+    : { html: "", visible: "" };
+}
+
+/** The finished words of a line still being written, before any markup. */
+function stableWords(line: string): string {
+  if (BLOCK_LINE_START.test(line)) {
+    return "";
+  }
+
+  const markup = line.search(INLINE_MARKUP);
+  const plain = markup === -1 ? line : line.slice(0, markup);
+  const lastSpace = plain.lastIndexOf(" ");
+
+  return lastSpace === -1 ? "" : plain.slice(0, lastSpace);
+}
+
+const QUESTION_CLOSED_REPLY =
+  "This question is closed. Type your answer instead.";
+
+const QUESTION_TAP_PATTERN = /^aq:([0-9a-f]{8}):(\d{1,2}):(\d{1,2})$/;
+
+const OPEN_QUESTIONS_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Saves the open questions with the chat session, so taps work after a restart. */
+async function sendQuestionButtons(
+  ctx: Context,
+  sessionStore: ChannelSessionStore,
+  conversationKey: string,
+  questionnaire: AgentQuestionnaire
+): Promise<void> {
+  const token = randomUUID().slice(0, 8);
+
+  sessionStore.setOpenQuestions(conversationKey, {
+    answers: {},
+    createdAt: new Date().toISOString(),
+    questionnaire,
+    token,
+  });
+  await sessionStore.save();
+
+  // In a reply thread of a plain supergroup only a reply keeps the thread id;
+  // without it a tap would resolve to another conversation key.
+  const msg = ctx.msg;
+
+  const threadReply =
+    isTelegramGroupChat(ctx) &&
+    msg?.message_thread_id !== undefined &&
+    !msg.is_topic_message
+      ? {
+          reply_parameters: {
+            allow_sending_without_reply: true,
+            message_id: msg.message_id,
+          },
+        }
+      : {};
+
+  const messageIds: number[] = [];
+
+  for (const [questionIndex, question] of questionnaire.questions.entries()) {
+    const message = await ctx.reply(
+      formatQuestionText(questionnaire, question, questionIndex),
+      {
+        ...threadReply,
+        reply_markup: buildQuestionKeyboard(token, questionIndex, question),
+      }
+    );
+
+    messageIds.push(message.message_id);
+  }
+
+  const open = sessionStore.getOpenQuestions(conversationKey);
+
+  if (open?.token === token) {
+    sessionStore.setOpenQuestions(conversationKey, { ...open, messageIds });
+    await sessionStore.save();
+  }
+}
+
+function buildQuestionKeyboard(
+  token: string,
+  questionIndex: number,
+  question: AgentQuestionItem
+): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+
+  for (const [choiceIndex, choice] of question.choices.entries()) {
+    keyboard
+      .text(
+        choice.recommended ? `${choice.label} (recommended)` : choice.label,
+        `aq:${token}:${questionIndex}:${choiceIndex}`
+      )
+      .row();
+  }
+
+  return keyboard;
+}
+
+function formatQuestionText(
+  questionnaire: AgentQuestionnaire,
+  question: AgentQuestionItem,
+  questionIndex: number
+): string {
+  const lines: string[] = [];
+
+  if (questionIndex === 0) {
+    lines.push(questionnaire.title.trim(), "");
+  }
+
+  lines.push(
+    questionnaire.questions.length > 1
+      ? `${questionIndex + 1}. ${question.prompt.trim()}`
+      : question.prompt.trim()
+  );
+
+  return lines.join("\n");
+}
+
+/** Answers a button tap; a failed answer (too old) must not stop the work. */
+async function answerTap(
+  ctx: Context,
+  options?: { show_alert?: boolean; text?: string }
+): Promise<void> {
+  try {
+    await ctx.answerCallbackQuery(options);
+  } catch (error) {
+    console.warn("Telegram: could not answer the button tap", error);
+  }
+}
+
+async function editQuestionMessage(
+  ctx: Context,
+  text: string,
+  keyboard?: InlineKeyboard
+): Promise<void> {
+  await ctx
+    .editMessageText(text, keyboard ? { reply_markup: keyboard } : undefined)
+    .catch((error) =>
+      console.warn("Telegram: could not update the question message", error)
+    );
+}
+
+interface RecordedAnswer {
+  answer: string;
+  /** Set when every question has an answer: the message for the agent. */
+  answersMessage?: string;
+  questionText: string;
+  /** Takes this answer back, while the same questions are still open. */
+  undo: () => void;
+}
+
+type QuestionTap =
+  | { kind: "closed" }
+  | { kind: "duplicate"; answer: string }
+  | ({ keyboard: InlineKeyboard; kind: "answered" } & RecordedAnswer);
+
+/** Open questions for the chat, or undefined; drops them once expired. */
+function readOpenQuestions(
+  sessionStore: ChannelSessionStore,
+  conversationKey: string
+): ChannelOpenQuestions | undefined {
+  const open = sessionStore.getOpenQuestions(conversationKey);
+
+  if (open && Date.now() - Date.parse(open.createdAt) > OPEN_QUESTIONS_TTL_MS) {
+    sessionStore.setOpenQuestions(conversationKey, undefined);
+
+    return;
+  }
+
+  return open;
+}
+
+/**
+ * Records one answer in the session store; the caller saves. The questions
+ * stay open until the agent turn starts, which closes them.
+ */
+function applyAnswer(
+  sessionStore: ChannelSessionStore,
+  conversationKey: string,
+  open: ChannelOpenQuestions,
+  questionIndex: number,
+  answer: string
+): RecordedAnswer {
+  const { questions } = open.questionnaire;
+
+  const answers: ChannelOpenQuestions["answers"] = {
+    ...open.answers,
+    [String(questionIndex)]: answer,
+  };
+
+  sessionStore.setOpenQuestions(conversationKey, { ...open, answers });
+
+  const complete = questions.every(
+    (_, index) => answers[String(index)] !== undefined
+  );
+
+  const recorded: RecordedAnswer = {
+    answer,
+    questionText: formatQuestionText(
+      open.questionnaire,
+      questions[questionIndex]!,
+      questionIndex
+    ),
+    undo: () => {
+      if (
+        sessionStore.getOpenQuestions(conversationKey)?.token === open.token
+      ) {
+        sessionStore.setOpenQuestions(conversationKey, open);
+      }
+    },
+  };
+
+  if (complete) {
+    recorded.answersMessage = formatAgentQuestionnaireAnswersMessage(
+      questions.map((entry, index) => ({
+        answer: answers[String(index)] ?? "",
+        prompt: entry.prompt,
+        questionId: entry.id,
+      }))
+    );
+  }
+
+  return recorded;
+}
+
+function recordQuestionTap(
+  sessionStore: ChannelSessionStore,
+  conversationKey: string,
+  data: string
+): QuestionTap {
+  const match = QUESTION_TAP_PATTERN.exec(data);
+  const open = readOpenQuestions(sessionStore, conversationKey);
+
+  if (!(match && open && open.token === match[1])) {
+    return { kind: "closed" };
+  }
+
+  const questionIndex = Number(match[2]);
+  const question = open.questionnaire.questions[questionIndex];
+  const choice = question?.choices[Number(match[3])];
+
+  if (!(question && choice)) {
+    return { kind: "closed" };
+  }
+
+  const earlier = open.answers[String(questionIndex)];
+
+  if (earlier !== undefined) {
+    return { answer: earlier, kind: "duplicate" };
+  }
+
+  return {
+    ...applyAnswer(
+      sessionStore,
+      conversationKey,
+      open,
+      questionIndex,
+      choice.label
+    ),
+    keyboard: buildQuestionKeyboard(open.token, questionIndex, question),
+    kind: "answered",
+  };
+}
+
+/** Text typed while questions are open answers the first open question. */
+function recordTypedAnswer(
+  sessionStore: ChannelSessionStore,
+  conversationKey: string,
+  text: string
+): (RecordedAnswer & { messageId?: number }) | null {
+  const open = readOpenQuestions(sessionStore, conversationKey);
+  const answer = text.trim();
+
+  if (!(open && answer)) {
+    return null;
+  }
+
+  const questionIndex = open.questionnaire.questions.findIndex(
+    (_, index) => open.answers[String(index)] === undefined
+  );
+
+  if (questionIndex === -1) {
+    return null;
+  }
+
+  const recorded = applyAnswer(
+    sessionStore,
+    conversationKey,
+    open,
+    questionIndex,
+    answer
+  );
+
+  const messageId = open.messageIds?.[questionIndex];
+
+  return messageId === undefined ? recorded : { ...recorded, messageId };
 }

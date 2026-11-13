@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { LlmUsageTracker } from "./llm-usage-tracker";
 
 const ORG_A = "org_a";

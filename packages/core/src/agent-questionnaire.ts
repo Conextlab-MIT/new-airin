@@ -29,7 +29,9 @@ export function formatAgentQuestionnaireMessage(
     lines.push(`${questionIndex + 1}. ${question.prompt.trim()}`);
 
     question.choices.forEach((choice, choiceIndex) => {
-      lines.push(`   ${choiceLetter(choiceIndex)}) ${choice.label.trim()}`);
+      lines.push(
+        `   ${choiceLetter(choiceIndex)}) ${choice.label.trim()}${choice.recommended ? " (recommended)" : ""}`
+      );
     });
 
     if (question.allowCustomAnswer) {
@@ -46,93 +48,6 @@ export function formatAgentQuestionnaireMessage(
   }
 
   return lines.join("\n").trimEnd();
-}
-
-export function tryParseChannelQuestionnaireAnswers(
-  questionnaire: AgentQuestionnaire,
-  text: string
-): AgentQuestionAnswer[] | null {
-  const trimmed = text.trim();
-
-  if (!trimmed || questionnaire.questions.length === 0) {
-    return null;
-  }
-
-  if (questionnaire.questions.length === 1) {
-    const [question] = questionnaire.questions;
-
-    if (!question) {
-      return null;
-    }
-
-    const answer = resolveQuestionAnswer(question, trimmed);
-
-    if (!answer) {
-      return null;
-    }
-
-    return [
-      {
-        answer,
-        prompt: question.prompt,
-        questionId: question.id,
-      },
-    ];
-  }
-
-  const byIndex = new Map<number, string>();
-
-  for (const rawLine of trimmed.split(/\r?\n/)) {
-    const line = rawLine.trim();
-
-    if (!line) {
-      continue;
-    }
-
-    const match = line.match(/^(\d+)\s*[.):-]\s*(.+)$/);
-
-    if (!match) {
-      return null;
-    }
-
-    const index = Number(match[1]);
-    const value = match[2]?.trim() ?? "";
-
-    if (!Number.isInteger(index) || index < 1 || !value) {
-      return null;
-    }
-
-    byIndex.set(index, value);
-  }
-
-  if (byIndex.size !== questionnaire.questions.length) {
-    return null;
-  }
-
-  const answers: AgentQuestionAnswer[] = [];
-
-  for (let index = 0; index < questionnaire.questions.length; index += 1) {
-    const question = questionnaire.questions[index]!;
-    const raw = byIndex.get(index + 1);
-
-    if (!raw) {
-      return null;
-    }
-
-    const answer = resolveQuestionAnswer(question, raw);
-
-    if (!answer) {
-      return null;
-    }
-
-    answers.push({
-      answer,
-      prompt: question.prompt,
-      questionId: question.id,
-    });
-  }
-
-  return answers;
 }
 
 export function parseAgentQuestionnaireAnswersMessage(
@@ -194,53 +109,19 @@ export function parseAgentQuestionnaireAnswersMessage(
   return answers.length > 0 ? answers : null;
 }
 
-function resolveQuestionAnswer(
-  question: AgentQuestionnaire["questions"][number],
-  raw: string
-): string | null {
-  const trimmed = raw.trim();
+/**
+ * Questionnaire answers anywhere in a message, also when a channel puts a
+ * note (such as a group-chat line) before the "Answers" block.
+ */
+export function findAgentQuestionnaireAnswers(
+  value: string
+): AgentQuestionAnswer[] | null {
+  const lines = value.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === ANSWERS_HEADER);
 
-  if (!trimmed) {
-    return null;
-  }
-
-  const byNumber = trimmed.match(/^(\d+)$/);
-
-  if (byNumber) {
-    const index = Number(byNumber[1]) - 1;
-    const choice = question.choices[index];
-
-    if (choice) {
-      return choice.label;
-    }
-  }
-
-  const byLetter = trimmed.match(/^([a-z])$/i);
-
-  if (byLetter) {
-    const index = byLetter[1]!.toLowerCase().charCodeAt(0) - "a".charCodeAt(0);
-    const choice = question.choices[index];
-
-    if (choice) {
-      return choice.label;
-    }
-  }
-
-  const labelMatch = question.choices.find(
-    (choice) => choice.label.trim().toLowerCase() === trimmed.toLowerCase()
-  );
-
-  if (labelMatch) {
-    return labelMatch.label;
-  }
-
-  if (question.allowCustomAnswer || question.choices.length === 0) {
-    return trimmed;
-  }
-
-  // Channel chats: accept free text even when choices exist so Discord/Telegram
-  // users are not stuck without buttons.
-  return trimmed;
+  return start === -1
+    ? null
+    : parseAgentQuestionnaireAnswersMessage(lines.slice(start).join("\n"));
 }
 
 function choiceLetter(index: number): string {

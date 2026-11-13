@@ -8,7 +8,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import {
   QueryClient,
   QueryClientProvider,
@@ -26,6 +26,7 @@ import { artifactShareStorageKey } from "@/lib/artifact-share-storage";
 import { client } from "@/lib/client";
 import { invalidateQueries } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
+import { useSaveGroup } from "./use-agent-groups";
 import {
   useConfigureProviderMutation,
   useCreateProviderMutation,
@@ -564,7 +565,18 @@ for (const kind of [
         undefined
       );
 
-      const requests = [create, configure, update, remove, deleteTool];
+      const saveSecret = spyOn(client, "setProviderSecret").mockResolvedValue({
+        provider,
+      });
+
+      const requests = [
+        create,
+        configure,
+        update,
+        remove,
+        deleteTool,
+        saveSecret,
+      ];
 
       if (fails) {
         for (const request of requests) {
@@ -674,7 +686,18 @@ for (const kind of [
         );
 
         if (kind === "create") {
-          expect(create).toHaveBeenCalledWith(createInput);
+          expect(create).toHaveBeenCalledWith({
+            label: provider.label,
+            type: provider.type,
+          });
+          expect(saveSecret).toHaveBeenCalledTimes(fails ? 0 : 1);
+
+          if (!fails) {
+            expect(saveSecret).toHaveBeenCalledWith(
+              provider.id,
+              createInput.apiKey
+            );
+          }
         } else if (kind === "configure") {
           expect(configure).toHaveBeenCalledWith(configureInput);
         } else if (kind === "update") {
@@ -713,7 +736,7 @@ for (const kind of ["create", "install", "patch", "delete"] as const) {
         name: "Content review",
         orgId: "parent",
         scriptIssues: [],
-        sourcePath: "/tmp/nakama-test-skills/content-review/SKILL.md",
+        sourcePath: "/tmp/airin-test-skills/content-review/SKILL.md",
         updatedAt: "2026-10-12T00:00:00Z",
       };
 
@@ -1005,6 +1028,77 @@ for (const kind of ["create", "clone", "update", "delete"] as const) {
   );
 }
 
+test.each([false, true])(
+  "automations toggle moves the cached profile before the save returns; failure=%s",
+  async (fails) => {
+    const profile = { automationsEnabled: false, id: "profile_toggle" };
+    const other = { automationsEnabled: false, id: "profile_other" };
+    const detailKey = queryKeys.profiles.detail(profile.id);
+    const save = Promise.withResolvers<{ profile: never }>();
+
+    const update = spyOn(client, "updateProfile").mockReturnValue(save.promise);
+
+    queryClient.setQueryData(detailKey, profile);
+    queryClient.setQueryData(queryKeys.profiles.all, [profile, other]);
+
+    let updateMutation!: ReturnType<typeof useUpdateProfileMutation>;
+
+    function Probe() {
+      updateMutation = useUpdateProfileMutation();
+
+      return null;
+    }
+
+    try {
+      renderToString(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(Probe)
+        )
+      );
+
+      const operation = updateMutation.mutateAsync({
+        input: { automationsEnabled: true },
+        profileId: profile.id,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(queryClient.getQueryData<typeof profile>(detailKey)).toEqual({
+        ...profile,
+        automationsEnabled: true,
+      });
+      expect(
+        queryClient.getQueryData<(typeof profile)[]>(queryKeys.profiles.all)
+      ).toEqual([{ ...profile, automationsEnabled: true }, other]);
+
+      if (fails) {
+        save.reject(new Error("Retry toggle"));
+        await expect(operation).rejects.toThrow();
+      } else {
+        // SAFETY: The hook ignores the saved profile; only the cache is checked.
+        save.resolve({ profile: undefined as never });
+        await operation;
+      }
+
+      const expected = fails
+        ? profile
+        : { ...profile, automationsEnabled: true };
+
+      expect(queryClient.getQueryData<typeof profile>(detailKey)).toEqual(
+        expected
+      );
+      expect(
+        queryClient.getQueryData<(typeof profile)[]>(queryKeys.profiles.all)
+      ).toEqual([expected, other]);
+    } finally {
+      update.mockRestore();
+      queryClient.removeQueries({ queryKey: queryKeys.profiles.all });
+    }
+  }
+);
+
 for (const kind of ["add", "invite", "update", "remove"] as const) {
   test.each([false, true])(
     `${kind} member refreshes summaries only on success; failure=%s`,
@@ -1203,7 +1297,7 @@ test.each([200, 404])(
     queryClient.setQueryData(queryKey, { active: true, id: variables.shareId });
 
     if (status === 404) {
-      revoke.mockRejectedValue(new NakamaApiError("Not found", 404));
+      revoke.mockRejectedValue(new AirinApiError("Not found", 404));
     } else {
       revoke.mockResolvedValue({ id: variables.shareId, revoked: true });
     }
@@ -1220,7 +1314,7 @@ test.each([200, 404])(
 
 test("revoke preserves HTTP 403 failures rather than allowing rotation to continue", async () => {
   queryClient.setQueryData(queryKey, { active: true, id: variables.shareId });
-  const error = new NakamaApiError("Request failed", 403);
+  const error = new AirinApiError("Request failed", 403);
   revoke.mockRejectedValue(error);
 
   const mutate = renderMutation();
@@ -1332,7 +1426,7 @@ describe("artifact share controls with a stale share ID", () => {
       revoke.mockImplementation(() => {
         queryClient.setQueryData(queryKey, replacement);
 
-        return Promise.reject(new NakamaApiError("Not found", 404));
+        return Promise.reject(new AirinApiError("Not found", 404));
       });
       publish.mockResolvedValue({
         id: replacement.id,
@@ -1378,7 +1472,7 @@ describe("artifact share controls with a stale share ID", () => {
   });
 
   test("rotation does not clear or publish on a permission failure", async () => {
-    revoke.mockRejectedValue(new NakamaApiError("Forbidden", 403));
+    revoke.mockRejectedValue(new AirinApiError("Forbidden", 403));
 
     await renderControls().rotate();
 
@@ -1530,7 +1624,7 @@ test("useArtifactsExist hides only the artifacts the server reports missing", as
       }
 
       if (path === "flaky.md") {
-        throw new NakamaApiError("Bad gateway", 502);
+        throw new AirinApiError("Bad gateway", 502);
       }
 
       return true;
@@ -1587,4 +1681,144 @@ test("useArtifactsExist hides only the artifacts the server reports missing", as
     exists.mockRestore();
     existsClient.clear();
   }
+});
+
+test("create group with invalid group photo", async () => {
+  const group = {
+    avatarVersion: null,
+    brief: "",
+    createdAt: "2026-10-22T00:00:00Z",
+    handles: {},
+    id: "group-1",
+    lastMessage: null,
+    memberIds: ["agent-1", "agent-2"],
+    name: "Test group",
+  };
+
+  const draft = {
+    brief: group.brief,
+    image: {
+      data: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+      mediaType: "image/gif",
+    },
+    memberIds: group.memberIds,
+    name: group.name,
+  };
+
+  const uploadError = new Error("Photo upload failed");
+
+  const create = spyOn(client, "createAgentGroup")
+    .mockResolvedValueOnce(group)
+    .mockResolvedValueOnce({ ...group, id: "group-2" });
+
+  const update = spyOn(client, "updateAgentGroup").mockResolvedValue(group);
+
+  const upload = spyOn(client, "uploadAgentGroupAvatar")
+    .mockRejectedValueOnce(uploadError)
+    .mockResolvedValueOnce(undefined);
+
+  const testQueryClient = new QueryClient({
+    defaultOptions: { mutations: { retry: false } },
+  });
+
+  const root = createRoot(document.createElement("div"));
+  let save!: ReturnType<typeof useSaveGroup>;
+
+  function Probe() {
+    save = useSaveGroup();
+
+    return null;
+  }
+
+  try {
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client: testQueryClient },
+          createElement(Probe)
+        )
+      );
+    });
+
+    await act(async () => {
+      await expect(save.mutateAsync(draft)).rejects.toBe(uploadError);
+    });
+
+    await act(async () => {
+      await save.mutateAsync(draft);
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(group.id, {
+      brief: draft.brief,
+      memberIds: draft.memberIds,
+      name: draft.name,
+    });
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(upload).toHaveBeenNthCalledWith(1, group.id, draft.image);
+    expect(upload).toHaveBeenNthCalledWith(2, group.id, draft.image);
+  } finally {
+    await act(async () => root.unmount());
+    testQueryClient.clear();
+    create.mockRestore();
+    update.mockRestore();
+    upload.mockRestore();
+  }
+});
+
+test("create provider removes the new row when its API key is rejected", async () => {
+  const provider = {
+    createdAt: "2026-10-12T00:00:00Z",
+    hasApiKey: false,
+    id: "new-provider",
+    label: "OpenAI",
+    modelCount: 1,
+    type: "openai" as const,
+  };
+
+  const rejected = new Error("Invalid API key");
+
+  const create = spyOn(client, "createProvider").mockResolvedValue({
+    defaultProviderId: provider.id,
+    initialModel: "new-provider::model",
+    provider,
+  });
+
+  const saveSecret = spyOn(client, "setProviderSecret").mockRejectedValue(
+    rejected
+  );
+
+  const remove = spyOn(client, "deleteProvider").mockResolvedValue({
+    defaultProviderId: null,
+  });
+
+  let mutation!: ReturnType<typeof useCreateProviderMutation>;
+
+  function Probe() {
+    mutation = useCreateProviderMutation();
+
+    return null;
+  }
+
+  renderToString(
+    createElement(
+      QueryClientProvider,
+      { client: new QueryClient() },
+      createElement(Probe)
+    )
+  );
+
+  await expect(
+    mutation.mutateAsync({ apiKey: "bad", label: "OpenAI", type: "openai" })
+  ).rejects.toBe(rejected);
+
+  expect(remove).toHaveBeenCalledWith(provider.id);
+
+  create.mockRestore();
+
+  saveSecret.mockRestore();
+
+  remove.mockRestore();
 });

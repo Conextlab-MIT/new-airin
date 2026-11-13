@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { getSkillPythonEnvDir } from "./python-env";
 import { resolveSkillScripts } from "./script-tools";
 
 const BODY = "def hitung(b, h):\n    return b * h * h / 6\n";
@@ -45,6 +46,50 @@ test("a script nothing can run is reported instead of ignored", async () => {
     expect(resolved.tools).toHaveLength(0);
     expect(resolved.issues).toHaveLength(1);
     expect(resolved.issues[0]?.reason).toContain("not runnable");
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test("documented shell scripts stay instructions instead of becoming tools", async () => {
+  const directory = await skillDir({
+    "scripts/new-plugin.mjs": "console.log('draft');\n",
+  });
+
+  try {
+    for (const body of [
+      "```sh\nbun <skill directory>/scripts/new-plugin.mjs example\n```",
+      "node scripts/new-plugin.mjs example",
+      'bun "./scripts/new-plugin.mjs" example',
+    ]) {
+      const resolved = await resolveSkillScripts({
+        body,
+        declared: [],
+        directory,
+        skillName: "create-plugin",
+        toolPath: null,
+      });
+
+      expect(resolved.issues).toEqual([]);
+      expect(resolved.tools).toEqual([]);
+    }
+
+    for (const body of [
+      "Read scripts/new-plugin.mjs before use.",
+      "bun scripts/new-plugin.mjs.bak",
+      "bun other-scripts/new-plugin.mjs",
+    ]) {
+      const resolved = await resolveSkillScripts({
+        body,
+        declared: [],
+        directory,
+        skillName: "create-plugin",
+        toolPath: null,
+      });
+
+      expect(resolved.issues).toHaveLength(1);
+      expect(resolved.tools).toEqual([]);
+    }
+  } finally {
     await rm(directory, { force: true, recursive: true });
   }
 });
@@ -294,4 +339,60 @@ test("a script that prints its result is accepted, not read as missing a harness
   expect(resolved.issues).toEqual([]);
   expect(resolved.tools).toHaveLength(1);
   await rm(directory, { force: true, recursive: true });
+});
+
+test("a package installed in the skill's own environment is not reported, a missing one names requirements.txt", async () => {
+  const previous = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = await mkdtemp(
+    path.join(os.tmpdir(), "skill-env-")
+  );
+  const source = `"""Draw a chart."""\nimport matplotlib.pyplot as plt\nfrom reportlab.lib import colors\n${BODY}${HARNESS}`;
+
+  try {
+    const directory = await skillDir({
+      "SKILL.md": "---\n---\n",
+      "scripts/chart.py": source,
+    });
+
+    const scan = () =>
+      resolveSkillScripts({
+        declared: ["scripts/chart.py"],
+        directory,
+        skillName: "calc",
+        toolPath: null,
+      });
+
+    // No requirements.txt yet: the author is told where to list them.
+    expect((await scan()).issues[0]?.reason).toContain("requirements.txt");
+
+    await writeFile(
+      path.join(directory, "requirements.txt"),
+      "matplotlib\nreportlab\n"
+    );
+
+    // A venv on Windows keeps packages in Lib/site-packages, with no version dir.
+    const sitePackages =
+      process.platform === "win32"
+        ? ["Lib", "site-packages"]
+        : ["lib", "python3.12", "site-packages"];
+
+    await mkdir(
+      path.join(getSkillPythonEnvDir(directory), ...sitePackages, "matplotlib"),
+      { recursive: true }
+    );
+
+    const reason = (await scan()).issues[0]?.reason ?? "";
+
+    expect(reason).toContain("reportlab");
+    expect(reason).not.toContain("matplotlib");
+    await rm(directory, { force: true, recursive: true });
+  } finally {
+    await rm(process.env.AIRIN_CONFIG_DIR, { force: true, recursive: true });
+
+    if (previous === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = previous;
+    }
+  }
 });

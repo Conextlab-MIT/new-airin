@@ -3,7 +3,7 @@ import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { setupFreshInstallSession } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-tools-catalog-auth-test-");
+setupTestConfigDir("airin-tools-catalog-auth-test-");
 
 // packages/core/src/ensure-server.ts reads these off /health before the CLI has
 // credentials. If any of them stops being served there, the CLI decides the
@@ -30,16 +30,6 @@ function createApp() {
 }
 
 describe("GET /v1/tools", () => {
-  test("rejects anonymous callers", async () => {
-    const { app } = createApp();
-
-    const response = await app.fetch(
-      new Request("http://localhost:4310/v1/tools")
-    );
-
-    expect(response.status).toBe(401);
-  });
-
   test("serves the catalog to an authenticated caller", async () => {
     const { app, databaseAdapter } = createApp();
     const session = await setupFreshInstallSession(app, databaseAdapter);

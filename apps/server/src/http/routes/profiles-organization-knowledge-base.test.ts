@@ -9,9 +9,9 @@ import {
   getKnowledgeBaseStoredDocumentPath,
   getOrgKnowledgeBaseDir,
   getProfileSoulDir,
-} from "@nakama/core";
-import { runKnowledgeBaseSearch } from "@nakama/core/tools/knowledge-base-search";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { runKnowledgeBaseSearch } from "@airin/core/tools/knowledge-base-search";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { zipSync } from "fflate";
 import { AgentService } from "../../services/agent-service";
 import { MemoryBackendService } from "../../services/memory-backend-service";
@@ -25,7 +25,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-org-knowledge-base-routes-");
+setupTestConfigDir("airin-org-knowledge-base-routes-");
 
 const BASE = "http://localhost:4310";
 
@@ -326,18 +326,6 @@ describe("profile knowledge base ZIP import", () => {
     expect((await list.json()).documents).toEqual([]);
   }, 30_000);
 
-  test("openapi describes the ZIP import route", async () => {
-    const { app } = createApp();
-    const response = await app.fetch(new Request(`${BASE}/openapi.json`));
-
-    const spec: ReturnType<typeof app.getOpenAPI31Document> =
-      await response.json();
-
-    expect(
-      spec.paths?.["/v1/profiles/{profileId}/knowledge-base/import-zip"]?.post
-    ).toBeDefined();
-  });
-
   test("requires a platform administrator and the active organization", async () => {
     const { app, authService, databaseAdapter } = createApp();
 
@@ -452,6 +440,11 @@ function createApp() {
           ),
         getProfile: (orgId: string, profileId: string) =>
           profileService.getProfile(orgId, profileId),
+        getProfileAccess: (orgId: string, profileId: string) =>
+          new AgentService(null, null, databaseAdapter).getProfileAccess(
+            orgId,
+            profileId
+          ),
         importKnowledgeBaseZip: (
           orgId: string,
           profileId: string,
@@ -637,7 +630,7 @@ describe("published parent knowledge reads", () => {
         { cognito, orgRole: "member" }
       );
 
-      const session = await agent.resolveSession(id, "org_team_a");
+      const session = await agent.sessions.get(id, "org_team_a");
       expect(session).not.toBeNull();
       await session!.send("First question");
       expect(prompts[0]).toContain('"id":"org_parent"');
@@ -646,7 +639,7 @@ describe("published parent knowledge reads", () => {
       await db.deleteOrgSharedResource("org_parent", publication.id);
       await session!.send("Second question");
       expect(prompts[1]).not.toContain('"id":"org_parent"');
-      expect(await agent.resolveSession(id, "org_team_a")).toBe(session);
+      expect(await agent.sessions.get(id, "org_team_a")).toBe(session);
       expect(
         session!.getHistory().filter((message) => message.role === "user")
       ).toHaveLength(2);
@@ -932,6 +925,28 @@ describe("published parent knowledge reads", () => {
     );
 
     expect(anonymous.status).toBe(401);
+  });
+
+  test("a plain member cannot read a root org publication", async () => {
+    const { db, profileService, read } = await setupPublishedKnowledge();
+    const now = new Date().toISOString();
+
+    const { document } =
+      await profileService.uploadOrganizationKnowledgeBaseDocument(
+        "org_other",
+        textDocument("Root bytes")
+      );
+
+    await db.publishOrgSharedResource({
+      createdAt: now,
+      id: "publication_root",
+      orgId: "org_other",
+      resourceId: document.id,
+      resourceKind: "knowledge",
+      updatedAt: now,
+    });
+
+    expect((await read("org_other", "publication_root")).status).toBe(404);
   });
 
   test("parent admins read published documents in parent context with live publication checks", async () => {

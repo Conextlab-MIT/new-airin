@@ -1,13 +1,9 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
-import { readFile, rm, stat, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  getUserConfigPath,
-  type JsonValue,
-  parseIniWithSections,
-  writeParsedConfigIni,
-} from "@nakama/core";
+import { getUserConfigPath, type JsonValue } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import {
   loadToolApiKey,
   loadToolEnv,
@@ -15,28 +11,37 @@ import {
   resolveCustomToolModulePath,
   saveToolApiKey,
   saveToolEnv,
+  setToolSecrets,
 } from "./custom-tool-shared";
 import {
   makeCustomToolRecord,
   setupCustomToolsDir,
 } from "./custom-tool-test-helpers";
 import { loadJavascriptTool } from "./javascript-tool-loader";
+import { ManagedSecrets } from "./managed-secrets";
 import { loadPythonTool } from "./python-tool-loader";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 const setupToolsDir = setupCustomToolsDir;
 
 const makeRecord = makeCustomToolRecord;
 
 describe("javascript tool loader", () => {
+  let secretDb = createInMemoryDatabaseAdapter();
+  beforeEach(() => {
+    secretDb = createInMemoryDatabaseAdapter();
+    setToolSecrets(
+      new ManagedSecrets(secretDb, Buffer.alloc(32, 1).toString("base64"))
+    );
+  });
   let configDir = "";
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (configDir) {
@@ -52,7 +57,7 @@ describe("javascript tool loader", () => {
     await writeFile(
       path.join(toolsDir, "echo.js"),
       `export async function run(input, context) {
-  return { echoed: input.message, root: process.env.NAKAMA_WORKSPACE_ROOT ?? "" };
+  return { echoed: input.message, root: process.env.AIRIN_WORKSPACE_ROOT ?? "" };
 }
 `,
       "utf8"
@@ -67,11 +72,11 @@ describe("javascript tool loader", () => {
     // SAFETY: The test fixture matches the contract used by this test.
     const result = (await tool!.run(
       { message: "hello" },
-      { orgId: "org_a", workspaceRoot: "/tmp/nakama-ws" }
+      { orgId: "org_a", workspaceRoot: "/tmp/airin-ws" }
     )) as { echoed: string; root: string };
 
     expect(result.echoed).toBe("hello");
-    expect(result.root).toBe("/tmp/nakama-ws");
+    expect(result.root).toBe("/tmp/airin-ws");
   });
 
   test("credentials stay scoped, are injected for both runtimes, and are redacted from results and failures", async () => {
@@ -81,7 +86,7 @@ describe("javascript tool loader", () => {
     await writeFile(
       path.join(toolsDir, "credential.js"),
       `export async function run(input) {
-      const key = process.env.NAKAMA_TOOL_API_KEY;
+      const key = process.env.AIRIN_TOOL_API_KEY;
       if (input.fail) throw new Error("bad key " + key);
       return { present: Boolean(key), echo: key, nested: [key], count: 1 };
     }`
@@ -136,7 +141,7 @@ describe("javascript tool loader", () => {
       path.join(toolsDir, "credential.py"),
       `import os, sys, json
 def run(input, context):
-    return {"present": bool(os.environ.get("NAKAMA_TOOL_API_KEY")), "echo": os.environ.get("NAKAMA_TOOL_API_KEY")}
+    return {"present": bool(os.environ.get("AIRIN_TOOL_API_KEY")), "echo": os.environ.get("AIRIN_TOOL_API_KEY")}
 if __name__ == "__main__":
     sys.stdout.write(json.dumps(run(json.load(sys.stdin), {})))
 `
@@ -159,40 +164,18 @@ if __name__ == "__main__":
     const { configDir: dir } = await setupToolsDir();
     configDir = dir;
     await saveToolApiKey("org_a", "tool_x", "plain-secret-value");
-    expect(await readFile(getUserConfigPath(), "utf8")).not.toContain(
-      "plain-secret-value"
-    );
-    const keyFile = await stat(path.join(dir, "tool-credentials.key"));
-
-    // Windows does not expose POSIX owner/group permission bits.
-    if (process.platform !== "win32") {
-      expect(keyFile.mode % 0o1000).toBe(0o600);
-    }
-
+    const saved = await secretDb.getManagedSecret("org_a", "tool:tool_x");
+    expect(saved?.encryptedValue).toBeTruthy();
+    expect(saved?.encryptedValue).not.toContain("plain-secret-value");
     expect(await loadToolApiKey("org_a", "tool_x")).toBe("plain-secret-value");
-
-    const parsed = parseIniWithSections(
-      await readFile(getUserConfigPath(), "utf8")
-    );
-
-    const [sectionA] = Object.keys(parsed.sections);
     await saveToolApiKey("org_b", "tool_x", "org-b-value");
-
-    const afterB = parseIniWithSections(
-      await readFile(getUserConfigPath(), "utf8")
-    );
-
-    const sectionB = Object.keys(afterB.sections).find(
-      (name) => name !== sectionA
-    )!;
-
-    afterB.sections[sectionB] = parsed.sections[sectionA!]!;
-    await writeParsedConfigIni(afterB.global, afterB.sections);
+    await secretDb.putManagedSecret({
+      encryptedValue: saved!.encryptedValue,
+      name: "tool:tool_x",
+      scope: "org_b",
+      source: "settings",
+    });
     await expect(loadToolApiKey("org_b", "tool_x")).rejects.toThrow();
-
-    afterB.sections[sectionB] = { api_key: "legacy-plain" };
-    await writeParsedConfigIni(afterB.global, afterB.sections);
-    expect(await loadToolApiKey("org_b", "tool_x")).toBe("legacy-plain");
   });
 
   test("declared env values reach the tool, and only secrets are redacted", async () => {
@@ -264,7 +247,7 @@ if __name__ == "__main__":
       "PYTHONPATH",
       "LD_PRELOAD",
       "DYLD_INSERT_LIBRARIES",
-      "NAKAMA_TOOL_API_KEY",
+      "AIRIN_TOOL_API_KEY",
       "BUN_OPTIONS",
       "lower_case",
       "WITH-DASH",
@@ -295,7 +278,7 @@ if __name__ == "__main__":
     await writeFile(
       path.join(toolsDir, "optional-key.js"),
       `export async function run() {
-      return { present: Boolean(process.env.NAKAMA_TOOL_API_KEY) };
+      return { present: Boolean(process.env.AIRIN_TOOL_API_KEY) };
     }`
     );
 
@@ -471,7 +454,7 @@ if __name__ == "__main__":
     await writeFile(
       path.join(toolsDir, "env-probe.js"),
       `export async function run(input, context) {
-  return { secret: process.env.NAKAMA_TEST_CANARY_SECRET ?? null };
+  return { secret: process.env.AIRIN_TEST_CANARY_SECRET ?? null };
 }
 `,
       "utf8"
@@ -484,7 +467,7 @@ if __name__ == "__main__":
       })
     );
 
-    process.env.NAKAMA_TEST_CANARY_SECRET = "canary-not-a-real-secret";
+    process.env.AIRIN_TEST_CANARY_SECRET = "canary-not-a-real-secret";
 
     try {
       // SAFETY: The test fixture matches the contract used by this test.
@@ -494,7 +477,7 @@ if __name__ == "__main__":
 
       expect(result.secret).toBeNull();
     } finally {
-      delete process.env.NAKAMA_TEST_CANARY_SECRET;
+      delete process.env.AIRIN_TEST_CANARY_SECRET;
     }
   });
 
@@ -518,7 +501,7 @@ if __name__ == "__main__":
       })
     );
 
-    process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS = "200";
+    process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS = "200";
 
     try {
       const err = await tool!
@@ -529,7 +512,7 @@ if __name__ == "__main__":
       // SAFETY: The test fixture matches the contract used by this test.
       expect((err as Error).message).toMatch(/timed out/i);
     } finally {
-      delete process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS;
+      delete process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS;
     }
   });
 
@@ -574,9 +557,9 @@ describe("tool resolver", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (configDir) {

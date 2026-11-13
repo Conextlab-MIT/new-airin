@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
 import { GridViewIcon, ListViewIcon, Refresh01Icon } from "hugeicons-react";
 import type { ReactNode } from "react";
 import type { FilesViewMode } from "@/lib/files-page.shared";
@@ -15,7 +15,7 @@ function FilesViewModeToggle({
   return (
     <div
       aria-label="View mode"
-      className="flex shrink-0 items-center rounded-md border border-border/60 p-0.5"
+      className="flex h-9 shrink-0 items-center gap-0.5 rounded-lg border border-border/60 p-0.5"
       role="group"
     >
       <Tooltip>
@@ -87,7 +87,7 @@ export function FilesToolbar({
             viewMode={viewMode}
           />
         ) : null}
-        <Button onClick={onRefresh} size="sm" type="button" variant="outline">
+        <Button onClick={onRefresh} size="lg" type="button" variant="outline">
           {isFetching ? (
             <Spinner className="size-4" />
           ) : (

@@ -1,4 +1,14 @@
 import * as readline from "node:readline/promises";
+import { AirinApiError, AirinClient } from "@airin/client";
+import {
+  type BrowserSessionCookieNames,
+  browserSessionCookieNames,
+  HOST_BOUND_BROWSER_SESSION_COOKIE_NAMES,
+  PLAIN_BROWSER_SESSION_COOKIE_NAMES,
+  type ProviderModelOption,
+  promptForProviderConfig,
+  type UserProviderName,
+} from "@airin/core";
 import {
   type Component,
   CURSOR_MARKER,
@@ -9,18 +19,6 @@ import {
   TuiAltScreen,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
-import { NakamaApiError, NakamaClient } from "@nakama/client";
-import {
-  type BrowserSessionCookieNames,
-  browserSessionCookieNames,
-  getUserConfigPath,
-  HOST_BOUND_BROWSER_SESSION_COOKIE_NAMES,
-  PLAIN_BROWSER_SESSION_COOKIE_NAMES,
-  type ProviderModelOption,
-  promptForProviderConfig,
-  type UserProviderName,
-} from "@nakama/core";
-import { formatCliDisplayPath, isCliVerbose } from "./display-path";
 import { printLine } from "./terminal-safe";
 
 export class LoginForm implements Component, Focusable {
@@ -65,7 +63,7 @@ export class LoginForm implements Component, Focusable {
         : "";
 
     return [
-      "Connect to Nakama",
+      "Connect to Airin",
       ...(this.server.focused
         ? this.server.render(Math.max(1, width))
         : [`Server URL: ${this.server.getValue()}`]),
@@ -143,7 +141,7 @@ export class LoginForm implements Component, Focusable {
     } catch (error) {
       this.password = new Input();
       this.message =
-        error instanceof NakamaApiError && error.status === 401
+        error instanceof AirinApiError && error.status === 401
           ? "Incorrect email or password. Try again."
           : "Could not log in. Check the server and credential store, then retry.";
     } finally {
@@ -313,13 +311,13 @@ export function readPassword(prompt: string): Promise<string> {
 }
 
 export async function ensureUserConfiguredViaCli(
-  client: NakamaClient
+  client: AirinClient
 ): Promise<boolean> {
   if (!(process.stdin.isTTY && process.stdout.isTTY)) {
     return false;
   }
 
-  console.log("Nakama admin setup\n");
+  console.log("Airin admin setup\n");
   console.log("No admin user found. Let's create one.\n");
 
   const rl = readline.createInterface({
@@ -365,7 +363,7 @@ export async function ensureUserConfiguredViaCli(
 }
 
 export async function ensureProviderConfiguredViaCli(
-  client: NakamaClient
+  client: AirinClient
 ): Promise<boolean> {
   if (!(process.stdin.isTTY && process.stdout.isTTY)) {
     return false;
@@ -374,7 +372,7 @@ export async function ensureProviderConfiguredViaCli(
   const catalog = await client.getModels();
   const modelHelpers = createModelHelpers(catalog.models);
 
-  console.log("Nakama setup\n");
+  console.log("Airin setup\n");
   console.log("No API key found. Let's configure one.\n");
 
   const rl = readline.createInterface({
@@ -404,23 +402,23 @@ export async function ensureProviderConfiguredViaCli(
       instance.customModels?.[0]?.id ??
       modelHelpers.getDefaultModel(instance.type);
 
-    const result = await client.configureProvider({
-      apiKey: instance.apiKey,
+    const result = await client.createProvider({
       baseUrl: instance.baseUrl,
       customModels: instance.customModels,
-      displayName:
-        instance.type === "openai_compatible" ? instance.label : undefined,
       hostMode: instance.hostMode,
+      label: instance.type === "openai_compatible" ? instance.label : undefined,
       model,
-      provider: instance.type,
+      type: instance.type,
     });
 
+    if (instance.apiKey) {
+      await client.setProviderSecret(result.provider.id, instance.apiKey);
+    }
+
     printLine(
-      `\nProvider configured (${result.provider}, ${result.currentModel}).`
+      `\nProvider configured (${result.provider.type}, ${result.initialModel}).`
     );
-    console.log(
-      `Saved to ${formatCliDisplayPath(getUserConfigPath(), isCliVerbose())}\n`
-    );
+    console.log("Provider settings saved. The key is stored securely.\n");
 
     return true;
   } finally {
@@ -491,7 +489,7 @@ export function parseConnectionArgs(argv = process.argv.slice(2)) {
     }
 
     if (!value || value.startsWith("--")) {
-      throw new Error("Pass --server https://your-nakama-server.");
+      throw new Error("Pass --server https://your-airin-server.");
     }
 
     serverUrl = normalizeServerUrl(value);
@@ -517,7 +515,7 @@ export async function createRemoteConnection(
 ) {
   const baseUrl = normalizeServerUrl(serverUrl);
   const store = options.secretStore ?? Bun.secrets;
-  const key = { name: baseUrl, service: "nakama-cli" };
+  const key = { name: baseUrl, service: "airin-cli" };
 
   // HTTPS servers issue host-bound cookies and refuse the unprefixed pair, so
   // the scheme of the server URL decides the names the CLI replays (#1345).
@@ -565,7 +563,7 @@ export async function createRemoteConnection(
   const fetchImpl = options.fetch ?? fetch;
   let loginSignal: AbortSignal | undefined;
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl,
     // SAFETY: This wrapper preserves the Fetch request and response contract.
     fetch: (async (input, init) => {
@@ -615,7 +613,7 @@ export async function createRemoteConnection(
       if (response.status === 401 && tokens) {
         tokens = null;
         await store.delete(key);
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Session expired. Run the CLI again to log in.",
           401,
           url.pathname
@@ -697,7 +695,7 @@ export async function createRemoteConnection(
           await client.logout();
         }
       } catch (error) {
-        if (!(error instanceof NakamaApiError && error.status === 401)) {
+        if (!(error instanceof AirinApiError && error.status === 401)) {
           throw new Error(
             "Local session removed, but server logout failed. The remote session may remain active."
           );

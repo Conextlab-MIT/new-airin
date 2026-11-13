@@ -1,4 +1,3 @@
-import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import {
   fetchWithoutIdleTimeout,
   type GenerateChatInput,
@@ -7,8 +6,13 @@ import {
   type ProviderClient,
   type ProviderName,
   type StreamChatHandlers,
-} from "@nakama/core";
-import { buildTokenUsage } from "../shared";
+} from "@airin/core";
+import Anthropic, { APIError } from "@anthropic-ai/sdk";
+import {
+  buildProviderHttpError,
+  buildProviderResponseError,
+  buildTokenUsage,
+} from "../shared";
 import {
   buildAnthropicThinkingRequest,
   continueAnthropicUntilDone,
@@ -44,6 +48,17 @@ function createAnthropicClient(
 }
 
 function formatAnthropicError(error: Error, label: string): Error {
+  // Same mapping as the other adapters, so the user reads the provider's
+  // reason instead of a generic server error. Aborts and dropped connections
+  // carry no status and keep the plain error below.
+  if (error instanceof APIError && error.status !== undefined) {
+    return buildProviderHttpError(
+      label,
+      error.status,
+      error.error ? JSON.stringify(error.error) : error.message
+    );
+  }
+
   if (error instanceof APIError) {
     return new Error(
       `${label} request failed (${error.status}): ${error.message}`
@@ -136,7 +151,9 @@ export function createAnthropicProvider(
           .trim();
 
         if (!content) {
-          throw new Error(`${label} returned an empty response.`);
+          throw buildProviderResponseError(
+            `${label} returned an empty response.`
+          );
         }
 
         const usage = buildTokenUsage({

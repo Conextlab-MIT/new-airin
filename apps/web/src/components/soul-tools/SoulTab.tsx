@@ -1,5 +1,5 @@
-import type { SoulStackFiles } from "@nakama/core/contract";
-import { cn } from "@nakama/ui/utils";
+import type { SoulStackFiles } from "@airin/core/contract";
+import { cn } from "@airin/ui/utils";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";

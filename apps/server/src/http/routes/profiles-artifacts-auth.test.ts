@@ -1,19 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, symlink, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { getProfileSoulDir, NakamaApiError } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { AirinApiError, getProfileSoulDir } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
+import { AgentService } from "../../services/agent-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import {
   createOrgAdminSession,
   loginPlatformAdminSession,
   loginUserSession,
+  seedOrgAdmin,
   setupFreshInstallSession,
   type TestBrowserSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-profiles-artifacts-auth-test-");
+setupTestConfigDir("airin-profiles-artifacts-auth-test-");
 
 test("workspace rename requires platform admin access and updates pins for every user only in this profile", async () => {
   const databaseAdapter = createInMemoryDatabaseAdapter();
@@ -25,11 +27,16 @@ test("workspace rename requires platform admin access and updates pins for every
         const profile = await databaseAdapter.getProfile(profileId);
 
         if (!profile || profile.orgId !== orgId) {
-          throw new NakamaApiError("Not found", 404);
+          throw new AirinApiError("Not found", 404);
         }
 
         return { profile };
       },
+      getProfileAccess: (orgId: string, profileId: string) =>
+        new AgentService(null, null, databaseAdapter).getProfileAccess(
+          orgId,
+          profileId
+        ),
     },
   });
 
@@ -246,6 +253,8 @@ function createApp() {
   const listCalls: Array<{ folder?: string; limit?: number; offset?: number }> =
     [];
 
+  const scopeCalls: Array<string | undefined> = [];
+
   const readCalls: Array<{
     headOnly?: boolean;
     render?: "markdown";
@@ -256,7 +265,7 @@ function createApp() {
   const agent = {
     getProfile: async (_orgId: string, profileId: string) => {
       if (profileId !== "profile_1") {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       return {
@@ -264,17 +273,30 @@ function createApp() {
         profileId,
       };
     },
-    deleteProfileArtifact: async () => ({
-      deleted: true,
-      filename: "report.md",
-      profileId: "profile_1",
-    }),
+    getProfileAccess: async (_orgId: string, profileId: string) =>
+      profileId === "profile_1" ? { isSuper: false, ownerUserId: null } : null,
+    deleteProfileArtifact: async (
+      _orgId: string,
+      _profileId: string,
+      _filename: string,
+      createdByUserId?: string
+    ) => {
+      scopeCalls.push(createdByUserId);
+
+      return {
+        deleted: true,
+        filename: "report.md",
+        profileId: "profile_1",
+      };
+    },
     listProfileArtifacts: async (
       _orgId: string,
       _profileId: string,
-      options: { folder?: string; limit?: number; offset?: number } = {}
+      options: { folder?: string; limit?: number; offset?: number } = {},
+      createdByUserId?: string
     ) => {
       listCalls.push(options);
+      scopeCalls.push(createdByUserId);
 
       return {
         artifacts: [],
@@ -290,12 +312,14 @@ function createApp() {
       options: {
         headOnly?: boolean;
         render?: "markdown";
-      } = {}
+      } = {},
+      createdByUserId?: string
     ) => {
       readCalls.push(options);
+      scopeCalls.push(createdByUserId);
 
       if (filename === "missing.md") {
-        throw new NakamaApiError(`Artifact not found: ${filename}`, 404);
+        throw new AirinApiError(`Artifact not found: ${filename}`, 404);
       }
 
       return {
@@ -307,9 +331,11 @@ function createApp() {
       _orgId: string,
       profileId: string,
       filename: string,
-      content: string
+      content: string,
+      createdByUserId?: string
     ) => {
       writeCalls.push({ content, filename });
+      scopeCalls.push(createdByUserId);
 
       return {
         filename,
@@ -324,6 +350,7 @@ function createApp() {
     ...createMinimalHonoApp({ agent }),
     readCalls,
     listCalls,
+    scopeCalls,
     writeCalls,
   };
 }
@@ -490,8 +517,8 @@ describe("profile artifact content auth", () => {
     expect(readCalls.at(-1)?.render).toBeUndefined();
   });
 
-  test("org member cannot list artifacts", async () => {
-    const { app, authService, databaseAdapter } = createApp();
+  test("org member reads, edits, lists and deletes only their own artifacts", async () => {
+    const { app, authService, databaseAdapter, scopeCalls } = createApp();
 
     const { orgId, adminSession } = await createOrgAdminSession(
       app,
@@ -534,13 +561,66 @@ describe("profile artifact content auth", () => {
       orgId
     );
 
+    const memberId = (await databaseAdapter.getUserByEmail(
+      "member-artifact@acme.com"
+    ))!.id;
+
     const response = await app.fetch(
       new Request("http://localhost:4310/v1/profiles/profile_1/artifacts", {
         headers: memberSession.headers({}, orgId),
       })
     );
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+
+    const deleteResponse = await app.fetch(
+      new Request(
+        "http://localhost:4310/v1/profiles/profile_1/artifacts?path=report.md",
+        {
+          headers: memberSession.headers(
+            { "X-CSRF-Token": memberSession.csrfToken },
+            orgId
+          ),
+          method: "DELETE",
+        }
+      )
+    );
+
+    expect(deleteResponse.status).toBe(200);
+
+    const contentUrl =
+      "http://localhost:4310/v1/profiles/profile_1/artifacts/content?path=report.md";
+
+    const readResponse = await app.fetch(
+      new Request(contentUrl, { headers: memberSession.headers({}, orgId) })
+    );
+
+    expect(readResponse.status).toBe(200);
+
+    const writeResponse = await app.fetch(
+      new Request(contentUrl, {
+        body: JSON.stringify({ content: "# Edited\n" }),
+        headers: memberSession.headers(
+          {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": memberSession.csrfToken,
+          },
+          orgId
+        ),
+        method: "PUT",
+      })
+    );
+
+    expect(writeResponse.status).toBe(200);
+    expect(scopeCalls).toEqual([memberId, memberId, memberId, memberId]);
+
+    const unknownAgent = await app.fetch(
+      new Request("http://localhost:4310/v1/profiles/profile_2/artifacts", {
+        headers: memberSession.headers({}, orgId),
+      })
+    );
+
+    expect(unknownAgent.status).toBe(403);
 
     for (const endpoint of ["workspace", "workspace/content?path=SOUL.md"]) {
       const workspaceResponse = await app.fetch(
@@ -553,8 +633,54 @@ describe("profile artifact content auth", () => {
     }
   });
 
-  test("platform admin can still list artifacts", async () => {
-    const { app, databaseAdapter } = createApp();
+  test("org admin reads every artifact, so channel bots keep sending them", async () => {
+    const { app, databaseAdapter, scopeCalls } = createApp();
+    const admin = await seedOrgAdmin(databaseAdapter);
+
+    const session = await loginUserSession(
+      app,
+      admin.email,
+      admin.password,
+      admin.orgId
+    );
+
+    const response = await app.fetch(
+      new Request(
+        "http://localhost:4310/v1/profiles/profile_1/artifacts/content?path=report.md",
+        { headers: session.headers({}, admin.orgId) }
+      )
+    );
+
+    expect(response.status).toBe(200);
+
+    const list = await app.fetch(
+      new Request("http://localhost:4310/v1/profiles/profile_1/artifacts", {
+        headers: session.headers({}, admin.orgId),
+      })
+    );
+
+    expect(list.status).toBe(200);
+
+    // Org admins reach every member's artifact, so delete is not scoped either.
+    const deleteResponse = await app.fetch(
+      new Request(
+        "http://localhost:4310/v1/profiles/profile_1/artifacts?path=report.md",
+        {
+          headers: session.headers(
+            { "X-CSRF-Token": session.csrfToken },
+            admin.orgId
+          ),
+          method: "DELETE",
+        }
+      )
+    );
+
+    expect(deleteResponse.status).toBe(200);
+    expect(scopeCalls).toEqual([undefined, undefined, undefined]);
+  });
+
+  test("platform admin can still list every artifact", async () => {
+    const { app, databaseAdapter, scopeCalls } = createApp();
     const adminSession = await setupFreshInstallSession(app, databaseAdapter);
 
     const response = await app.fetch(
@@ -564,6 +690,7 @@ describe("profile artifact content auth", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(scopeCalls).toEqual([undefined]);
   });
 });
 
@@ -685,11 +812,16 @@ test("personal file pins persist and enforce user, org, profile and path boundar
         const profile = await databaseAdapter.getProfile(profileId);
 
         if (!profile || profile.orgId !== orgId) {
-          throw new NakamaApiError("Not found", 404);
+          throw new AirinApiError("Not found", 404);
         }
 
         return { profile };
       },
+      getProfileAccess: (orgId: string, profileId: string) =>
+        new AgentService(null, null, databaseAdapter).getProfileAccess(
+          orgId,
+          profileId
+        ),
     },
   });
 

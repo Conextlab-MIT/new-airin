@@ -1,8 +1,8 @@
-import type { ToolDetail } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
-import { Textarea } from "@nakama/ui/textarea";
+import type { ToolDetail } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
+import { Textarea } from "@airin/ui/textarea";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckmarkCircle02Icon, PlayIcon } from "hugeicons-react";
 import { useState } from "react";
@@ -29,7 +29,7 @@ export function ToolPlaygroundRunForm({
           <p className="type-body mt-1 text-xs">
             Real side effects. Relative paths resolve in the assigned profile
             workspace under{" "}
-            <code className="type-code">~/.nakama/orgs/…/profiles/…/</code>.
+            <code className="type-code">~/.airin/orgs/…/profiles/…/</code>.
           </p>
         </div>
 
@@ -278,10 +278,10 @@ function ToolConfigurationCard({ toolId }: { toolId: string }) {
 
 export function ToolPlaygroundOutput({
   run,
-  superBotProfileId,
+  superAirinProfileId,
 }: {
   run: ToolPlaygroundRunControls;
-  superBotProfileId: string | null;
+  superAirinProfileId: string | null;
 }) {
   return (
     <div className="min-h-32">
@@ -310,14 +310,14 @@ export function ToolPlaygroundOutput({
           <pre className="text-destructive text-xs leading-relaxed">
             {run.runState.error}
           </pre>
-          {superBotProfileId ? (
+          {superAirinProfileId ? (
             <Button
-              onClick={run.handleFixWithSuperBot}
+              onClick={run.handleFixWithSuperAirin}
               size="sm"
               type="button"
               variant="outline"
             >
-              Fix with Super Bot
+              Fix with Airin
             </Button>
           ) : null}
         </div>

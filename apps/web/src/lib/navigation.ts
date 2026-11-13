@@ -4,7 +4,6 @@ import {
   Building03Icon,
   CodeIcon,
   Coins01Icon,
-  CpuChargeIcon,
   DashboardSquare01Icon,
   Folder01Icon,
   LayoutGridIcon,
@@ -12,9 +11,11 @@ import {
   PackageIcon,
   Plug01Icon,
   PlusSignSquareIcon,
+  PuzzleIcon,
   Settings01Icon,
   SharedWifiIcon,
   SlidersHorizontalIcon,
+  UserGroupIcon,
   UserSquareIcon,
   WorkflowSquare01Icon,
 } from "hugeicons-react";
@@ -23,7 +24,9 @@ type NavIcon = typeof SharedWifiIcon;
 
 export type PageId =
   | "google-meet"
+  | "groups"
   | "chat"
+  | "composio"
   | "customize"
   | "usage"
   | "files"
@@ -32,6 +35,7 @@ export type PageId =
   | "tools"
   | "skills"
   | "mcp"
+  | "marketplace"
   | "automations"
   | "organization"
   | "settings"
@@ -85,16 +89,23 @@ const NAV_GROUPS: NavGroup[] = [
         UserSquareIcon
       ),
       navItem(
+        "groups",
+        "Groups",
+        "Group chats where agents talk to each other",
+        UserGroupIcon
+      ),
+      navItem(
         "google-meet",
         "Google Meet",
         "Capture and read meeting transcripts",
         SharedWifiIcon
       ),
+      navItem("plugin-management", "Plugins", "Manage plugins", PackageIcon),
       navItem(
-        "files",
-        "Browse Files",
-        "Manage profile artifacts",
-        Folder01Icon
+        "composio",
+        "Connections",
+        "Connect apps and manage plugins",
+        PuzzleIcon
       ),
     ],
     label: "Chat",
@@ -110,8 +121,8 @@ const NAV_GROUPS: NavGroup[] = [
       ),
       navItem(
         "customize",
-        "Control center",
-        "Manage Nakama settings, tools, and integrations",
+        "Settings",
+        "Manage Airin settings, tools, and integrations",
         SlidersHorizontalIcon
       ),
     ],
@@ -134,7 +145,12 @@ const NAV_GROUPS: NavGroup[] = [
     id: "system",
     items: [
       navItem("usage", "Usage", "View token usage and costs", Coins01Icon),
-      navItem("plugin-management", "Plugins", "Manage plugins", PackageIcon),
+      navItem(
+        "files",
+        "Browse Files",
+        "Manage profile artifacts",
+        Folder01Icon
+      ),
       navItem(
         "workers",
         "Workers",
@@ -152,7 +168,7 @@ const NAV_GROUPS: NavGroup[] = [
       ),
       navItem(
         "settings",
-        "Settings",
+        "Preferences",
         "Appearance and preferences",
         Settings01Icon
       ),
@@ -166,12 +182,24 @@ const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 export const SIDEBAR_PAGE_IDS: readonly PageId[] = [
   "chat",
   "profiles",
-  "files",
+  "groups",
+  "composio",
   "automations",
   "customize",
 ];
 
+/** Plugins is a tab of Connections, so it lights up the Connections item. */
+export function sidebarPageId(page: PageId): PageId {
+  return page === "plugin-management" ? "composio" : page;
+}
+
 export const STANDALONE_PAGES: Partial<Record<PageId, NavItem>> = {
+  marketplace: navItem(
+    "marketplace",
+    "Marketplace",
+    "Install ready-made AI agents for your team",
+    PackageIcon
+  ),
   notifications: navItem(
     "notifications",
     "Notifications",
@@ -183,7 +211,6 @@ export const STANDALONE_PAGES: Partial<Record<PageId, NavItem>> = {
 export const SETUP_PATH = "/setup";
 
 const PLATFORM_ADMIN_PAGE_IDS: ReadonlySet<PageId> = new Set([
-  "files",
   "soul",
   "mcp",
   "providers",
@@ -216,43 +243,52 @@ export function canManagePluginReleases(isPlatformAdmin: boolean): boolean {
 
 export const canUseToolPlayground = canAccessSystemPage;
 
+interface PageAccess {
+  isPlatformAdmin: boolean;
+  orgRole: string | undefined;
+}
+
+/** Whether this user can open the page, so it is not redirected away. */
+export function canOpenPage(pageId: PageId, access: PageAccess): boolean {
+  if (
+    pageId === "google-meet" ||
+    pageId === "groups" ||
+    pageId === "marketplace"
+  ) {
+    return canAccessIntegrationsPage(access.orgRole);
+  }
+
+  if (pageId === "composio") {
+    return access.isPlatformAdmin || canAccessIntegrationsPage(access.orgRole);
+  }
+
+  if (pageId === "organization" || pageId === "files") {
+    return canAccessOrganizationPage(access.isPlatformAdmin, access.orgRole);
+  }
+
+  if (
+    pageId === "usage" ||
+    pageId === "plugin-management" ||
+    pageId === "tools" ||
+    pageId === "soul" ||
+    pageId === "workers"
+  ) {
+    return canAccessSystemPage(access.isPlatformAdmin, access.orgRole);
+  }
+
+  return !PLATFORM_ADMIN_PAGE_IDS.has(pageId) || access.isPlatformAdmin;
+}
+
 /**
  * Nav groups this user can actually reach, empty groups dropped. The sidebar and
  * the command palette both read this, so the palette cannot offer a destination
  * the sidebar hides.
  */
-export function visibleNavGroups(access: {
-  isPlatformAdmin: boolean;
-  orgRole: string | undefined;
-}): NavGroup[] {
+export function visibleNavGroups(access: PageAccess): NavGroup[] {
   const groups: NavGroup[] = [];
 
   for (const group of NAV_GROUPS) {
-    const items = group.items.filter((item) => {
-      if (item.id === "google-meet") {
-        return canAccessIntegrationsPage(access.orgRole);
-      }
-
-      if (item.id === "organization") {
-        return canAccessOrganizationPage(
-          access.isPlatformAdmin,
-          access.orgRole
-        );
-      }
-
-      if (
-        item.id === "usage" ||
-        item.id === "plugin-management" ||
-        item.id === "files" ||
-        item.id === "tools" ||
-        item.id === "soul" ||
-        item.id === "workers"
-      ) {
-        return canAccessSystemPage(access.isPlatformAdmin, access.orgRole);
-      }
-
-      return !PLATFORM_ADMIN_PAGE_IDS.has(item.id) || access.isPlatformAdmin;
-    });
+    const items = group.items.filter((item) => canOpenPage(item.id, access));
 
     if (items.length > 0) {
       groups.push({ ...group, items });
@@ -347,8 +383,17 @@ export function enabledPluginNavEntries(
     }));
 }
 
-export const profilePath = (profileId: string): string =>
-  queryPath(PAGE_PATHS.profiles, { profile: profileId });
+export function profilePath(
+  profileId: string,
+  options?: { section?: "mcp" }
+): string {
+  return queryPath(
+    PAGE_PATHS.profiles,
+    options?.section
+      ? { profile: profileId, section: options.section }
+      : { profile: profileId }
+  );
+}
 
 export function skillDetailPath(
   skillId: string,
@@ -423,31 +468,66 @@ export function teamDetailPath(teamId: string): string {
   return `${PAGE_PATHS.organization}/teams/${encodeURIComponent(teamId)}`;
 }
 
+/** A group's new chat, or one of its sessions. */
+export function groupPath(groupId: string, sessionId?: string): string {
+  const base = `${PAGE_PATHS.groups}/${encodeURIComponent(groupId)}`;
+
+  return sessionId ? `${base}/${encodeURIComponent(sessionId)}` : base;
+}
+
+/** The group (and session) a `/groups/...` path points at, if any. */
+export function groupRouteFromPath(
+  pathname: string
+): { groupId: string; sessionId: string | null } | null {
+  const [groupId, sessionId] = pathname
+    .slice(`${PAGE_PATHS.groups}/`.length)
+    .split("/");
+
+  if (!(pathname.startsWith(`${PAGE_PATHS.groups}/`) && groupId)) {
+    return null;
+  }
+
+  try {
+    return {
+      groupId: decodeURIComponent(groupId),
+      sessionId: sessionId ? decodeURIComponent(sessionId) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export const PAGE_PATHS: Record<PageId, string> = {
   automations: "/automations",
   chat: "/chat",
-  customize: "/customize",
+  composio: "/connectors",
+  customize: "/settings",
   files: "/files",
   "google-meet": "/google-meet",
-  mcp: "/customize/mcp",
+  groups: "/groups",
+  marketplace: "/marketplace",
+  mcp: "/settings/mcp",
   notifications: "/notifications",
   organization: "/organization",
-  "plugin-management": "/customize/plugins",
+  "plugin-management": "/settings/plugins",
   plugins: PLUGIN_PAGE_PREFIX,
   profiles: "/profiles",
-  providers: "/customize/providers",
-  settings: "/settings",
-  skills: "/customize/skills",
+  providers: "/settings/providers",
+  settings: "/settings/preferences",
+  skills: "/settings/skills",
   soul: "/system",
-  tools: "/customize/tools",
-  usage: "/customize/usage",
+  tools: "/settings/tools",
+  usage: "/settings/usage",
   workers: "/workers",
 };
 
 const PREFIX_PAGE_IDS: readonly [string, PageId][] = [
-  ["/customize/connections", "customize"],
+  [PAGE_PATHS.composio, "composio"],
+  ["/settings/connections", "customize"],
   [PAGE_PATHS["plugin-management"], "plugin-management"],
   [PAGE_PATHS.chat, "chat"],
+  [PAGE_PATHS.groups, "groups"],
+  [PAGE_PATHS.marketplace, "marketplace"],
   [PAGE_PATHS.organization, "organization"],
   [PAGE_PATHS.soul, "soul"],
   [PAGE_PATHS.profiles, "profiles"],
@@ -482,9 +562,24 @@ export function findNavItem(pageId: PageId): NavItem | undefined {
   );
 }
 
+/** Settings pages lived under /customize before; old links still point there. */
+export function settingsPathFromLegacy(pathname: string): string | null {
+  if (pathname === "/customize" || pathname.startsWith("/customize/")) {
+    return `/settings${pathname.slice("/customize".length)}`;
+  }
+
+  return null;
+}
+
 export function pageIdFromPath(pathname: string): PageId | null {
   if (pathname === "/tasks") {
     return "automations";
+  }
+
+  const settingsPath = settingsPathFromLegacy(pathname);
+
+  if (settingsPath) {
+    return pageIdFromPath(settingsPath);
   }
 
   const prefixPage = PREFIX_PAGE_IDS.find(
@@ -501,6 +596,27 @@ export function pageIdFromPath(pathname: string): PageId | null {
       ([, path]) => pathname === path
     )?.[0] ?? null
   );
+}
+
+/** App path for a same-origin link to a known page, or null for other links. */
+export function inAppLinkPath(href: string, origin: string): string | null {
+  if (href.startsWith("//")) {
+    return null;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(href, origin);
+  } catch {
+    return null;
+  }
+
+  if (url.origin !== origin || !pageIdFromPath(url.pathname)) {
+    return null;
+  }
+
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 const INTEGRATION_SECTIONS = [
@@ -520,11 +636,6 @@ const INTEGRATION_SECTIONS = [
     label: "Coding agents",
   },
   {
-    icon: CpuChargeIcon,
-    id: "optimization",
-    label: "Context savings",
-  },
-  {
     icon: Bug01Icon,
     id: "error-tracking",
     label: "Error tracking",
@@ -532,6 +643,12 @@ const INTEGRATION_SECTIONS = [
 ] as const;
 
 export type IntegrationSectionId = (typeof INTEGRATION_SECTIONS)[number]["id"];
+
+export function integrationSectionPath(id: IntegrationSectionId): string {
+  return id === "composio"
+    ? PAGE_PATHS.composio
+    : `/settings/connections/${id}`;
+}
 
 export function visibleIntegrationSections(
   isPlatformAdmin: boolean,

@@ -4,7 +4,7 @@ import type {
   ChatUsage,
   ProviderClient,
   ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { createAgentChatSession } from "./index";
 
 const toolCall = { arguments: {}, id: "call_1", name: "ping" };

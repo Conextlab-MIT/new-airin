@@ -1,4 +1,4 @@
-import type { AcpSessionSetting } from "@nakama/core/contract";
+import type { AcpSessionSetting } from "@airin/core/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { ACP_PROVIDER_ID, acpModelGroups } from "@/lib/acp-settings";

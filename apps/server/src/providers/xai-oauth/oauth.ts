@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import {
+  AirinApiError,
   type CustomModelEntry,
-  NakamaApiError,
   type XaiOAuthCredentials,
   type XaiOAuthDeviceStartResponse,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 
 const deviceResponseSchema = z.object({
@@ -110,15 +110,15 @@ function readTokens(
   };
 }
 
-function authError(status: number): NakamaApiError {
+function authError(status: number): AirinApiError {
   if (status === 403 || status === 402) {
-    return new NakamaApiError(
+    return new AirinApiError(
       `Grok subscription access denied (${status}). Check your xAI plan's API eligibility and remaining quota.`,
       400
     );
   }
 
-  return new NakamaApiError(
+  return new AirinApiError(
     `Grok OAuth failed (${status}). Try signing in again.`,
     400
   );
@@ -209,7 +209,7 @@ export async function completeXaiOAuthDeviceSession(
   const session = sessions.get(sessionId);
 
   if (!session || session.owner !== owner || session.expiresAt <= Date.now()) {
-    throw new NakamaApiError("Grok sign-in session expired. Start again.", 400);
+    throw new AirinApiError("Grok sign-in session expired. Start again.", 400);
   }
 
   // Claim once: concurrent completion requests must not redeem the same grant.
@@ -314,7 +314,7 @@ export async function fetchXaiOAuthModels(
   });
 
   if (!models.length) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Grok returned no language models for this account.",
       400
     );
@@ -333,7 +333,7 @@ export async function resolveXaiOAuthCredentials(
 
   if (!current) {
     throw new Error(
-      "Grok is not connected. Reconnect in Settings → LLM providers."
+      "Grok is not connected. Reconnect in Settings → AI Providers (/settings/providers)."
     );
   }
 

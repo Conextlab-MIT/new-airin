@@ -1,11 +1,11 @@
-import type { ProfileChangeEvent } from "@nakama/core";
-import { createId, isWritableSoulFileKey } from "@nakama/core";
+import type { ProfileChangeEvent } from "@airin/core";
+import { createId, isWritableSoulFileKey } from "@airin/core";
 import type {
   DatabaseAdapter,
   ProfileChangeField,
   ProfileChangeSource,
   StoredProfileChangeEvent,
-} from "@nakama/db";
+} from "@airin/db";
 
 export type ProfileChangeMeta = {
   actorUserId?: string | null;

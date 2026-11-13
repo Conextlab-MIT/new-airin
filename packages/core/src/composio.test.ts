@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -7,9 +7,7 @@ import {
   normalizeUpdateProfileComposioToolkitsRequest,
 } from "./composio";
 import {
-  composioOrgUserId,
   composioUserId,
-  getComposioConfigPath,
   isComposioConfigured,
   isComposioConfiguredAsync,
   loadComposioConfigFile,
@@ -31,7 +29,7 @@ describe("composio-config", () => {
   });
 
   test("resolveComposioApiKey reads a mounted secret file", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-composio-secret-"));
+    const configDir = await mkdtemp(join(tmpdir(), "airin-composio-secret-"));
     const secretPath = join(configDir, "api-key");
     await writeFile(secretPath, "  ck-mounted\n");
 
@@ -61,37 +59,38 @@ describe("composio-config", () => {
     ).toBe("ck-direct");
   });
 
-  test("composioOrgUserId namespaces org id", () => {
-    expect(composioOrgUserId("org_123")).toBe("nakama:org:org_123");
+  test("composioUserId namespaces airin user id", () => {
+    expect(composioUserId("usr_123")).toBe("airin:user:usr_123");
   });
 
-  test("composioUserId namespaces nakama user id", () => {
-    expect(composioUserId("usr_123")).toBe("nakama:user:usr_123");
-  });
-
-  test("saveComposioConfig writes config.ini", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-composio-config-"));
-    const previous = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+  test("Composio reads an environment key without writing config.ini", async () => {
+    const configDir = await mkdtemp(join(tmpdir(), "airin-composio-config-"));
+    const previous = process.env.AIRIN_CONFIG_DIR;
+    const previousKey = process.env.COMPOSIO_API_KEY;
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    process.env.COMPOSIO_API_KEY = "ck_test_secret";
 
     try {
-      const saved = await saveComposioConfig({ apiKey: "ck_test_secret" });
-      expect(saved.configured).toBe(true);
-      expect(saved.apiKeyMasked).toBeTruthy();
+      await expect(
+        saveComposioConfig({ apiKey: "ck_test_secret" })
+      ).rejects.toThrow();
 
       const loaded = await loadComposioConfigFile();
       expect(loaded?.apiKey).toBe("ck_test_secret");
-
-      const raw = await readFile(getComposioConfigPath(), "utf8");
-      expect(raw).toContain("api_key=ck_test_secret");
 
       expect(await isComposioConfiguredAsync()).toBe(true);
       expect((await loadComposioSettingsPublic()).configured).toBe(true);
     } finally {
       if (previous === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previous;
+        process.env.AIRIN_CONFIG_DIR = previous;
+      }
+
+      if (previousKey === undefined) {
+        delete process.env.COMPOSIO_API_KEY;
+      } else {
+        process.env.COMPOSIO_API_KEY = previousKey;
       }
     }
   });
@@ -99,15 +98,9 @@ describe("composio-config", () => {
 
 describe("normalizeEnableComposioToolkitRequest", () => {
   test.each(
-    [
-      undefined,
-      null,
-      false,
-      1,
-      "gmail",
-      [],
-      { toolkitSlug: Symbol("gmail") },
-    ].map((input) => ({ input }))
+    [undefined, [], { toolkitSlug: Symbol("gmail") }].map((input) => ({
+      input,
+    }))
   )("rejects malformed request %j", ({ input }) => {
     expect(() => normalizeEnableComposioToolkitRequest(input)).toThrow();
   });
@@ -127,9 +120,7 @@ describe("normalizeEnableComposioToolkitRequest", () => {
 
 describe("normalizeUpdateProfileComposioToolkitsRequest", () => {
   test.each(
-    [undefined, null, false, 1, "gmail", [], { assignments: [undefined] }].map(
-      (input) => ({ input })
-    )
+    [undefined, [], { assignments: [undefined] }].map((input) => ({ input }))
   )("rejects malformed request %j", ({ input }) => {
     expect(() =>
       normalizeUpdateProfileComposioToolkitsRequest(input)

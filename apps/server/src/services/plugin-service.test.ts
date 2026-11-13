@@ -3,17 +3,21 @@ import { existsSync } from "node:fs";
 import {
   appendFile,
   cp,
+  link,
   mkdir,
   mkdtemp,
   readFile,
+  rename,
   rm,
+  symlink,
+  truncate,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
-import { getPluginReleaseDir, PLUGIN_MANIFEST_API_VERSION } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { getPluginReleaseDir, PLUGIN_MANIFEST_API_VERSION } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import {
   approvedPluginPackage,
   closePluginPackageRegistry,
@@ -21,16 +25,19 @@ import {
   pluginTarball,
   publishPluginPackageVersion,
 } from "../testing/plugin-package-fixture";
-import { PluginService } from "./plugin-service";
+import { createSuperAirinTools } from "../tools/super-airin-tools";
+import { PluginService, setPluginLifecycleTestHooks } from "./plugin-service";
+import type { ProfileService } from "./profile-service";
+import { SuperAirinSessionState } from "./super-airin-session-state";
 
 afterEach(closePluginPackageRegistry);
 
-const SIDE_EFFECT_MARKER = join(tmpdir(), "nakama-plugin-side-effect-marker");
+const SIDE_EFFECT_MARKER = join(tmpdir(), "airin-plugin-side-effect-marker");
 
 type Json = boolean | Json[] | { [key: string]: Json } | null | number | string;
 
 const identity = {
-  author: "Nakama",
+  author: "Airin",
   description: "Notes for an organization",
   id: "notes",
   license: "MIT",
@@ -58,7 +65,7 @@ function notesManifest(overrides: Record<string, Json> = {}) {
       },
     ],
     apiVersion: PLUGIN_MANIFEST_API_VERSION,
-    minNakamaVersion: "0.1.0",
+    minAirinVersion: "0.1.0",
     skills: [{ directory: "skills/notes", key: "notes" }],
     ui: {
       assetsDir: "ui/assets",
@@ -79,7 +86,7 @@ function validBundle(
   return pluginPackage(
     {
       "actions/list.js": sideEffectJs,
-      "nakama.plugin.json": JSON.stringify(manifest),
+      "airin.plugin.json": JSON.stringify(manifest),
       "side-effect.js": sideEffectJs,
       "skills/notes/SKILL.md": "# Notes\n",
       "ui/assets/app.js": "export {}",
@@ -93,14 +100,808 @@ describe("PluginService", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-plugin-u2-"));
+    configDir = await mkdtemp(join(tmpdir(), "airin-plugin-u2-"));
     await rm(SIDE_EFFECT_MARKER, { force: true });
   });
 
   afterEach(async () => {
+    setPluginLifecycleTestHooks(null);
     await rm(SIDE_EFFECT_MARKER, { force: true });
     await rm(configDir, { force: true, recursive: true });
   });
+
+  async function localDraft() {
+    const db = createInMemoryDatabaseAdapter();
+    const now = new Date().toISOString();
+    await db.upsertOrganization({
+      createdAt: now,
+      id: "org_local",
+      name: "Local",
+      slug: "local",
+      updatedAt: now,
+    });
+    await db.upsertProfile({
+      createdAt: now,
+      id: "super_local",
+      isDefault: false,
+      isSuper: true,
+      model: null,
+      name: "Super",
+      orgId: "org_local",
+      systemPrompt: "",
+      updatedAt: now,
+    });
+
+    const draft = {
+      draftId: "notes",
+      orgId: "org_local",
+      profileId: "super_local",
+    };
+
+    const directory = join(
+      configDir,
+      "orgs/org_local/profiles/super_local/plugin-drafts/notes"
+    );
+
+    const contents = {
+      "actions/list.js": sideEffectJs,
+      "airin.plugin.json": JSON.stringify(notesManifest()),
+      "package.json": JSON.stringify({ name: "@test/notes", version: "1.0.0" }),
+      "skills/notes/SKILL.md":
+        "---\nname: notes\ndescription: Notes\n---\nList notes.",
+      "src/list.js": sideEffectJs,
+      "ui/assets/app.js": "export {}",
+      "ui/index.js": sideEffectJs,
+    };
+
+    for (const [path, content] of Object.entries(contents)) {
+      await mkdir(dirname(join(directory, path)), { recursive: true });
+      await writeFile(join(directory, path), content);
+    }
+
+    return {
+      actor: { id: "platform", isPlatformAdmin: true },
+      db,
+      directory,
+      draft,
+      service: new PluginService(db, configDir),
+    };
+  }
+
+  test("submit_plugin_draft describes Airin's own draft without installing it", async () => {
+    const { db, directory, draft, service } = await localDraft();
+
+    const submit = createSuperAirinTools(
+      // SAFETY: submit_plugin_draft never touches profile management.
+      {} as ProfileService,
+      new SuperAirinSessionState(),
+      undefined,
+      () => service
+    ).find((tool) => tool.name === "submit_plugin_draft");
+
+    const context = { orgId: draft.orgId, profileId: draft.profileId };
+
+    expect(
+      await submit?.run({ draftId: draft.draftId }, context)
+    ).toMatchObject({
+      actions: ["list"],
+      draftId: "notes",
+      fileCount: 7,
+      pluginId: "notes",
+      type: "plugin_draft_ready",
+    });
+    expect(await db.getOrgPlugin(draft.orgId, "notes")).toBeNull();
+    await expect(
+      submit?.run({ draftId: draft.draftId }, { ...context, profileId: "x" })
+    ).rejects.toThrow();
+
+    const manifest = notesManifest();
+    manifest.actions[0].inputSchema = {
+      properties: { query: { description: "Search text", type: "string" } },
+      type: "object",
+    };
+    await writeFile(
+      join(directory, "airin.plugin.json"),
+      JSON.stringify(manifest)
+    );
+
+    await expect(
+      submit?.run({ draftId: draft.draftId }, context)
+    ).rejects.toThrow("invalid_manifest: unsupported_schema");
+  });
+
+  test("local review and first install publish only reviewed bytes and stay disabled", async () => {
+    const { db, draft, directory, service, actor } = await localDraft();
+    const preview = await service.previewLocalPlugin(draft, actor);
+    expect(preview.expectedRevision).toBeNull();
+    expect(preview.files.some((file) => file.path === "src/list.js")).toBe(
+      true
+    );
+
+    const file = await service.readLocalPluginFile(
+      { ...draft, expectedDigest: preview.digest, path: "actions/list.js" },
+      actor
+    );
+
+    expect(Buffer.from(file.content, "base64").toString()).toBe(sideEffectJs);
+
+    const install = await service.installLocalPlugin(
+      { ...draft, expectedDigest: preview.digest, expectedRevision: null },
+      actor
+    );
+
+    expect(install.lifecycleState).toBe("disabled");
+    expect(install.databaseGeneration).toBeNull();
+    expect(existsSync(SIDE_EFFECT_MARKER)).toBe(false);
+
+    const release = await db.getPluginRelease(
+      "notes",
+      install.selectedVersion!
+    );
+
+    expect(release?.source).toBe("local");
+    expect(release?.digest).toBe(preview.digest);
+    expect(
+      await readFile(
+        join(
+          getPluginReleaseDir("notes", install.selectedVersion!, configDir),
+          "actions/list.js"
+        ),
+        "utf8"
+      )
+    ).toBe(sideEffectJs);
+    await rm(directory, { recursive: true });
+    expect(
+      await service.getOrgPluginDetail("org_local", "notes")
+    ).toBeDefined();
+  });
+
+  test("usage lists organizations that hold a plugin and the agents using it", async () => {
+    const { db, draft, service, actor } = await localDraft();
+    expect(await service.listPluginUsage("notes")).toEqual([]);
+
+    const preview = await service.previewLocalPlugin(draft, actor);
+
+    const install = await service.installLocalPlugin(
+      { ...draft, expectedDigest: preview.digest, expectedRevision: null },
+      actor
+    );
+
+    const now = new Date().toISOString();
+    await db.upsertTool({
+      createdAt: now,
+      description: "List notes",
+      handlerConfig: {},
+      handlerType: "plugin",
+      id: "tool_notes_list",
+      name: "notes_list",
+      pluginId: "notes",
+      updatedAt: now,
+    });
+    await db.assignToolToProfile("super_local", "tool_notes_list");
+
+    expect(await service.listPluginUsage("notes")).toEqual([
+      {
+        agents: [{ id: "super_local", name: "Super" }],
+        lifecycleState: "disabled",
+        name: "Local",
+        orgId: "org_local",
+        revision: install.revision,
+        selectedVersion: install.selectedVersion,
+      },
+    ]);
+    expect(await service.listPluginUsage("other")).toEqual([]);
+  });
+
+  test("local install rejects changed review files without publishing", async () => {
+    const { db, draft, directory, service, actor } = await localDraft();
+    const preview = await service.previewLocalPlugin(draft, actor);
+    await appendFile(join(directory, "src/list.js"), "\n// changed");
+    await expect(
+      service.readLocalPluginFile(
+        { ...draft, expectedDigest: preview.digest, path: "src/list.js" },
+        actor
+      )
+    ).rejects.toMatchObject({ code: "digest_mismatch" });
+    await expect(
+      service.installLocalPlugin(
+        { ...draft, expectedDigest: preview.digest, expectedRevision: null },
+        actor
+      )
+    ).rejects.toMatchObject({ code: "digest_mismatch" });
+    expect(await db.listPluginReleases()).toHaveLength(0);
+    expect(await db.getOrgPlugin(draft.orgId, "notes")).toBeNull();
+  });
+
+  test("local reinstall reuses content, rejects stale revision, and preserves other organizations", async () => {
+    const { db, draft, directory, service, actor } = await localDraft();
+    const firstPreview = await service.previewLocalPlugin(draft, actor);
+
+    const first = await service.installLocalPlugin(
+      { ...draft, expectedDigest: firstPreview.digest, expectedRevision: null },
+      actor
+    );
+
+    await db.upsertOrganization({
+      createdAt: first.updatedAt,
+      id: "org_other",
+      name: "Other",
+      slug: "other",
+      updatedAt: first.updatedAt,
+    });
+    await service.addOrgPlugin("org_other", "notes", first.selectedVersion!);
+    const other = await db.getOrgPlugin("org_other", "notes");
+
+    const repeated = await service.installLocalPlugin(
+      {
+        ...draft,
+        expectedDigest: firstPreview.digest,
+        expectedRevision: first.revision,
+      },
+      actor
+    );
+
+    expect(repeated.selectedVersion).toBe(first.selectedVersion);
+    expect(await db.listPluginReleases()).toHaveLength(1);
+    await appendFile(join(directory, "actions/list.js"), "\n// changed");
+    const changed = await service.previewLocalPlugin(draft, actor);
+    await expect(
+      service.installLocalPlugin(
+        { ...draft, expectedDigest: changed.digest, expectedRevision: null },
+        actor
+      )
+    ).rejects.toMatchObject({ code: "stale_revision" });
+
+    const updated = await service.installLocalPlugin(
+      {
+        ...draft,
+        expectedDigest: changed.digest,
+        expectedRevision: repeated.revision,
+      },
+      actor
+    );
+
+    expect(updated.selectedVersion).not.toBe(first.selectedVersion);
+    expect(updated.lifecycleState).toBe("disabled");
+    expect(await db.getOrgPlugin("org_other", "notes")).toEqual(other);
+    expect(await db.listPluginReleases()).toHaveLength(2);
+  });
+
+  test("local reinstall rejects modified release bytes without changing the installation", async () => {
+    const { db, draft, service, actor } = await localDraft();
+    const preview = await service.previewLocalPlugin(draft, actor);
+
+    const installed = await service.installLocalPlugin(
+      { ...draft, expectedDigest: preview.digest, expectedRevision: null },
+      actor
+    );
+
+    const releaseDir = getPluginReleaseDir(
+      "notes",
+      installed.selectedVersion!,
+      configDir
+    );
+
+    for (const path of ["actions/list.js", "unexpected.js"]) {
+      const original = path === "actions/list.js" ? sideEffectJs : null;
+      await writeFile(join(releaseDir, path), "export const changed = true;");
+      await expect(
+        service.installLocalPlugin(
+          {
+            ...draft,
+            expectedDigest: preview.digest,
+            expectedRevision: installed.revision,
+          },
+          actor
+        )
+      ).rejects.toMatchObject({ code: "digest_mismatch" });
+      expect(await db.getOrgPlugin(draft.orgId, "notes")).toEqual(installed);
+
+      if (original) {
+        await writeFile(join(releaseDir, path), original);
+      } else {
+        await rm(join(releaseDir, path));
+      }
+    }
+  });
+
+  test("local review requires platform authority and a profile in the named organization", async () => {
+    const { draft, service, actor } = await localDraft();
+    await expect(
+      service.previewLocalPlugin(draft, { ...actor, isPlatformAdmin: false })
+    ).rejects.toMatchObject({ code: "forbidden" });
+
+    for (const changes of [
+      { orgId: "other" },
+      { profileId: "other" },
+      { draftId: "../notes" },
+      { draftId: "%2e%2e" },
+      { draftId: "/notes" },
+    ]) {
+      await expect(
+        service.previewLocalPlugin({ ...draft, ...changes }, actor)
+      ).rejects.toBeDefined();
+    }
+  });
+
+  test("enabled local reinstall restores enabled state and migration failure preserves the previous generation", async () => {
+    const { db, draft, directory, service, actor } = await localDraft();
+    await mkdir(join(directory, "migrations"));
+    await writeFile(
+      join(directory, "migrations/001.sql"),
+      "CREATE TABLE notes (body TEXT);"
+    );
+
+    const manifest = notesManifest({
+      database: { migrations: [{ id: "001", path: "migrations/001.sql" }] },
+    });
+
+    await writeFile(
+      join(directory, "airin.plugin.json"),
+      JSON.stringify(manifest)
+    );
+    const preview = await service.previewLocalPlugin(draft, actor);
+
+    const first = await service.installLocalPlugin(
+      { ...draft, expectedDigest: preview.digest, expectedRevision: null },
+      actor
+    );
+
+    const enabled = await service.enableOrgPlugin(
+      draft.orgId,
+      "notes",
+      first.revision
+    );
+
+    await appendFile(join(directory, "src/list.js"), "\n// source change");
+    const secondPreview = await service.previewLocalPlugin(draft, actor);
+
+    const second = await service.installLocalPlugin(
+      {
+        ...draft,
+        expectedDigest: secondPreview.digest,
+        expectedRevision: enabled.revision,
+      },
+      actor
+    );
+
+    expect(second.lifecycleState).toBe("enabled");
+    expect(second.selectedVersion).not.toBe(enabled.selectedVersion);
+    await writeFile(join(directory, "migrations/002.sql"), "INVALID SQL;");
+    await writeFile(
+      join(directory, "airin.plugin.json"),
+      JSON.stringify(
+        notesManifest({
+          database: {
+            migrations: [
+              { id: "001", path: "migrations/001.sql" },
+              { id: "002", path: "migrations/002.sql" },
+            ],
+          },
+        })
+      )
+    );
+    const broken = await service.previewLocalPlugin(draft, actor);
+    await expect(
+      service.installLocalPlugin(
+        {
+          ...draft,
+          expectedDigest: broken.digest,
+          expectedRevision: second.revision,
+        },
+        actor
+      )
+    ).rejects.toBeDefined();
+    const recovered = await db.getOrgPlugin(draft.orgId, "notes");
+    expect(recovered?.lifecycleState).toBe("disabled");
+    expect(recovered?.selectedVersion).toBe(second.selectedVersion);
+    expect(recovered?.databaseGeneration).toBe(second.databaseGeneration);
+    expect(existsSync(SIDE_EFFECT_MARKER)).toBe(false);
+  });
+
+  test("local review checks host compatibility, official identity, and package versions", async () => {
+    const { draft, directory, service, actor } = await localDraft();
+
+    const changes: Record<string, Json>[] = [
+      { minAirinVersion: "999.0.0" },
+      { id: "workflows" },
+      { version: "2.0.0" },
+      { apiVersion: 999 },
+    ];
+
+    for (const change of changes) {
+      await writeFile(
+        join(directory, "airin.plugin.json"),
+        JSON.stringify(notesManifest(change))
+      );
+      await expect(
+        service.previewLocalPlugin(draft, actor)
+      ).rejects.toMatchObject({ code: "invalid_manifest" });
+    }
+  });
+
+  test("local review rejects official IDs even when the draft ID matches", async () => {
+    const { draft, directory, service, actor } = await localDraft();
+    await writeFile(
+      join(directory, "airin.plugin.json"),
+      JSON.stringify(notesManifest({ id: "workflows" }))
+    );
+    await rename(directory, join(dirname(directory), "workflows"));
+    await expect(
+      service.previewLocalPlugin({ ...draft, draftId: "workflows" }, actor)
+    ).rejects.toMatchObject({ code: "invalid_manifest" });
+  });
+
+  test("concurrent local installs use one revision and retained reinstall stays disabled", async () => {
+    const { db, draft, service, actor } = await localDraft();
+    const preview = await service.previewLocalPlugin(draft, actor);
+
+    const request = {
+      ...draft,
+      expectedDigest: preview.digest,
+      expectedRevision: null,
+    };
+
+    // Hold the second draft read until the first install has published.
+    const seen = new Set<string>();
+    let first: Promise<unknown> = Promise.resolve();
+    setPluginLifecycleTestHooks({
+      async beforeLocalFileRead(path) {
+        if (seen.has(path)) {
+          await first.catch(() => undefined);
+        }
+
+        seen.add(path);
+      },
+    });
+    first = service.installLocalPlugin(request, actor);
+
+    const results = await Promise.allSettled([
+      first,
+      service.installLocalPlugin(request, actor),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === "fulfilled")
+    ).toHaveLength(1);
+    expect(
+      results.find((result) => result.status === "rejected")
+    ).toMatchObject({
+      reason: { code: "stale_revision" },
+    });
+    const installed = (await db.getOrgPlugin(draft.orgId, "notes"))!;
+
+    const retained = await service.uninstallOrgPlugin(
+      draft.orgId,
+      "notes",
+      installed.revision
+    );
+
+    const restored = await service.installLocalPlugin(
+      { ...request, expectedRevision: retained.revision },
+      actor
+    );
+
+    expect(restored.lifecycleState).toBe("disabled");
+    expect(restored.selectedVersion).toBe(installed.selectedVersion);
+    expect(restored.databaseGeneration).toBe(retained.databaseGeneration);
+  });
+
+  test("failed local publication creates no organization installation", async () => {
+    const { db, draft, service, actor } = await localDraft();
+    const preview = await service.previewLocalPlugin(draft, actor);
+    await writeFile(join(configDir, "plugins"), "not a directory");
+    await expect(
+      service.installLocalPlugin(
+        { ...draft, expectedDigest: preview.digest, expectedRevision: null },
+        actor
+      )
+    ).rejects.toBeDefined();
+    expect(await db.getOrgPlugin(draft.orgId, "notes")).toBeNull();
+    expect(await db.listPluginReleases()).toHaveLength(0);
+  });
+
+  test("local install rejects a pending enable without changing its operation", async () => {
+    const { db, draft, service, actor } = await localDraft();
+    const preview = await service.previewLocalPlugin(draft, actor);
+
+    const installed = await service.installLocalPlugin(
+      { ...draft, expectedDigest: preview.digest, expectedRevision: null },
+      actor
+    );
+
+    const reached = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    setPluginLifecycleTestHooks({
+      async afterMigrationBeforePublish() {
+        reached.resolve();
+        await resume.promise;
+      },
+    });
+
+    const enabling = service.enableOrgPlugin(
+      draft.orgId,
+      "notes",
+      installed.revision
+    );
+
+    try {
+      await reached.promise;
+      const pending = (await db.getOrgPlugin(draft.orgId, "notes"))!;
+      await expect(
+        service.installLocalPlugin(
+          {
+            ...draft,
+            expectedDigest: preview.digest,
+            expectedRevision: pending.revision,
+          },
+          actor
+        )
+      ).rejects.toMatchObject({ code: "invalid_state" });
+      expect(await db.getOrgPlugin(draft.orgId, "notes")).toEqual(pending);
+    } finally {
+      resume.resolve();
+      await enabling;
+    }
+
+    expect((await db.getOrgPlugin(draft.orgId, "notes"))?.lifecycleState).toBe(
+      "enabled"
+    );
+  });
+
+  test("failed first enable leaves the local release disabled without a database generation", async () => {
+    const { db, draft, directory, service, actor } = await localDraft();
+    await mkdir(join(directory, "migrations"));
+    await writeFile(join(directory, "migrations/001.sql"), "INVALID SQL;");
+    await writeFile(
+      join(directory, "airin.plugin.json"),
+      JSON.stringify(
+        notesManifest({
+          database: { migrations: [{ id: "001", path: "migrations/001.sql" }] },
+        })
+      )
+    );
+    const preview = await service.previewLocalPlugin(draft, actor);
+
+    const installed = await service.installLocalPlugin(
+      { ...draft, expectedDigest: preview.digest, expectedRevision: null },
+      actor
+    );
+
+    await expect(
+      service.enableOrgPlugin(draft.orgId, "notes", installed.revision)
+    ).rejects.toBeDefined();
+    const failed = await db.getOrgPlugin(draft.orgId, "notes");
+    expect(failed?.selectedVersion).toBe(installed.selectedVersion);
+    expect(failed?.databaseGeneration).toBeNull();
+    expect(failed?.lifecycleState).toBe("disabled");
+  });
+
+  test("local review rejects linked roots, linked ancestors, and excessive entry counts", async () => {
+    const { draft, directory, service, actor } = await localDraft();
+    const moved = directory + "-moved";
+    await rename(directory, moved);
+    await symlink(moved, directory);
+    await expect(
+      service.previewLocalPlugin(draft, actor)
+    ).rejects.toMatchObject({ code: "unsafe_path" });
+    await rm(directory);
+    await rename(moved, directory);
+    const workspace = dirname(dirname(directory));
+    await rename(workspace, workspace + "-moved");
+    await symlink(workspace + "-moved", workspace);
+    await expect(
+      service.previewLocalPlugin(draft, actor)
+    ).rejects.toMatchObject({ code: "unsafe_path" });
+    await rm(workspace);
+    await rename(workspace + "-moved", workspace);
+    await mkdir(join(directory, "src/files"));
+
+    for (let index = 0; index < 2001; index += 1) {
+      await writeFile(join(directory, "src/files", String(index)), "");
+    }
+
+    await expect(
+      service.previewLocalPlugin(draft, actor)
+    ).rejects.toMatchObject({ code: "expansion_limit" });
+  });
+
+  for (const kind of ["total size", "path length", "depth", "special file"]) {
+    test.skipIf(kind === "special file" && process.platform === "win32")(
+      `local review bounds ${kind}`,
+      async () => {
+        const { draft, directory, service, actor } = await localDraft();
+
+        if (kind === "total size") {
+          for (let index = 0; index < 6; index += 1) {
+            const path = join(directory, "src", String(index));
+            await writeFile(path, "");
+            await truncate(path, 20 * 1024 * 1024);
+          }
+        } else if (kind === "path length") {
+          await writeFile(join(directory, "src", "x".repeat(241)), "");
+        } else if (kind === "depth") {
+          await mkdir(
+            join(directory, "src", ...Array.from({ length: 25 }, () => "d")),
+            { recursive: true }
+          );
+        } else {
+          const result = Bun.spawnSync(["mkfifo", join(directory, "src/pipe")]);
+          expect(result.exitCode).toBe(0);
+        }
+
+        await expect(
+          service.previewLocalPlugin(draft, actor)
+        ).rejects.toMatchObject({
+          code:
+            kind === "total size" || kind === "depth"
+              ? "expansion_limit"
+              : "unsafe_path",
+        });
+      }
+    );
+  }
+
+  test("local review rejects missing migration and worker entries and unavailable worker support", async () => {
+    const { draft, directory, service, actor } = await localDraft();
+
+    const capabilities: Record<string, Json>[] = [
+      { database: { migrations: [{ id: "001", path: "migrations/001.sql" }] } },
+      {
+        workers: [{ entry: "workers/index.js", key: "index", name: "Indexer" }],
+      },
+    ];
+
+    for (const capability of capabilities) {
+      await writeFile(
+        join(directory, "airin.plugin.json"),
+        JSON.stringify(notesManifest(capability))
+      );
+      await expect(
+        service.previewLocalPlugin(draft, actor)
+      ).rejects.toBeDefined();
+    }
+
+    await mkdir(join(directory, "workers"));
+    await writeFile(join(directory, "workers/index.js"), sideEffectJs);
+    await expect(
+      service.previewLocalPlugin(draft, actor)
+    ).rejects.toMatchObject({ code: "package_unavailable" });
+    expect(existsSync(SIDE_EFFECT_MARKER)).toBe(false);
+  });
+
+  test("local review accepts ordinary profiles and reads large output in bounded chunks", async () => {
+    const { db, draft, directory, service, actor } = await localDraft();
+    const profile = (await db.getProfile(draft.profileId))!;
+    await db.upsertProfile({ ...profile, isSuper: false });
+    await expect(
+      service.previewLocalPlugin(draft, actor)
+    ).resolves.toBeDefined();
+    await db.upsertProfile({ ...profile, orgId: "other" });
+    await expect(
+      service.previewLocalPlugin(draft, actor)
+    ).rejects.toMatchObject({ code: "not_found" });
+    await db.upsertProfile(profile);
+    const output = Buffer.alloc(1024 * 1024 + 7, "x");
+    await writeFile(join(directory, "src/large.txt"), output);
+    const preview = await service.previewLocalPlugin(draft, actor);
+
+    const first = await service.readLocalPluginFile(
+      { ...draft, expectedDigest: preview.digest, path: "src/large.txt" },
+      actor
+    );
+
+    expect(Buffer.from(first.content, "base64")).toEqual(
+      output.subarray(0, first.nextOffset!)
+    );
+    expect(first.nextOffset).toBe(1024 * 1024);
+
+    const last = await service.readLocalPluginFile(
+      {
+        ...draft,
+        expectedDigest: preview.digest,
+        offset: first.nextOffset!,
+        path: "src/large.txt",
+      },
+      actor
+    );
+
+    expect(Buffer.from(last.content, "base64")).toEqual(
+      output.subarray(first.nextOffset!)
+    );
+    expect(last.nextOffset).toBeNull();
+  });
+
+  for (const field of [
+    "dependencies",
+    "optionalDependencies",
+    "peerDependencies",
+  ]) {
+    test(`local review rejects nonempty ${field}`, async () => {
+      const { draft, directory, service, actor } = await localDraft();
+      await writeFile(
+        join(directory, "package.json"),
+        JSON.stringify({
+          name: "@test/notes",
+          version: "1.0.0",
+          [field]: { unsafe: "*" },
+        })
+      );
+      await expect(
+        service.previewLocalPlugin(draft, actor)
+      ).rejects.toMatchObject({ code: "invalid_manifest" });
+    });
+  }
+
+  for (const file of [
+    "package.json",
+    "airin.plugin.json",
+    "actions/list.js",
+    "ui/index.js",
+    "ui/assets/app.js",
+    "skills/notes/SKILL.md",
+  ]) {
+    test(`local review rejects missing ${file}`, async () => {
+      const { draft, directory, service, actor } = await localDraft();
+      await rm(join(directory, file));
+      await expect(
+        service.previewLocalPlugin(draft, actor)
+      ).rejects.toBeDefined();
+    });
+  }
+
+  for (const kind of [
+    "symlink",
+    "hardlink",
+    "oversized",
+    "leaf replacement",
+    "ancestor replacement",
+  ]) {
+    test(`local review rejects ${kind}`, async () => {
+      const { draft, directory, service, actor } = await localDraft();
+      const path = join(directory, "actions/list.js");
+      const outside = join(configDir, "outside.js");
+      await writeFile(outside, "private");
+
+      if (kind === "symlink" || kind === "hardlink") {
+        await rm(path);
+        await (kind === "symlink"
+          ? symlink(outside, path)
+          : link(outside, path));
+      } else if (kind === "oversized") {
+        await truncate(path, 21 * 1024 * 1024);
+      } else {
+        let changed = false;
+        setPluginLifecycleTestHooks({
+          async beforeLocalFileRead(selected) {
+            if (selected !== path || changed) {
+              return;
+            }
+
+            changed = true;
+
+            if (kind === "leaf replacement") {
+              await rm(path);
+              await symlink(outside, path);
+            } else {
+              await rename(
+                join(directory, "actions"),
+                join(directory, "old-actions")
+              );
+              await symlink(
+                join(directory, "old-actions"),
+                join(directory, "actions")
+              );
+            }
+          },
+        });
+      }
+
+      await expect(
+        service.previewLocalPlugin(draft, actor)
+      ).rejects.toBeDefined();
+    });
+  }
 
   test("installs rebuilt Supermemory bytes without replacing another org's release", async () => {
     const db = createInMemoryDatabaseAdapter();
@@ -200,7 +1001,7 @@ describe("PluginService", () => {
       getPluginReleaseDir("notes", "1.0.0", configDir)
     );
     expect(
-      await readFile(join(installed.releaseDir, "nakama.plugin.json"), "utf8")
+      await readFile(join(installed.releaseDir, "airin.plugin.json"), "utf8")
     ).toContain('"id":"notes"');
     expect(existsSync(SIDE_EFFECT_MARKER)).toBe(false);
     expect(existsSync(join(configDir, "plugins", ".staging"))).toBe(false);
@@ -217,12 +1018,12 @@ describe("PluginService", () => {
     const db = createInMemoryDatabaseAdapter();
     const service = new PluginService(db, configDir);
     const parent = dirname(configDir);
-    const escapeProbe = join(parent, "nakama-plugin-escape.txt");
+    const escapeProbe = join(parent, "airin-plugin-escape.txt");
     await rm(escapeProbe, { force: true });
 
     const cases = [
       ...[
-        "../nakama-plugin-escape.txt",
+        "../airin-plugin-escape.txt",
         "foo/%2e%2e/secret.js",
         "foo\\..\\secret.js",
         "/absolute.txt",
@@ -369,7 +1170,7 @@ describe("PluginService", () => {
       code: "package_unavailable",
     });
 
-    process.env.NAKAMA_PLUGIN_NPM_TOKEN = "npm_fixture_token";
+    process.env.AIRIN_PLUGIN_NPM_TOKEN = "npm_fixture_token";
 
     try {
       const preview = await service.previewPluginPackage(source);
@@ -399,7 +1200,7 @@ describe("PluginService", () => {
         )
       ).rejects.toMatchObject({ code: "invalid_package" });
     } finally {
-      delete process.env.NAKAMA_PLUGIN_NPM_TOKEN;
+      delete process.env.AIRIN_PLUGIN_NPM_TOKEN;
     }
   });
 
@@ -466,7 +1267,7 @@ describe("PluginService", () => {
     const existingDir = getPluginReleaseDir("notes", "1.0.0", configDir);
 
     const existingBytes = await readFile(
-      join(existingDir, "nakama.plugin.json"),
+      join(existingDir, "airin.plugin.json"),
       "utf8"
     );
 
@@ -484,9 +1285,9 @@ describe("PluginService", () => {
     );
     expect(existsSync(join(configDir, "plugins", ".staging"))).toBe(false);
     expect(await failingDb.getPluginRelease("notes", "1.1.0")).toBeNull();
-    expect(
-      await readFile(join(existingDir, "nakama.plugin.json"), "utf8")
-    ).toBe(existingBytes);
+    expect(await readFile(join(existingDir, "airin.plugin.json"), "utf8")).toBe(
+      existingBytes
+    );
     expect((await db.getPluginRelease("notes", "1.0.0"))?.version).toBe(
       "1.0.0"
     );
@@ -544,7 +1345,7 @@ describe("PluginService", () => {
     const service = new PluginService(db, configDir);
 
     const archive = pluginPackage({
-      "nakama.plugin.json": JSON.stringify(notesManifest()),
+      "airin.plugin.json": JSON.stringify(notesManifest()),
       "skills/notes/SKILL.md": "# Notes\n",
     });
 

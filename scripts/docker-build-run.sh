@@ -2,10 +2,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONTAINER_NAME="${NAKAMA_CONTAINER_NAME:-nakama}"
-IMAGE_NAME="${NAKAMA_IMAGE_NAME:-nakama}"
-HOST_PORT="${NAKAMA_HOST_PORT:-4310}"
-VOLUME_NAME="${NAKAMA_DATA_VOLUME:-nakama-data}"
+CONTAINER_NAME="${AIRIN_CONTAINER_NAME:-airin}"
+IMAGE_NAME="${AIRIN_IMAGE_NAME:-airin}"
+HOST_PORT="${AIRIN_HOST_PORT:-4310}"
+VOLUME_NAME="${AIRIN_DATA_VOLUME:-airin-data}"
+SECRETS_ENV_FILE="${AIRIN_SECRETS_ENV_FILE:-${HOME}/.airin/docker-secrets.env}"
+if [[ ! -f "${SECRETS_ENV_FILE}" ]]; then
+  mkdir -p "$(dirname "${SECRETS_ENV_FILE}")"
+  (umask 077; printf 'AIRIN_SECRETS_KEY=%s\n' "$(openssl rand -base64 32)" > "${SECRETS_ENV_FILE}")
+fi
 
 echo "Building ${IMAGE_NAME}..."
 # buildx handles cross-platform builds; legacy `docker build` fails on Apple Silicon
@@ -14,8 +19,8 @@ echo "Building ${IMAGE_NAME}..."
 # Host network: OrbStack/Docker bridge DNS is often AAAA-only, and bun then
 # ConnectionRefused on IPv6-less bridges. Do not put RUN --network=host in the
 # Dockerfile — GHCR publish rejects that entitlement.
-if [[ "${IMAGE_NAME}" == "nakama" && "$#" -eq 0 ]]; then
-  docker buildx build --load --network=host --allow network.host --platform=linux/amd64 -t nakama "${ROOT}"
+if [[ "${IMAGE_NAME}" == "airin" && "$#" -eq 0 ]]; then
+  docker buildx build --load --network=host --allow network.host --platform=linux/amd64 -t airin "${ROOT}"
 else
   docker buildx build --load --network=host --allow network.host --platform=linux/amd64 -t "${IMAGE_NAME}" "$@" "${ROOT}"
 fi
@@ -25,14 +30,15 @@ docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 
 echo "Starting ${CONTAINER_NAME}..."
 docker run -d \
+  --env-file "${SECRETS_ENV_FILE}" \
   -p "${HOST_PORT}:4310" \
-  -v "${VOLUME_NAME}:/nakama/data" \
+  -v "${VOLUME_NAME}:/airin/data" \
   --name "${CONTAINER_NAME}" \
   "${IMAGE_NAME}"
 
 for _ in $(seq 1 30); do
   if curl -fsS -o /dev/null "http://localhost:${HOST_PORT}/" 2>/dev/null; then
-    echo "Nakama is up: http://localhost:${HOST_PORT}"
+    echo "Airin is up: http://localhost:${HOST_PORT}"
     docker ps --filter "name=${CONTAINER_NAME}" --format '{{.Names}}\t{{.Status}}'
     exit 0
   fi

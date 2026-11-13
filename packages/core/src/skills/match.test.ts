@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { matchSkillsForMessage } from "./match";
+import { findExplicitSkill } from "./match";
 import type { DiscoveredSkill } from "./types";
 
 const weatherSkill: DiscoveredSkill = {
@@ -8,7 +8,6 @@ const weatherSkill: DiscoveredSkill = {
   directory: "/tmp/weather",
   disableModelInvocation: false,
   hasTool: true,
-  includeBodyOnMatch: false,
   name: "weather",
   scriptIssues: [],
   scriptTools: [],
@@ -23,48 +22,29 @@ const privateSkill: DiscoveredSkill = {
   name: "deploy",
 };
 
-describe("matchSkillsForMessage", () => {
-  test("matches by keyword in user message", () => {
-    const matched = matchSkillsForMessage(
-      [weatherSkill],
-      "What's the weather in Jakarta?"
-    );
-
-    expect(matched.map((skill) => skill.name)).toEqual(["weather"]);
-  });
-
-  test("matches explicit /skill invocation", () => {
-    const matched = matchSkillsForMessage(
-      [privateSkill],
-      "Please /skill deploy now"
-    );
-
-    expect(matched.map((skill) => skill.name)).toEqual(["deploy"]);
-  });
-
-  test("skips explicit-only skills without invocation", () => {
-    const matched = matchSkillsForMessage(
-      [privateSkill],
-      "deploy the app to production"
-    );
-
-    expect(matched).toEqual([]);
-  });
-
-  test("matches create-workflow on singular workflow", () => {
-    const createWorkflow: DiscoveredSkill = {
-      ...weatherSkill,
-      description:
-        "Create and run user-triggered workflows with declared steps. Use when the user asks about a workflow or wants a verifiable recipe (fetch, compare, summarize) they can run on demand from chat or the dashboard.",
-      hasTool: false,
-      includeBodyOnMatch: true,
-      name: "create-workflow",
-    };
-
+describe("findExplicitSkill", () => {
+  test("finds the skill a /skill message names", () => {
     expect(
-      matchSkillsForMessage([createWorkflow], "What workflow do you have?").map(
-        (skill) => skill.name
+      findExplicitSkill(
+        [weatherSkill, privateSkill],
+        "Please /skill deploy now"
       )
-    ).toEqual(["create-workflow"]);
+    ).toBe(privateSkill);
+    expect(
+      findExplicitSkill([weatherSkill], "use skill weather for Jakarta")
+    ).toBe(weatherSkill);
+  });
+
+  test("does not pick a skill from words in the message", () => {
+    expect(
+      findExplicitSkill([weatherSkill], "What's the weather in Jakarta?")
+    ).toBeNull();
+    expect(
+      findExplicitSkill([privateSkill], "deploy the app to production")
+    ).toBeNull();
+  });
+
+  test("returns null for a skill the profile does not have", () => {
+    expect(findExplicitSkill([weatherSkill], "/skill deploy")).toBeNull();
   });
 });

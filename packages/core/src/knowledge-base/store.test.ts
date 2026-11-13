@@ -43,13 +43,13 @@ const ORG_ID = "org_test";
 
 describe("knowledge base store", () => {
   let tempConfigDir = "";
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     if (tempConfigDir) {
@@ -59,8 +59,8 @@ describe("knowledge base store", () => {
   });
 
   async function setupProfile(profileId: string): Promise<void> {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-kb-store-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-kb-store-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     await import("node:fs/promises").then(({ mkdir }) =>
       mkdir(path.join(tempConfigDir, "orgs", ORG_ID, "profiles", profileId), {
         recursive: true,

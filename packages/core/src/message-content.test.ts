@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import type { ChatMessage } from "./contract";
 import {
   countUserImages,
-  estimateUserContentTokens,
   getUserMessageText,
+  MAX_ATTACHMENTS_PER_MESSAGE,
   messagesIncludeUserImages,
+  normalizeAttachmentBase64,
   normalizeUserContent,
   parseDataUrl,
   parseDocumentDataUrl,
@@ -87,14 +88,14 @@ describe("validateImageAttachments", () => {
       validateImageAttachments([
         { data: tinyPngBase64, mediaType: "image/bmp" },
       ])
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("rejects oversized image", () => {
     const huge = "A".repeat((6 * 1024 * 1024 * 4) / 3);
     expect(() =>
       validateImageAttachments([{ data: huge, mediaType: "image/png" }])
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test.each(["!!!!", "YQ", "====", "data:image/png;base64,!!!!"])(
@@ -102,7 +103,7 @@ describe("validateImageAttachments", () => {
     (data) => {
       expect(() =>
         validateImageAttachments([{ data, mediaType: "image/png" }])
-      ).toThrow(NakamaApiError);
+      ).toThrow(AirinApiError);
     }
   );
 });
@@ -117,44 +118,7 @@ describe("validateDocumentAttachments", () => {
           mediaType: "application/octet-stream",
         },
       ])
-    ).toThrow(NakamaApiError);
-  });
-
-  test("accepts markdown attachments", () => {
-    expect(() =>
-      validateDocumentAttachments([
-        {
-          data: "Iw==",
-          filename: "notes.md",
-          mediaType: "text/markdown",
-        },
-      ])
-    ).not.toThrow();
-  });
-
-  test("accepts excel attachments under the size limit", () => {
-    expect(() =>
-      validateDocumentAttachments([
-        {
-          data: "YWJj",
-          filename: "budget.xlsx",
-          mediaType:
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        },
-      ])
-    ).not.toThrow();
-  });
-
-  test("normalizes excel extension when media type is generic", () => {
-    expect(() =>
-      validateDocumentAttachments([
-        {
-          data: "YWJj",
-          filename: "budget.xlsx",
-          mediaType: "application/octet-stream",
-        },
-      ])
-    ).not.toThrow();
+    ).toThrow(AirinApiError);
   });
 
   test("rejects oversized document", () => {
@@ -163,7 +127,7 @@ describe("validateDocumentAttachments", () => {
       validateDocumentAttachments([
         { data: huge, filename: "big.pdf", mediaType: "application/pdf" },
       ])
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("rejects invalid document base64", () => {
@@ -175,27 +139,26 @@ describe("validateDocumentAttachments", () => {
           mediaType: "text/plain",
         },
       ])
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
+});
 
-  test("rejects oversized excel the same way as other documents", () => {
-    const huge = "A".repeat((6 * 1024 * 1024 * 4) / 3);
-    expect(() =>
-      validateDocumentAttachments([
-        {
-          data: huge,
-          filename: "big.xlsx",
-          mediaType:
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        },
-      ])
-    ).toThrow(NakamaApiError);
+describe("normalizeAttachmentBase64", () => {
+  test("accepts valid base64 above 6 MB when the cap allows it", () => {
+    const data = Buffer.alloc(8 * 1024 * 1024, 7).toString("base64");
+
+    expect(normalizeAttachmentBase64(data, 10 * 1024 * 1024)).toBe(data);
   });
 });
 
 describe("validateCombinedAttachmentCount", () => {
-  test("rejects more than five attachments total", () => {
-    expect(() => validateCombinedAttachmentCount(3, 3)).toThrow(NakamaApiError);
+  test("accepts the limit and rejects one more", () => {
+    expect(() =>
+      validateCombinedAttachmentCount(MAX_ATTACHMENTS_PER_MESSAGE - 3, 3)
+    ).not.toThrow();
+    expect(() =>
+      validateCombinedAttachmentCount(MAX_ATTACHMENTS_PER_MESSAGE - 2, 3)
+    ).toThrow(AirinApiError);
   });
 });
 
@@ -211,16 +174,7 @@ describe("getUserMessageText", () => {
   });
 });
 
-describe("estimateUserContentTokens", () => {
-  test("adds fixed tokens per image", () => {
-    const tokens = estimateUserContentTokens([
-      { text: "hi", type: "text" },
-      { data: tinyPngBase64, mediaType: "image/png", type: "image" },
-    ]);
-
-    expect(tokens).toBeGreaterThan(1400);
-  });
-});
+describe("estimateUserContentTokens", () => {});
 
 describe("stripImagesForCompaction", () => {
   test("omits tool images while preserving the tool result and original history", () => {

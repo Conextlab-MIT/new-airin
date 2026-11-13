@@ -1,8 +1,8 @@
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ToolContext, ToolDefinition } from "@nakama/core";
-import { pathExists } from "@nakama/core";
+import type { ToolContext, ToolDefinition } from "@airin/core";
+import { pathExists } from "@airin/core";
 import { z } from "zod";
 import {
   type CustomToolRecord,
@@ -12,7 +12,7 @@ import {
 } from "./custom-tool-shared";
 import { spawnJsonTool } from "./custom-tool-subprocess";
 
-/** Bare interpreter names allowed when NAKAMA_PYTHON_BIN has no path. */
+/** Bare interpreter names allowed when AIRIN_PYTHON_BIN has no path. */
 const ALLOWED_PYTHON_BASENAME = /^python(\d+(\.\d+)*)?$/;
 
 const customToolJsonValueSchema = z.json();
@@ -24,7 +24,7 @@ const ALLOWED_WINDOWS_PYTHON_BASENAME = /^python(\d+(\.\d+)*)?(\.exe)?$/i;
 /**
  * Absolute interpreter paths must resolve under one of these prefixes after
  * realpath (covers Homebrew Cellar symlinks). Anything else is rejected so an
- * operator cannot point NAKAMA_PYTHON_BIN at an arbitrary host binary (#593).
+ * operator cannot point AIRIN_PYTHON_BIN at an arbitrary host binary (#593).
  */
 const ALLOWED_PYTHON_PATH_PREFIXES = [
   "/usr/bin/",
@@ -77,12 +77,12 @@ function isOnWindowsPythonAllowlist(resolved: string): boolean {
 }
 
 /**
- * Resolve NAKAMA_PYTHON_BIN (or the default `python3`, `python` on Windows)
+ * Resolve AIRIN_PYTHON_BIN (or the default `python3`, `python` on Windows)
  * against the allowlist. Called at spawn time so tests can change the env
  * without reloading the module.
  */
 export function resolvePythonBin(
-  raw: string | undefined = process.env.NAKAMA_PYTHON_BIN
+  raw: string | undefined = process.env.AIRIN_PYTHON_BIN
 ): string {
   // Windows installers put `python.exe` on PATH; `python3` there is usually
   // the Microsoft Store stub, which exits 49 without running anything.
@@ -90,13 +90,13 @@ export function resolvePythonBin(
     raw?.trim() || (process.platform === "win32" ? "python" : "python3");
 
   if (value.includes("\0")) {
-    throw new Error("NAKAMA_PYTHON_BIN contains a null byte.");
+    throw new Error("AIRIN_PYTHON_BIN contains a null byte.");
   }
 
   if (!(value.includes("/") || value.includes("\\"))) {
     if (!pythonBasenamePattern().test(value)) {
       throw new Error(
-        `NAKAMA_PYTHON_BIN bare name must match python or python3…; got "${value}".`
+        `AIRIN_PYTHON_BIN bare name must match python or python3…; got "${value}".`
       );
     }
 
@@ -105,7 +105,7 @@ export function resolvePythonBin(
 
   if (!path.isAbsolute(value)) {
     throw new Error(
-      `NAKAMA_PYTHON_BIN must be an absolute path or a bare name (python3); got "${value}".`
+      `AIRIN_PYTHON_BIN must be an absolute path or a bare name (python3); got "${value}".`
     );
   }
 
@@ -126,7 +126,7 @@ export function resolvePythonBin(
 
   if (!pythonBasenamePattern().test(basename)) {
     throw new Error(
-      `NAKAMA_PYTHON_BIN basename must match python or python3…; got "${basename}".`
+      `AIRIN_PYTHON_BIN basename must match python or python3…; got "${basename}".`
     );
   }
 
@@ -151,7 +151,7 @@ export function resolvePythonBin(
 
   if (!allowed) {
     throw new Error(
-      `NAKAMA_PYTHON_BIN path is not on the server allowlist: "${value}".`
+      `AIRIN_PYTHON_BIN path is not on the server allowlist: "${value}".`
     );
   }
 

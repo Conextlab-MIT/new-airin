@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import type { ChatCompletionResult } from "@nakama/core";
+import type { ChatCompletionResult } from "@airin/core";
 import { createAgentChatSession } from "./index";
 import { createCapturingProvider } from "./test-helpers";
 

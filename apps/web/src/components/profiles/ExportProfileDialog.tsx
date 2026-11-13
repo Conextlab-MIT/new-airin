@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -6,8 +6,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/ui/dialog";
+import { toast } from "@airin/ui/toast";
 import { CloudUploadIcon } from "hugeicons-react";
 import { PendingIcon } from "@/components/data-portability/DataImportPreview";
 import { useExportProfilePackMutation } from "@/hooks/use-profile-pack";

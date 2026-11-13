@@ -7,7 +7,7 @@ import {
   getProfileSoulDir,
 } from "./resolve";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 describe("assertConfigPathSegment", () => {
   test("accepts slug ids", () => {
@@ -36,21 +36,21 @@ describe("assertConfigPathSegment", () => {
 describe("getProfileSoulDir", () => {
   afterEach(() => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
   });
 
   test("resolves under the config orgs tree", () => {
-    process.env.NAKAMA_CONFIG_DIR = "/tmp/nakama-config";
+    process.env.AIRIN_CONFIG_DIR = "/tmp/airin-config";
     expect(getProfileSoulDir("org_a", "p1")).toBe(
       join(getUserConfigDir(), "orgs", "org_a", "profiles", "p1")
     );
   });
 
   test("does not escape the config dir via orgId or profileId", () => {
-    process.env.NAKAMA_CONFIG_DIR = "/tmp/nakama-config";
+    process.env.AIRIN_CONFIG_DIR = "/tmp/airin-config";
     expect(() => getProfileSoulDir("org_a/../org_b", "p1")).toThrow();
     expect(() => getProfileSoulDir("org_a", "..")).toThrow();
     expect(() => getOrgMemoryDir("../other")).toThrow();
@@ -60,9 +60,9 @@ describe("getProfileSoulDir", () => {
 describe("app user soul workspaces", () => {
   afterEach(() => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
   });
 });

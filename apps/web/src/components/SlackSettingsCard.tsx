@@ -1,17 +1,17 @@
 import {
   parseSlackMemberIdInput,
   type SlackSettingsResponse,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { buttonVariants } from "@nakama/ui/button-variants";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { buttonVariants } from "@airin/ui/button-variants";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
+} from "@airin/ui/input-group";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
 import { Cancel01Icon, ViewIcon, ViewOffIcon } from "hugeicons-react";
 import {
   type KeyboardEvent,
@@ -44,13 +44,13 @@ const SLACK_GUIDE_URL = "/docs#tag/slack";
 /** Paste into "Create New App → From a manifest": Socket Mode, scopes and events preset. */
 const SLACK_APP_MANIFEST = JSON.stringify(
   {
-    display_information: { name: "Nakama" },
+    display_information: { name: "Airin" },
     features: {
       app_home: {
         messages_tab_enabled: true,
         messages_tab_read_only_enabled: false,
       },
-      bot_user: { always_online: true, display_name: "Nakama" },
+      bot_user: { always_online: true, display_name: "Airin" },
     },
     oauth_config: {
       scopes: {
@@ -238,9 +238,9 @@ function PairingGuide({ code }: { code: string }) {
       <div className="overflow-hidden rounded-md border border-border">
         <PairingStepTile
           className="border-border border-b"
-          description="In the Slack sidebar, open Nakama under Apps. Not listed? Search for Nakama at the top of Slack and open the app."
+          description="In the Slack sidebar, open Airin under Apps. Not listed? Search for Airin at the top of Slack and open the app."
           step={1}
-          title="Open Nakama in Slack"
+          title="Open Airin in Slack"
         />
         <PairingStepTile
           className="border-border border-b"
@@ -256,7 +256,7 @@ function PairingGuide({ code }: { code: string }) {
           title="Send the code in the DM"
         />
         <PairingStepTile
-          description="Nakama replies “Linked successfully” and the member appears under Allowed users. A code works once, so click New code for the next person."
+          description="Airin replies “Linked successfully” and the member appears under Allowed users. A code works once, so click New code for the next person."
           step={3}
           title="Wait for the reply"
         />
@@ -271,7 +271,7 @@ function WorkspaceGuide() {
       <div className="overflow-hidden rounded-md border border-border">
         <PairingStepTile
           className="border-border border-b"
-          description="Members need no code. They open Nakama under Apps and send a message, or @mention Nakama in a channel it was added to."
+          description="Members need no code. They open Airin under Apps and send a message, or @mention Airin in a channel it was added to."
           step={1}
           title="What members do"
         />
@@ -289,12 +289,12 @@ function UsageGuide() {
   return (
     <details className="group px-4 py-3" id="slack-usage-guide">
       <summary className="cursor-pointer font-medium text-foreground text-sm">
-        How members use Nakama in Slack
+        How members use Airin in Slack
       </summary>
       <div className="mt-3 overflow-hidden rounded-md border border-border">
         <PairingStepTile
           className="border-border border-b"
-          description="Open Nakama under Apps and type. Every message goes to the agent, and the DM keeps one conversation until !new."
+          description="Open Airin under Apps and type. Every message goes to the agent, and the DM keeps one conversation until !new."
           step={1}
           title="Direct message"
         />
@@ -303,7 +303,7 @@ function UsageGuide() {
           description={
             <>
               Add the app to the channel once with{" "}
-              <code className="font-mono">/invite @Nakama</code>, then @mention
+              <code className="font-mono">/invite @Airin</code>, then @mention
               it. It answers in a thread; keep replying in that thread without
               mentioning it again.
             </>

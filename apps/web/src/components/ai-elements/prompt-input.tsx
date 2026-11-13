@@ -4,16 +4,9 @@ import {
   InputGroupAddon,
   InputGroupButton,
   InputGroupTextarea,
-} from "@nakama/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@nakama/ui/select";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/input-group";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { ArrowTurnDownIcon, Cancel01Icon, SquareIcon } from "hugeicons-react";
 import type {
   ChangeEvent,
@@ -593,29 +586,3 @@ export const PromptInputSubmit = ({
     </InputGroupButton>
   );
 };
-
-export type PromptInputSelectTriggerProps = ComponentProps<
-  typeof SelectTrigger
->;
-
-export const PromptInputSelect = Select;
-
-export const PromptInputSelectContent = SelectContent;
-
-export const PromptInputSelectItem = SelectItem;
-
-export const PromptInputSelectValue = SelectValue;
-
-export const PromptInputSelectTrigger = ({
-  className,
-  ...props
-}: PromptInputSelectTriggerProps) => (
-  <SelectTrigger
-    className={cn(
-      "border-none bg-transparent font-medium text-muted-foreground shadow-none transition-colors",
-      "hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
-      className
-    )}
-    {...props}
-  />
-);

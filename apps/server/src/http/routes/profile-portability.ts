@@ -1,10 +1,10 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   ProfilePackImportRequest,
   ProfilePackImportResponse,
   ProfilePackPreviewResponse,
-} from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
+} from "@airin/core";
+import { AirinApiError } from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import { decodeArchiveRequestData } from "../../services/data-portability";
 import {
   createProfilePackExport,
@@ -211,6 +211,7 @@ export function registerProfilePortabilityRoutes(
         orgId,
         decodeArchiveRequestData(body.data),
         {
+          allowPythonSkillTools: auth.isPlatformAdmin,
           isPlatformAdmin: auth.isPlatformAdmin,
           restoreCustomTools: auth.isPlatformAdmin,
         }
@@ -243,6 +244,7 @@ export function registerProfilePortabilityRoutes(
         decodeArchiveRequestData(body.data),
         {
           actorUserId: auth.user.id,
+          allowPythonSkillTools: auth.isPlatformAdmin,
           confirm: body.confirm,
           isPlatformAdmin: auth.isPlatformAdmin,
           name: body.name,
@@ -264,14 +266,14 @@ export function registerProfilePortabilityRoutes(
 
 function requireDatabase(options: ServerOptions) {
   if (!options.databaseAdapter) {
-    throw new NakamaApiError("Database is not configured.", 500);
+    throw new AirinApiError("Database is not configured.", 500);
   }
 
   return options.databaseAdapter;
 }
 
 function formatPackError<T>(error: T): Response {
-  if (error instanceof NakamaApiError) {
+  if (error instanceof AirinApiError) {
     return errorResponse(error.message, error.status);
   }
 

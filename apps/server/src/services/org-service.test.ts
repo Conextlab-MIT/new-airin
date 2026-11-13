@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
+  AirinApiError,
   attachSharedKnowledgeBaseDocument,
   type EmailOutboundAdapter,
   type GenerateChatInput,
@@ -24,7 +25,6 @@ import {
   getUserConfigPath,
   listOrganizationKnowledgeBaseDocuments,
   loadUserConfig,
-  NakamaApiError,
   resolveProfileSkillDirectory,
   saveUserConfig,
   type ToolSetupPlan,
@@ -32,23 +32,24 @@ import {
   uploadKnowledgeBaseDocument,
   uploadOrganizationKnowledgeBaseDocument,
   writeParsedConfigIni,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   LOCAL_CLIENT_USER_ID,
   resolveLocalAuthToken,
-} from "@nakama/core/local-auth";
+} from "@airin/core/local-auth";
 import {
   createDatabase,
   createInMemoryDatabaseAdapter,
   type DatabaseAdapter,
   mergeWorkspaceSettings,
   type StoredProfileRecord,
-} from "@nakama/db";
-import { NakamaClient } from "../../../../packages/client/src/client";
+} from "@airin/db";
+import { AirinClient } from "../../../../packages/client/src/client";
 import { createMinimalHonoApp } from "../http/test-app-helpers";
 import { loginUserSession } from "../http/test-session-helpers";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
+import { startStoppedTurn } from "./agent-service-test-fixtures";
 import { AuthService } from "./auth-service";
 import { AutomationRunner } from "./automation-runner";
 import { AutomationService } from "./automation-service";
@@ -60,13 +61,16 @@ import {
   saveToolApiKey,
   saveToolEnv,
   saveToolSetup,
+  setToolSecrets,
 } from "./custom-tool-shared";
 import {
-  createNakamaDataExport,
-  restoreNakamaDataImport,
+  createAirinDataExport,
+  restoreAirinDataImport,
 } from "./data-portability";
+import { ManagedSecrets } from "./managed-secrets";
 import { McpClientManager } from "./mcp-client-manager";
 import { McpService } from "./mcp-service";
+
 import { OrgService } from "./org-service";
 import { OrgUsageQuotaService } from "./org-usage-quota-service";
 import { ProfileService } from "./profile-service";
@@ -74,13 +78,16 @@ import { modelExistsOnInstance } from "./provider-instance-helpers";
 import { sessionTurnRegistry } from "./session-turn-registry";
 import { isSkillWriteApprovalRequired } from "./skill-write-approval";
 
-setupTestConfigDir("nakama-org-service-test-");
+setupTestConfigDir("airin-org-service-test-");
 
 function createOrgService(
   email?: EmailOutboundAdapter,
   getWebPublicUrl?: () => string | undefined
 ) {
   const databaseAdapter = createInMemoryDatabaseAdapter();
+  setToolSecrets(
+    new ManagedSecrets(databaseAdapter, Buffer.alloc(32, 1).toString("base64"))
+  );
   const authService = new AuthService();
 
   return {
@@ -362,9 +369,7 @@ describe("OrgService", () => {
     );
 
     expect(
-      profiles.some(
-        (profile) => profile.isSuper && profile.name === "Super Bot"
-      )
+      profiles.some((profile) => profile.isSuper && profile.name === "Airin")
     ).toBe(true);
   });
 
@@ -574,6 +579,273 @@ describe("OrgService", () => {
     expect(sessionB?.revokedAt).toBeTruthy();
   });
 
+  describe("webhook secrets of a member who loses access", () => {
+    async function setup() {
+      const { authService, databaseAdapter, orgService } = createOrgService();
+
+      const created = await orgService.createOrganization({
+        admin: {
+          email: "admin@acme.com",
+          name: "Acme Admin",
+          phone: "+628123456789",
+        },
+        name: "Acme",
+        slug: "acme-webhook-secrets",
+      });
+
+      const orgId = created.organization.id;
+
+      const second = await orgService.createOrganization(
+        { name: "Beta", slug: "beta-webhook-secrets" },
+        created.adminMember!.member.userId
+      );
+
+      const addMember = async (
+        email: string,
+        role: "admin" | "member" = "member"
+      ) => {
+        const added = await orgService.addMember({
+          email,
+          name: email,
+          orgId,
+          phone: "+628111111111",
+          role,
+        });
+
+        return {
+          password: added.temporaryPassword!,
+          userId: added.member.userId,
+        };
+      };
+
+      const memberA = await addMember("a@acme.com");
+      const memberB = await addMember("b@acme.com");
+      const adminC = await addMember("c@acme.com", "admin");
+
+      const automations = new AutomationService(databaseAdapter, {
+        getUserTimezone: async () => "UTC",
+        secrets: new ManagedSecrets(
+          databaseAdapter,
+          Buffer.alloc(32, 1).toString("base64")
+        ),
+      });
+
+      const makeSecret = async (inOrgId: string, userId: string) => {
+        const automation = await automations.create(
+          inOrgId,
+          {
+            description: "Review",
+            name: "PR review",
+            prompt: "Review the pull request.",
+            trigger: { type: "webhook" },
+          },
+          undefined,
+          { orgRole: "member", userId }
+        );
+
+        await automations.createWebhookSecret(automation.id, inOrgId, userId);
+
+        return automation.id;
+      };
+
+      const remaining = async () =>
+        (await databaseAdapter.listAutomationWebhookSecrets())
+          .map((secret) => secret.automationId)
+          .sort();
+
+      return {
+        adminC,
+        adminUserId: created.adminMember!.member.userId,
+        automations,
+        databaseAdapter,
+        makeSecret,
+        memberA,
+        memberB,
+        orgId,
+        orgService,
+        remaining,
+        secondOrgId: second.organization.id,
+      };
+    }
+
+    test("removing a member deletes only their webhook secrets in that org", async () => {
+      const ctx = await setup();
+      const a = await ctx.makeSecret(ctx.orgId, ctx.memberA.userId);
+      const b = await ctx.makeSecret(ctx.orgId, ctx.memberB.userId);
+      const other = await ctx.makeSecret(ctx.secondOrgId, ctx.memberA.userId);
+
+      await ctx.orgService.removeMember(ctx.orgId, ctx.memberA.userId);
+
+      expect(await ctx.remaining()).toEqual([b, other].sort());
+      expect(await ctx.remaining()).not.toContain(a);
+    });
+
+    test("removing the last admin is blocked and keeps their webhook secrets", async () => {
+      const ctx = await setup();
+      await ctx.databaseAdapter.deleteOrgMember(
+        ctx.secondOrgId,
+        "user_local_client"
+      );
+      const secret = await ctx.makeSecret(ctx.secondOrgId, ctx.adminUserId);
+
+      await expect(
+        ctx.orgService.removeMember(ctx.secondOrgId, ctx.adminUserId)
+      ).rejects.toMatchObject({ status: 409 });
+      expect(await ctx.remaining()).toEqual([secret]);
+    });
+
+    test("erasing the last admin is blocked and keeps their webhook secrets", async () => {
+      const ctx = await setup();
+      await ctx.databaseAdapter.deleteOrgMember(
+        ctx.secondOrgId,
+        "user_local_client"
+      );
+      const secret = await ctx.makeSecret(ctx.orgId, ctx.adminUserId);
+
+      await expect(
+        ctx.orgService.eraseUser(ctx.adminUserId, ctx.adminC.userId)
+      ).rejects.toMatchObject({ status: 409 });
+      expect(await ctx.remaining()).toEqual([secret]);
+    });
+
+    test("disabling a member deletes only their webhook secrets in every org", async () => {
+      const ctx = await setup();
+      await ctx.makeSecret(ctx.orgId, ctx.memberA.userId);
+      await ctx.makeSecret(ctx.secondOrgId, ctx.memberA.userId);
+      const b = await ctx.makeSecret(ctx.orgId, ctx.memberB.userId);
+
+      await ctx.orgService.disableMember(ctx.orgId, ctx.memberA.userId);
+
+      expect(await ctx.remaining()).toEqual([b]);
+    });
+
+    test("changing a password deletes the user's webhook secrets in every org", async () => {
+      const ctx = await setup();
+      await ctx.makeSecret(ctx.orgId, ctx.memberA.userId);
+      await ctx.makeSecret(ctx.secondOrgId, ctx.memberA.userId);
+      const b = await ctx.makeSecret(ctx.orgId, ctx.memberB.userId);
+
+      await ctx.orgService.changePassword({
+        currentPassword: ctx.memberA.password,
+        newPassword: "new-password-123",
+        userId: ctx.memberA.userId,
+      });
+
+      expect(await ctx.remaining()).toEqual([b]);
+    });
+
+    test("a wrong current password keeps the user's webhook secrets", async () => {
+      const ctx = await setup();
+      const a = await ctx.makeSecret(ctx.orgId, ctx.memberA.userId);
+
+      await expect(
+        ctx.orgService.changePassword({
+          currentPassword: "wrong-password-123",
+          newPassword: "new-password-123",
+          userId: ctx.memberA.userId,
+        })
+      ).rejects.toThrow();
+      expect(await ctx.remaining()).toEqual([a]);
+    });
+
+    test("erasing a user deletes their webhook secrets in every org", async () => {
+      const ctx = await setup();
+      await ctx.makeSecret(ctx.orgId, ctx.memberA.userId);
+      await ctx.makeSecret(ctx.secondOrgId, ctx.memberA.userId);
+      const b = await ctx.makeSecret(ctx.orgId, ctx.memberB.userId);
+
+      await ctx.orgService.eraseUser(ctx.memberA.userId, ctx.adminUserId);
+
+      expect(await ctx.remaining()).toEqual([b]);
+    });
+
+    test("a password reset deletes the user's webhook secrets in every org", async () => {
+      const ctx = await setup();
+      await ctx.makeSecret(ctx.orgId, ctx.memberA.userId);
+      await ctx.makeSecret(ctx.secondOrgId, ctx.memberA.userId);
+      const b = await ctx.makeSecret(ctx.orgId, ctx.memberB.userId);
+
+      await expect(
+        ctx.orgService.resetPassword({
+          newPassword: "new-password-123",
+          token: "tc_reset_invalid",
+        })
+      ).rejects.toThrow();
+      expect(await ctx.remaining()).toHaveLength(3);
+
+      const requested = await ctx.orgService.requestPasswordReset(
+        "a@acme.com",
+        true
+      );
+
+      await ctx.orgService.resetPassword({
+        newPassword: "new-password-123",
+        token: requested.token!,
+      });
+
+      expect(await ctx.remaining()).toEqual([b]);
+    });
+
+    test("demoting an admin deletes their webhook secrets in that org only", async () => {
+      const ctx = await setup();
+      const c = await ctx.makeSecret(ctx.orgId, ctx.adminC.userId);
+      const other = await ctx.makeSecret(ctx.secondOrgId, ctx.adminC.userId);
+
+      await ctx.orgService.updateMember(ctx.orgId, ctx.adminC.userId, {
+        name: "Renamed",
+      });
+      await ctx.orgService.updateMember(ctx.orgId, ctx.memberA.userId, {
+        role: "admin",
+      });
+      expect(await ctx.remaining()).toEqual([c, other].sort());
+
+      await ctx.orgService.updateMember(ctx.orgId, ctx.adminC.userId, {
+        role: "member",
+      });
+
+      expect(await ctx.remaining()).toEqual([other]);
+    });
+
+    test("removing the maker revokes a secret that another member steered", async () => {
+      const ctx = await setup();
+      const a = await ctx.makeSecret(ctx.orgId, ctx.memberA.userId);
+
+      await ctx.automations.update(
+        a,
+        ctx.orgId,
+        { prompt: "Summarize the pull request." },
+        { orgRole: "member", userId: ctx.memberB.userId }
+      );
+
+      await ctx.orgService.removeMember(ctx.orgId, ctx.memberB.userId);
+      expect(await ctx.remaining()).toEqual([a]);
+
+      await ctx.orgService.removeMember(ctx.orgId, ctx.memberA.userId);
+      expect(await ctx.remaining()).toEqual([]);
+    });
+
+    test("a failed revoke keeps the membership so a retry can finish", async () => {
+      const ctx = await setup();
+      const a = await ctx.makeSecret(ctx.orgId, ctx.memberA.userId);
+
+      spyOn(
+        ctx.databaseAdapter,
+        "deleteAutomationWebhookSecretsForUser"
+      ).mockRejectedValueOnce(new Error("db down"));
+
+      await expect(
+        ctx.orgService.removeMember(ctx.orgId, ctx.memberA.userId)
+      ).rejects.toThrow("db down");
+      expect(
+        await ctx.databaseAdapter.getOrgMember(ctx.orgId, ctx.memberA.userId)
+      ).not.toBeNull();
+      expect(await ctx.remaining()).toEqual([a]);
+
+      await ctx.orgService.removeMember(ctx.orgId, ctx.memberA.userId);
+      expect(await ctx.remaining()).toEqual([]);
+    });
+  });
+
   test("updates own profile email phone and name", async () => {
     const { orgService } = createOrgService();
 
@@ -681,6 +953,50 @@ describe("OrgService", () => {
     expect(accepted.role).toBe("member");
   });
 
+  test("lists and revokes pending invites only within their org", async () => {
+    const { orgService } = createOrgService();
+
+    const acme = await orgService.createOrganization({
+      name: "Acme",
+      slug: "acme-revoke",
+    });
+
+    const other = await orgService.createOrganization({
+      name: "Other",
+      slug: "other-revoke",
+    });
+
+    const invite = await orgService.createInvite({
+      email: "guest@acme.com",
+      invitedByUserId: "user_platform",
+      orgId: acme.organization.id,
+      role: "member",
+    });
+
+    expect(
+      (await orgService.listInvites(acme.organization.id)).invites
+    ).toEqual([invite.invite]);
+    expect(
+      (await orgService.listInvites(other.organization.id)).invites
+    ).toEqual([]);
+
+    await expect(
+      orgService.revokeInvite(other.organization.id, invite.invite.id)
+    ).rejects.toMatchObject({ status: 404 });
+
+    await orgService.revokeInvite(acme.organization.id, invite.invite.id);
+
+    expect(
+      (await orgService.listInvites(acme.organization.id)).invites
+    ).toEqual([]);
+    await expect(
+      orgService.acceptInvite({ password: "secret123", token: invite.token! })
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      orgService.revokeInvite(acme.organization.id, invite.invite.id)
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
   test("only creates invites for allowed email domains", async () => {
     const sent: string[] = [];
 
@@ -773,7 +1089,7 @@ describe("OrgService", () => {
           return { ok: true };
         },
       },
-      () => "https://nakama.example.com"
+      () => "https://airin.example.com"
     );
 
     const created = await orgService.createOrganization({
@@ -794,7 +1110,7 @@ describe("OrgService", () => {
     expect(sent[0]?.to).toBe("guest@acme.com");
     expect(sent[0]?.subject).toBe("You're invited to Acme");
     expect(sent[0]?.text).toContain(
-      "https://nakama.example.com/accept-invite?token="
+      "https://airin.example.com/accept-invite?token="
     );
     expect(sent[0]?.text).toContain("join Acme as member");
   });
@@ -831,7 +1147,7 @@ describe("OrgService", () => {
           return { ok: true };
         },
       },
-      () => "https://nakama.example.com"
+      () => "https://airin.example.com"
     );
 
     await orgService.bootstrapInitialSetup({
@@ -849,9 +1165,9 @@ describe("OrgService", () => {
     expect(requested).toEqual({ delivered: true, token: null });
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe("admin@acme.com");
-    expect(sent[0]?.subject).toBe("Reset your Nakama password");
+    expect(sent[0]?.subject).toBe("Reset your Airin password");
     expect(sent[0]?.text).toContain(
-      "https://nakama.example.com/reset-password?token=tc_reset_"
+      "https://airin.example.com/reset-password?token=tc_reset_"
     );
   });
 
@@ -1067,7 +1383,7 @@ describe("OrgService", () => {
 
     await expect(
       orgService.createOrganization({ name: "   ", slug: "acme" })
-    ).rejects.toBeInstanceOf(NakamaApiError);
+    ).rejects.toBeInstanceOf(AirinApiError);
   });
 
   test("lists, updates, and removes members", async () => {
@@ -1192,6 +1508,143 @@ describe("OrgService", () => {
       message: "Cannot change role of the last org admin.",
       status: 409,
     });
+  });
+
+  // The service checks are read-then-write, so each pair can pass them
+  // together. The disable statement must refuse whichever write lands second.
+  const racingAdminChanges: [
+    string,
+    (
+      service: OrgService,
+      orgId: string,
+      a: string,
+      b: string
+    ) => Promise<unknown>[],
+  ][] = [
+    [
+      "disable A + remove B",
+      (service, orgId, a, b) => [
+        service.disableMember(orgId, a),
+        service.removeMember(orgId, b),
+      ],
+    ],
+    [
+      "remove B + disable A",
+      (service, orgId, a, b) => [
+        service.removeMember(orgId, b),
+        service.disableMember(orgId, a),
+      ],
+    ],
+    [
+      "demote B + disable A",
+      (service, orgId, a, b) => [
+        service.updateMember(orgId, b, { role: "member" }),
+        service.disableMember(orgId, a),
+      ],
+    ],
+    [
+      "disable A + disable B",
+      (service, orgId, a, b) => [
+        service.disableMember(orgId, a),
+        service.disableMember(orgId, b),
+      ],
+    ],
+  ];
+
+  for (const [name, race] of racingAdminChanges) {
+    test(`${name} in parallel leaves one usable admin`, async () => {
+      const { orgService } = createOrgService();
+
+      const created = await orgService.createOrganization({
+        admin: {
+          email: "admin@acme.com",
+          name: "Acme Admin",
+          phone: "+628123456789",
+        },
+        name: "Acme",
+        slug: "acme-race",
+      });
+
+      const orgId = created.organization.id;
+      const adminA = created.adminMember!.member.userId;
+
+      const added = await orgService.addMember({
+        email: "second@acme.com",
+        name: "Second Admin",
+        orgId,
+        phone: "+628987654321",
+        role: "admin",
+      });
+
+      const adminB = added.member.userId;
+
+      // A disabled admin row must not count as coverage.
+      await orgService.disableMember(orgId, LOCAL_CLIENT_USER_ID!);
+
+      const results = await Promise.allSettled(
+        race(orgService, orgId, adminA, adminB)
+      );
+
+      expect(results.map((result) => result.status).sort()).toEqual([
+        "fulfilled",
+        "rejected",
+      ]);
+
+      expect(
+        results.find((result) => result.status === "rejected")
+      ).toMatchObject({
+        reason: { status: 409 },
+      });
+
+      const { members } = await orgService.listMembers(orgId);
+
+      const usableAdmins = members.filter(
+        (member) => member.role === "admin" && !member.disabledAt
+      );
+
+      expect(usableAdmins).toHaveLength(1);
+    });
+  }
+
+  // The member list is where an admin sees who is locked out; without the
+  // field the web cannot offer Enable for a disabled account.
+  test("the member list shows when an account is disabled, and clears it on enable", async () => {
+    const { orgService } = createOrgService();
+
+    const created = await orgService.createOrganization({
+      admin: {
+        email: "admin@acme.com",
+        name: "Acme Admin",
+        phone: "+628123456789",
+      },
+      name: "Acme",
+      slug: "acme-disabled-list",
+    });
+
+    const orgId = created.organization.id;
+
+    const added = await orgService.addMember({
+      email: "member@acme.com",
+      name: "Member",
+      orgId,
+      phone: "+628987654321",
+      role: "member",
+    });
+
+    const userId = added.member.userId;
+
+    const disabledAtFor = async () =>
+      (await orgService.listMembers(orgId)).members.find(
+        (member) => member.userId === userId
+      )?.disabledAt;
+
+    expect(await disabledAtFor()).toBeNull();
+
+    await orgService.disableMember(orgId, userId);
+    expect(await disabledAtFor()).toEqual(expect.any(String));
+
+    await orgService.enableMember(orgId, userId);
+    expect(await disabledAtFor()).toBeNull();
   });
 
   test("removeMember rejects bad userId shape before membership lookup", async () => {
@@ -1402,7 +1855,7 @@ describe("OrgService", () => {
   });
 
   test("permanent deletion removes tool secrets from the global config", async () => {
-    const { orgService, authService } = createOrgService();
+    const { authService, databaseAdapter: db, orgService } = createOrgService();
 
     const bootstrapped = await orgService.bootstrapInitialSetup({
       admin: {
@@ -1460,6 +1913,31 @@ describe("OrgService", () => {
       sessionId: "session_kept_org",
     });
 
+    for (const [orgId, automationId] of [
+      [bootstrapped.organization.id, "auto_deleted"],
+      [kept.organization.id, "auto_kept"],
+    ] as const) {
+      const now = new Date().toISOString();
+
+      await db.upsertAutomation({
+        createdAt: now,
+        definition: { trigger: { type: "webhook" } },
+        enabled: true,
+        id: automationId,
+        name: "Webhook",
+        orgId,
+        profileId: "profile_webhook",
+        updatedAt: now,
+        version: 1,
+      });
+      await db.putAutomationWebhookSecret({
+        automationId,
+        createdAt: now,
+        createdByUserId: bootstrapped.user.id,
+        encryptedValue: "enc",
+      });
+    }
+
     await orgService.archiveOrganization(
       bootstrapped.organization.id,
       bootstrapped.user.id
@@ -1469,6 +1947,11 @@ describe("OrgService", () => {
     );
 
     expect(
+      (await db.listAutomationWebhookSecrets()).map(
+        (secret) => secret.automationId
+      )
+    ).toEqual(["auto_kept"]);
+    expect(
       await loadToolApiKey(bootstrapped.organization.id, "tool_deleted_org")
     ).toBeUndefined();
     await expect(
@@ -1477,8 +1960,10 @@ describe("OrgService", () => {
 
     const raw = await readFile(getUserConfigPath(), "utf8");
     expect(raw).not.toContain("sk-deleted-org-secret");
+    expect(raw).not.toContain("sk-kept-org-secret");
     expect(raw).toContain("sk-keep-provider");
     expect(raw).toContain("sk-foreign-shape");
+
     expect(raw).toContain("web_public_url=https://acme.example.com");
     expect(await loadToolApiKey(kept.organization.id, "tool_kept_org")).toBe(
       "sk-kept-org-secret"
@@ -1876,7 +2361,6 @@ describe("OrgService shared agent selection", () => {
       await db.incrementLlmTurnUsage("org_parent", {
         estimated: false,
         inputTokens: 1,
-        optimized: false,
         outputTokens: 1,
       });
       const parentUsage = await db.listLlmTurnUsage("org_parent");
@@ -1926,7 +2410,7 @@ describe("OrgService shared agent selection", () => {
             );
 
       const session = sessionId
-        ? (await agent.resolveSession(sessionId, "org_team_a"))!
+        ? (await agent.sessions.get(sessionId, "org_team_a"))!
         : null;
 
       const run = () =>
@@ -2153,7 +2637,7 @@ describe("OrgService shared agent selection", () => {
       expect(create.status).toBe(201);
       const body: { sessionId: string } = await create.json();
       const id = body.sessionId;
-      const session = (await agent.resolveSession(id, "org_team_a"))!;
+      const session = (await agent.sessions.get(id, "org_team_a"))!;
       await session.send("Saved team turn");
       const history = [...session.getHistory()];
       expect(providerCalls).toBe(1);
@@ -2264,7 +2748,7 @@ describe("OrgService shared agent selection", () => {
         orgService,
       });
 
-      const client = new NakamaClient({
+      const client = new AirinClient({
         authToken: await resolveLocalAuthToken(),
         baseUrl: "http://localhost:4310",
         fetch: (input, init) =>
@@ -2382,10 +2866,10 @@ describe("OrgService shared agent selection", () => {
         { orgRole: "member" }
       );
 
-      const first = (await agent.resolveSession(id, "org_team_a"))!;
+      const first = (await agent.sessions.get(id, "org_team_a"))!;
       await first.send("Saved turn");
       const savedHistory = [...first.getHistory()];
-      const backup = await createNakamaDataExport({ databasePath, rootDir });
+      const backup = await createAirinDataExport({ databasePath, rootDir });
       const source = (await db.getProfile("profile_template"))!;
       await db.upsertProfile({
         ...source,
@@ -2394,11 +2878,11 @@ describe("OrgService shared agent selection", () => {
       });
       await writeFile(join(sourceDir, "STYLE.md"), "Later source style");
       await writeFile(join(teamDir, "MEMORY.md"), "Later team memory");
-      const later = (await agent.resolveSession(id, "org_team_a"))!;
+      const later = (await agent.sessions.get(id, "org_team_a"))!;
       await later.send("Later turn");
       expect(later.getHistory()).toHaveLength(savedHistory.length + 2);
       expect(builds.at(-1)?.name).toBe("Later source");
-      await restoreNakamaDataImport(backup.data, {
+      await restoreAirinDataImport(backup.data, {
         beforeReplace: () => database.release(),
         confirm: true,
         databasePath,
@@ -2406,7 +2890,7 @@ describe("OrgService shared agent selection", () => {
       });
       await database.reopen();
       await agent.reloadAfterDataRestore();
-      const restored = (await agent.resolveSession(id, "org_team_a"))!;
+      const restored = (await agent.sessions.get(id, "org_team_a"))!;
       expect(restored).not.toBe(later);
       expect(restored.getHistory()).toEqual(savedHistory);
       expect(builds.at(-1)).toMatchObject({
@@ -2429,7 +2913,7 @@ describe("OrgService shared agent selection", () => {
         "user_creator"
       );
       await expect(
-        agent.beginSessionTurn(id, "org_team_a")
+        startStoppedTurn(agent, id, "org_team_a")
       ).rejects.toMatchObject({ status: 404 });
       expect(
         (await agent.getSessionMessages(id, "org_team_a"))?.messages
@@ -2443,7 +2927,8 @@ describe("OrgService shared agent selection", () => {
     } finally {
       database.release();
     }
-  });
+    // A full export and restore on a busy CI runner can pass 5 seconds.
+  }, 15_000);
   test("published tool details and local assignments keep parent sources private", async () => {
     const { orgService, databaseAdapter: db } = createOrgService();
     const agentPublication = await seedSharedAgentSelection(db, orgService);
@@ -2816,7 +3301,7 @@ describe("OrgService shared agent selection", () => {
           { cognito, orgRole: "member" }
         );
 
-        const first = (await agent.resolveSession(id, "org_team_a"))!;
+        const first = (await agent.sessions.get(id, "org_team_a"))!;
         await first.send("First");
         await db.assignMcpServerToProfile("profile_template", server.id);
 
@@ -2826,7 +3311,7 @@ describe("OrgService shared agent selection", () => {
         expect(detail.mcpServers.map((item) => item.id)).toEqual([server.id]);
         expect(detail.mcpServerCount).toBe(1);
         expect(await db.listMcpServersForProfile(profile.id)).toEqual([]);
-        const second = (await agent.resolveSession(id, "org_team_a"))!;
+        const second = (await agent.sessions.get(id, "org_team_a"))!;
         expect(second).not.toBe(first);
         expect(second.getHistory()).toEqual(first.getHistory());
         await second.send("Second");
@@ -2873,7 +3358,7 @@ describe("OrgService shared agent selection", () => {
             },
           ],
         });
-        const third = (await agent.resolveSession(id, "org_team_a"))!;
+        const third = (await agent.sessions.get(id, "org_team_a"))!;
         expect(third).not.toBe(second);
         expect(third.getHistory()).toEqual(second.getHistory());
         expect(
@@ -2991,7 +3476,7 @@ describe("OrgService shared agent selection", () => {
           ? `import {writeFile} from "node:fs/promises";
 export async function run(input, context) {
   await writeFile("tool.marker", "team");
-  return {keyIsTeam: process.env.NAKAMA_TOOL_API_KEY === "team-key", config: process.env.NAKAMA_CONFIG_DIR ?? null, cwd: process.cwd(), workspace: context.workspaceRoot, version: "first"};
+  return {keyIsTeam: process.env.AIRIN_TOOL_API_KEY === "team-key", config: process.env.AIRIN_CONFIG_DIR ?? null, cwd: process.cwd(), workspace: context.workspaceRoot, version: "first"};
 }`
           : `import json
 import os
@@ -3000,7 +3485,7 @@ import sys
 def run(input, context):
     with open("tool.marker", "w") as handle:
         handle.write("team")
-    return {"keyIsTeam": os.environ.get("NAKAMA_TOOL_API_KEY") == "team-key", "config": os.environ.get("NAKAMA_CONFIG_DIR"), "cwd": os.getcwd(), "workspace": os.environ.get("NAKAMA_WORKSPACE_ROOT"), "version": "first"}
+    return {"keyIsTeam": os.environ.get("AIRIN_TOOL_API_KEY") == "team-key", "config": os.environ.get("AIRIN_CONFIG_DIR"), "cwd": os.getcwd(), "workspace": os.environ.get("AIRIN_WORKSPACE_ROOT"), "version": "first"}
 
 if __name__ == "__main__":
     print(json.dumps(run(json.loads(sys.stdin.read() or "{}"), {})))
@@ -3071,11 +3556,11 @@ if __name__ == "__main__":
         { cognito, orgRole: "member" }
       );
 
-      const first = (await agent.resolveSession(id, "org_team_a"))!;
+      const first = (await agent.sessions.get(id, "org_team_a"))!;
       await first.send("First");
       await db.assignToolToProfile(assignmentProfileId, record.id);
       await db.assignToolToProfile(assignmentProfileId, "global_read");
-      const second = (await agent.resolveSession(id, "org_team_a"))!;
+      const second = (await agent.sessions.get(id, "org_team_a"))!;
 
       if (!local) {
         const detail = (await agent.getProfile("org_team_a", profile.id))
@@ -3180,7 +3665,7 @@ if __name__ == "__main__":
       }
 
       await writeFile(modulePath, source.replace('"first"', '"updated"'));
-      await db.upsertTool({ ...record, name: "ask_user_question" });
+      await db.upsertTool({ ...record, name: "org_memory_search" });
       await expect(
         agent.resolvePluginExecutionTools("org_team_a", profile.id)
       ).rejects.toMatchObject({ status: 409 });
@@ -3194,7 +3679,7 @@ if __name__ == "__main__":
           },
         },
       });
-      const third = (await agent.resolveSession(id, "org_team_a"))!;
+      const third = (await agent.sessions.get(id, "org_team_a"))!;
       expect(third).not.toBe(second);
       expect(third.getHistory()).toEqual(second.getHistory());
 
@@ -3246,7 +3731,7 @@ if __name__ == "__main__":
           status: 404,
         });
         await expect(
-          agent.resolveSession(id, "org_team_a")
+          agent.sessions.get(id, "org_team_a")
         ).rejects.toMatchObject({ status: 404 });
       } else {
         expect(
@@ -3598,7 +4083,7 @@ if __name__ == "__main__":
           { cognito, orgRole: "member" }
         );
 
-        const first = (await agent.resolveSession(id, "org_team_a"))!;
+        const first = (await agent.sessions.get(id, "org_team_a"))!;
         await first.send("Keep history");
         const history = [...first.getHistory()];
         expect(selections).toEqual(["second::same-model"]);
@@ -3607,14 +4092,13 @@ if __name__ == "__main__":
           modelPublication.id,
           "user_creator"
         );
-        expect(await agent.beginSessionTurn(id, "org_team_a")).toBe(true);
-        sessionTurnRegistry.cancelTurn(id);
-        expect(await agent.resolveSession(id, "org_team_a")).toBe(first);
+        expect(await startStoppedTurn(agent, id, "org_team_a")).toBe("started");
+        expect(await agent.sessions.get(id, "org_team_a")).toBe(first);
         Object.assign(agent, {
           userConfig: { ...config, providers: [config.providers[0]!] },
         });
         await expect(
-          agent.beginSessionTurn(id, "org_team_a")
+          startStoppedTurn(agent, id, "org_team_a")
         ).rejects.toMatchObject({ status: 400 });
         expect(sessionTurnRegistry.isActive(id)).toBe(false);
         expect(selections).toHaveLength(1);
@@ -3631,7 +4115,7 @@ if __name__ == "__main__":
           },
         });
         await expect(
-          agent.beginSessionTurn(id, "org_team_a")
+          startStoppedTurn(agent, id, "org_team_a")
         ).rejects.toMatchObject({ status: 400 });
         expect(selections).toHaveLength(1);
         Object.assign(agent, { userConfig: config });
@@ -3647,16 +4131,17 @@ if __name__ == "__main__":
 
         expect(changedCoding.env?.OPENAI_API_KEY).toBe("first-key");
         expect((await db.getProfile(profile.id))!.model).toBe(profile.model);
-        expect(await agent.beginSessionTurn(id, "org_team_a")).toBe(true);
-        sessionTurnRegistry.cancelTurn(id);
-        const second = (await agent.resolveSession(id, "org_team_a"))!;
+        expect(await startStoppedTurn(agent, id, "org_team_a")).toBe("started");
+        const second = (await agent.sessions.get(id, "org_team_a"))!;
         expect(second).not.toBe(first);
         expect(second.getHistory()).toEqual(history);
         expect(selections).toEqual(["second::same-model", "first::same-model"]);
         expect(
-          await agent.updateSessionModel(id, "org_team_a", "second::same-model")
+          await agent.updateSessionRunSettings(id, "org_team_a", {
+            model: "second::same-model",
+          })
         ).toBe(true);
-        const overridden = (await agent.resolveSession(id, "org_team_a"))!;
+        const overridden = (await agent.sessions.get(id, "org_team_a"))!;
         expect(overridden.getHistory()).toEqual(history);
         expect(selections.at(-1)).toBe("second::same-model");
         const builds = selections.length;
@@ -3664,7 +4149,7 @@ if __name__ == "__main__":
           userConfig: { ...config, providers: [config.providers[0]!] },
         });
         await expect(
-          agent.beginSessionTurn(id, "org_team_a")
+          startStoppedTurn(agent, id, "org_team_a")
         ).rejects.toMatchObject({ status: 400 });
         expect(sessionTurnRegistry.isActive(id)).toBe(false);
         expect(selections).toHaveLength(builds);
@@ -3672,9 +4157,8 @@ if __name__ == "__main__":
           (await agent.getSessionMessages(id, "org_team_a"))!.messages
         ).toEqual(history);
         Object.assign(agent, { userConfig: config });
-        expect(await agent.beginSessionTurn(id, "org_team_a")).toBe(true);
-        sessionTurnRegistry.cancelTurn(id);
-        expect(await agent.resolveSession(id, "org_team_a")).toBe(overridden);
+        expect(await startStoppedTurn(agent, id, "org_team_a")).toBe("started");
+        expect(await agent.sessions.get(id, "org_team_a")).toBe(overridden);
         await orgService.unpublishSharedResource(
           "org_parent",
           publication.id,
@@ -3779,7 +4263,7 @@ if __name__ == "__main__":
         { cognito, orgRole: "member" }
       );
 
-      const first = (await agent.resolveSession(id, "org_team_a"))!;
+      const first = (await agent.sessions.get(id, "org_team_a"))!;
       await first.send("First");
       expect(turns[0]!.system).toContain("Published identity");
       expect(turns[0]!.system).toContain("Published style");
@@ -3797,7 +4281,8 @@ if __name__ == "__main__":
       }
 
       const history = [...first.getHistory()];
-      expect(await agent.beginSessionTurn(id, "org_team_a")).toBe(true);
+      // Holds the lock only, so the chat below is the one a running turn has.
+      expect(sessionTurnRegistry.beginTurn(id).started).toBe(true);
       const source = (await db.getProfile("profile_template"))!;
       await db.upsertProfile({
         ...source,
@@ -3806,18 +4291,18 @@ if __name__ == "__main__":
         thinkingEffort: "high",
         thinkingEnabled: true,
       });
-      expect(await agent.resolveSession(id, "org_team_a")).toBe(first);
+      expect(await agent.sessions.get(id, "org_team_a")).toBe(first);
       sessionTurnRegistry.cancelTurn(id);
       failBuild = true;
-      await expect(agent.beginSessionTurn(id, "org_team_a")).rejects.toThrow();
+      await expect(startStoppedTurn(agent, id, "org_team_a")).rejects.toThrow();
       expect(sessionTurnRegistry.isActive(id)).toBe(false);
       expect(first.getHistory()).toEqual(history);
       expect(
         (await agent.getSessionMessages(id, "org_team_a"))!.messages
       ).toEqual(history);
       failBuild = false;
-      expect(await agent.beginSessionTurn(id, "org_team_a")).toBe(true);
-      const second = (await agent.resolveSession(id, "org_team_a"))!;
+      expect(await startStoppedTurn(agent, id, "org_team_a")).toBe("started");
+      const second = (await agent.sessions.get(id, "org_team_a"))!;
       expect(second).not.toBe(first);
       expect(second.getHistory()).toEqual(history);
       expect(builds.at(-1)).toMatchObject({
@@ -3832,7 +4317,7 @@ if __name__ == "__main__":
       );
       sessionTurnRegistry.cancelTurn(id);
       await second.send("Second");
-      expect(await agent.resolveSession(id, "org_team_a")).toBe(second);
+      expect(await agent.sessions.get(id, "org_team_a")).toBe(second);
       expect(
         (await agent.getSessionMessages(id, "org_team_a"))!.messages.filter(
           (message) => message.role === "user"
@@ -3842,9 +4327,9 @@ if __name__ == "__main__":
         join(sourceDir, "USER.md"),
         "Changed private parent context"
       );
-      expect(await agent.resolveSession(id, "org_team_a")).toBe(second);
+      expect(await agent.sessions.get(id, "org_team_a")).toBe(second);
       await writeFile(join(sourceDir, "STYLE.md"), "Changed published style");
-      const third = (await agent.resolveSession(id, "org_team_a"))!;
+      const third = (await agent.sessions.get(id, "org_team_a"))!;
       expect(third).not.toBe(second);
       expect(third.getHistory()).toEqual(second.getHistory());
       await third.send("Third");
@@ -3854,7 +4339,7 @@ if __name__ == "__main__":
       await rm(join(sourceDir, "SOUL.md"));
       await rm(join(sourceDir, "STYLE.md"));
       await rm(join(sourceDir, "INSTRUCTIONS.md"));
-      const fourth = (await agent.resolveSession(id, "org_team_a"))!;
+      const fourth = (await agent.sessions.get(id, "org_team_a"))!;
       expect(fourth).not.toBe(third);
       expect(fourth.getHistory()).toEqual(third.getHistory());
       await fourth.send("Fourth");
@@ -3991,29 +4476,28 @@ if __name__ == "__main__":
         { cognito, orgRole: "member" }
       );
 
-      const session = (await agent.resolveSession(id, "org_team_a"))!;
+      const session = (await agent.sessions.get(id, "org_team_a"))!;
       await session.send("Keep this history");
       const history = [...session.getHistory()];
       const source = (await db.getProfile("profile_template"))!;
       await db.upsertProfile({ ...source, isSuper: true });
       await expect(
-        agent.beginSessionTurn(id, "org_team_a")
+        startStoppedTurn(agent, id, "org_team_a")
       ).rejects.toMatchObject({ status: 404 });
       expect(sessionTurnRegistry.isActive(id)).toBe(false);
       await db.upsertProfile(source);
-      expect(await agent.beginSessionTurn(id, "org_team_a")).toBe(true);
-      sessionTurnRegistry.cancelTurn(id);
+      expect(await startStoppedTurn(agent, id, "org_team_a")).toBe("started");
       await orgService.unpublishSharedResource(
         "org_parent",
         publication.id,
         "user_creator"
       );
       await expect(
-        agent.beginSessionTurn(id, "org_team_a")
+        startStoppedTurn(agent, id, "org_team_a")
       ).rejects.toMatchObject({ status: 404 });
-      await expect(
-        agent.resolveSession(id, "org_team_a")
-      ).rejects.toMatchObject({ status: 404 });
+      await expect(agent.sessions.get(id, "org_team_a")).rejects.toMatchObject({
+        status: 404,
+      });
       await expect(
         agent.createSession("org_team_a", "web", profile.id, "user_other")
       ).rejects.toMatchObject({ status: 404 });
@@ -4342,7 +4826,7 @@ if __name__ == "__main__":
     expect(
       (await db.getSharedAgentInstance("org_team_a", profile.id))?.publicationId
     ).toBe(republished.id);
-    await db.disableUser("user_other", now);
+    expect(await db.disableUserUnlessLastAdmin("user_other", now)).toBe(true);
     await expect(
       orgService.createSharedAgentInstance(
         "org_team_a",
@@ -4548,7 +5032,7 @@ describe("OrgService shared resource publications", () => {
           await orgService.listSharedResources("org_team_b", "user_other")
         ).resources.find((item) => item.id === publication.id)?.readiness
       ).toBe("requires_setup");
-      await deleteOrgToolCredentials("org_team_a");
+      await deleteOrgToolCredentials("org_team_a", db);
       expect(
         (
           await orgService.listSharedResources("org_team_a", "user_other")
@@ -5570,7 +6054,18 @@ describe("OrgService shared resource publications", () => {
         "user_platform"
       )
     ).toBe(false);
-    await db.disableUser("user_platform", now);
+    // The disable guard keeps the last usable platform admin enabled.
+    await db.createUser({
+      createdAt: now,
+      email: "platform_second@example.com",
+      id: "user_platform_second",
+      isPlatformAdmin: true,
+      passwordHash: "test",
+      updatedAt: now,
+    });
+    expect(await db.disableUserUnlessLastAdmin("user_platform", now)).toBe(
+      true
+    );
     await expect(
       orgService.publishSharedResource("org_parent", request, "user_platform")
     ).rejects.toMatchObject({ status: 403 });
@@ -6081,5 +6576,169 @@ describe("OrgService team setup", () => {
       orgService.permanentlyDeleteOrganization("org_parent")
     ).rejects.toMatchObject({ status: 409 });
     expect(await readFile(parentFile, "utf8")).toBe("Parent data");
+  });
+});
+
+describe("OrgService member domain allowlist", () => {
+  async function seedRestrictedTeam() {
+    const { databaseAdapter, orgService } = createOrgService();
+    const request = await seedTeamParent(databaseAdapter);
+
+    await orgService.updateOrganization("org_parent", {
+      allowedInviteDomains: ["example.com"],
+    });
+
+    const { organization } = await orgService.createTeam(
+      "org_parent",
+      request,
+      "user_creator"
+    );
+
+    return { databaseAdapter, orgService, teamId: organization.id };
+  }
+
+  test("a team applies its parent's allowlist to new addresses", async () => {
+    const { databaseAdapter, orgService, teamId } = await seedRestrictedTeam();
+
+    await expect(
+      orgService.addMember({
+        email: "guest@other.com",
+        name: "Guest",
+        orgId: teamId,
+        phone: "",
+        role: "member",
+      })
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      orgService.createInvite({
+        email: "guest@other.com",
+        invitedByUserId: "user_creator",
+        orgId: teamId,
+        role: "member",
+      })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(await databaseAdapter.getUserByEmail("guest@other.com")).toBeNull();
+
+    const added = await orgService.addMember({
+      email: "new@example.com",
+      name: "New",
+      orgId: teamId,
+      phone: "",
+      role: "member",
+    });
+
+    expect(added.member.email).toBe("new@example.com");
+  });
+
+  test("a parent member outside the parent's allowlist can join a team", async () => {
+    const { databaseAdapter, orgService, teamId } = await seedRestrictedTeam();
+    const now = new Date().toISOString();
+
+    await databaseAdapter.createUser({
+      createdAt: now,
+      email: "contractor@other.com",
+      id: "user_contractor",
+      passwordHash: "test",
+      updatedAt: now,
+    });
+    await databaseAdapter.upsertOrgMember({
+      createdAt: now,
+      orgId: "org_parent",
+      role: "member",
+      userId: "user_contractor",
+    });
+
+    const added = await orgService.addMember({
+      email: "contractor@other.com",
+      name: "Contractor",
+      orgId: teamId,
+      phone: "",
+      role: "member",
+    });
+
+    expect(added.member.userId).toBe("user_contractor");
+  });
+
+  test("parent members list hides people the team's allowlist refuses", async () => {
+    const { orgService, teamId } = await seedRestrictedTeam();
+
+    expect(
+      (await orgService.listParentMembers(teamId)).members.map(
+        (member) => member.userId
+      )
+    ).toEqual(["user_secondary_member"]);
+
+    await orgService.updateOrganization(teamId, {
+      allowedInviteDomains: ["partner.example"],
+    });
+
+    expect((await orgService.listParentMembers(teamId)).members).toEqual([]);
+  });
+
+  test("a platform admin's invite outside the allowlist can be accepted", async () => {
+    const { databaseAdapter, orgService } = createOrgService();
+    const now = new Date().toISOString();
+
+    await databaseAdapter.createUser({
+      createdAt: now,
+      email: "platform@example.com",
+      id: "user_platform_admin",
+      isPlatformAdmin: true,
+      passwordHash: "test",
+      updatedAt: now,
+    });
+
+    const created = await orgService.createOrganization({
+      name: "Acme",
+      slug: "acme-platform-invite",
+    });
+
+    await orgService.updateOrganization(created.organization.id, {
+      allowedInviteDomains: ["acme.com"],
+    });
+
+    const invite = await orgService.createInvite({
+      email: "contractor@other.com",
+      invitedByUserId: "user_platform_admin",
+      orgId: created.organization.id,
+      role: "member",
+    });
+
+    const accepted = await orgService.acceptInvite({
+      password: "secret123",
+      token: invite.token!,
+    });
+
+    expect(accepted.orgId).toBe(created.organization.id);
+    expect(accepted.user.email).toBe("contractor@other.com");
+  });
+
+  test("an allowed domain also allows its subdomains", async () => {
+    const { orgService } = createOrgService();
+
+    const created = await orgService.createOrganization({
+      name: "Acme",
+      slug: "acme-subdomains",
+    });
+
+    await orgService.updateOrganization(created.organization.id, {
+      allowedInviteDomains: ["acme.com"],
+    });
+
+    const add = (email: string) =>
+      orgService.addMember({
+        email,
+        name: "Member",
+        orgId: created.organization.id,
+        phone: "",
+        role: "member",
+      });
+
+    expect((await add("jane@eng.acme.com")).member.email).toBe(
+      "jane@eng.acme.com"
+    );
+    await expect(add("jane@notacme.com")).rejects.toMatchObject({
+      status: 400,
+    });
   });
 });

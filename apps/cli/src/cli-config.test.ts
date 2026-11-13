@@ -14,17 +14,17 @@ import {
 } from "./cli-config";
 
 async function withCliConfigDir<T>(run: () => Promise<T>): Promise<T> {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-cli-"));
-  const previous = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(join(tmpdir(), "airin-cli-"));
+  const previous = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = configDir;
 
   try {
     return await run();
   } finally {
     if (previous === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous;
+      process.env.AIRIN_CONFIG_DIR = previous;
     }
   }
 }
@@ -39,7 +39,7 @@ describe("cli-config", () => {
         await saveCliProfileId("remote");
         const path = getCliConfigPath();
         expect(await readFile(path, "utf8")).toBe(
-          "# Nakama CLI\nprofile_id=remote\n"
+          "# Airin CLI\nprofile_id=remote\n"
         );
         setCliConfigScope("https://two.example", "user1");
         expect(await loadSavedCliProfileId()).toBeNull();
@@ -56,11 +56,11 @@ describe("cli-config", () => {
   });
   test("saves and loads profile_id", async () => {
     await withCliConfigDir(async () => {
-      await saveCliProfileId("super_bot");
-      expect(await loadSavedCliProfileId()).toBe("super_bot");
+      await saveCliProfileId("super_airin");
+      expect(await loadSavedCliProfileId()).toBe("super_airin");
 
       const raw = await readFile(getCliConfigPath(), "utf8");
-      expect(raw).toContain("profile_id=super_bot");
+      expect(raw).toContain("profile_id=super_airin");
     });
   });
 
@@ -70,8 +70,8 @@ describe("cli-config", () => {
       await writeFile(
         path,
         [
-          "# Nakama CLI",
-          "profile_id=super_bot",
+          "# Airin CLI",
+          "profile_id=super_airin",
           "evil=injected",
           "org_id=org_123",
           "another=payload",
@@ -80,14 +80,14 @@ describe("cli-config", () => {
         { mode: 0o600 }
       );
 
-      expect(await loadSavedCliProfileId()).toBe("super_bot");
+      expect(await loadSavedCliProfileId()).toBe("super_airin");
       expect(await loadSavedCliOrgId()).toBe("org_123");
 
       await saveCliOrgId("org_123");
       await saveCliServerUrl(" https://example.com ");
       expect(await loadSavedCliServerUrl()).toBe("https://example.com");
       const raw = await readFile(path, "utf8");
-      expect(raw).toContain("profile_id=super_bot");
+      expect(raw).toContain("profile_id=super_airin");
       expect(raw).toContain("org_id=org_123");
       expect(raw).not.toContain("evil");
       expect(raw).not.toContain("another");

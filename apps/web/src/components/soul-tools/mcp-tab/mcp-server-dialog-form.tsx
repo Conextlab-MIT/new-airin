@@ -1,8 +1,8 @@
-import type { CachedMcpToolSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import type { CachedMcpToolSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { CodeIcon } from "hugeicons-react";
 import { McpToolList } from "@/components/soul-tools/McpToolList";
 import {
@@ -35,19 +35,13 @@ function testResultTone(
   return result.requiresAuthorization ? "pending" : "bad";
 }
 
-const KIND_TITLE: Record<McpServerKind, string> = {
-  http: "HTTP server",
-  signin: "Hosted server",
-  stdio: "Command server",
-};
-
 function kindHint(kind: McpServerKind): string {
   if (kind === "signin") {
-    return "A hosted server that signs you in through your browser (OAuth). Nakama registers itself with the provider and stores the grant, so there is no key to paste.";
+    return "A hosted server that signs you in through your browser (OAuth). Airin registers itself with the provider and stores the grant, so there is no key to paste.";
   }
 
   if (kind === "stdio") {
-    return "A command Nakama runs locally, one process per profile.";
+    return "A command Airin runs locally, one process per profile.";
   }
 
   return "A remote endpoint that takes an API key or another header, if it needs one at all.";
@@ -166,12 +160,7 @@ export function McpServerDialogForm({
           </div>
           <p className="mt-2 text-muted-foreground text-xs">{kindHint(kind)}</p>
         </McpFormField>
-      ) : (
-        <div className="flex flex-col gap-1">
-          <h3 className="font-semibold text-base">{KIND_TITLE[kind]}</h3>
-          <p className="text-muted-foreground text-sm">{kindHint(kind)}</p>
-        </div>
-      )}
+      ) : null}
 
       <McpFormField htmlFor={`${idPrefix}-name`} label="Name">
         <Input

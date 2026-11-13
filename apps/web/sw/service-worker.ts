@@ -36,6 +36,116 @@ self.addEventListener("message", (event) => {
   }
 });
 
+/** Sent by the server when a chat reply is ready (`web-push-service.ts`). */
+interface ReplyPush {
+  body: string;
+  profileId?: string;
+  tag: string;
+  title: string;
+  url: string;
+}
+
+const FALLBACK_PUSH: ReplyPush = {
+  body: "",
+  tag: "airin",
+  title: "Airin",
+  url: "/",
+};
+
+function readPush(data: PushMessageData | null): ReplyPush {
+  try {
+    // SAFETY: only Airin's server holds the VAPID key this subscription was
+    // made with, and it always sends a ReplyPush.
+    return (data?.json() as ReplyPush | undefined) ?? FALLBACK_PUSH;
+  } catch {
+    return FALLBACK_PUSH;
+  }
+}
+
+async function isProfileMuted(profileId: string | undefined): Promise<boolean> {
+  if (!profileId) {
+    return false;
+  }
+
+  try {
+    const cache = await caches.open("airin-agent-mute-v1");
+    const response = await cache.match("/muted-agents");
+
+    if (!response) {
+      return false;
+    }
+
+    const muted: unknown = await response.json();
+
+    return Array.isArray(muted) && muted.includes(profileId);
+  } catch {
+    return false;
+  }
+}
+
+self.addEventListener("push", (event) => {
+  const message = readPush(event.data);
+
+  event.waitUntil(
+    (async () => {
+      if (await isProfileMuted(message.profileId)) {
+        return;
+      }
+
+      // Always show something: Safari drops a subscription whose pushes stay silent.
+      await self.registration.showNotification(message.title || "Airin", {
+        // Android draws the badge from its alpha only: an opaque icon is a white square.
+        badge: "/icons/notification-badge-v1.png",
+        body: message.body,
+        data: { url: message.url },
+        icon: "/icons/icon-192-v3.png",
+        tag: message.tag,
+      });
+    })()
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const url = new URL(event.notification.data?.url ?? "/", self.location.origin)
+    .href;
+
+  event.waitUntil(openFromNotification(url));
+});
+
+async function openFromNotification(url: string): Promise<void> {
+  const windows = await self.clients.matchAll({ type: "window" });
+  const { pathname } = new URL(url);
+
+  // Already on that chat: a reload would only throw away what is on screen.
+  const showing = windows.find(
+    (client) => new URL(client.url).pathname === pathname
+  );
+
+  if (showing) {
+    await showing.focus();
+
+    return;
+  }
+
+  const [open] = windows;
+
+  if (open) {
+    await open.focus();
+
+    try {
+      await open.navigate(url);
+
+      return;
+    } catch {
+      // Not controlled by this worker yet: fall through to a new window.
+    }
+  }
+
+  await self.clients.openWindow(url);
+}
+
 self.addEventListener("fetch", (event) => {
   const strategy = classifyRequest(
     {

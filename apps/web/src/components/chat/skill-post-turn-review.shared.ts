@@ -1,4 +1,4 @@
-import type { SkillSuggestion } from "@nakama/core/contract";
+import type { SkillSuggestion } from "@airin/core/contract";
 
 /** Prefer YAML frontmatter description; fall back to a short body excerpt. */
 export function skillSuggestionPreview(suggestion: SkillSuggestion) {
@@ -34,7 +34,7 @@ export function skillSuggestionPreview(suggestion: SkillSuggestion) {
   return { description, excerpt, title };
 }
 
-export function extractSkillDescription(content: string): string | null {
+function extractSkillDescription(content: string): string | null {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
 
   if (!match) {

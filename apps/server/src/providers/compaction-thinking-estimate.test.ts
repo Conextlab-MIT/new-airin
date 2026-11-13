@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { ChatMessage, ProviderClient } from "@nakama/core";
-// estimateHistoryTokens is not exported from @nakama/agent, hence the deep path.
+import type { ChatMessage, ProviderClient } from "@airin/core";
+// estimateHistoryTokens is not exported from @airin/agent, hence the deep path.
 import {
   compactHistory,
   estimateHistoryTokens,

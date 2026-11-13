@@ -57,7 +57,7 @@ function stringField(record: JsonRecord, key: string): string {
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "nakama-supermemory-"));
+  dir = mkdtempSync(join(tmpdir(), "airin-supermemory-"));
   const databasePath = join(dir, "plugin.sqlite");
   const db = new Database(databasePath);
   db.exec(
@@ -287,7 +287,7 @@ test("search and forget require owned metadata and filter the selected fact only
     .at(-1)!;
 
   expect(forgotten.body).toEqual({
-    containerTag: meta.nakamaContainer,
+    containerTag: meta.airinContainer,
     id: "mem-1",
   });
 });
@@ -323,7 +323,7 @@ test("failed document removal excludes search immediately and retries safely", a
       path === "/v3/documents/doc-1"
     ) {
       return Response.json({
-        containerTags: [meta.nakamaContainer],
+        containerTags: [meta.airinContainer],
         content: "Full document content",
         customId,
         id: "doc-1",

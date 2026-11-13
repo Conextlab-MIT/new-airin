@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { CustomModelEntry } from "@nakama/core";
+import type { CustomModelEntry } from "@airin/core";
 import {
   estimateUsageCostUsd,
   getExplicitModelPricing,
@@ -149,6 +149,54 @@ describe("estimateUsageCostUsd", () => {
     }
   });
 
+  test("prices a saved Cloudflare list from its entries and never guesses", () => {
+    const providerInstance = {
+      apiKey: "test",
+      createdAt: "2026-10-24T00:00:00.000Z",
+      customModels: [
+        {
+          id: "@cf/openai/gpt-oss-120b",
+          inputPerMillionUsd: 0.35,
+          outputPerMillionUsd: 0.75,
+        },
+        { id: "@cf/swiss-ai/apertus-v1.5-8b" },
+        { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast" },
+      ],
+      id: "cloudflare-one",
+      label: "Cloudflare Worker AI",
+      type: "cloudflare" as const,
+    };
+
+    expect(
+      getModelPricing("@cf/openai/gpt-oss-120b", {
+        provider: "cloudflare",
+        providerInstance,
+      })
+    ).toEqual({ inputPerMillionUsd: 0.35, outputPerMillionUsd: 0.75 });
+    // Cloudflare publishes no rate for this one, so cost stays unknown
+    // instead of falling back to the house guess.
+    expect(
+      getModelPricing("@cf/swiss-ai/apertus-v1.5-8b", {
+        provider: "cloudflare",
+        providerInstance,
+      })
+    ).toBeNull();
+    // A saved built-in id without rates keeps its catalog price.
+    expect(
+      getModelPricing("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+        provider: "cloudflare",
+        providerInstance,
+      })
+    ).toEqual({ inputPerMillionUsd: 0.293, outputPerMillionUsd: 2.253 });
+    // Without a saved list the built-in catalog still prices its models.
+    expect(
+      getModelPricing("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+        provider: "cloudflare",
+        providerInstance: { ...providerInstance, customModels: undefined },
+      })
+    ).toEqual({ inputPerMillionUsd: 0.293, outputPerMillionUsd: 2.253 });
+  });
+
   test("uses fallback pricing for unknown models", () => {
     const pricing = getModelPricing("vendor/custom-model");
     expect(pricing?.inputPerMillionUsd).toBe(1);
@@ -207,65 +255,6 @@ describe("estimateUsageCostUsd", () => {
         },
       })
     ).toBe(0);
-  });
-
-  test("uses saved pricing for cerebras custom models", () => {
-    const cost = estimateUsageCostUsd("gpt-oss-120b", 1_000_000, 1_000_000, {
-      provider: "cerebras",
-      providerInstance: {
-        ...cerebrasInstance,
-        customModels: [
-          {
-            id: "gpt-oss-120b",
-            inputPerMillionUsd: 0.25,
-            outputPerMillionUsd: 0.69,
-          },
-        ],
-      },
-    });
-
-    expect(cost).toBeCloseTo(0.94, 5);
-  });
-
-  test("uses saved pricing for fireworks custom models", () => {
-    const cost = estimateUsageCostUsd(
-      "accounts/fireworks/models/kimi-k2p6",
-      1_000_000,
-      1_000_000,
-      {
-        provider: "fireworks",
-        providerInstance: {
-          ...fireworksInstance,
-          customModels: [
-            {
-              id: "accounts/fireworks/models/kimi-k2p6",
-              inputPerMillionUsd: 0.5,
-              outputPerMillionUsd: 2,
-            },
-          ],
-        },
-      }
-    );
-
-    expect(cost).toBeCloseTo(2.5, 5);
-  });
-
-  test("uses saved pricing for moonshot discovered models", () => {
-    const cost = estimateUsageCostUsd("kimi-k2.5", 1_000_000, 1_000_000, {
-      provider: "moonshot",
-      providerInstance: {
-        ...moonshotInstance,
-        customModels: [
-          {
-            id: "kimi-k2.5",
-            inputPerMillionUsd: 0.6,
-            outputPerMillionUsd: 2.5,
-          },
-        ],
-      },
-    });
-
-    expect(cost).toBeCloseTo(3.1, 5);
   });
 
   test("does not estimate discovery-provider models without saved pricing", () => {

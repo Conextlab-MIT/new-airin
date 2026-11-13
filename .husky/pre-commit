@@ -1,11 +1,17 @@
 # ultracite
 #!/bin/sh
+# GUI git (Cursor) often has a short PATH without Bun.
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 # Check if there are any staged files
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 if [ -z "$STAGED_FILES" ]; then
   echo "No staged files to format"
   exit 0
 fi
+
+# Block files over 5,000 tokens
+bun run scripts/check-file-size.ts || exit 1
 
 # Run formatter, capturing the exit code so we can still re-stage and report
 FORMAT_EXIT_CODE=0
@@ -25,3 +31,13 @@ fi
 
 echo "✨ Files formatted by Ultracite"
 # ultracite end
+
+# React Doctor: only when staged changes touch React code. Any warning blocks,
+# so the score stays at 100.
+REACT_FILES=$(git diff --cached --name-only --diff-filter=ACMR |
+  grep -E '\.(tsx|jsx)$|^(apps/web|packages/ui|packages/plugins)/.*\.(ts|js)$' || true)
+# A merge stages upstream files too; their React checks ran in their own commits.
+if [ -n "$REACT_FILES" ] && [ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+  bun x react-doctor --staged -y --no-supply-chain --blocking warning \
+    --project @airin/web,@airin/ui,@airin/plugin-supermemory || exit 1
+fi

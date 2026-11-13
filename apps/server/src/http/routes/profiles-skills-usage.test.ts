@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { ProfileService } from "../../services/profile-service";
 import { SkillsService } from "../../services/skills-service";
 import { setupTestConfigDir } from "../../test-config-dir";
@@ -9,7 +9,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-profiles-skills-usage-test-");
+setupTestConfigDir("airin-profiles-skills-usage-test-");
 
 function createApp() {
   const databaseAdapter = createInMemoryDatabaseAdapter();

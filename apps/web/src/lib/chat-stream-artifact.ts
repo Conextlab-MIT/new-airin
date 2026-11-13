@@ -57,7 +57,9 @@ export interface CompletedContentArtifact {
 }
 
 function isContentArtifactTool(tool: string | undefined): boolean {
-  return tool === "write_file" || tool === "write_docx";
+  return (
+    tool === "write_file" || tool === "write_docx" || tool === "save_artifact"
+  );
 }
 
 function relativePathFromCompletedTool(message: ChatListItem): string | null {
@@ -80,7 +82,7 @@ function relativePathFromCompletedTool(message: ChatListItem): string | null {
 
   const relativePath = toArtifactsRelativePath(result.path);
 
-  if (!relativePath || relativePath.includes(".nakama-meta")) {
+  if (!relativePath || relativePath.includes(".airin-meta")) {
     return null;
   }
 
@@ -130,8 +132,7 @@ export function upsertStreamingToolMessage(
     event.accumulatedArguments
   );
 
-  const isArtifactTool =
-    event.tool === "write_file" || event.tool === "write_docx";
+  const isArtifactTool = isContentArtifactTool(event.tool);
 
   if (!isArtifactTool) {
     return messages;

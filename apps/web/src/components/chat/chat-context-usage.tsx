@@ -1,16 +1,15 @@
-import type { ChatUsage } from "@nakama/core/contract";
+import type { ChatUsage } from "@airin/core/contract";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTrigger,
-} from "@nakama/ui/popover";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/popover";
+import { cn } from "@airin/ui/utils";
 import {
   type ChatContextUsage,
   contextUsageRatio,
   contextUsageSegments,
-  formatBytes,
   formatContextUsageLabel,
   formatTokenCountDetailed,
 } from "@/lib/chat-context-usage";
@@ -58,11 +57,6 @@ export function ChatContextUsageRing({
 
   const fillRatio = ratio;
 
-  const optimizedNote =
-    usage.bytesKeptOut && usage.bytesProduced
-      ? `${formatBytes(usage.bytesKeptOut)} of tool output saved (${Math.round((100 * usage.bytesKeptOut) / usage.bytesProduced)}%)`
-      : null;
-
   return (
     <Popover>
       <PopoverTrigger
@@ -109,7 +103,7 @@ export function ChatContextUsageRing({
         }
       />
       <PopoverContent
-        align="start"
+        align="end"
         className="w-80 min-w-80 p-3.5"
         side="top"
         sideOffset={8}
@@ -174,12 +168,9 @@ export function ChatContextUsageRing({
           ) : null}
         </ul>
 
-        {usage.source === "estimate" || optimizedNote ? (
+        {usage.source === "estimate" ? (
           <div className="mt-3 space-y-1 text-muted-foreground text-xs">
-            {usage.source === "estimate" ? (
-              <p>Estimated from prompt size</p>
-            ) : null}
-            {optimizedNote ? <p>{optimizedNote}</p> : null}
+            <p>Estimated from prompt size</p>
           </div>
         ) : null}
       </PopoverContent>

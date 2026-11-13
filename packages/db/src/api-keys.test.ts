@@ -38,7 +38,7 @@ test("upgrades remove key storage idempotently and retain private session marker
 
 test("retired sessions cannot be read, paged, mutated or resurrected, including attachments", async () => {
   const root = await mkdtemp(join(tmpdir(), "retired-sessions-"));
-  const filename = join(root, "nakama.sqlite");
+  const filename = join(root, "airin.sqlite");
   const database = await createSqliteDatabase(`file:${filename}`);
   const raw = new Database(filename);
   const db = database.adapter;

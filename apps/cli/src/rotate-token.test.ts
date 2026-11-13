@@ -6,13 +6,13 @@ import {
   getLocalAuthTokenPath,
   loadLocalAuthToken,
   verifyLocalAuthToken,
-} from "@nakama/core/local-auth";
+} from "@airin/core/local-auth";
 import { runRotateToken } from "./rotate-token";
 
 describe("rotate-token command", () => {
   test("runRotateToken rotates the on-disk token", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-cli-rotate-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-cli-rotate-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       const original = await loadLocalAuthToken();
@@ -34,7 +34,7 @@ describe("rotate-token command", () => {
       expect(rotated).not.toBe(original);
       await expect(verifyLocalAuthToken(original!)).resolves.toBeNull();
       await expect(verifyLocalAuthToken(rotated!)).resolves.toEqual({
-        email: "local-client@nakama.internal",
+        email: "local-client@airin.internal",
       });
       expect(
         logs.some((line) => line.includes("Local auth token rotated."))
@@ -44,7 +44,7 @@ describe("rotate-token command", () => {
       ).toBe(true);
       expect(logs.some((line) => line.includes(rotated!))).toBe(false);
     } finally {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
       await rm(configDir, { force: true, recursive: true });
     }
   });

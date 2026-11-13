@@ -1,8 +1,8 @@
 import {
   type ChannelOwner,
   channelOwnerFromEnv,
-} from "@nakama/core/channel-config-shared";
-import { loadTelegramConfigFile } from "@nakama/core/telegram-config";
+} from "@airin/core/channel-config-shared";
+import { loadTelegramConfigFile } from "@airin/core/telegram-config";
 
 export interface TelegramBridgeConfig {
   botToken: string;

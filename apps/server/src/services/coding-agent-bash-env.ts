@@ -1,9 +1,5 @@
-import {
-  NakamaApiError,
-  type ToolContext,
-  type UserConfig,
-} from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+import { AirinApiError, type ToolContext, type UserConfig } from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import type { BashInput } from "../tools/bash";
 import {
   inferCodingAgentHarnessKind,
@@ -33,7 +29,7 @@ async function resolveProfileModelId(
     : await db.getProfile(profileId);
 
   if (!profile) {
-    throw new NakamaApiError("Profile not found.", 404);
+    throw new AirinApiError("Profile not found.", 404);
   }
 
   if (
@@ -41,7 +37,7 @@ async function resolveProfileModelId(
     (await db.getSharedAgentInstance(profile.orgId, profileId))
   ) {
     if (!(context.orgId && orgService)) {
-      throw new NakamaApiError("Shared agent is unavailable.", 503);
+      throw new AirinApiError("Shared agent is unavailable.", 503);
     }
 
     const shared = await orgService.resolveSharedAgentProfile(
@@ -50,7 +46,7 @@ async function resolveProfileModelId(
     );
 
     if (!shared) {
-      throw new NakamaApiError("Shared agent is unavailable.", 404);
+      throw new AirinApiError("Shared agent is unavailable.", 404);
     }
 
     const selected = resolveConfiguredModelInstance(userConfig, shared.model, {
@@ -62,7 +58,7 @@ async function resolveProfileModelId(
       selected &&
       !modelExistsOnInstance(selected.instance, selected.modelId)
     ) {
-      throw new NakamaApiError("Select a configured model.", 400);
+      throw new AirinApiError("Select a configured model.", 400);
     }
 
     return shared.model?.trim() || null;
@@ -99,7 +95,7 @@ export async function enrichCodingAgentBashInput(
 
   if (codingAgentRequested && !inferredKind) {
     throw new Error(
-      "codingAgent was set but the bash command does not start with a known coding-agent CLI (codex, claude, opencode, pi, or agent). Use the harness binary as argv0 so Nakama can merge the correct provider passthrough env."
+      "codingAgent was set but the bash command does not start with a known coding-agent CLI (codex, claude, opencode, pi, or agent). Use the harness binary as argv0 so Airin can merge the correct provider passthrough env."
     );
   }
 

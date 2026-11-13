@@ -1,8 +1,7 @@
-import { CodeBlock } from "@nakama/ui/code-block";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageResponse } from "@/components/ai-elements/message";
+import { CodeBlock } from "@airin/ui/code-block";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArtifactMarkdownToc } from "@/components/chat/artifact-markdown-toc";
 import type { ArtifactPreviewMode } from "@/components/chat/artifact-preview-mode-toggle";
 import { SpreadsheetGrid } from "@/components/chat/artifact-spreadsheet-editor";
@@ -18,6 +17,10 @@ import { parseSpreadsheetText } from "@/lib/artifact-spreadsheet";
 import type { ChatArtifactRef } from "@/lib/chat-artifacts";
 import { client, formatError } from "@/lib/client";
 import { extractMarkdownHeadings } from "@/lib/markdown-toc";
+
+const MessageResponse = lazy(async () => ({
+  default: (await import("@/components/ai-elements/message")).MessageResponse,
+}));
 
 type ArtifactPanelSharedProps = {
   loading: boolean;
@@ -73,9 +76,11 @@ function renderTextContent({
 }) {
   if (format === "markdown") {
     return (
-      <MessageResponse className="text-sm" isAnimating={streaming}>
-        {content}
-      </MessageResponse>
+      <Suspense fallback={<Spinner className="size-6" />}>
+        <MessageResponse className="text-sm" isAnimating={streaming}>
+          {content}
+        </MessageResponse>
+      </Suspense>
     );
   }
 
@@ -333,7 +338,7 @@ function ArtifactHtmlFrame({
         event.data === ARTIFACT_FRAME_READY
       ) {
         // The sandboxed frame has an opaque origin, so "*" is the only target.
-        frame.postMessage({ nakamaArtifactHtml: html }, "*");
+        frame.postMessage({ airinArtifactHtml: html }, "*");
       }
     };
 
@@ -499,12 +504,23 @@ function ArtifactSpreadsheetPreview({
   content: string;
   filename: string;
 }) {
+  const preview = parseSpreadsheetText(filename, content, {
+    columns: 50,
+    rows: 500,
+  });
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SpreadsheetGrid
-        editable={false}
-        rows={parseSpreadsheetText(filename, content)}
-      />
+      <SpreadsheetGrid editable={false} rows={preview.rows} />
+      {preview.truncated ? (
+        <p
+          className="border-border border-t px-3 py-2 text-muted-foreground text-xs"
+          role="status"
+        >
+          Preview limited to 500 rows and 50 columns. Download the file for all
+          data.
+        </p>
+      ) : null}
     </div>
   );
 }

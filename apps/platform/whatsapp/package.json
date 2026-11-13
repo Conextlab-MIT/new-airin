@@ -1,5 +1,5 @@
 {
-  "name": "@nakama/whatsapp",
+  "name": "@airin/whatsapp",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,8 +9,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@nakama/client": "workspace:*",
-    "@nakama/core": "workspace:*",
+    "@airin/client": "workspace:*",
+    "@airin/core": "workspace:*",
     "@whiskeysockets/baileys": "7.0.0-rc14"
   }
 }

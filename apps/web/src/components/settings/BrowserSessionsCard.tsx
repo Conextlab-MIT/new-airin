@@ -1,10 +1,11 @@
-import type { BrowserSessionSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { Spinner } from "@nakama/ui/spinner";
+import type { BrowserSessionSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { Spinner } from "@airin/ui/spinner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
+  describeDevice,
   formatFutureRelativeTime,
   formatSessionRelativeTime,
 } from "@/lib/chat-history";
@@ -45,13 +46,7 @@ export function BrowserSessionsCard() {
       <CardContent className="divide-y divide-border p-0">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0 space-y-0.5">
-            <p className="font-medium text-foreground text-sm">
-              Active sessions
-            </p>
-            <p className="text-muted-foreground text-xs">
-              Browsers currently signed in to your account. Sign out of one you
-              do not recognise.
-            </p>
+            <p className="text-foreground text-sm">Active sessions</p>
             {error ? (
               <p className="text-destructive text-xs" role="status">
                 {error}
@@ -78,8 +73,13 @@ export function BrowserSessionsCard() {
             key={session.id}
           >
             <div className="min-w-0 space-y-0.5">
-              <p className="text-foreground text-sm">
-                {session.current ? "This browser" : "Another browser"}
+              <p className="flex items-center gap-2 text-foreground text-sm">
+                {describeDevice(session.userAgent)}
+                {session.current ? (
+                  <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground text-xs">
+                    This browser
+                  </span>
+                ) : null}
               </p>
               <p className="text-muted-foreground text-xs">
                 {describeSession(session)}
@@ -87,10 +87,9 @@ export function BrowserSessionsCard() {
             </div>
             {session.current ? null : (
               <Button
-                aria-label="Sign out this session"
+                aria-label={`Sign out ${describeDevice(session.userAgent)}, ${describeSession(session)}`}
                 disabled={revoke.isPending}
                 onClick={() => revoke.mutate(session.id)}
-                size="sm"
                 type="button"
                 variant="outline"
               >

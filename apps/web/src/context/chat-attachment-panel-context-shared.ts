@@ -4,12 +4,16 @@ export interface ChatAttachmentPanelConfig {
   bodyClassName?: string;
   content: ReactNode;
   defaultWidth?: number;
+  /** Width that ignores the saved panel width. The panel is not resizable. */
+  fixedWidth?: number;
   fullscreen?: boolean;
   headerActions?: ReactNode;
   id: string;
   leading?: ReactNode;
   onClose?: () => void | Promise<void>;
   resizable?: boolean;
+  /** Saved for the chat, so the same panel opens again after a reload. */
+  restoreKey?: string;
   subtitle?: string | null;
   title: string;
   typeLabel?: string | null;
@@ -59,6 +63,15 @@ export interface ChatAttachmentPanelContextValue {
   hide: (id?: string) => void;
   isFullscreen: boolean;
   isOpen: boolean;
+  /**
+   * Called by a card as it mounts. Runs `open` if this card shows the panel
+   * that was open when the chat was last left. Returns a cleanup for unmount.
+   */
+  requestRestore: (
+    restoreKey: string,
+    id: string,
+    open: () => void
+  ) => () => void;
   show: (config: ChatAttachmentPanelConfig) => void;
   update: (
     id: string,

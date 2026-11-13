@@ -3,7 +3,7 @@ import type { ChannelSendResult, WhatsAppOutboundAdapter } from "./types";
 
 const DEFAULT_OUTBOUND_PORT = 4312;
 
-export const WHATSAPP_OUTBOUND_TOKEN_HEADER = "x-nakama-token";
+export const WHATSAPP_OUTBOUND_TOKEN_HEADER = "x-airin-token";
 
 export interface WhatsAppOutboundOptions {
   fetchImpl?: typeof fetch;

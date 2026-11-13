@@ -5,13 +5,11 @@ import path from "node:path";
 import {
   createInMemoryDatabaseAdapter,
   mergeWorkspaceSettings,
-} from "@nakama/db";
+} from "@airin/db";
 import {
   buildCodingHarnessInstallPlan,
   inferCodingAgentHarnessKind,
-  isCodingAgentCommand,
   listCodingAgentHarnessStatuses,
-  listCodingHarnessLoginCommands,
   refreshCodingAgentHarnessProbe,
 } from "./coding-agent-harness-service";
 import {
@@ -23,29 +21,6 @@ import {
 const testPosix = test.skipIf(process.platform === "win32");
 
 describe("coding-agent harness resolution", () => {
-  test("login commands follow default harnesses that support vendor login", () => {
-    expect(listCodingHarnessLoginCommands()).toEqual([
-      { command: "codex login", name: "Codex" },
-      { command: "claude auth login", name: "Claude Code" },
-      { command: "opencode auth login", name: "OpenCode" },
-      { command: "pi login", name: "pi.dev" },
-    ]);
-  });
-
-  test("detects harness-shaped bash commands", () => {
-    const harnesses = [
-      { command: "claude", enabled: true },
-      { command: "codex", enabled: true },
-    ];
-
-    expect(isCodingAgentCommand("claude --print 'task'", harnesses)).toBe(true);
-    expect(
-      isCodingAgentCommand("claude --print 'task'", [
-        { command: "claude", enabled: false },
-      ])
-    ).toBe(false);
-  });
-
   test("infers harness kind from argv0", () => {
     const harnesses = [
       { command: "claude", enabled: true, kind: "claude_code" as const },
@@ -65,14 +40,6 @@ describe("coding-agent harness resolution", () => {
     expect(
       inferCodingAgentHarnessKind("npm install -g @openai/codex", harnesses)
     ).toBeNull();
-  });
-
-  test("buildCodingHarnessInstallPlan can use bun when npm is unavailable", () => {
-    expect(buildCodingHarnessInstallPlan("opencode", "bun")).toEqual({
-      args: ["install", "-g", "--trust", "opencode-ai"],
-      command: "bun",
-      displayCommand: "bun install -g --trust opencode-ai",
-    });
   });
 
   test("refuses auto-install plan for Cursor Agent", () => {
@@ -115,7 +82,7 @@ describe("coding-agent harness resolution", () => {
     expect(cursor?.statusMessage).toMatch(/host Cursor auth/i);
   });
 
-  test("marks a harness ready without Nakama provider when passthrough is off", async () => {
+  test("marks a harness ready without Airin provider when passthrough is off", async () => {
     const db = createInMemoryDatabaseAdapter();
     await db.upsertWorkspaceSettings(
       mergeWorkspaceSettings(null, {
@@ -148,7 +115,7 @@ describe("coding-agent harness resolution", () => {
     expect(codex?.installed).toBe(true);
     expect(codex?.ready).toBe(true);
     expect(codex?.statusMessage).toMatch(/codex login/i);
-    expect(codex?.statusMessage).not.toMatch(/Settings → Provider/);
+    expect(codex?.statusMessage).not.toMatch(/AI Providers/);
   });
 
   test("refreshCodingAgentHarnessProbe persists cached readiness", async () => {
@@ -191,76 +158,80 @@ describe("coding-agent harness resolution", () => {
   for (const parentIgnoresTerm of [false, true]) {
     testPosix(
       `readiness timeout kills descendants when the parent ${parentIgnoresTerm ? "ignores SIGTERM" : "exits"}`,
-      async () => {
-        const dir = await mkdtemp(
-          path.join(tmpdir(), "nakama-stubborn-harness-")
-        );
+      // Short SIGKILL grace, so the test does not wait the 2s default.
+      () =>
+        withFastCliProbes(async () => {
+          const dir = await mkdtemp(
+            path.join(tmpdir(), "airin-stubborn-harness-")
+          );
 
-        const command = path.join(dir, "stubborn");
-        const pidFile = path.join(dir, "descendant.pid");
+          const command = path.join(dir, "stubborn");
+          const pidFile = path.join(dir, "descendant.pid");
 
-        const descendantCode = [
-          'process.on("SIGTERM", () => {});',
-          `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
-          "setInterval(() => {}, 1000);",
-        ].join("\n");
-
-        let descendantPid: number | undefined;
-        await writeFile(
-          command,
-          [
-            `#!${process.execPath}`,
-            'if (process.argv[2] === "--version") { console.log("1.0.0"); process.exit(0); }',
-            `require("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(descendantCode)}], { stdio: "ignore" });`,
-            ...(parentIgnoresTerm ? ['process.on("SIGTERM", () => {});'] : []),
+          const descendantCode = [
+            'process.on("SIGTERM", () => {});',
+            `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
             "setInterval(() => {}, 1000);",
-            "",
-          ].join("\n"),
-          { mode: 0o755 }
-        );
+          ].join("\n");
 
-        try {
-          const db = createInMemoryDatabaseAdapter();
-          await db.upsertWorkspaceSettings(
-            mergeWorkspaceSettings(null, {
-              codingAgentHarnesses: [
-                {
-                  args: [],
-                  command,
-                  enabled: true,
-                  id: "coding-harness-claude-code",
-                  kind: "claude_code",
-                  name: "Claude Code",
-                },
-              ],
-              id: "workspace-settings",
-              imageModel: null,
-              selectedCodingAgentHarness: "coding-harness-claude-code",
-              transcriptionModel: null,
-              updatedAt: new Date().toISOString(),
-              visionModel: null,
-            })
+          let descendantPid: number | undefined;
+          await writeFile(
+            command,
+            [
+              `#!${process.execPath}`,
+              'if (process.argv[2] === "--version") { console.log("1.0.0"); process.exit(0); }',
+              `require("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(descendantCode)}], { stdio: "ignore" });`,
+              ...(parentIgnoresTerm
+                ? ['process.on("SIGTERM", () => {});']
+                : []),
+              "setInterval(() => {}, 1000);",
+              "",
+            ].join("\n"),
+            { mode: 0o755 }
           );
 
-          const pending = refreshCodingAgentHarnessProbe(
-            db,
-            "coding-harness-claude-code",
-            { probeTimeoutMs: 1000 }
-          );
+          try {
+            const db = createInMemoryDatabaseAdapter();
+            await db.upsertWorkspaceSettings(
+              mergeWorkspaceSettings(null, {
+                codingAgentHarnesses: [
+                  {
+                    args: [],
+                    command,
+                    enabled: true,
+                    id: "coding-harness-claude-code",
+                    kind: "claude_code",
+                    name: "Claude Code",
+                  },
+                ],
+                id: "workspace-settings",
+                imageModel: null,
+                selectedCodingAgentHarness: "coding-harness-claude-code",
+                transcriptionModel: null,
+                updatedAt: new Date().toISOString(),
+                visionModel: null,
+              })
+            );
 
-          descendantPid = await waitForPidFile(pidFile, 2000);
-          const probed = await pending;
-          expect(await waitForExit(descendantPid, 3000)).toBe(true);
-          expect(probed.installed).toBe(true);
-          expect(probed.ready).toBe(false);
-        } finally {
-          if (descendantPid && !(await waitForExit(descendantPid, 100))) {
-            process.kill(descendantPid, "SIGKILL");
+            const pending = refreshCodingAgentHarnessProbe(
+              db,
+              "coding-harness-claude-code",
+              { probeTimeoutMs: 1000 }
+            );
+
+            descendantPid = await waitForPidFile(pidFile, 2000);
+            const probed = await pending;
+            expect(await waitForExit(descendantPid, 3000)).toBe(true);
+            expect(probed.installed).toBe(true);
+            expect(probed.ready).toBe(false);
+          } finally {
+            if (descendantPid && !(await waitForExit(descendantPid, 100))) {
+              process.kill(descendantPid, "SIGKILL");
+            }
+
+            await rm(dir, { force: true, recursive: true });
           }
-
-          await rm(dir, { force: true, recursive: true });
-        }
-      },
+        }),
       7000
     );
   }
@@ -270,7 +241,7 @@ describe("coding-agent harness resolution", () => {
     async () => {
       await withFastCliProbes(async () => {
         const dir = await mkdtemp(
-          path.join(tmpdir(), "nakama-sigterm-proof-harness-")
+          path.join(tmpdir(), "airin-sigterm-proof-harness-")
         );
 
         const command = path.join(dir, "stubborn-version");
@@ -331,7 +302,7 @@ describe("coding-agent harness resolution", () => {
 
   test("a harness that hangs on --version resolves as not installed", async () => {
     await withFastCliProbes(async () => {
-      const dir = await mkdtemp(path.join(tmpdir(), "nakama-hanging-harness-"));
+      const dir = await mkdtemp(path.join(tmpdir(), "airin-hanging-harness-"));
       // exec, so SIGTERM reaches sleep itself rather than orphaning it under sh.
       const command = path.join(dir, "hangs");
       await writeFile(command, "#!/bin/sh\nexec sleep 600\n", { mode: 0o755 });

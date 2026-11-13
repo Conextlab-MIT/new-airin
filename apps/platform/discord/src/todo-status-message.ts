@@ -1,4 +1,4 @@
-import type { AgentTodo } from "@nakama/core/contract";
+import type { AgentTodo } from "@airin/core/contract";
 import { DiscordEditableMessage } from "./editable-message";
 import { type DiscordTodoRunState, renderDiscordTodoStatus } from "./format";
 import type { DiscordMessenger } from "./messenger";

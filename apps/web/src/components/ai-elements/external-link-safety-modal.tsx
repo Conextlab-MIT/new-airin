@@ -1,12 +1,12 @@
 "use client";
 
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import { Cancel01Icon } from "hugeicons-react";
 import { useState } from "react";
 import type { LinkSafetyModalProps } from "streamdown";

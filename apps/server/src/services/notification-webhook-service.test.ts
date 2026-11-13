@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type {
   NotificationDestinationChannel,
   TelegramOutboundAdapter,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AuthService } from "./auth-service";
 import { NotificationWebhookService } from "./notification-webhook-service";
 

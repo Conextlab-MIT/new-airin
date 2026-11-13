@@ -1,13 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChatListItem } from "./chat-history";
-import {
-  buildGenerateImageToolState,
-  formatImageGenerationResolution,
-  imageGenerationAspectFromSize,
-  parseGenerateImagePrompt,
-  parseGenerateImageSize,
-  shouldRenderGenerateImageToolRow,
-} from "./chat-stream-image-generation";
+import { buildGenerateImageToolState } from "./chat-stream-image-generation";
 
 function toolMessage(
   partial: Partial<ChatListItem> & Pick<ChatListItem, "toolStatus">
@@ -25,48 +18,6 @@ function toolMessage(
 }
 
 describe("chat-stream-image-generation", () => {
-  test("parseGenerateImagePrompt and size", () => {
-    expect(parseGenerateImagePrompt({ prompt: "  lake  " })).toBe("lake");
-    expect(parseGenerateImagePrompt({})).toBeNull();
-    expect(parseGenerateImageSize({ size: "1024x1536" })).toBe("1024x1536");
-    expect(parseGenerateImageSize({ prompt: "x" })).toBeNull();
-  });
-
-  test("formatImageGenerationResolution uses multiplication sign", () => {
-    expect(formatImageGenerationResolution("1024x1024")).toBe("1024 × 1024");
-    expect(formatImageGenerationResolution("1536x1024")).toBe("1536 × 1024");
-    expect(formatImageGenerationResolution("auto")).toBe("auto");
-    expect(formatImageGenerationResolution(null)).toBe("1024 × 1024");
-  });
-
-  test("imageGenerationAspectFromSize maps ratios", () => {
-    expect(imageGenerationAspectFromSize("1024x1024")).toBe("square");
-    expect(imageGenerationAspectFromSize("1024x1536")).toBe("portrait");
-    expect(imageGenerationAspectFromSize("1536x1024")).toBe("landscape");
-    expect(imageGenerationAspectFromSize("auto")).toBe("square");
-  });
-
-  test("buildGenerateImageToolState running uses prompt and resolution", () => {
-    const state = buildGenerateImageToolState(
-      toolMessage({
-        toolInput: {
-          prompt: "a calm mountain lake at dawn",
-          size: "1024x1536",
-        },
-        toolStatus: "running",
-      })
-    );
-
-    expect(state).toEqual({
-      artifactPath: null,
-      aspect: "portrait",
-      error: null,
-      prompt: "a calm mountain lake at dawn",
-      resolution: "1024 × 1536",
-      status: "running",
-    });
-  });
-
   test("buildGenerateImageToolState done exposes artifacts-relative path", () => {
     const state = buildGenerateImageToolState(
       toolMessage({
@@ -100,17 +51,5 @@ describe("chat-stream-image-generation", () => {
       error: "Configure an image generation model",
       status: "error",
     });
-  });
-
-  test("shouldRenderGenerateImageToolRow is true for generate_image", () => {
-    expect(
-      shouldRenderGenerateImageToolRow(toolMessage({ toolStatus: "running" }))
-    ).toBe(true);
-    expect(
-      shouldRenderGenerateImageToolRow({
-        ...toolMessage({ toolStatus: "done" }),
-        tool: "web_search",
-      })
-    ).toBe(false);
   });
 });

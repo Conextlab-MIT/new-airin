@@ -1,5 +1,5 @@
-import { Button } from "@nakama/ui/button";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { cn } from "@airin/ui/utils";
 import { Cancel01Icon } from "hugeicons-react";
 import {
   type PointerEvent,
@@ -16,8 +16,11 @@ interface AttachmentDetailPanelProps {
   className?: string;
   fullscreen?: boolean;
   headerActions?: ReactNode;
+  headerClassName?: string;
   leading?: ReactNode;
   onClose: () => void;
+  /** Called once when a drag ends, with the width the user chose. */
+  onResizeEnd?: (width: number) => void;
   onWidthChange: (width: number) => void;
   resizable?: boolean;
   subtitle?: string | null;
@@ -33,11 +36,13 @@ export function AttachmentDetailPanel({
   leading,
   children,
   headerActions,
+  headerClassName,
   bodyClassName,
   resizable = true,
   fullscreen = false,
   width,
   onWidthChange,
+  onResizeEnd,
   onClose,
   className,
 }: AttachmentDetailPanelProps) {
@@ -101,6 +106,7 @@ export function AttachmentDetailPanel({
     }
 
     draggingRef.current = false;
+    onResizeEnd?.(clampWidth(window.innerWidth - event.clientX));
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -120,9 +126,10 @@ export function AttachmentDetailPanel({
         // As a resizable column this clamps to about 195px on a phone, so
         // there it takes the screen whatever the caller asked for. `w-full!`
         // is what beats the inline width below.
-        "max-sm:left-0 max-sm:w-full! max-sm:min-w-0 max-sm:max-w-none max-sm:flex-1",
+        "max-md:left-0 max-md:w-full! max-md:min-w-0 max-md:max-w-none max-md:flex-1",
         className
       )}
+      data-fullscreen={fullscreen || undefined}
       data-slot="attachment-detail-panel"
       style={fullscreen ? undefined : { width }}
     >
@@ -130,7 +137,7 @@ export function AttachmentDetailPanel({
         <div
           aria-label="Resize panel"
           aria-orientation="vertical"
-          className="absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize touch-none before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent hover:before:bg-border active:before:bg-border max-sm:hidden"
+          className="absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize touch-none before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent hover:before:bg-border active:before:bg-border max-md:hidden"
           onPointerCancel={handleResizePointerUp}
           onPointerDown={handleResizePointerDown}
           onPointerMove={handleResizePointerMove}
@@ -138,28 +145,31 @@ export function AttachmentDetailPanel({
           role="separator"
         />
       ) : null}
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between gap-3 border-border border-b px-4 py-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            {leading}
-            <div className="min-w-0 flex-1">
-              <h2 className="truncate font-medium text-sm">
-                {title}
-                {typeLabel ? (
-                  <span className="font-normal text-muted-foreground">
-                    {" · "}
-                    {typeLabel}
-                  </span>
-                ) : null}
-              </h2>
+      <div className="@container relative flex min-h-0 flex-1 flex-col">
+        <div
+          className={cn(
+            "h-12 shrink-0 items-center gap-3 border-border border-b px-4",
+            leading ? "grid grid-cols-[1fr_auto_1fr]" : "flex justify-between",
+            headerClassName
+          )}
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="min-w-0">
+              <h2 className="truncate font-medium text-sm">{title}</h2>
               {leading ? null : subtitle ? (
                 <p className="mt-0.5 truncate text-muted-foreground text-xs">
                   {subtitle}
                 </p>
               ) : null}
             </div>
+            {typeLabel ? (
+              <span className="@lg:inline hidden shrink-0 rounded border border-border px-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
+                {typeLabel}
+              </span>
+            ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          {leading}
+          <div className="flex shrink-0 items-center justify-end gap-1">
             {headerActions}
             <Button
               aria-label="Close attachment panel"

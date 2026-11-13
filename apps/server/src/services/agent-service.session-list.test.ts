@@ -1,11 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
-import { createDefaultProfile } from "./agent-service-test-fixtures";
+import {
+  createDefaultProfile,
+  startStoppedTurn,
+} from "./agent-service-test-fixtures";
 import { sessionTurnRegistry } from "./session-turn-registry";
 
 const ORG_ID = "org_test";
+
+const USER = { id: "user_test" };
 
 async function createService(): Promise<{
   db: ReturnType<typeof createInMemoryDatabaseAdapter>;
@@ -34,7 +39,222 @@ async function seedFirstMessage(
 }
 
 describe("listSessions reports the live turn", () => {
-  setupTestConfigDir("nakama-session-list-");
+  setupTestConfigDir("airin-session-list-");
+
+  test("a closed chat stops, leaves the list, stays searchable, and comes back on its next turn", async () => {
+    const { db, service } = await createService();
+
+    const sessionId = await service.createSession(
+      ORG_ID,
+      "web",
+      "profile_default",
+      USER.id
+    );
+
+    await seedFirstMessage(db, sessionId);
+
+    const listed = async (query?: string) =>
+      (
+        await service.listSessions(
+          ORG_ID,
+          "profile_default",
+          "web",
+          { isPlatformAdmin: true, user: USER },
+          undefined,
+          query
+        )
+      ).sessions.map((session) => session.id);
+
+    const abort = new AbortController();
+    expect(sessionTurnRegistry.beginTurn(sessionId).started).toBe(true);
+    sessionTurnRegistry.attachAbort(sessionId, abort);
+
+    expect(await service.closeSession(sessionId, ORG_ID, { user: USER })).toBe(
+      true
+    );
+    expect(abort.signal.aborted).toBe(true);
+
+    // The aborted turn still ends through its own endTurn.
+    sessionTurnRegistry.endTurn(sessionId, {
+      error: "Turn cancelled.",
+      type: "error",
+    });
+
+    expect(await listed()).toEqual([]);
+    expect(await listed("hello")).toEqual([sessionId]);
+
+    expect(await startStoppedTurn(service, sessionId, ORG_ID)).toBe("started");
+
+    expect(await listed()).toEqual([sessionId]);
+  });
+
+  test("a close the database does not record leaves the turn running", async () => {
+    const { db, service } = await createService();
+
+    const sessionId = await service.createSession(
+      ORG_ID,
+      "web",
+      "profile_default",
+      USER.id
+    );
+
+    db.updateSessionClosedAt = () => Promise.resolve(false);
+
+    const abort = new AbortController();
+    expect(sessionTurnRegistry.beginTurn(sessionId).started).toBe(true);
+    sessionTurnRegistry.attachAbort(sessionId, abort);
+
+    expect(await service.closeSession(sessionId, ORG_ID, { user: USER })).toBe(
+      false
+    );
+    expect(abort.signal.aborted).toBe(false);
+
+    sessionTurnRegistry.cancelTurn(sessionId);
+  });
+
+  test("a member cannot stop or hide a messaging chat someone else started", async () => {
+    const { db, service } = await createService();
+
+    const sessionId = await service.createSession(
+      ORG_ID,
+      "telegram",
+      "profile_default",
+      USER.id
+    );
+
+    await seedFirstMessage(db, sessionId);
+
+    const abort = new AbortController();
+    expect(sessionTurnRegistry.beginTurn(sessionId).started).toBe(true);
+    sessionTurnRegistry.attachAbort(sessionId, abort);
+
+    await expect(
+      service.closeSession(sessionId, ORG_ID, {
+        orgRole: "member",
+        user: { id: "user_other" },
+      })
+    ).rejects.toThrow();
+    expect(abort.signal.aborted).toBe(false);
+    expect((await db.getSession(sessionId))?.closedAt ?? null).toBeNull();
+
+    // Positive control: an org admin may close it.
+    expect(
+      await service.closeSession(sessionId, ORG_ID, {
+        orgRole: "admin",
+        user: { id: "user_other" },
+      })
+    ).toBe(true);
+    expect(abort.signal.aborted).toBe(true);
+
+    sessionTurnRegistry.cancelTurn(sessionId);
+  });
+
+  test("a failed reopen frees the turn instead of locking the chat", async () => {
+    const { db, service } = await createService();
+
+    const sessionId = await service.createSession(
+      ORG_ID,
+      "web",
+      "profile_default",
+      USER.id
+    );
+
+    expect(await service.closeSession(sessionId, ORG_ID, { user: USER })).toBe(
+      true
+    );
+
+    const update = db.updateSessionClosedAt.bind(db);
+    db.updateSessionClosedAt = () => Promise.reject(new Error("busy"));
+
+    await expect(
+      startStoppedTurn(service, sessionId, ORG_ID)
+    ).rejects.toThrow();
+    expect(sessionTurnRegistry.isActive(sessionId)).toBe(false);
+
+    db.updateSessionClosedAt = update;
+    expect(await startStoppedTurn(service, sessionId, ORG_ID)).toBe("started");
+  });
+
+  test("a closed sub_agent chat does not reopen past the open-chat cap", async () => {
+    const { db, service } = await createService();
+    const access = { isPlatformAdmin: false, orgRole: null };
+
+    const parentId = await service.createSession(
+      ORG_ID,
+      "web",
+      "profile_default",
+      USER.id
+    );
+
+    const children: string[] = [];
+
+    for (let index = 0; index < 5; index += 1) {
+      children.push(
+        await service.createChildSession(
+          parentId,
+          ORG_ID,
+          `Topic ${index}`,
+          access
+        )
+      );
+    }
+
+    const closedId = children[0] ?? "";
+
+    expect(await service.closeSession(closedId, ORG_ID, { user: USER })).toBe(
+      true
+    );
+    await service.createChildSession(parentId, ORG_ID, "Topic 5", access);
+
+    await expect(
+      startStoppedTurn(service, closedId, ORG_ID)
+    ).rejects.toMatchObject({ status: 400 });
+    expect((await db.getSession(closedId))?.closedAt).toBeString();
+    expect(sessionTurnRegistry.isActive(closedId)).toBe(false);
+  });
+
+  test("closing a chat closes the chats sub_agent started from it, not its branches", async () => {
+    const { db, service } = await createService();
+
+    const parentId = await service.createSession(
+      ORG_ID,
+      "web",
+      "profile_default",
+      USER.id
+    );
+
+    await seedFirstMessage(db, parentId);
+
+    const childId = await service.createSession(
+      ORG_ID,
+      "web",
+      "profile_default",
+      USER.id,
+      { parentSessionId: parentId }
+    );
+
+    await seedFirstMessage(db, childId);
+
+    const branch = await service.branchSession(parentId, 0, ORG_ID);
+
+    expect(await db.getSession(branch?.sessionId ?? "")).not.toBeNull();
+
+    const childAbort = new AbortController();
+    expect(sessionTurnRegistry.beginTurn(childId).started).toBe(true);
+    sessionTurnRegistry.attachAbort(childId, childAbort);
+
+    expect(await service.closeSession(parentId, ORG_ID, { user: USER })).toBe(
+      true
+    );
+
+    expect(childAbort.signal.aborted).toBe(true);
+    expect((await db.getSession(childId))?.closedAt).toBeString();
+    expect(
+      (await db.getSession(branch?.sessionId ?? ""))?.closedAt ?? null
+    ).toBeNull();
+
+    sessionTurnRegistry.cancelTurn(childId);
+  });
 
   test("a session is active only while its turn is running", async () => {
     const { db, service } = await createService();
@@ -43,13 +263,14 @@ describe("listSessions reports the live turn", () => {
       ORG_ID,
       "web",
       "profile_default",
-      null
+      USER.id
     );
 
     await seedFirstMessage(db, sessionId);
 
     const idle = await service.listSessions(ORG_ID, "profile_default", "web", {
       isPlatformAdmin: true,
+      user: USER,
     });
 
     expect(idle.sessions.map((session) => session.active)).toEqual([false]);
@@ -61,7 +282,7 @@ describe("listSessions reports the live turn", () => {
         ORG_ID,
         "profile_default",
         "web",
-        { isPlatformAdmin: true }
+        { isPlatformAdmin: true, user: USER }
       );
 
       expect(running.sessions.map((session) => session.active)).toEqual([true]);
@@ -75,7 +296,7 @@ describe("listSessions reports the live turn", () => {
       ORG_ID,
       "profile_default",
       "web",
-      { isPlatformAdmin: true }
+      { isPlatformAdmin: true, user: USER }
     );
 
     expect(settled.sessions.map((session) => session.active)).toEqual([false]);
@@ -83,8 +304,8 @@ describe("listSessions reports the live turn", () => {
 });
 
 describe("listSessions pages the merged history", () => {
-  setupTestConfigDir("nakama-session-page-");
-  const ACCESS = { isPlatformAdmin: true };
+  setupTestConfigDir("airin-session-page-");
+  const ACCESS = { isPlatformAdmin: true, user: USER };
   const CHANNELS = ["web", "telegram", "discord"] as const;
 
   async function seedHistory() {
@@ -102,7 +323,7 @@ describe("listSessions pages the merged history", () => {
         ORG_ID,
         channel,
         "profile_default",
-        null
+        USER.id
       );
 
       await seedFirstMessage(db, id);
@@ -150,6 +371,53 @@ describe("listSessions pages the merged history", () => {
 
     expect(sizes).toEqual([2, 2, 1]);
     expect(paged).toEqual(all.sessions.map((session) => session.id));
+  });
+
+  test("saved order belongs to one user", async () => {
+    const { service } = await seedHistory();
+
+    const owner = await service.listSessions(
+      ORG_ID,
+      "profile_default",
+      CHANNELS,
+      ACCESS
+    );
+
+    const ids = owner.sessions.map((session) => session.id).reverse();
+    await service.setSessionOrder(ORG_ID, "profile_default", ACCESS, ids);
+
+    const ordered = await service.listSessions(
+      ORG_ID,
+      "profile_default",
+      CHANNELS,
+      ACCESS
+    );
+
+    expect(ordered.sessions.map((session) => session.sortPosition)).toEqual(
+      ordered.sessions.map((session) => ids.indexOf(session.id))
+    );
+
+    const teammate = await service.listSessions(
+      ORG_ID,
+      "profile_default",
+      CHANNELS,
+      {
+        isPlatformAdmin: true,
+        user: { id: "user_other" },
+      }
+    );
+
+    expect(teammate.sessions.map((session) => session.sortPosition)).toEqual(
+      teammate.sessions.map(() => null)
+    );
+    await expect(
+      service.setSessionOrder(
+        ORG_ID,
+        "profile_default",
+        { isPlatformAdmin: true, user: { id: "user_other" } },
+        ids
+      )
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   test("a page asked for after a chat moved across its cursor is stale", async () => {
@@ -225,8 +493,8 @@ describe("listSessions pages the merged history", () => {
 });
 
 describe("listSessions searches titles and message text", () => {
-  setupTestConfigDir("nakama-session-search-");
-  const ACCESS = { isPlatformAdmin: true };
+  setupTestConfigDir("airin-session-search-");
+  const ACCESS = { isPlatformAdmin: true, user: USER };
   const CHANNELS = ["web", "telegram"] as const;
 
   async function seedChat(
@@ -240,7 +508,7 @@ describe("listSessions searches titles and message text", () => {
       ORG_ID,
       channel,
       "profile_default",
-      null
+      USER.id
     );
 
     await db.appendMessagesForSession(

@@ -5,7 +5,7 @@ description: "Let agents turn successful work into reusable skills, with optiona
 
 Your agents get better at repeat work when they can **save what worked** as a [skill](/skills) — a short playbook the bot can follow next time.
 
-**Self-improving skills** is Nakama's approach to that: agents can create and update profile skills after complex tasks, while your team keeps control when you need it.
+**Self-improving skills** is Airin's approach to that: agents can create and update profile skills after complex tasks, while your team keeps control when you need it.
 
 ## Why this matters
 
@@ -23,15 +23,15 @@ Think of it as the agent learning *how to do the job*, while you decide whether 
 ## How it works
 
 ```text
-Complex task succeeds  →  Agent saves a skill (or review suggests one)  →  Skill matches on later chats
+Complex task succeeds  →  Agent saves a skill (or review suggests one)  →  Agent loads the skill on later chats
                               ↓
                     (optional) Org admin approves
 ```
 
 1. **During chat** — after a hard problem, recovery, or correction, the agent may offer to save the approach as a skill (for example, a deploy checklist or support triage flow).
 2. **On demand with `/learn`** — when you already know the material (notes, a docs URL, a local folder, or “what we just did”), type `/learn …` in web or CLI chat to turn it into a skill now. See [Learn from sources](#learn-from-sources).
-3. **After complex turns (optional)** — when **Learn from chats** is on, Nakama may review the finished turn in the background and either show an **Apply** suggestion in chat or stage a proposal for an org admin.
-4. **On later turns** — when someone asks for something similar, Nakama can load that skill and follow the saved steps.
+3. **After complex turns (optional)** — when **Learn from chats** is on, Airin may review the finished turn in the background and either show an **Apply** suggestion in chat or stage a proposal for an org admin.
+4. **On later turns** — when someone asks for something similar, Airin can load that skill and follow the saved steps.
 5. **Optional gate** — if write approval is on, skill changes wait in a proposal queue until an org admin approves or rejects them.
 
 Skills hold **procedures** (how to do something). Profile memory holds **facts** about the user (preferences, context). Keep preferences in memory; keep repeatable workflows in skills.
@@ -46,7 +46,7 @@ Skills hold **procedures** (how to do something). Profile memory holds **facts**
 | **Automations / scheduled runs** | No | No |
 
 
-Every profile receives the default bundled skills after sync, including `manage-skills`, so skill-authoring capability is available without assigning that skill manually. Super Bot also receives its Super Bot-specific skills.
+Every profile receives the default bundled skills after sync, including `manage-skills`, so skill-authoring capability is available without assigning that skill manually. Airin also receives its Airin-specific skills.
 
 ## Learn from sources
 
@@ -65,7 +65,7 @@ Bare **`/learn`** (no argument) after a conversation distills the workflow you j
 
 What happens:
 
-1. Nakama expands `/learn` into a standards-guided turn (same house rules as hand-authored skills).
+1. Airin expands `/learn` into a standards-guided turn (same house rules as hand-authored skills).
 2. The agent gathers sources with tools it already has (`read_file`, `search_files`, `web_fetch`, or the current conversation).
 3. It saves through `skill_manage` (create or patch). If **write approval** is on, that stages a proposal for an org admin — same gate as other agent skill writes.
 
@@ -79,7 +79,7 @@ By default, skill changes apply immediately. Turn on **write approval** when you
 
 ### Turn it on
 
-Org admins: **Control center → Workspace → Organization → How bots learn skills → Customize → Ask me before a bot saves a skill → Settings**.
+Org admins: **Settings → Workspace → Organization → How bots learn skills → Customize → Ask me before a bot saves a skill → Settings**.
 
 - Flip the toggle to require approval for skill writes org-wide.
 - Optionally override per profile: flip that profile's switch. **Use org default** follows the org again.
@@ -100,7 +100,7 @@ Open **Review** to see the full skill content (or the before/after for an edit).
 
 ![Review dialog — preview skill content and approve or reject](/screenshots/skill-write-approval-review.png)
 
-Nakama flags suspicious patterns in proposals the same way it does for org memory — worth a closer look before approving.
+Airin flags suspicious patterns in proposals the same way it does for org memory — worth a closer look before approving.
 
 Platform admins managing a specific bot can also open **Agent**, select the profile, and use the **Proposals** tab.
 
@@ -110,7 +110,7 @@ In-session saves can still miss a good workflow: the agent finishes a long tool-
 
 ### Turn it on
 
-Org admins: **Control center → Workspace → Organization → How bots learn skills → Customize**, on the **Bots learn from chats** card. Agent owners and platform admins can also flip **Learn from chats** under **Agent → your agent → Behavior**.
+Org admins: **Settings → Workspace → Organization → How bots learn skills → Customize**, on the **Bots learn from chats** card. Agent owners and platform admins can also flip **Learn from chats** under **Agent → your agent → Behavior**.
 
 - Default is **off** (no extra review pass).
 - Optionally override per profile: flip that profile's switch. **Use org default** follows the org again.
@@ -119,7 +119,7 @@ Org admins: **Control center → Workspace → Organization → How bots learn s
 
 ![Bots learn from chats org switch and per-profile overrides](/screenshots/learn-after-a-turn-org.png)
 
-When enabled, after a **successful** turn in an interactive chat (web, CLI, Discord, Telegram, WhatsApp, or Slack) that looks complex (many tool calls, or a tool error recovery) — and only if the agent did **not** already save a skill that turn — Nakama runs a lightweight background review. Chat is not blocked while that runs. It uses an extra model call on eligible turns, so leave it off unless you want the safety net.
+When enabled, after a **successful** turn in an interactive chat (web, CLI, Discord, Telegram, WhatsApp, or Slack) that looks complex (many tool calls, or a tool error recovery) — and only if the agent did **not** already save a skill that turn — Airin runs a lightweight background review. Chat is not blocked while that runs. It uses an extra model call on eligible turns, so leave it off unless you want the safety net.
 
 ### What you see (review × write approval)
 
@@ -128,7 +128,7 @@ When enabled, after a **successful** turn in an interactive chat (web, CLI, Disc
 | **Learn from chats off** | No background pass | No background pass |
 | **Learn from chats on** | Chat shows a suggestion with preview + **Apply** — nothing is written until you Apply | Review stages a proposal; chat shows a pending-admin notice; live skill waits for org-admin approve |
 
-Unlike some other agents that auto-write skills in the background when approval is off, Nakama **never silent-writes** from Learn from chats. Gate off means you still choose **Apply**; gate on means an admin must approve.
+Unlike some other agents that auto-write skills in the background when approval is off, Airin **never silent-writes** from Learn from chats. Gate off means you still choose **Apply**; gate on means an admin must approve.
 
 Suggestions appear as a chat UI card (not as a message in the conversation history the model will see next turn). Ignore a suggestion by leaving it; there is no separate reject queue for suggestions.
 
@@ -149,15 +149,15 @@ Both help agents stay consistent across your team, but they solve different prob
 | **What it stores** | Repeatable workflows for one bot | Shared facts for the whole org |
 | **Example** | "How we triage support tickets" | "Support hours are 9–6 SGT" |
 | **Who approves agent writes** | Optional — only when write approval is on | Always — members propose, admins approve |
-| **Where admins manage it** | **Control center → Workspace → Organization → How bots learn skills** | **Control center → Workspace → Organization → Org Memory** |
+| **Where admins manage it** | **Settings → Workspace → Organization → How bots learn skills** | **Settings → Workspace → Organization → Org Memory** |
 
 Use org memory for facts everyone should know. Use skills for how a specific bot should run a task.
 
 ## See which skills are used
 
-After your team has been chatting for a while, you may wonder which skills actually help and which just sit on the shelf. Nakama tracks that automatically for each **assigned** skill on a profile.
+After your team has been chatting for a while, you may wonder which skills actually help and which just sit on the shelf. Airin tracks that automatically for each **assigned** skill on a profile.
 
-Open **Agent**, select a bot, and scroll to **Skills**. Each skill shows a short hint such as **Last matched 2 days ago · 5 uses**, or **Never matched** when it has not been selected for a turn yet. Skills with no match for the configured stale interval (30 days by default) get an **Unused** badge. **Bundled system skills** (shipped with Nakama, such as `manage-skills` and `save-artifact`) never get the Unused badge; they stay assigned by design.
+Open **Agent**, select a bot, and scroll to **Skills**. Each skill shows a short hint such as **Last matched 2 days ago · 5 uses**, or **Never matched** when it has not been selected for a turn yet. Skills with no match for the configured stale interval (30 days by default) get an **Unused** badge. **Bundled system skills** (shipped with Airin, such as `manage-skills` and `artifact-design`) never get the Unused badge; they stay assigned by design.
 
 Click a skill to open its detail dialog for the full breakdown:
 
@@ -175,7 +175,7 @@ When a profile collects unused playbooks, the catalog gets noisy and wastes toke
 ### What it does
 
 - **Stale (30 days by default):** listed in the last report. Files stay in place. Org admins can choose a different stale interval.
-- **Archive (90 days by default):** the skill folder is **moved**, never deleted, to `~/.nakama/orgs/{orgId}/profiles/{profileId}/skills/.archive/` (or `$NAKAMA_CONFIG_DIR/orgs/...` if you set that). The skill is unassigned so it leaves the chat catalog. Org admins can choose a different archive interval. Restore UI is not in this release: move the folder back to `skills/`, then assign it on the profile again.
+- **Archive (90 days by default):** the skill folder is **moved**, never deleted, to `~/.airin/orgs/{orgId}/profiles/{profileId}/skills/.archive/` (or `$AIRIN_CONFIG_DIR/orgs/...` if you set that). The skill is unassigned so it leaves the chat catalog. Org admins can choose a different archive interval. Restore UI is not in this release: move the folder back to `skills/`, then assign it on the profile again.
 - **Unused means match or patch, not a catalog view:** the configured stale/archive clock uses last **match** or last **update**. Catalog views do not reset it.
 - **Never-matched grace:** a skill with no matches is judged from when it was created, so a brand-new skill is not archived.
 - **Skipped:** bundled / library skills, and any skill on a profile that has an **enabled automation** (usage is not recorded on those runs yet).
@@ -184,7 +184,7 @@ Default is **off**. The first scheduled pass after you enable it only records a 
 
 ### Turn it on
 
-Org admins: **Control center → Workspace → Organization → How bots learn skills → Customize → Auto clean-up of skills**.
+Org admins: **Settings → Workspace → Organization → How bots learn skills → Customize → Auto clean-up of skills**.
 
 - Set **Freshness clocks**. Defaults are 30 days stale and 90 days archive; stale must be before archive.
 - Set **Automation worker poll interval** if this installation needs a different schedule reload cadence. It is workspace-global and defaults to 5 minutes.

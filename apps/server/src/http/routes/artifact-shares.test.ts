@@ -1,32 +1,25 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import * as core from "@nakama/core";
-import { getProfileArtifactsDir, writeArtifactFile } from "@nakama/core";
-import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+import * as core from "@airin/core";
+import { getProfileArtifactsDir } from "@airin/core";
+import { MAX_HTML_ARTIFACT_BYTES } from "@airin/core/artifact-mime";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
+import { AgentService } from "../../services/agent-service";
 import { setupTestConfigDir, withTestEnv } from "../../test-config-dir";
-import { isPublicRouteRequest } from "../public-routes";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import {
+  loginUserSession,
+  seedOrgAdmin,
   setupFreshInstallSession,
   type TestBrowserSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-artifact-shares-test-");
+setupTestConfigDir("airin-artifact-shares-test-");
 
 function createApp(databaseAdapter = createInMemoryDatabaseAdapter()) {
   return createMinimalHonoApp({
-    agent: {
-      writeProfileArtifact: (
-        orgId: string,
-        profileId: string,
-        filename: string,
-        content: string
-      ) => writeArtifactFile({ content, filename, orgId, profileId }),
-    },
+    agent: new AgentService(null, null, databaseAdapter),
     databaseAdapter,
   });
 }
@@ -81,7 +74,7 @@ async function seedProfileArtifact(params: {
 
   if (params.meta !== undefined) {
     await writeFile(
-      join(artifactsDir, `${params.filename}.nakama-meta.json`),
+      join(artifactsDir, `${params.filename}.airin-meta.json`),
       params.meta
     );
   }
@@ -113,13 +106,99 @@ function publishArtifactShareRequest(params: {
 }
 
 describe("artifact share routes", () => {
-  test("public artifact share GET is allowlisted", () => {
+  test("a member cannot publish or revoke a share of someone else's artifact", async () => {
+    const { app, databaseAdapter } = createApp();
+    const orgId = "org_share_scope";
+    const profileId = "profile_share_scope";
+
+    const ana = await seedOrgAdmin(databaseAdapter, {
+      email: "ana@example.com",
+      orgId,
+      role: "member",
+      userId: "user_ana",
+    });
+
+    const bo = await seedOrgAdmin(databaseAdapter, {
+      email: "bo@example.com",
+      orgId,
+      role: "member",
+      userId: "user_bo",
+    });
+
+    await seedProfileArtifact({
+      content: "# Ana's report",
+      databaseAdapter,
+      filename: "ana.md",
+      name: "Share Scope",
+      orgId,
+      profileId,
+    });
+    await databaseAdapter.upsertArtifactRecord({
+      channel: null,
+      createdAt: new Date().toISOString(),
+      filename: "ana.md",
+      orgId,
+      profileId,
+      sessionId: null,
+      userId: ana.userId,
+    });
+
+    const anaSession = await loginUserSession(
+      app,
+      ana.email,
+      ana.password,
+      orgId
+    );
+
+    const boSession = await loginUserSession(app, bo.email, bo.password, orgId);
+
+    // The dashboard sends the absolute path listArtifacts returns.
+    const absolutePath = join(
+      getProfileArtifactsDir(orgId, profileId),
+      "ana.md"
+    );
+
+    const publish = (session: TestBrowserSession) =>
+      app.fetch(
+        publishArtifactShareRequest({
+          body: { path: absolutePath },
+          orgId,
+          profileId,
+          session,
+        })
+      );
+
+    const call = (session: TestBrowserSession, route: string, method = "GET") =>
+      app.fetch(
+        new Request(
+          `http://localhost:4310/v1/profiles/${profileId}/artifacts/${route}?path=${encodeURIComponent(absolutePath)}`,
+          {
+            headers: session.headers(
+              { "X-CSRF-Token": session.csrfToken },
+              orgId
+            ),
+            method,
+          }
+        )
+      );
+
+    expect((await publish(boSession)).status).toBe(403);
+    expect((await call(boSession, "content")).status).toBe(403);
+    expect((await call(anaSession, "content")).status).toBe(200);
+
+    const published = await publish(anaSession);
+    expect(published.status).toBe(201);
+
+    // SAFETY: This test controls the fixture shape at this boundary.
+    const { id } = (await published.json()) as { id: string };
+
+    expect((await call(boSession, "shares/status")).status).toBe(403);
     expect(
-      isPublicRouteRequest("GET", "/v1/public/artifact-shares/abc123")
-    ).toBe(true);
-    expect(
-      isPublicRouteRequest("POST", "/v1/public/artifact-shares/abc123")
-    ).toBe(false);
+      await (await call(anaSession, "shares/status")).json()
+    ).toMatchObject({ id });
+
+    expect((await call(boSession, `shares/${id}`, "DELETE")).status).toBe(403);
+    expect((await call(anaSession, `shares/${id}`, "DELETE")).status).toBe(200);
   });
 
   test("member can publish and anonymous visitor can read snapshot", async () => {
@@ -262,6 +341,100 @@ describe("artifact share routes", () => {
     );
   });
 
+  test("HTML downloads use the frame policy and oversized HTML cannot be published", async () => {
+    const { app, databaseAdapter } = createApp();
+    const session = await setupFreshInstallSession(app, databaseAdapter);
+    const orgId = session.orgId!;
+    const profileId = "profile_share_html";
+    const content = "x".repeat(MAX_HTML_ARTIFACT_BYTES);
+    await seedProfileArtifact({
+      content,
+      databaseAdapter,
+      filename: "page.html",
+      name: "HTML page",
+      orgId,
+      profileId,
+    });
+    const artifactUrl = `http://localhost:4310/v1/profiles/${profileId}/artifacts/content?path=page.html&inline=1`;
+
+    const response = await app.fetch(
+      new Request(artifactUrl, { headers: session.headers({}, orgId) })
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.arrayBuffer()).byteLength).toBe(
+      MAX_HTML_ARTIFACT_BYTES
+    );
+
+    const frame = await app.fetch(
+      new Request("http://localhost:4310/artifact-frame")
+    );
+
+    expect(response.headers.get("Content-Security-Policy")).toBe(
+      frame.headers.get("Content-Security-Policy")
+    );
+    expect(response.headers.get("Permissions-Policy")).toBe(
+      "camera=(), microphone=()"
+    );
+
+    const publish = () =>
+      app.fetch(
+        publishArtifactShareRequest({
+          body: { path: "page.html" },
+          orgId,
+          profileId,
+          session,
+        })
+      );
+
+    const publishedResponse = await publish();
+    expect(publishedResponse.status).toBe(201);
+    const published = await publishedResponse.json();
+
+    const publicResponse = await app.fetch(
+      new Request(
+        `http://localhost:4310/v1/public/artifact-shares/${published.token}`
+      )
+    );
+
+    expect(publicResponse.status).toBe(200);
+    expect(publicResponse.headers.get("Content-Type")).toBe(
+      "text/plain; charset=utf-8"
+    );
+    expect((await publicResponse.arrayBuffer()).byteLength).toBe(
+      MAX_HTML_ARTIFACT_BYTES
+    );
+    await writeFile(
+      join(getProfileArtifactsDir(orgId, profileId), "page.html"),
+      `${content}x`
+    );
+    expect(
+      (
+        await app.fetch(
+          new Request(artifactUrl, { headers: session.headers({}, orgId) })
+        )
+      ).status
+    ).toBe(413);
+    expect((await publish()).status).toBe(413);
+
+    const share = await databaseAdapter.getActiveArtifactShareByPath(
+      orgId,
+      profileId,
+      "page.html"
+    );
+
+    await writeFile(share!.storagePath, `${content}x`);
+    expect(
+      (
+        await app.fetch(
+          new Request(
+            `http://localhost:4310/v1/public/artifact-shares/${published.token}`
+          )
+        )
+      ).status
+    ).toBe(413);
+  });
+
   test("publish refuses a clientOrigin off the request host", async () => {
     const { app, databaseAdapter } = createApp();
     const session = await setupFreshInstallSession(app, databaseAdapter);
@@ -280,7 +453,7 @@ describe("artifact share routes", () => {
     const publishResponse = await app.fetch(
       publishArtifactShareRequest({
         body: {
-          clientOrigin: "https://nakama.example.com/",
+          clientOrigin: "https://airin.example.com/",
           path: "note.md",
         },
         host: "127.0.0.1",
@@ -300,7 +473,7 @@ describe("artifact share routes", () => {
 
   test("publish prefers configured web public URL over loopback request URL", async () => {
     await withTestEnv(
-      { NAKAMA_WEB_PUBLIC_URL: "https://deployed.example.com/" },
+      { AIRIN_WEB_PUBLIC_URL: "https://deployed.example.com/" },
       async () => {
         const { app, databaseAdapter } = createApp();
         const session = await setupFreshInstallSession(app, databaseAdapter);

@@ -31,9 +31,7 @@ function warnAboutUnrunnableScripts(
   warnedSkillDirectories.add(directory);
 
   for (const issue of issues) {
-    console.warn(
-      `[nakama:skills] ${directory}: ${issue.path} ${issue.reason}.`
-    );
+    console.warn(`[airin:skills] ${directory}: ${issue.path} ${issue.reason}.`);
   }
 }
 
@@ -105,6 +103,7 @@ export async function discoverSkillDirectory(
     const toolPath = await findSkillToolPath(directory);
 
     const scripts = await resolveSkillScripts({
+      body: parsed.body,
       declared: parsed.frontmatter.scripts ?? [],
       directory,
       skillName: parsed.frontmatter.name,
@@ -120,7 +119,6 @@ export async function discoverSkillDirectory(
       disableModelInvocation:
         parsed.frontmatter.disableModelInvocation ?? false,
       hasTool: toolPath !== null || scripts.tools.length > 0,
-      includeBodyOnMatch: parsed.frontmatter.includeBodyOnMatch ?? false,
       name: parsed.frontmatter.name,
       scriptIssues: scripts.issues,
       scriptTools: scripts.tools,
@@ -129,7 +127,7 @@ export async function discoverSkillDirectory(
     };
   } catch (error) {
     console.warn(
-      `[nakama:skills] Skipping ${skillFilePath}:`,
+      `[airin:skills] Skipping ${skillFilePath}:`,
       error instanceof Error ? error.message : error
     );
 

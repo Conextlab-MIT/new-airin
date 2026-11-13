@@ -1,20 +1,31 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getUserConfigDir } from "@nakama/core";
+import { getUserConfigDir } from "@airin/core";
 import { unzipSync, zipSync } from "fflate";
+import {
+  closeAgentGroupDatabases,
+  createAgentGroup,
+  listAgentGroups,
+} from "../../services/agent-group-store";
 import * as dataPortability from "../../services/data-portability";
 import {
-  createNakamaDataExport,
+  createAirinDataExport,
+  decodeArchiveRequestBytes,
+  MAX_IMPORT_ARCHIVE_BYTES,
   MAX_IMPORT_ENTRIES,
-  previewNakamaDataImport,
+  previewAirinDataImport,
 } from "../../services/data-portability";
 import { sessionTurnRegistry } from "../../services/session-turn-registry";
 import { setupTestConfigDir } from "../../test-config-dir";
+import { MAX_HTTP_REQUEST_BODY_LIMIT_BYTES } from "../app";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { loginPlatformAdminSession } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-setup-import-routes-test-");
+// Before the config dir cleanup, which Windows refuses while a file is open.
+afterEach(closeAgentGroupDatabases);
+
+setupTestConfigDir("airin-setup-import-routes-test-");
 
 function createApp() {
   return createMinimalHonoApp({
@@ -26,9 +37,8 @@ function createApp() {
 }
 
 async function createArchiveOverEntryLimit(): Promise<Buffer> {
-  const archive = (
-    await createNakamaDataExport({ rootDir: getUserConfigDir() })
-  ).data;
+  const archive = (await createAirinDataExport({ rootDir: getUserConfigDir() }))
+    .data;
 
   const entries = unzipSync(archive);
 
@@ -46,7 +56,7 @@ describe("setup import routes", () => {
     await writeFile(configPath, "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(configPath, "changed");
@@ -75,6 +85,38 @@ describe("setup import routes", () => {
     await expect(readFile(configPath, "utf8")).resolves.toBe("changed");
   });
 
+  test("restores a raw ZIP before setup, and only with confirm in the query", async () => {
+    const { app } = createApp();
+    const configPath = join(getUserConfigDir(), "config.ini");
+    await writeFile(configPath, "original");
+
+    const archive = (
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
+    ).data;
+
+    await writeFile(configPath, "changed");
+
+    const send = (contentType: string, query: string) =>
+      app.fetch(
+        new Request(
+          `http://localhost:4310/v1/auth/setup/import/restore${query}`,
+          {
+            body: archive,
+            headers: { "Content-Type": contentType },
+            method: "POST",
+          }
+        )
+      );
+
+    // A cross-site form can send text/plain without a preflight.
+    expect((await send("text/plain", "?confirm=true")).status).toBe(415);
+    expect((await send("application/zip", "")).status).toBe(400);
+    await expect(readFile(configPath, "utf8")).resolves.toBe("changed");
+
+    expect((await send("application/zip", "?confirm=true")).status).toBe(200);
+    await expect(readFile(configPath, "utf8")).resolves.toBe("original");
+  });
+
   test("restore blocks traffic and waits for active turns before replacing data", async () => {
     let stopped = false;
 
@@ -86,7 +128,7 @@ describe("setup import routes", () => {
     });
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     sessionTurnRegistry.beginTurn("restore-drain-test");
@@ -134,7 +176,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(join(getUserConfigDir(), "config.ini"), "changed");
@@ -194,7 +236,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(join(getUserConfigDir(), "config.ini"), "changed");
@@ -221,6 +263,32 @@ describe("setup import routes", () => {
     });
   });
 
+  test("restore reopens agent group files from the restored data", async () => {
+    const { app } = createMinimalHonoApp({ onDataRestored: async () => {} });
+    await writeFile(join(getUserConfigDir(), "config.ini"), "original");
+
+    const archive = (
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
+    ).data;
+
+    // Opens and keeps the org's group file, which the archive does not have.
+    createAgentGroup("org_restore", "u1", "Launch", ["p1", "p2"]);
+
+    const restoreResponse = await app.fetch(
+      new Request("http://localhost:4310/v1/auth/setup/import/restore", {
+        body: JSON.stringify({
+          confirm: true,
+          data: archive.toString("base64"),
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      })
+    );
+
+    expect(restoreResponse.status).toBe(200);
+    expect(listAgentGroups("org_restore", "u1")).toEqual([]);
+  });
+
   test("setup restore keeps 200 with requiresRestart when onDataRestored throws", async () => {
     const { app } = createMinimalHonoApp({
       agent: {
@@ -235,7 +303,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     const restoreResponse = await app.fetch(
@@ -285,7 +353,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(join(getUserConfigDir(), "config.ini"), "changed");
@@ -324,7 +392,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(join(getUserConfigDir(), "config.ini"), "changed");
@@ -352,7 +420,7 @@ describe("setup import routes", () => {
     await loginPlatformAdminSession(app, authService, databaseAdapter);
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     const previewResponse = await app.fetch(
@@ -418,30 +486,72 @@ describe("setup import routes", () => {
 
     expect(restoreResponse.status).toBe(400);
     await expect(readFile(configPath, "utf8")).resolves.toBe("keep");
+  }, 30_000);
+
+  test("after the first admin, a setup body over the limit gets the 409, not setup advice", async () => {
+    const { app, authService, databaseAdapter } = createApp();
+    await loginPlatformAdminSession(app, authService, databaseAdapter);
+
+    const response = await app.fetch(
+      new Request("http://localhost:4310/v1/auth/setup/import/preview", {
+        body: "{}",
+        headers: {
+          "Content-Length": String(MAX_HTTP_REQUEST_BODY_LIMIT_BYTES + 1),
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(409);
   });
 
-  test("wrong-typed setup import body is rejected before decoding", async () => {
+  test("setup preview and restore give their own 413 for an archive over the size limit", async () => {
     const { app } = createApp();
+    const configPath = join(getUserConfigDir(), "config.ini");
+    await writeFile(configPath, "keep");
+    const archive = Buffer.alloc(MAX_IMPORT_ARCHIVE_BYTES + 1);
 
-    const previewResponse = await app.fetch(
+    let genericError = "";
+
+    try {
+      decodeArchiveRequestBytes(archive);
+    } catch (error) {
+      genericError = error instanceof Error ? error.message : "";
+    }
+
+    const send = (route: string) =>
+      app.fetch(
+        new Request(`http://localhost:4310/v1/auth/setup/import/${route}`, {
+          body: archive,
+          headers: { "Content-Type": "application/zip" },
+          method: "POST",
+        })
+      );
+
+    const preview = await send("preview");
+    const restore = await send("restore?confirm=true");
+
+    expect([preview.status, restore.status]).toEqual([413, 413]);
+    const setupError = (await preview.json()).error;
+    expect(genericError).not.toBe("");
+    expect(setupError).not.toBe(genericError);
+    expect((await restore.json()).error).toBe(setupError);
+
+    // The JSON form: base64 over the cap, still under the body limit.
+    const base64 = await app.fetch(
       new Request("http://localhost:4310/v1/auth/setup/import/preview", {
-        body: JSON.stringify({ data: 42 }),
+        body: JSON.stringify({
+          data: "A".repeat(Math.ceil(MAX_IMPORT_ARCHIVE_BYTES / 3) * 4 + 1),
+        }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       })
     );
 
-    expect(previewResponse.status).toBe(400);
-
-    const restoreResponse = await app.fetch(
-      new Request("http://localhost:4310/v1/auth/setup/import/restore", {
-        body: JSON.stringify({ confirm: "yes", data: "archive" }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      })
-    );
-
-    expect(restoreResponse.status).toBe(400);
+    expect(base64.status).toBe(413);
+    expect((await base64.json()).error).toBe(setupError);
+    await expect(readFile(configPath, "utf8")).resolves.toBe("keep");
   });
 
   test("setup import preview does not leak an unexpected error's message", async () => {
@@ -449,15 +559,15 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "keep");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     const previewSpy = spyOn(
       dataPortability,
-      "previewNakamaDataImport"
+      "previewAirinDataImportFile"
     ).mockImplementation(async () => {
       throw new Error(
-        "ENOENT: no such file or directory, open '/home/nakama/.config/nakama/nakama.db'"
+        "ENOENT: no such file or directory, open '/home/airin/.config/airin/airin.db'"
       );
     });
 
@@ -484,10 +594,10 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "provider=openai");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
-    const preview = await previewNakamaDataImport(archive, {
+    const preview = await previewAirinDataImport(archive, {
       rootDir: getUserConfigDir(),
     });
 

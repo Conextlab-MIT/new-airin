@@ -1,11 +1,11 @@
-import type { ArtifactFile } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ArtifactFile } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
+} from "@airin/ui/dropdown-menu";
 import {
   Delete02Icon,
   FileDownloadIcon,

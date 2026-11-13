@@ -1,8 +1,10 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import type { StoredMcpServerRecord } from "@airin/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type { StoredMcpServerRecord } from "@nakama/db";
 import { McpClientManager } from "./mcp-client-manager";
+
+type ToolCallResult = Awaited<ReturnType<Client["callTool"]>>;
 
 function fakeStdioServer(id = "stdio-server"): StoredMcpServerRecord {
   return {
@@ -262,5 +264,165 @@ describe("McpClientManager", () => {
     await manager.ensureConnected(server, orgId, profileId);
     expect(manager.getConnectedCount()).toBe(1);
     expect(clientConnectCount).toBe(2);
+  });
+
+  test("tool images leave the text and fit the model limit", async () => {
+    const pixel = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "base64"
+    );
+
+    const screenshot = await new Bun.Image(pixel)
+      .resize(3000, 1000)
+      .png()
+      .toBase64();
+
+    using _connect = spyOn(Client.prototype, "connect").mockResolvedValue(
+      undefined
+    );
+
+    using _listTools = spyOn(Client.prototype, "listTools").mockResolvedValue({
+      tools: [],
+    });
+
+    using _callTool = spyOn(Client.prototype, "callTool").mockResolvedValue({
+      content: [
+        { data: screenshot, mimeType: "image/png", type: "image" },
+        { text: "Captured", type: "text" },
+      ],
+    });
+
+    using _close = spyOn(
+      StdioClientTransport.prototype,
+      "close"
+    ).mockResolvedValue(undefined);
+
+    const manager = new McpClientManager();
+    const server = fakeStdioServer("stdio-image");
+    await manager.ensureConnected(server, "org_1", "profile_1");
+
+    const result = await manager.callTool(
+      server.id,
+      "stdio",
+      "screenshot",
+      {},
+      "profile_1",
+      "org_1"
+    );
+
+    await manager.disconnectAll();
+
+    // SAFETY: the result shape is asserted field by field below.
+    const { content, images, text } = result as {
+      content: Array<{ data?: string; type: string }>;
+      images: Array<{ data: string; mediaType: string }>;
+      text: string;
+    };
+
+    expect(JSON.stringify({ content, text })).not.toContain(
+      screenshot.slice(0, 64)
+    );
+    expect(content.some((part) => part.type === "image" && !part.data)).toBe(
+      true
+    );
+    expect(images).toHaveLength(1);
+
+    const fitted = await new Bun.Image(
+      Buffer.from(images[0]?.data ?? "", "base64")
+    ).metadata();
+
+    expect({ height: fitted.height, width: fitted.width }).toEqual({
+      height: 667,
+      width: 2000,
+    });
+
+    expect(text).toContain("Captured");
+  });
+
+  async function callWithResult(result: ToolCallResult) {
+    using _connect = spyOn(Client.prototype, "connect").mockResolvedValue(
+      undefined
+    );
+
+    using _listTools = spyOn(Client.prototype, "listTools").mockResolvedValue({
+      tools: [],
+    });
+
+    using callTool = spyOn(Client.prototype, "callTool").mockResolvedValue(
+      // SAFETY: each test controls the result shape the server would send.
+      result as never
+    );
+
+    using _close = spyOn(
+      StdioClientTransport.prototype,
+      "close"
+    ).mockResolvedValue(undefined);
+
+    const manager = new McpClientManager();
+    const server = fakeStdioServer("stdio-bounds");
+    await manager.ensureConnected(server, "org_1", "profile_1");
+
+    try {
+      const value = await manager.callTool(
+        server.id,
+        "stdio",
+        "tool",
+        {},
+        "profile_1",
+        "org_1"
+      );
+
+      return { options: callTool.mock.calls[0]?.[2], value };
+    } finally {
+      await manager.disconnectAll();
+    }
+  }
+
+  test("a tool call has a total deadline even while it reports progress", async () => {
+    const { options } = await callWithResult({
+      content: [{ text: "ok", type: "text" }],
+    });
+
+    expect(options?.resetTimeoutOnProgress).toBe(true);
+    expect(options?.maxTotalTimeout).toBeGreaterThan(0);
+  });
+
+  test("an oversized text result is replaced by an error", async () => {
+    const { value } = await callWithResult({
+      content: [{ text: "x".repeat(2_000_000), type: "text" }],
+    });
+
+    expect(JSON.stringify(value).length).toBeLessThan(1000);
+    expect(value).toMatchObject({ error: expect.stringContaining("limit") });
+  });
+
+  test("an image that cannot be fitted is dropped, not passed through", async () => {
+    const { value } = await callWithResult({
+      content: [
+        {
+          data: "A".repeat(6 * 1024 * 1024),
+          mimeType: "image/png",
+          type: "image",
+        },
+      ],
+    });
+
+    // SAFETY: the result shape is asserted field by field below.
+    const { images, text } = value as { images?: unknown[]; text: string };
+
+    expect(images).toBeUndefined();
+    expect(text).toContain("Image dropped");
+  });
+
+  test("structured content nested past the depth limit is refused", async () => {
+    let deep = {};
+
+    for (let i = 0; i < 500; i++) {
+      deep = { next: deep };
+    }
+
+    await expect(
+      callWithResult({ content: [], structuredContent: { next: deep } })
+    ).rejects.toBeInstanceOf(Error);
   });
 });

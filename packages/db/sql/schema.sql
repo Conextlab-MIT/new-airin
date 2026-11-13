@@ -1,5 +1,14 @@
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS managed_secrets (
+  scope TEXT NOT NULL,
+  name TEXT NOT NULL,
+  source TEXT NOT NULL CHECK(source IN ('environment', 'settings')),
+  encrypted_value TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (scope, name)
+);
+
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
@@ -10,7 +19,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   is_super INTEGER DEFAULT 0 NOT NULL,
   org_id TEXT,
   is_default INTEGER DEFAULT 0 NOT NULL,
-  automations_enabled INTEGER DEFAULT 1 NOT NULL,
+  automations_enabled INTEGER DEFAULT 0 NOT NULL,
+  groups_enabled INTEGER DEFAULT 1 NOT NULL,
   skills_write_approval INTEGER,
   skills_post_turn_review INTEGER,
   skills_curator_consolidate_enabled INTEGER,
@@ -55,11 +65,21 @@ CREATE TABLE IF NOT EXISTS sessions (
   updated_at TEXT NOT NULL,
   title TEXT,
   pinned INTEGER NOT NULL DEFAULT 0,
+  parent_session_id TEXT REFERENCES sessions (id) ON DELETE SET NULL,
+  branch_message_index INTEGER,
   model TEXT,
   agent_todos TEXT DEFAULT '[]' NOT NULL,
   agent_questionnaire TEXT,
+  closed_at TEXT,
   FOREIGN KEY (profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS session_user_order (
+  session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  sort_position INTEGER NOT NULL,
+  PRIMARY KEY (session_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS session_messages (
@@ -120,6 +140,8 @@ CREATE TABLE IF NOT EXISTS automation_runs (
   delivery_status TEXT,
   delivery_error TEXT,
   resume_count INTEGER NOT NULL DEFAULT 0,
+  source TEXT,
+  input TEXT,
   FOREIGN KEY (automation_id) REFERENCES automations (id) ON DELETE CASCADE
 );
 
@@ -225,6 +247,31 @@ CREATE TABLE IF NOT EXISTS notification_webhook_deliveries (
 
 CREATE INDEX IF NOT EXISTS notification_webhook_deliveries_created_at
   ON notification_webhook_deliveries (created_at);
+
+-- Idempotency ledger for public POST /v1/automations/:automationId/webhook.
+CREATE TABLE IF NOT EXISTS automation_webhook_deliveries (
+  automation_id TEXT NOT NULL,
+  delivery_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (automation_id, delivery_id),
+  FOREIGN KEY (automation_id) REFERENCES automations (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS automation_webhook_deliveries_created_at
+  ON automation_webhook_deliveries (created_at);
+
+-- One HMAC secret per webhook automation; it ends with its maker's access.
+CREATE TABLE IF NOT EXISTS automation_webhook_secrets (
+  automation_id TEXT PRIMARY KEY NOT NULL,
+  encrypted_value TEXT NOT NULL,
+  created_by_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (automation_id) REFERENCES automations (id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS automation_webhook_secrets_created_by_user_id
+  ON automation_webhook_secrets (created_by_user_id);
 
 CREATE TABLE IF NOT EXISTS mcp_servers (
   id TEXT PRIMARY KEY NOT NULL,
@@ -636,6 +683,52 @@ CREATE UNIQUE INDEX IF NOT EXISTS artifact_shares_active_path_unique
   ON artifact_shares (org_id, profile_id, source_path)
   WHERE revoked_at IS NULL;
 
+-- A finished chat session or automation run saved with the result a member
+-- expected, so a later profile change can be checked against it.
+CREATE TABLE IF NOT EXISTS regression_cases (
+  id TEXT PRIMARY KEY NOT NULL,
+  org_id TEXT NOT NULL,
+  profile_id TEXT NOT NULL,
+  source_type TEXT NOT NULL CHECK(source_type IN ('session', 'automation_run')),
+  source_id TEXT NOT NULL,
+  source_automation_id TEXT,
+  input TEXT NOT NULL,
+  expected_result TEXT NOT NULL,
+  created_by_user_id TEXT,
+  -- Set when the source chat was private; only this user and platform admins read it.
+  private_to_user_id TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (org_id) REFERENCES organizations (id) ON DELETE CASCADE,
+  FOREIGN KEY (profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL,
+  FOREIGN KEY (private_to_user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS regression_cases_profile_created
+  ON regression_cases (org_id, profile_id, created_at DESC);
+
+-- A case rerun against its profile, with the pass or fail a member gave it.
+CREATE TABLE IF NOT EXISTS regression_case_runs (
+  id TEXT PRIMARY KEY NOT NULL,
+  org_id TEXT NOT NULL,
+  case_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('completed', 'failed')),
+  output TEXT,
+  error TEXT,
+  verdict TEXT CHECK(verdict IN ('pass', 'fail')),
+  verdict_by_user_id TEXT,
+  verdict_at TEXT,
+  created_by_user_id TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (org_id) REFERENCES organizations (id) ON DELETE CASCADE,
+  FOREIGN KEY (case_id) REFERENCES regression_cases (id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL,
+  FOREIGN KEY (verdict_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS regression_case_runs_case_created
+  ON regression_case_runs (case_id, created_at DESC);
+
 -- Security audit ledger. Deliberately has no foreign keys so account or org
 -- erasure cannot remove the historical record.
 CREATE TABLE IF NOT EXISTS audit_events (
@@ -691,6 +784,7 @@ CREATE TABLE IF NOT EXISTS plugin_releases (
   version TEXT NOT NULL,
   manifest TEXT NOT NULL,
   digest TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'legacy',
   created_at TEXT NOT NULL,
   PRIMARY KEY (plugin_id, version)
 );
@@ -717,6 +811,20 @@ CREATE TABLE IF NOT EXISTS file_pins (
   path TEXT NOT NULL,
   PRIMARY KEY (org_id, user_id, profile_id, path)
 );
+
+-- Who made each artifact. The file stays on disk; this row only records its owner.
+CREATE TABLE IF NOT EXISTS artifacts (
+  org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  channel TEXT,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (org_id, profile_id, filename)
+);
+
+CREATE INDEX IF NOT EXISTS artifacts_org_user ON artifacts (org_id, user_id);
 
 -- Source links survive publication removal so shared instances remain managed.
 CREATE TABLE IF NOT EXISTS org_shared_resources (

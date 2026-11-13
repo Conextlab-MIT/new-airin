@@ -11,14 +11,14 @@ import {
 let previousDsn: string | undefined;
 
 beforeEach(() => {
-  previousDsn = process.env.NAKAMA_ERROR_TRACKING_DSN;
+  previousDsn = process.env.AIRIN_ERROR_TRACKING_DSN;
 });
 
 afterEach(() => {
   if (previousDsn === undefined) {
-    delete process.env.NAKAMA_ERROR_TRACKING_DSN;
+    delete process.env.AIRIN_ERROR_TRACKING_DSN;
   } else {
-    process.env.NAKAMA_ERROR_TRACKING_DSN = previousDsn;
+    process.env.AIRIN_ERROR_TRACKING_DSN = previousDsn;
   }
 });
 
@@ -52,6 +52,18 @@ test("the event forces our own fingerprint so grouping survives across installs"
   const event = toSentryEvent(report);
 
   expect(event.fingerprint).toEqual([report.fingerprint]);
+});
+
+test("the event carries the cause next to the stack", () => {
+  const report = buildErrorReport(
+    new Error("wrapper", { cause: new RangeError("root") }),
+    { source: "server" }
+  );
+
+  const event = toSentryEvent(report);
+
+  expect(event.extra?.cause).toStartWith("RangeError");
+  expect(event.extra?.stack).toBe(report.stack);
 });
 
 test("no user identity is sent", () => {
@@ -168,7 +180,7 @@ async function countSinkHits(env: Record<string, string>): Promise<number> {
   });
 
   try {
-    process.env.NAKAMA_ERROR_TRACKING_DSN = `http://k@${server.hostname}:${server.port}/1`;
+    process.env.AIRIN_ERROR_TRACKING_DSN = `http://k@${server.hostname}:${server.port}/1`;
 
     for (const [key, value] of Object.entries(env)) {
       process.env[key] = value;
@@ -187,7 +199,7 @@ async function countSinkHits(env: Record<string, string>): Promise<number> {
 }
 
 test("the sink contacts nothing when no DSN is configured", async () => {
-  expect(await countSinkHits({ NAKAMA_ERROR_TRACKING_DSN: "" })).toBe(0);
+  expect(await countSinkHits({ AIRIN_ERROR_TRACKING_DSN: "" })).toBe(0);
 });
 
 test("the sink contacts nothing under DO_NOT_TRACK", async () => {
@@ -207,7 +219,7 @@ test("the sink delivers to the configured DSN", async () => {
   });
 
   try {
-    process.env.NAKAMA_ERROR_TRACKING_DSN = `http://k@${server.hostname}:${server.port}/1`;
+    process.env.AIRIN_ERROR_TRACKING_DSN = `http://k@${server.hostname}:${server.port}/1`;
 
     await createErrorTrackingSink()(sampleReport());
 

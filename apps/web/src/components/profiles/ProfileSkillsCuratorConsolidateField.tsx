@@ -1,4 +1,4 @@
-import type { ProfileDetail } from "@nakama/core/contract";
+import type { ProfileDetail } from "@airin/core/contract";
 import { Layers01Icon } from "hugeicons-react";
 import { ProfileOrgBooleanOverrideField } from "@/components/profiles/ProfileOrgBooleanOverrideField";
 

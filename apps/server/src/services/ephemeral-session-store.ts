@@ -1,5 +1,5 @@
-import type { AgentChatSession } from "@nakama/agent";
-import type { StoredSessionRecord } from "@nakama/db";
+import type { AgentChatSession } from "@airin/agent";
+import type { StoredSessionRecord } from "@airin/db";
 
 /**
  * A cognito session. It never reaches SQLite, so this map is the only place it
@@ -15,8 +15,9 @@ export interface EphemeralSession {
   lastActiveAt: number;
   /** Synthetic; shaped like a row so session paths can treat it as one. */
   record: StoredSessionRecord;
+  /** The capability revision the chat was built under. */
+  revision?: string;
   session: AgentChatSession;
-  sharedCapabilityRevision?: string;
 }
 
 /** A tab closed without toggling cognito off leaves an entry behind. */
@@ -47,6 +48,16 @@ export class EphemeralSessionStore {
     }
 
     return entry;
+  }
+
+  findByAttachmentId(attachmentId: string): EphemeralSession | undefined {
+    for (const entry of this.entries.values()) {
+      if (entry.attachmentIds.has(attachmentId)) {
+        return entry;
+      }
+    }
+
+    return undefined;
   }
 
   clear(): void {

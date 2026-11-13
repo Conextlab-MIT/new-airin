@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { McpServerSummary } from "@nakama/core/contract";
-import { PREINSTALLED_MCP_SERVER_IDS } from "@nakama/core/mcp/preinstalled";
+import type { McpServerSummary } from "@airin/core/contract";
+import { PREINSTALLED_MCP_SERVER_IDS } from "@airin/core/mcp/preinstalled";
 import { mcpServerDeleteBlockReason } from "./shared";
 
 function summary(

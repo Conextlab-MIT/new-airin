@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
 import { setupTestConfigDir } from "../test-config-dir";
 import { createMinimalHonoApp } from "./test-app-helpers";
 import {
@@ -8,7 +8,7 @@ import {
   loginUserSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-platform-orgs-test-");
+setupTestConfigDir("airin-platform-orgs-test-");
 
 function createPlatformApp() {
   return createMinimalHonoApp();
@@ -39,6 +39,7 @@ describe("platform org routes", () => {
       adminMember: {
         member: {
           createdAt: expect.any(String),
+          disabledAt: null,
           email: "platform@example.com",
           name: null,
           phone: null,
@@ -223,6 +224,13 @@ describe("platform org routes", () => {
 
     expect(second.status).toBe(201);
 
+    await databaseAdapter.putManagedSecret({
+      encryptedValue: "test-value",
+      name: "tool:test-api-key",
+      scope: created.organization.id,
+      source: "settings",
+    });
+
     const archived = await app.fetch(
       new Request(
         `http://localhost:4310/v1/platform/orgs/${created.organization.id}`,
@@ -256,6 +264,12 @@ describe("platform org routes", () => {
     expect(deleted.status).toBe(204);
     expect(
       await databaseAdapter.getOrganizationById(created.organization.id)
+    ).toBeNull();
+    expect(
+      await databaseAdapter.getManagedSecret(
+        created.organization.id,
+        "tool:test-api-key"
+      )
     ).toBeNull();
   });
 
@@ -1033,6 +1047,58 @@ describe("platform org routes", () => {
         "session_erased_user_second_org"
       )
     ).toHaveLength(1);
+  });
+
+  test("platform admin cannot erase the only admin of an organization", async () => {
+    const { app, authService, databaseAdapter } = createPlatformApp();
+
+    const platformSession = await loginPlatformAdminSession(
+      app,
+      authService,
+      databaseAdapter
+    );
+
+    const now = new Date().toISOString();
+    const orgId = "org_sole_admin";
+    await databaseAdapter.upsertOrganization({
+      createdAt: now,
+      id: orgId,
+      name: "Sole Admin",
+      slug: "sole-admin",
+      updatedAt: now,
+    });
+    const userId = "user_sole_admin";
+    await databaseAdapter.createUser({
+      createdAt: now,
+      email: "sole-admin@example.com",
+      id: userId,
+      passwordHash: "unused",
+      updatedAt: now,
+    });
+    await databaseAdapter.upsertOrgMember({
+      createdAt: now,
+      orgId,
+      role: "admin",
+      userId,
+    });
+
+    const response = await app.fetch(
+      new Request(`http://localhost:4310/v1/platform/users/${userId}`, {
+        headers: platformSession.headers({
+          "X-CSRF-Token": platformSession.csrfToken,
+        }),
+        method: "DELETE",
+      })
+    );
+
+    expect(response.status).toBe(409);
+    expect(await databaseAdapter.getOrgMember(orgId, userId)).toMatchObject({
+      role: "admin",
+    });
+    expect(await databaseAdapter.getUserById(userId)).toMatchObject({
+      disabledAt: null,
+      email: "sole-admin@example.com",
+    });
   });
 
   test("platform admin cannot erase their current account", async () => {

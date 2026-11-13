@@ -3,16 +3,16 @@ import { homedir, tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type ImageAttachment,
+  MAX_IMAGE_BYTES,
+  validateImageAttachments,
+} from "@airin/core";
+import {
   getFiles,
   getImageBinary,
   hasFiles,
   hasImage,
 } from "@crosscopy/clipboard";
-import {
-  type ImageAttachment,
-  MAX_IMAGE_BYTES,
-  validateImageAttachments,
-} from "@nakama/core";
 import { resolveAllowedImagePath } from "./image-input";
 
 export function pastedImagePath(text: string): string | null {

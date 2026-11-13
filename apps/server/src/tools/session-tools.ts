@@ -4,7 +4,7 @@ import {
   type JsonValue,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import type { AgentService } from "../services/agent-service";
 
@@ -144,6 +144,7 @@ export function createSessionTools(agent: AgentService): ToolDefinition[] {
           {
             isPlatformAdmin: context.isPlatformAdmin,
             orgRole: context.orgRole,
+            user: context.userId ? { id: context.userId } : undefined,
           }
         );
       },
@@ -181,6 +182,12 @@ export function createSessionTools(agent: AgentService): ToolDefinition[] {
         if (!sessionId) {
           throw new Error("sessionId is required.");
         }
+
+        await agent.assertSessionProfileAccess(sessionId, orgId, {
+          isPlatformAdmin: context.isPlatformAdmin,
+          orgRole: context.orgRole,
+          user: context.userId ? { id: context.userId } : undefined,
+        });
 
         const result = await agent.getSessionMessages(sessionId, orgId, {
           persistedOnly: true,
@@ -221,6 +228,51 @@ export function createSessionTools(agent: AgentService): ToolDefinition[] {
           returnedMessages: messages.length,
           totalMessages: result.messages.length,
         };
+      },
+    },
+    {
+      description:
+        "Close one of the user's chats when they ask: stop its running turn and take it out of Recents. Nothing is deleted. The user finds it again by search, and sending it a message brings it back. Deleting a chat stays a UI action.",
+      name: "close_session",
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          sessionId: {
+            description:
+              "Id of the chat to close, for example one sub_agent started.",
+            type: "string",
+          },
+        },
+        required: ["sessionId"],
+        type: "object",
+      },
+      async run(input, context: ToolContext) {
+        const parsedInput = ReadSessionInputSchema.parse(input);
+        const orgId = requireOrgId(context);
+        const sessionId = parsedInput.sessionId?.trim();
+
+        if (!sessionId) {
+          throw new Error("sessionId is required.");
+        }
+
+        // Closing the running chat would abort the turn that runs this tool.
+        if (sessionId === context.sessionId?.trim()) {
+          throw new Error(
+            "This chat cannot close itself. The user can close it from Recents."
+          );
+        }
+
+        const closed = await agent.closeSession(sessionId, orgId, {
+          isPlatformAdmin: context.isPlatformAdmin,
+          orgRole: context.orgRole,
+          user: context.userId ? { id: context.userId } : undefined,
+        });
+
+        if (!closed) {
+          throw new Error("Session not found.");
+        }
+
+        return { closed: true, sessionId };
       },
     },
   ];

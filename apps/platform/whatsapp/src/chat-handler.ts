@@ -1,47 +1,48 @@
 import type {
-  NakamaClient,
+  AirinClient,
   RemoteChatSession,
   SendStreamOptions,
-} from "@nakama/client";
+} from "@airin/client";
 import {
   extractPairedTurnArtifacts,
   isAttachOnlyCommand,
   pushDeliverableArtifact,
-} from "@nakama/core";
-import { formatClientError } from "@nakama/core/api-error";
+} from "@airin/core";
+import { formatClientError } from "@airin/core/api-error";
 import {
   clearActiveStream,
   isAbortError,
   registerActiveStream,
   stopActiveStream,
-} from "@nakama/core/channel-active-stream";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
+} from "@airin/core/channel-active-stream";
+import { createChatLock } from "@airin/core/channel-chat-lock";
+import { describeChannelStatus } from "@airin/core/channel-commands";
 import {
   type ChannelOrgStore,
   findOrgBySelectionInput,
   formatOrgSelectionPrompt,
   formatOrgSwitchConfirmation,
   prepareChannelOrgContext,
-} from "@nakama/core/channel-org";
-import type { ChannelSessionStore } from "@nakama/core/channel-session-store";
-import { createTypingLoop } from "@nakama/core/channel-typing-loop";
+} from "@airin/core/channel-org";
+import type { ChannelSessionStore } from "@airin/core/channel-session-store";
+import { createTypingLoop } from "@airin/core/channel-typing-loop";
 import type {
   SendMessageInput,
   SendMessageRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   MAX_DOCUMENT_BYTES,
   MAX_IMAGE_BYTES,
   normalizeDocumentMediaType,
   validateDocumentAttachments,
   validateImageAttachments,
-} from "@nakama/core/message-content";
-import { pickProfileForOrg } from "@nakama/core/profiles";
+} from "@airin/core/message-content";
+import { pickProfileForOrg } from "@airin/core/profiles";
 import {
   DEFAULT_WHATSAPP_REQUIRE_GROUP_MENTION,
   hasActivePairingCode,
   looksLikePairingCode,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 import {
   downloadContentFromMessage,
   type WASocket,
@@ -76,7 +77,7 @@ import { WhatsAppTodoStatusMessage } from "./todo-status-message";
 
 /** Optional verbose channel worker logging (per-message structural info). */
 function isChannelDebugEnabled(): boolean {
-  return process.env.NAKAMA_CH_DEBUG === "1";
+  return process.env.AIRIN_CH_DEBUG === "1";
 }
 
 const chatLock = createChatLock();
@@ -90,13 +91,13 @@ const LINK_IN_PRIVATE_REPLY =
 const ALREADY_LINKED_REPLY = "This number is already linked.";
 
 const PAIRING_PROMPT =
-  "Welcome to Nakama.\n\n" +
+  "Welcome to Airin.\n\n" +
   "Paste your pairing code from Integrations \u2192 WhatsApp in the web dashboard. " +
   "You only need to do this once for this number.";
 
 export interface ChatHandlerDeps {
   authStore: WhatsAppAuthStore;
-  client: NakamaClient;
+  client: AirinClient;
   config: WhatsAppBridgeConfig;
   getSocket: () => WASocket | null;
   orgStore: ChannelOrgStore;
@@ -105,6 +106,14 @@ export interface ChatHandlerDeps {
 }
 
 export function createChatHandler(deps: ChatHandlerDeps) {
+  // Each message owns its API client. The lock is per chat, so two chats run
+  // at once, and a shared client's setOrgId would send one chat's requests to
+  // the other chat's org.
+  return (data: Parameters<ReturnType<typeof createScopedChatHandler>>[0]) =>
+    createScopedChatHandler({ ...deps, client: deps.client.forOrg() })(data);
+}
+
+function createScopedChatHandler(deps: ChatHandlerDeps) {
   const {
     client,
     config,
@@ -167,6 +176,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
       ? explainGroupMessageHandling({
           me: inbound.me,
           mentionedJids: inbound.mentionedJids,
+          quotedMessageId: inbound.quotedMessageId,
           quotedParticipant: inbound.quotedParticipant,
           requireMention: requireGroupMention,
           text: trimmed || (inbound.media ? "[attachment]" : ""),
@@ -440,7 +450,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
       }
 
       case "/status":
-        await replyStatus(jid);
+        await replyStatus(jid, conversationKey);
 
         return;
 
@@ -619,6 +629,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
               if (
                 event.tool === "write_file" ||
                 event.tool === "write_docx" ||
+                event.tool === "save_artifact" ||
                 event.tool === "edit_file"
               ) {
                 writeCalls.add(event.toolCallId);
@@ -791,49 +802,41 @@ export function createChatHandler(deps: ChatHandlerDeps) {
     }
   }
 
-  async function replyStatus(jid: string): Promise<void> {
-    try {
-      const health = await client.health();
+  async function replyStatus(
+    jid: string,
+    conversationKey: string
+  ): Promise<void> {
+    const status = await describeChannelStatus(client, {
+      findAgent: async () => {
+        const agent = await resolveProfile();
 
-      const lines = [
-        `Server: ${health.ok ? "ok" : "degraded"}`,
-        `Provider configured: ${health.providerConfigured ? "yes" : "no"}`,
-      ];
+        return { agent, id: agent.id };
+      },
+      label: "Agent",
+      sessionId: sessionStore.get(conversationKey)?.sessionId,
+    });
 
-      if (health.providerConfigured) {
-        const models = await client.getModels();
-        const profileId = await resolveProfileId();
-        const profiles = await client.listProfiles();
-
-        const profile = profiles.profiles.find(
-          (entry) => entry.id === profileId
-        );
-
-        const modelLabel = profile?.model?.includes("::")
-          ? profile.model.slice(profile.model.indexOf("::") + 2)
-          : (profile?.model ?? "none");
-
-        lines.push(`Provider: ${models.provider ?? "unknown"}`);
-        lines.push(`Model: ${modelLabel}`);
-      } else {
-        lines.push("Chat runs in offline mode without an API key.");
-      }
-
-      await sendText(jid, lines.join("\n"));
-    } catch (error) {
-      await sendText(jid, formatClientError(error));
-    }
+    await sendText(jid, status);
   }
 
   async function resolveProfileId(): Promise<string> {
+    return (await resolveProfile()).id;
+  }
+
+  /** The chat's agent. An owner's connection looks it up in the owner's org. */
+  async function resolveProfile() {
     if (config.owner) {
       const { profiles } = await client.listProfiles(config.owner.orgId);
 
-      if (!profiles.some((profile) => profile.id === config.owner!.profileId)) {
+      const ownerProfile = profiles.find(
+        (profile) => profile.id === config.owner!.profileId
+      );
+
+      if (!ownerProfile) {
         throw new Error("The connection owner is unavailable.");
       }
 
-      return config.owner.profileId;
+      return ownerProfile;
     }
 
     const fileConfig = authStore.getConfig();
@@ -843,7 +846,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
 
     const profiles = await client.listProfiles();
 
-    return pickProfileForOrg(profiles.profiles, preferredProfileId).id;
+    return pickProfileForOrg(profiles.profiles, preferredProfileId);
   }
 
   async function resolveSession(jid: string): Promise<RemoteChatSession> {
@@ -998,6 +1001,7 @@ function normalizeInboundChat(
     media: data.media,
     mentionedJids: data.mentionedJids ?? [],
     messageId: data.messageId ?? null,
+    quotedMessageId: data.quotedMessageId ?? null,
     quotedParticipant: data.quotedParticipant ?? null,
     quotedText: data.quotedText ?? null,
     senderJid: data.senderJid ?? data.jid,
@@ -1142,17 +1146,9 @@ export function resetChatLocksForTests(): void {
   chatLock.resetForTests();
 }
 
-export async function withChatLock(
+async function withChatLock(
   jid: string,
   fn: () => Promise<void>
 ): Promise<void> {
   return chatLock.withLock(jid, fn);
-}
-
-/** @internal Test helper — seed a predecessor promise (rejection-safety tests). */
-export function seedChatLockForTests(
-  jid: string,
-  promise: Promise<void>
-): void {
-  chatLock.seedForTests(jid, promise);
 }

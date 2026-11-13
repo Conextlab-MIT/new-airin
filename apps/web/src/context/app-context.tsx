@@ -1,7 +1,7 @@
 import type {
   ConfigureProviderRequest,
   CreateProviderRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { type ReactNode, useCallback, useMemo } from "react";
 import { AppContext } from "@/context/app-context-shared";
 import { useAuth } from "@/context/use-auth";
@@ -12,15 +12,18 @@ import {
   useModelsQuery,
 } from "@/hooks/use-app-queries";
 import { formatError } from "@/lib/client";
+import { isMfaEnrollmentError, needsMfaEnrollment } from "@/lib/mfa";
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const authReady = isAuthenticated && !authLoading;
+  const mfaPending = needsMfaEnrollment(user);
   const healthQuery = useHealthQuery();
   const providerConfigured = healthQuery.data?.providerConfigured === true;
 
   const modelsQuery = useModelsQuery({
-    enabled: providerConfigured && authReady,
+    // Models stay locked until MFA enrollment finishes.
+    enabled: providerConfigured && authReady && !mfaPending,
   });
 
   const configureProviderMutation = useConfigureProviderMutation();
@@ -39,11 +42,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const error = useMemo(() => {
-    if (healthQuery.error) {
+    if (healthQuery.error && !isMfaEnrollmentError(healthQuery.error)) {
       return formatError(healthQuery.error);
     }
 
-    if (modelsQuery.error) {
+    if (modelsQuery.error && !isMfaEnrollmentError(modelsQuery.error)) {
       return formatError(modelsQuery.error);
     }
 

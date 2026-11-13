@@ -1,21 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import type { ProviderName } from "@nakama/core";
-import { USER_PROVIDER_NAMES } from "@nakama/core/provider-resolution";
+import type { ProviderName } from "@airin/core";
+import { USER_PROVIDER_NAMES } from "@airin/core/provider-resolution";
 import {
-  appendOpenRouterModelRow,
   buildCreateProviderRequest,
   effectiveProfileModelSelection,
   encodeModelSelection,
   filterVisionCapableProviderGroups,
+  findSelectedModel,
   firstAvailableProviderOption,
-  hasOpenCodeZenProvider,
-  isOpenCodeZenBaseUrl,
-  isProviderTypeAlreadyConfigured,
-  knownModelSelection,
-  PROVIDER_OPTIONS,
+  isLocalBaseUrl,
+  profileModelLabel,
   profileModelSelectionValue,
   resolveModelThinkingSupport,
   resolveModelVisionSupport,
+  resolveOpenRouterSetupModel,
   validateCustomModelsInput,
 } from "./models";
 
@@ -28,9 +26,23 @@ describe("buildCreateProviderRequest", () => {
       "xai_oauth",
       "chatgpt",
       "cerebras",
+      "cloudflare",
       "fireworks",
       "ollama",
       "opencode_go",
+      "openai",
+      "anthropic",
+      "gemini",
+      "deepseek",
+      "doubao",
+      "together",
+      "xiaomi",
+      "meta",
+      "vercel_ai_gateway",
+      "mistral",
+      "qwen",
+      "qwen_cn",
+      "perplexity",
     ];
 
     for (const provider of USER_PROVIDER_NAMES) {
@@ -179,8 +191,10 @@ describe("resolveModelThinkingSupport", () => {
       if (explicitProviders.includes(provider)) {
         expect(
           resolveModelThinkingSupport(
-            encodeModelSelection("instance-one", "model-1"),
-            group("instance-one", provider)
+            findSelectedModel(
+              encodeModelSelection("instance-one", "model-1"),
+              group("instance-one", provider)
+            )
           )
         ).toBe(false);
       }
@@ -188,28 +202,33 @@ describe("resolveModelThinkingSupport", () => {
       for (const supportsThinking of [false, true]) {
         expect(
           resolveModelThinkingSupport(
-            encodeModelSelection("instance-one", "model-1"),
-            group("instance-one", provider, { supportsThinking })
+            findSelectedModel(
+              encodeModelSelection("instance-one", "model-1"),
+              group("instance-one", provider, { supportsThinking })
+            )
           )
         ).toBe(supportsThinking);
       }
     }
   });
+});
 
-  test("preserves existing non-compatible behavior", () => {
-    expect(
-      resolveModelThinkingSupport(
-        encodeModelSelection("openai-1", "model-1"),
-        group("openai-1", "openai")
-      )
-    ).toBe(true);
+describe("profileModelLabel", () => {
+  test("names the provider only when the model is found in the selected one", () => {
+    const groups = [
+      ...group("instance-one", "openai"),
+      ...group("instance-two", "openrouter"),
+    ];
 
-    expect(
-      resolveModelThinkingSupport(
-        encodeModelSelection("openai-1", "model-1"),
-        group("openai-1", "openai", { supportsThinking: false })
-      )
-    ).toBe(false);
+    const label = (selection: string) =>
+      profileModelLabel(selection, groups, { withProvider: true });
+
+    expect(label(encodeModelSelection("instance-two", "model-1"))).toBe(
+      "Model 1 · instance-two"
+    );
+    expect(label(encodeModelSelection("missing", "model-1"))).toBe("Model 1");
+    expect(label(encodeModelSelection("instance-one", "gone"))).toBe("gone");
+    expect(profileModelLabel(null, groups)).toBe("Select model");
   });
 });
 
@@ -231,6 +250,8 @@ describe("resolveModelVisionSupport", () => {
       "openrouter",
       "mistral",
       "ollama",
+      "netra",
+      "groq",
     ];
 
     for (const provider of USER_PROVIDER_NAMES) {
@@ -253,22 +274,6 @@ describe("resolveModelVisionSupport", () => {
       }
     }
   });
-
-  test("defaults first-party models to vision-capable", () => {
-    expect(
-      resolveModelVisionSupport(
-        encodeModelSelection("openai-1", "model-1"),
-        group("openai-1", "openai")
-      )
-    ).toBe(true);
-
-    expect(
-      resolveModelVisionSupport(
-        encodeModelSelection("openai-1", "model-1"),
-        group("openai-1", "openai", { supportsVision: false })
-      )
-    ).toBe(false);
-  });
 });
 
 describe("filterVisionCapableProviderGroups", () => {
@@ -289,44 +294,7 @@ describe("filterVisionCapableProviderGroups", () => {
   });
 });
 
-describe("isProviderTypeAlreadyConfigured", () => {
-  test("treats builtin providers as taken once configured", () => {
-    const configured = new Set(["openai", "anthropic"]);
-
-    expect(isProviderTypeAlreadyConfigured("openai", configured)).toBe(true);
-    expect(isProviderTypeAlreadyConfigured("gemini", configured)).toBe(false);
-  });
-
-  test("always allows another openai_compatible instance", () => {
-    const configured = new Set(["openai_compatible", "openai"]);
-
-    expect(
-      isProviderTypeAlreadyConfigured("openai_compatible", configured)
-    ).toBe(false);
-  });
-
-  test("always allows another ollama instance", () => {
-    const configured = new Set(["ollama", "openai"]);
-
-    expect(isProviderTypeAlreadyConfigured("ollama", configured)).toBe(false);
-  });
-});
-
-describe("PROVIDER_OPTIONS", () => {
-  test("lists every registered provider type", () => {
-    expect(PROVIDER_OPTIONS.map((option) => option.id).toSorted()).toEqual(
-      [...USER_PROVIDER_NAMES].toSorted()
-    );
-  });
-});
-
 describe("firstAvailableProviderOption", () => {
-  test("keeps preferred provider when it is still free", () => {
-    expect(firstAvailableProviderOption(new Set(["anthropic"]), "openai")).toBe(
-      "openai"
-    );
-  });
-
   test("falls through to the next free builtin, then custom", () => {
     expect(firstAvailableProviderOption(new Set(["openai"]), "openai")).toBe(
       "chatgpt"
@@ -345,6 +313,7 @@ describe("firstAvailableProviderOption", () => {
           "doubao",
           "together",
           "xiaomi",
+          "meta",
           "vercel_ai_gateway",
           "mistral",
           "qwen",
@@ -422,81 +391,6 @@ describe("effectiveProfileModelSelection", () => {
   });
 });
 
-describe("knownModelSelection", () => {
-  const groups = group("openai-1", "openai");
-
-  test("keeps a remembered pick that still exists", () => {
-    expect(knownModelSelection("openai-1::model-1", groups)).toBe(
-      "openai-1::model-1"
-    );
-  });
-
-  test("re-encodes a bare model id onto its provider", () => {
-    expect(knownModelSelection("model-1", groups)).toBe("openai-1::model-1");
-  });
-
-  test("drops a pick whose provider or model is gone", () => {
-    expect(knownModelSelection("openai-1::retired-model", groups)).toBeNull();
-    expect(knownModelSelection("deleted-provider::model-9", groups)).toBeNull();
-  });
-
-  test("keeps the pick while the catalog has not loaded", () => {
-    expect(knownModelSelection("openai-1::model-1", [])).toBe(
-      "openai-1::model-1"
-    );
-  });
-
-  test("returns null for an empty selection", () => {
-    expect(knownModelSelection(null, groups)).toBeNull();
-    expect(knownModelSelection("", groups)).toBeNull();
-  });
-});
-
-describe("isOpenCodeZenBaseUrl", () => {
-  test("matches Zen v1 and rejects OpenCode Go", () => {
-    expect(isOpenCodeZenBaseUrl("https://opencode.ai/zen/v1")).toBe(true);
-    expect(isOpenCodeZenBaseUrl("https://opencode.ai/zen/v1/")).toBe(true);
-    expect(isOpenCodeZenBaseUrl("https://opencode.ai/zen/go/v1")).toBe(false);
-    expect(isOpenCodeZenBaseUrl("https://api.openai.com/v1")).toBe(false);
-  });
-});
-
-describe("hasOpenCodeZenProvider", () => {
-  test("detects Zen by base URL or label on openai_compatible", () => {
-    expect(
-      hasOpenCodeZenProvider([
-        {
-          baseUrl: "https://opencode.ai/zen/v1",
-          label: "OpenCode Zen",
-          type: "openai_compatible",
-        },
-      ])
-    ).toBe(true);
-
-    expect(
-      hasOpenCodeZenProvider([
-        {
-          baseUrl: "https://localhost:11434/v1",
-          label: "Ollama",
-          type: "openai_compatible",
-        },
-      ])
-    ).toBe(false);
-
-    expect(
-      hasOpenCodeZenProvider([
-        { baseUrl: null, label: "OpenCode Zen", type: "openai_compatible" },
-      ])
-    ).toBe(true);
-
-    expect(
-      hasOpenCodeZenProvider([
-        { baseUrl: "https://opencode.ai/zen/go/v1", type: "opencode_go" },
-      ])
-    ).toBe(false);
-  });
-});
-
 describe("validateCustomModelsInput", () => {
   test("requires both $/1M rates or neither", () => {
     expect(
@@ -512,43 +406,36 @@ describe("validateCustomModelsInput", () => {
       "Add at least one model."
     );
   });
+
+  test("rejects the same model ID twice", () => {
+    expect(
+      validateCustomModelsInput([{ id: "m" }, { id: " m " }])
+    ).not.toBeNull();
+    expect(validateCustomModelsInput([{ id: "m" }, { id: "n" }])).toBeNull();
+  });
 });
 
-describe("appendOpenRouterModelRow", () => {
-  test("keeps the context window the browse row carried", () => {
+describe("isLocalBaseUrl", () => {
+  test("treats loopback and private hosts as local", () => {
+    expect(isLocalBaseUrl("http://localhost:11434/v1")).toBe(true);
+    expect(isLocalBaseUrl("http://192.168.1.4:8000/v1")).toBe(true);
+    expect(isLocalBaseUrl("https://apihub.agnes-ai.com/v1")).toBe(false);
+  });
+});
+
+describe("resolveOpenRouterSetupModel", () => {
+  test("the row marked default wins over the catalog pick", () => {
     expect(
-      appendOpenRouterModelRow(
-        [],
-        "anthropic/claude-sonnet-4-6",
-        "Sonnet 4.6",
-        {
-          contextWindow: 1_000_000,
-        }
+      resolveOpenRouterSetupModel(
+        [{ id: "a/one" }, { default: true, id: "a/two" }],
+        "a/one"
       )
-    ).toEqual([
-      {
-        contextWindow: 1_000_000,
-        default: true,
-        id: "anthropic/claude-sonnet-4-6",
-        name: "Sonnet 4.6",
-      },
-    ]);
+    ).toBe("a/two");
   });
 
-  test("preserves existing rows and moves the default to the picked model", () => {
+  test("with no row marked, the catalog pick stays", () => {
     expect(
-      appendOpenRouterModelRow(
-        [
-          { contextWindow: 32_000, default: true, id: "a/one", name: "One" },
-          { id: "a/two" },
-          { id: "   " },
-        ],
-        "a/two",
-        "Two"
-      )
-    ).toEqual([
-      { contextWindow: 32_000, default: false, id: "a/one", name: "One" },
-      { default: true, id: "a/two", name: "a/two" },
-    ]);
+      resolveOpenRouterSetupModel([{ id: "a/one" }, { id: "a/two" }], "a/two")
+    ).toBe("a/two");
   });
 });

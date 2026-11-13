@@ -13,15 +13,15 @@ function sharePublishRequest(init?: RequestInit): Request {
 }
 
 async function withFreshConfigDir<T>(run: () => T | Promise<T>): Promise<T> {
-  const configDir = join(tmpdir(), `nakama-artifact-share-base-${Date.now()}`);
+  const configDir = join(tmpdir(), `airin-artifact-share-base-${Date.now()}`);
   mkdirSync(configDir, { recursive: true });
 
   try {
     return await withTestEnv(
       {
-        NAKAMA_CONFIG_DIR: configDir,
-        NAKAMA_PUBLIC_URL: undefined,
-        NAKAMA_WEB_PUBLIC_URL: undefined,
+        AIRIN_CONFIG_DIR: configDir,
+        AIRIN_PUBLIC_URL: undefined,
+        AIRIN_WEB_PUBLIC_URL: undefined,
       },
       run
     );
@@ -36,7 +36,7 @@ describe("resolveArtifactShareBaseUrl", () => {
     // it only from loopback or the host the request arrived on.
     expect(() =>
       resolveArtifactShareBaseUrl({
-        clientOrigin: "https://nakama.example.com/",
+        clientOrigin: "https://airin.example.com/",
         request: sharePublishRequest(),
       })
     ).toThrow("Origin is not allowed.");
@@ -44,7 +44,7 @@ describe("resolveArtifactShareBaseUrl", () => {
 
   test("prefers configured web public URL when request host is loopback", async () => {
     await withTestEnv(
-      { NAKAMA_WEB_PUBLIC_URL: "https://deployed.example.com/" },
+      { AIRIN_WEB_PUBLIC_URL: "https://deployed.example.com/" },
       () => {
         expect(
           resolveArtifactShareBaseUrl({ request: sharePublishRequest() })

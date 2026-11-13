@@ -1,13 +1,14 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   AutomationResponse,
   DraftAutomationResponse,
+  GetAutomationRunResponse,
   ListAutomationRunsResponse,
   ListAutomationsResponse,
   MarkAutomationRunsReadResponse,
   RunAutomationResponse,
-} from "@nakama/core";
-import { AGENT_CHANNELS } from "@nakama/core";
+} from "@airin/core";
+import { AGENT_CHANNELS } from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { ServerOptions } from "../context";
 import {
   requireActiveOrgIdFromContext,
@@ -21,6 +22,7 @@ import {
   readJson,
 } from "../shared";
 import type { HonoApp } from "../types";
+import { registerAutomationWebhookRoutes } from "./automation-webhooks";
 
 export function registerAutomationRoutes(
   app: HonoApp,
@@ -53,6 +55,12 @@ export function registerAutomationRoutes(
     .passthrough()
     .openapi("ListAutomationsResponse");
 
+  const toolLimitSchema = z.object({
+    composioToolkits: z.array(z.string()),
+    mcpServerIds: z.array(z.string()),
+    toolIds: z.array(z.string()),
+  });
+
   const createAutomationSchema = z
     .object({
       delivery: z
@@ -69,6 +77,7 @@ export function registerAutomationRoutes(
       name: z.string(),
       profileId: z.string().optional(),
       prompt: z.string(),
+      toolLimit: toolLimitSchema.optional(),
       trigger: z.discriminatedUnion("type", [
         z.object({ type: z.literal("manual") }),
         z.object({
@@ -81,6 +90,7 @@ export function registerAutomationRoutes(
           timezone: z.string().optional(),
           type: z.literal("runAt"),
         }),
+        z.object({ type: z.literal("webhook") }),
       ]),
     })
     .passthrough()
@@ -108,6 +118,7 @@ export function registerAutomationRoutes(
       name: z.string().optional(),
       profileId: z.string().optional(),
       prompt: z.string().optional(),
+      toolLimit: toolLimitSchema.nullable().optional(),
       trigger: z
         .discriminatedUnion("type", [
           z.object({ type: z.literal("manual") }),
@@ -121,6 +132,7 @@ export function registerAutomationRoutes(
             timezone: z.string().optional(),
             type: z.literal("runAt"),
           }),
+          z.object({ type: z.literal("webhook") }),
         ])
         .optional(),
     })
@@ -136,6 +148,11 @@ export function registerAutomationRoutes(
     .object({})
     .passthrough()
     .openapi("ListAutomationRunsResponse");
+
+  const getAutomationRunSchema = z
+    .object({})
+    .passthrough()
+    .openapi("GetAutomationRunResponse");
 
   const markAutomationRunsReadSchema = z
     .object({})
@@ -342,6 +359,34 @@ export function registerAutomationRoutes(
   );
   app.openAPIRegistry.registerPath(
     createRoute({
+      method: "get",
+      operationId: "getAutomationRun",
+      path: "/v1/automations/{automationId}/runs/{runId}",
+      request: {
+        params: automationIdParam.extend({
+          runId: z.string().openapi({ param: { in: "path", name: "runId" } }),
+        }),
+      },
+      responses: {
+        200: {
+          content: { "application/json": { schema: getAutomationRunSchema } },
+          description: "Automation run with its transcript",
+        },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Error",
+        },
+        500: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Error",
+        },
+      },
+      summary: "Get one automation run",
+      tags: ["Automations"],
+    })
+  );
+  app.openAPIRegistry.registerPath(
+    createRoute({
       method: "post",
       operationId: "markAutomationRunsRead",
       path: "/v1/automations/{automationId}/runs/mark-read",
@@ -400,6 +445,7 @@ export function registerAutomationRoutes(
       {
         isPlatformAdmin: auth.isPlatformAdmin,
         orgRole: auth.orgRole,
+        userId: auth.user.id,
       }
     );
 
@@ -435,6 +481,7 @@ export function registerAutomationRoutes(
         {
           isPlatformAdmin: auth.isPlatformAdmin,
           orgRole: auth.orgRole,
+          userId: auth.user.id,
         }
       );
 
@@ -491,6 +538,11 @@ export function registerAutomationRoutes(
       return errorResponse("Automation not found", 404);
     }
 
+    await automationService.assertCanAutomateMailbox(automation.profileId, {
+      isPlatformAdmin: auth.isPlatformAdmin,
+      orgRole: auth.orgRole,
+    });
+
     const result = await agent.runAutomation(automationId);
 
     if (result.skipped) {
@@ -510,13 +562,28 @@ export function registerAutomationRoutes(
       return errorResponse("Automation run record not found.", 500);
     }
 
-    return json<RunAutomationResponse>({ run });
+    // The list leaves out a finished transcript. This reply keeps it.
+    const saved = await automationService.getRun(automationId, orgId, run.id);
+
+    return json<RunAutomationResponse>({
+      run: { ...run, progress: saved?.progress },
+    });
   });
 
   app.get("/v1/automations/:automationId/runs", async (c) => {
     const orgId = requireActiveOrgIdFromContext(c);
     const auth = getRequestAuth(c);
     const automationId = decodeURIComponent(c.req.param("automationId"));
+    const automation = await automationService.get(automationId, orgId);
+
+    if (!automation) {
+      return errorResponse("Automation not found.", 404);
+    }
+
+    await automationService.assertCanAutomateMailbox(automation.profileId, {
+      isPlatformAdmin: auth.isPlatformAdmin,
+      orgRole: auth.orgRole,
+    });
 
     try {
       const runs = await automationService.listRuns(
@@ -534,6 +601,31 @@ export function registerAutomationRoutes(
 
       throw error;
     }
+  });
+
+  app.get("/v1/automations/:automationId/runs/:runId", async (c) => {
+    const orgId = requireActiveOrgIdFromContext(c);
+    const auth = getRequestAuth(c);
+    const automationId = decodeURIComponent(c.req.param("automationId"));
+    const runId = decodeURIComponent(c.req.param("runId"));
+    const automation = await automationService.get(automationId, orgId);
+
+    if (!automation) {
+      return errorResponse("Automation not found.", 404);
+    }
+
+    await automationService.assertCanAutomateMailbox(automation.profileId, {
+      isPlatformAdmin: auth.isPlatformAdmin,
+      orgRole: auth.orgRole,
+    });
+
+    const run = await automationService.getRun(automationId, orgId, runId);
+
+    if (!run) {
+      return errorResponse("Automation run not found.", 404);
+    }
+
+    return json<GetAutomationRunResponse>({ run });
   });
 
   app.post("/v1/automations/:automationId/runs/mark-read", async (c) => {
@@ -556,5 +648,10 @@ export function registerAutomationRoutes(
 
       throw error;
     }
+  });
+
+  registerAutomationWebhookRoutes(app, options, {
+    automationIdParam,
+    errorSchema,
   });
 }

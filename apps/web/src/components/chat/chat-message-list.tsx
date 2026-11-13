@@ -1,24 +1,33 @@
-import type { ChatUsage } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import { hasActiveAgentQuestionnaire } from "@airin/core/agent-questionnaire";
+import { AirinApiError } from "@airin/core/api-error";
+import type {
+  AgentQuestionAnswer,
+  AgentQuestionnaire,
+  ChatUsage,
+  ListComposioToolkitsResponse,
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Textarea } from "@nakama/ui/textarea";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { Textarea } from "@airin/ui/textarea";
+import { cn } from "@airin/ui/utils";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckmarkCircle01Icon,
   Copy01Icon,
   Edit03Icon,
-  File01Icon,
   GitBranchIcon,
   MoreHorizontalIcon,
-  Rotate02Icon,
+  RefreshIcon,
+  TestTube01Icon,
 } from "hugeicons-react";
 import {
   forwardRef,
+  type MouseEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -33,20 +42,43 @@ import {
   ConversationStickinessProvider,
 } from "@/components/ai-elements/conversation";
 import { Message, MessageContent } from "@/components/ai-elements/message";
+import {
+  ComposioCustomAuthSteps,
+  ComposioToolkitLogo,
+} from "@/components/ComposioToolkitLogo";
+import {
+  AgentQuestionnaireAnswers,
+  AgentQuestionnairePanel,
+} from "@/components/chat/AgentQuestionnairePanel";
 import { ArtifactAttachmentPreview } from "@/components/chat/artifact-attachment-preview";
 import {
   AssistantTurnSegmentView,
+  GroupCreatedCard,
   LocalCitationPreview,
   ProfileCreatedCard,
 } from "@/components/chat/assistant-tool-group";
 import { segmentAssistantTurn } from "@/components/chat/assistant-tool-group.shared";
 import { ToolCredentialCard } from "@/components/chat/chat-add-capabilities-dialogs";
 import { ChatUsageBadge } from "@/components/chat/chat-usage-badge";
+import { DocumentAttachmentPreview } from "@/components/chat/document-attachment-preview";
 import { ImageAttachmentPreview } from "@/components/chat/image-attachment-preview";
-import { TextAttachmentPreview } from "@/components/chat/text-attachment-preview";
+import { PluginDrafts } from "@/components/chat/PluginDraftCard";
+import { readRecord, readString } from "@/components/chat/web-search.shared";
+import { useAuth } from "@/context/use-auth";
 import { useOptionalChatAttachmentPanel } from "@/context/use-chat-attachment-panel";
+import { useProfileQuery } from "@/hooks/use-app-queries";
+import {
+  connectComposioApp,
+  needsComposioCustomAuth,
+  profileComposioToolkitsQueryOptions,
+  useComposioToolkits,
+} from "@/hooks/use-composio";
 import { useArtifactsExist } from "@/hooks/use-resource-mutations";
-import { extractTurnArtifacts } from "@/lib/chat-artifacts";
+import {
+  type ChatArtifactRef,
+  extractTurnArtifacts,
+  isImageArtifactMimeType,
+} from "@/lib/chat-artifacts";
 import {
   type ChatListItem,
   formatSessionTimestamp,
@@ -61,11 +93,15 @@ import {
 import {
   awaitingModelLabel,
   isAwaitingModelResponse,
+  parseGroupCreatedResult,
   parseProfileCreatedResult,
 } from "@/lib/chat-stream";
 import { sumChatUsage } from "@/lib/chat-usage";
+import { formatError } from "@/lib/client";
 import { formatElapsedSeconds, useElapsedSeconds } from "@/lib/elapsed-time";
-import { isPastedTextDocument } from "@/lib/pasted-text";
+import { canManageAgent } from "@/lib/profiles";
+import { invalidateQueries } from "@/lib/query-client";
+import { queryKeys } from "@/lib/query-keys";
 import { listOverflowsViewport } from "./chat-message-list.shared";
 
 function followOutputBehavior(atBottom: boolean): false | "auto" {
@@ -74,6 +110,27 @@ function followOutputBehavior(atBottom: boolean): false | "auto" {
 
 function shouldAutoscrollOnHeightGrowth(atBottom: boolean): boolean {
   return atBottom;
+}
+
+/** Growth right after a button click is the user expanding something: let it grow down, don't re-pin. */
+const USER_TOGGLE_PIN_PAUSE_MS = 600;
+
+function useUserTogglePinPause() {
+  const userToggleAtRef = useRef(0);
+
+  const onClickCapture = useCallback((event: MouseEvent<HTMLElement>) => {
+    if (event.target instanceof Element && event.target.closest("button")) {
+      userToggleAtRef.current = performance.now();
+    }
+  }, []);
+
+  const isPinPaused = useCallback(
+    () =>
+      performance.now() - userToggleAtRef.current <= USER_TOGGLE_PIN_PAUSE_MS,
+    []
+  );
+
+  return { isPinPaused, onClickCapture };
 }
 
 /** Top/bottom inset as Virtuoso Header/Footer — never put padding on the scroller. */
@@ -114,6 +171,12 @@ const virtuosoComponents: Components<MessageTurn> = {
   Item: VirtuosoItem,
 };
 
+/** The reply a test case is saved from; the server pairs it with the question before it. */
+export interface SaveCaseReply {
+  expectedResult: string;
+  messageIndex: number;
+}
+
 interface ChatMessageListProps {
   actionsDisabled?: boolean;
   branchingMessageId?: string | null;
@@ -126,7 +189,11 @@ interface ChatMessageListProps {
   onContinueToolSetup?: (setupId: string) => Promise<void>;
   onEditMessage?: (message: ChatListItem, text: string) => void;
   onRetryMessage?: (message: ChatListItem) => void;
+  onSaveAsCase?: (reply: SaveCaseReply) => void;
+  onSubmitQuestionnaire?: (answers: AgentQuestionAnswer[]) => void;
+  onSwitchModel?: () => void;
   profileId?: string | null;
+  questionnaire?: AgentQuestionnaire | null;
   readOnly?: boolean;
   sessionId?: string;
   showThinking?: boolean;
@@ -144,59 +211,16 @@ export function ChatMessageList(props: ChatMessageListProps) {
   return <ChatMessageListSession key={sessionAnchor} {...props} />;
 }
 
-function ChatMessageListSession({
-  sessionId,
-  onContinueToolSetup,
-  messages,
-  profileId,
-  showThinking = true,
-  showUsage = false,
-  modelLabel,
-  branchingMessageId,
-  actionsDisabled = false,
-  readOnly = false,
-  streamActive = false,
-  turnStartedAt = null,
-  workStreamActive = streamActive,
-  onBranchMessage,
-  onEditMessage,
-  onRetryMessage,
-  emptyMessage,
-  className,
-  contentClassName,
-}: ChatMessageListProps) {
-  const turns = useMemo(() => groupMessagesIntoTurns(messages), [messages]);
+function useListPinning() {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
   const isAtBottomRef = useRef(true);
   const stickIntentRef = useRef(true);
   const lastListHeightRef = useRef(0);
   const didInitialPinRef = useRef(false);
+  const userTogglePinPause = useUserTogglePinPause();
+  const { isPinPaused } = userTogglePinPause;
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const canPreviewCitations = useOptionalChatAttachmentPanel() !== null;
-
-  const [citationPreview, setCitationPreview] = useState<{
-    path: string;
-    profileId: string;
-  } | null>(null);
-
-  const openCitationPreview = useCallback(
-    (path: string) => {
-      if (profileId) {
-        setCitationPreview({ path, profileId });
-      }
-    },
-    [profileId]
-  );
-
-  const closeCitationPreview = useCallback(() => setCitationPreview(null), []);
-
-  const showAwaitingPlaceholder =
-    streamActive && isAwaitingModelResponse(messages);
-
-  const awaitingLabel = showAwaitingPlaceholder
-    ? awaitingModelLabel(messages)
-    : null;
 
   const pinLatest = useCallback((behavior: "auto" | "smooth") => {
     const scroller = scrollerRef.current;
@@ -280,13 +304,101 @@ function ChatMessageListSession({
 
       if (
         height > previous &&
-        shouldAutoscrollOnHeightGrowth(stickIntentRef.current)
+        shouldAutoscrollOnHeightGrowth(stickIntentRef.current) &&
+        !isPinPaused()
       ) {
         pinLatest("auto");
       }
     },
-    [pinLatest]
+    [isPinPaused, pinLatest]
   );
+
+  return {
+    handleAtBottomStateChange,
+    handleFollowOutput,
+    handleScrollerRef,
+    handleTotalListHeightChanged,
+    stickiness,
+    userTogglePinPause,
+    virtuosoRef,
+  };
+}
+
+function ChatMessageListSession({
+  sessionId,
+  onContinueToolSetup,
+  messages,
+  profileId,
+  showThinking = true,
+  showUsage = false,
+  modelLabel,
+  branchingMessageId,
+  actionsDisabled = false,
+  readOnly = false,
+  streamActive = false,
+  turnStartedAt = null,
+  workStreamActive = streamActive,
+  onBranchMessage,
+  onEditMessage,
+  onRetryMessage,
+  onSaveAsCase,
+  onSwitchModel,
+  onSubmitQuestionnaire,
+  questionnaire,
+  emptyMessage,
+  className,
+  contentClassName,
+}: ChatMessageListProps) {
+  const turns = useMemo(() => groupMessagesIntoTurns(messages), [messages]);
+
+  // A plugin draft card marks "Try it" once its tool runs anywhere in the chat.
+  const usedPluginToolKey = [
+    ...new Set(
+      messages.flatMap((item) =>
+        item.tool?.startsWith("plugin_") ? [item.tool] : []
+      )
+    ),
+  ].join("\n");
+
+  const usedPluginTools = useMemo(
+    () => (usedPluginToolKey ? usedPluginToolKey.split("\n") : []),
+    [usedPluginToolKey]
+  );
+
+  const {
+    handleAtBottomStateChange,
+    handleFollowOutput,
+    handleScrollerRef,
+    handleTotalListHeightChanged,
+    stickiness,
+    userTogglePinPause,
+    virtuosoRef,
+  } = useListPinning();
+
+  const canPreviewCitations = useOptionalChatAttachmentPanel() !== null;
+
+  const [citationPreview, setCitationPreview] = useState<{
+    path: string;
+    profileId: string;
+  } | null>(null);
+
+  const openCitationPreview = useCallback(
+    (path: string) => {
+      if (profileId) {
+        setCitationPreview({ path, profileId });
+      }
+    },
+    [profileId]
+  );
+
+  const closeCitationPreview = useCallback(() => setCitationPreview(null), []);
+
+  const showAwaitingPlaceholder =
+    streamActive && isAwaitingModelResponse(messages);
+
+  const awaitingLabel = showAwaitingPlaceholder
+    ? awaitingModelLabel(messages)
+    : null;
 
   const renderTurn = useCallback(
     (turnIndex: number, turn: MessageTurn) => {
@@ -324,7 +436,14 @@ function ChatMessageListSession({
               canPreviewCitations ? openCitationPreview : undefined
             }
             onRetryMessage={onRetryMessage}
+            onSaveAsCase={onSaveAsCase}
+            onSubmitQuestionnaire={onSubmitQuestionnaire}
+            onSwitchModel={onSwitchModel}
             profileId={profileId}
+            questionnaire={
+              turnIndex === turns.length - 1 ? questionnaire : null
+            }
+            questionnaireAnswers={turn.questionnaireAnswers}
             readOnly={readOnly}
             sessionId={sessionId}
             showAwaiting={
@@ -334,6 +453,7 @@ function ChatMessageListSession({
             showUsage={showUsage}
             streamActive={streamActive}
             turnStartedAt={turnStartedAt}
+            usedPluginTools={usedPluginTools}
             workStreamActive={
               workStreamActive && turnIndex === turns.length - 1
             }
@@ -354,14 +474,19 @@ function ChatMessageListSession({
       onBranchMessage,
       onEditMessage,
       onRetryMessage,
+      onSaveAsCase,
+      onSwitchModel,
+      onSubmitQuestionnaire,
       openCitationPreview,
       profileId,
+      questionnaire,
       showThinking,
       showUsage,
       streamActive,
       turnStartedAt,
       workStreamActive,
       turns.length,
+      usedPluginTools,
     ]
   );
 
@@ -385,7 +510,10 @@ function ChatMessageListSession({
 
   return (
     <ConversationStickinessProvider value={stickiness}>
-      <Conversation className={cn("min-h-0 flex-1", className)}>
+      <Conversation
+        className={cn("min-h-0 flex-1", className)}
+        onClickCapture={userTogglePinPause.onClickCapture}
+      >
         <Virtuoso
           atBottomStateChange={handleAtBottomStateChange}
           atBottomThreshold={80}
@@ -437,6 +565,12 @@ function AssistantTurn({
   onBranchMessage,
   onOpenFileCitation,
   onRetryMessage,
+  onSaveAsCase,
+  onSwitchModel,
+  onSubmitQuestionnaire,
+  questionnaire,
+  questionnaireAnswers,
+  usedPluginTools,
 }: {
   readOnly?: boolean;
   sessionId?: string;
@@ -455,6 +589,12 @@ function AssistantTurn({
   onBranchMessage?: (message: ChatListItem) => void;
   onOpenFileCitation?: (path: string) => void;
   onRetryMessage?: (message: ChatListItem) => void;
+  onSaveAsCase?: (reply: SaveCaseReply) => void;
+  onSwitchModel?: () => void;
+  onSubmitQuestionnaire?: (answers: AgentQuestionAnswer[]) => void;
+  questionnaire?: AgentQuestionnaire | null;
+  questionnaireAnswers?: AgentQuestionAnswer[];
+  usedPluginTools: string[];
 }) {
   const turnMessages = messages.map(({ message }) => message);
   const segments = segmentAssistantTurn(turnMessages, workStreamActive);
@@ -493,6 +633,7 @@ function AssistantTurn({
           modelLabel={modelLabel}
           onOpenFileCitation={onOpenFileCitation}
           onRetryMessage={onRetryMessage}
+          onSwitchModel={onSwitchModel}
           profileId={profileId}
           retryDisabled={retryDisabled}
           segment={segment}
@@ -502,38 +643,41 @@ function AssistantTurn({
       {showAwaiting && !segments.some((segment) => segment.kind === "work") ? (
         <TurnAwaitingElapsed startedAt={turnStartedAt} />
       ) : null}
-      {!workStreamActive &&
-        interactiveTurnComplete &&
-        turnMessages
-          .filter((message) => message.toolResult != null)
-          .map((message) => (
-            <ToolCredentialCard
-              disabled={actionsDisabled}
-              key={message.id}
-              onContinue={onContinueToolSetup}
-              result={message.toolResult}
-              sessionId={sessionId}
-            />
-          ))}
+      <TurnQuestionnaire
+        actionsDisabled={actionsDisabled}
+        answers={questionnaireAnswers}
+        messages={turnMessages}
+        onSubmit={onSubmitQuestionnaire}
+        questionnaire={questionnaire}
+      />
+      {workStreamActive || !interactiveTurnComplete ? null : (
+        <ToolCredentialCards
+          disabled={actionsDisabled}
+          messages={turnMessages}
+          onContinue={onContinueToolSetup}
+          sessionId={sessionId}
+        />
+      )}
       {profileId && showArtifacts ? (
-        <div className="flex flex-wrap gap-2">
-          {liveArtifacts.map((artifact) => {
-            const chipId = `${artifactTurnKey}:${artifact.ownerProfileId ?? profileId}:${artifact.path}`;
-
-            return (
-              <ArtifactAttachmentPreview
-                artifact={artifact}
-                id={chipId}
-                key={chipId}
-                profileId={profileId}
-              />
-            );
-          })}
-        </div>
+        <TurnArtifacts
+          artifacts={liveArtifacts}
+          profileId={profileId}
+          turnKey={artifactTurnKey}
+        />
       ) : null}
       <CreatedProfiles
         complete={interactiveTurnComplete}
         messages={turnMessages}
+      />
+      <ComposioConnectCards
+        complete={interactiveTurnComplete}
+        messages={turnMessages}
+        profileId={profileId}
+      />
+      <PluginDrafts
+        complete={interactiveTurnComplete}
+        messages={turnMessages}
+        usedTools={usedPluginTools}
       />
       {showActions ? (
         <AssistantMessageActions
@@ -543,9 +687,124 @@ function AssistantTurn({
           message={anchorMessage}
           onBranchMessage={onBranchMessage}
           onRetryMessage={onRetryMessage}
+          onSaveAsCase={onSaveAsCase}
           usage={turnUsage}
         />
       ) : null}
+    </div>
+  );
+}
+
+function TurnQuestionnaire({
+  actionsDisabled,
+  answers,
+  messages,
+  onSubmit,
+  questionnaire,
+}: {
+  actionsDisabled?: boolean;
+  answers?: AgentQuestionAnswer[];
+  messages: ChatListItem[];
+  onSubmit?: (answers: AgentQuestionAnswer[]) => void;
+  questionnaire?: AgentQuestionnaire | null;
+}) {
+  if (answers?.length) {
+    return <AgentQuestionnaireAnswers answers={answers} />;
+  }
+
+  const asked = messages.some(
+    (message) =>
+      message.tool === "ask_user_question" && message.toolStatus === "done"
+  );
+
+  if (!(onSubmit && asked && hasActiveAgentQuestionnaire(questionnaire))) {
+    return null;
+  }
+
+  return (
+    <AgentQuestionnairePanel
+      disabled={actionsDisabled}
+      onSubmit={(next) => onSubmit(next)}
+      questionnaire={questionnaire ?? null}
+    />
+  );
+}
+
+function ToolCredentialCards({
+  disabled,
+  messages,
+  onContinue,
+  sessionId,
+}: {
+  disabled?: boolean;
+  messages: ChatListItem[];
+  onContinue?: (setupId: string) => Promise<void>;
+  sessionId?: string;
+}) {
+  return messages
+    .filter((message) => message.toolResult != null)
+    .map((message) => (
+      <ToolCredentialCard
+        disabled={disabled}
+        key={message.id}
+        onContinue={onContinue}
+        result={message.toolResult}
+        sessionId={sessionId}
+      />
+    ));
+}
+
+function isChatImageArtifact(artifact: ChatArtifactRef): boolean {
+  return isImageArtifactMimeType(artifact.mimeType);
+}
+
+function TurnArtifacts({
+  artifacts,
+  profileId,
+  turnKey,
+}: {
+  artifacts: ReturnType<typeof extractTurnArtifacts>;
+  profileId: string;
+  turnKey: string;
+}) {
+  const imageArtifacts = artifacts.filter(isChatImageArtifact);
+
+  const otherArtifacts = artifacts.filter(
+    (artifact) => !isChatImageArtifact(artifact)
+  );
+
+  function renderArtifact(artifact: ChatArtifactRef, inlineImage: boolean) {
+    const chipId = `${turnKey}:${artifact.ownerProfileId ?? profileId}:${artifact.path}`;
+
+    return (
+      <ArtifactAttachmentPreview
+        artifact={artifact}
+        id={chipId}
+        key={chipId}
+        profileId={profileId}
+        showInlineImagePreview={inlineImage}
+      />
+    );
+  }
+
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-2">
+      {imageArtifacts.length === 1
+        ? renderArtifact(imageArtifacts[0], true)
+        : null}
+      {imageArtifacts.length > 1 ? (
+        <div className="flex w-full min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-1">
+          {imageArtifacts.map((artifact) => (
+            <div
+              className="w-[min(100%,20rem)] shrink-0 snap-start"
+              key={`${turnKey}:${artifact.ownerProfileId ?? profileId}:${artifact.path}`}
+            >
+              {renderArtifact(artifact, true)}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {otherArtifacts.map((artifact) => renderArtifact(artifact, false))}
     </div>
   );
 }
@@ -571,7 +830,16 @@ function CreatedProfiles({
     return profile ? [profile] : [];
   });
 
-  if (profiles.length === 0) {
+  const groups = messages.flatMap((message) => {
+    const group =
+      message.tool === "create_group"
+        ? parseGroupCreatedResult(message.toolResult)
+        : null;
+
+    return group ? [group] : [];
+  });
+
+  if (profiles.length === 0 && groups.length === 0) {
     return null;
   }
 
@@ -580,7 +848,321 @@ function CreatedProfiles({
       {profiles.map((profile) => (
         <ProfileCreatedCard key={profile.id} profile={profile} />
       ))}
+      {groups.map((group) => (
+        <GroupCreatedCard group={group} key={group.id} />
+      ))}
     </div>
+  );
+}
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool results are untrusted JSON decoded at this boundary.
+function parseComposioConnectRequest(value: unknown) {
+  const record = readRecord(value);
+  const toolkitSlug = readString(record?.toolkitSlug);
+
+  if (record?.type !== "composio_connect" || !toolkitSlug) {
+    return null;
+  }
+
+  return {
+    displayName: readString(record.displayName) ?? toolkitSlug,
+    onAgent: record.onAgent === true,
+    toolkitSlug,
+  };
+}
+
+function ComposioConnectCards({
+  complete,
+  messages,
+  profileId,
+}: {
+  complete: boolean;
+  messages: ChatListItem[];
+  profileId?: string | null;
+}) {
+  if (!complete) {
+    return null;
+  }
+
+  const requests = new Map(
+    messages.flatMap((message) => {
+      const request =
+        message.tool === "composio__connect_account"
+          ? parseComposioConnectRequest(message.toolResult)
+          : null;
+
+      return request ? [[request.toolkitSlug, request] as const] : [];
+    })
+  );
+
+  return [...requests.values()].map((request) => (
+    <ComposioConnectCard
+      displayName={request.displayName}
+      key={request.toolkitSlug}
+      onAgent={request.onAgent}
+      profileId={profileId ?? null}
+      toolkitSlug={request.toolkitSlug}
+    />
+  ));
+}
+
+const COMPOSIO_CONNECT_POLL_MS = 3000;
+
+const COMPOSIO_CONNECT_POLL_LIMIT_MS = 5 * 60_000;
+
+function isComposioToolkitConnected(
+  toolkits: ListComposioToolkitsResponse | undefined,
+  toolkitSlug: string
+): boolean {
+  const orgToolkit = toolkits?.orgToolkits.find(
+    (item) => item.toolkitSlug === toolkitSlug
+  );
+
+  return (
+    orgToolkit?.status === "enabled" &&
+    (toolkits?.userConnections.some(
+      (item) => item.toolkitId === orgToolkit.id && item.status === "connected"
+    ) ??
+      false)
+  );
+}
+
+/** What the connect card shows for one app, from the org's Composio list. */
+function describeComposioApp(
+  toolkits: ListComposioToolkitsResponse | undefined,
+  toolkitSlug: string,
+  displayName: string,
+  access: { canManage: boolean; isOrgAdmin: boolean; onAgent: boolean },
+  agent: { error: Error | null; loaded: boolean }
+) {
+  const catalogItem = toolkits?.catalog.find(
+    (item) => item.slug === toolkitSlug
+  );
+
+  const orgToolkit = toolkits?.orgToolkits.find(
+    (item) => item.toolkitSlug === toolkitSlug
+  );
+
+  const name = catalogItem?.name ?? orgToolkit?.displayName ?? displayName;
+
+  const unknownApp =
+    Boolean(toolkits?.catalog.length) && !catalogItem && !orgToolkit;
+
+  let blockedReason: string | null = null;
+
+  if (unknownApp) {
+    blockedReason = `${name} is not in Composio.`;
+  } else if (!(access.isOrgAdmin || orgToolkit?.status === "enabled")) {
+    blockedReason = `Ask an org admin to turn on ${name}.`;
+  } else if (!(access.canManage || access.onAgent)) {
+    // Only someone who manages the agent can add the app to it.
+    blockedReason = `Ask the agent owner to add ${name}.`;
+  }
+
+  // A member on a shared agent cannot read it (403); they cannot manage it.
+  const agentForbidden =
+    agent.error instanceof AirinApiError && agent.error.status === 403;
+
+  const ready = Boolean(toolkits && (agent.loaded || agentForbidden));
+
+  let notice: string | null = ready ? blockedReason : null;
+
+  if (agent.error && !agentForbidden) {
+    notice = formatError(agent.error);
+  }
+
+  return {
+    blockedReason,
+    // The agent can use the app only when it is on the agent too.
+    connected:
+      access.onAgent && isComposioToolkitConnected(toolkits, toolkitSlug),
+    logoUrl: catalogItem?.logoUrl,
+    name,
+    notice,
+    ready,
+  };
+}
+
+/**
+ * One click opens Composio sign-in in a new tab. An admin also turns the app
+ * on and adds it to this agent. After the click the card checks every few
+ * seconds, so it reads Connected without a tab switch.
+ */
+function ComposioConnectCard({
+  displayName,
+  onAgent: onAgentAtCall,
+  profileId,
+  toolkitSlug,
+}: {
+  displayName: string;
+  /** From the tool result: the app was on the agent when the model asked. */
+  onAgent: boolean;
+  profileId: string | null;
+  toolkitSlug: string;
+}) {
+  const { activeOrg, user } = useAuth();
+  const queryClient = useQueryClient();
+  const isOrgAdmin = activeOrg?.role === "admin";
+
+  const [pollUntil, setPollUntil] = useState(0);
+
+  const { data: toolkits } = useComposioToolkits({
+    refetchInterval: (data) =>
+      Date.now() < pollUntil && !isComposioToolkitConnected(data, toolkitSlug)
+        ? COMPOSIO_CONNECT_POLL_MS
+        : false,
+    refetchOnWindowFocus: true,
+  });
+
+  const { data: profile, error: profileError } = useProfileQuery(profileId);
+  const [pending, setPending] = useState(false);
+
+  const [error, setError] = useState<{
+    customAuth: boolean;
+    message: string;
+  } | null>(null);
+
+  const canManage = canManageAgent(profile, user, isOrgAdmin);
+
+  // Only managers can read the agent's apps; a click can add one, so read live.
+  const { data: agentApps } = useQuery({
+    ...profileComposioToolkitsQueryOptions(profileId),
+    enabled: canManage && Boolean(profileId),
+  });
+
+  const onAgent =
+    agentApps?.assignments.some((item) => item.toolkitSlug === toolkitSlug) ??
+    onAgentAtCall;
+
+  const { blockedReason, connected, logoUrl, name, notice, ready } =
+    describeComposioApp(
+      toolkits,
+      toolkitSlug,
+      displayName,
+      { canManage, isOrgAdmin, onAgent },
+      { error: profileError, loaded: !profileId || Boolean(profile) }
+    );
+
+  async function connect() {
+    if (!(toolkits && ready)) {
+      return;
+    }
+
+    // Open the tab inside the click so the browser does not block it.
+    const tab = window.open("", "_blank");
+
+    if (tab) {
+      tab.opener = null;
+    }
+
+    setPending(true);
+    setError(null);
+
+    try {
+      const signInUrl = await connectComposioApp({
+        isOrgAdmin,
+        profileId: canManage && profileId ? profileId : undefined,
+        returnTo: `/integrations?section=composio&connected=${encodeURIComponent(toolkitSlug)}`,
+        toolkitSlug,
+        toolkits,
+      });
+
+      if (signInUrl && tab) {
+        tab.location.href = signInUrl;
+        setPollUntil(Date.now() + COMPOSIO_CONNECT_POLL_LIMIT_MS);
+      } else if (signInUrl) {
+        window.location.href = signInUrl;
+      } else {
+        tab?.close();
+      }
+
+      await invalidateQueries(
+        queryClient,
+        queryKeys.composio.toolkits,
+        queryKeys.composio.profileToolkits(profileId ?? "none")
+      );
+    } catch (connectError) {
+      tab?.close();
+      setError({
+        customAuth:
+          connectError instanceof Error &&
+          needsComposioCustomAuth(connectError),
+        message: formatError(connectError),
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex w-fit max-w-full flex-col gap-2 rounded-xl bg-muted/40 p-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <ComposioToolkitLogo logoUrl={logoUrl} name={name} />
+        <p className="min-w-0 truncate font-medium text-foreground text-sm">
+          {name}
+        </p>
+        {connected ? (
+          <span className="flex shrink-0 items-center gap-1 text-muted-foreground text-sm">
+            <CheckmarkCircle01Icon aria-hidden className="size-4" />
+            Connected
+          </span>
+        ) : (
+          <Button
+            className="min-h-10 shrink-0 rounded-lg transition-transform active:scale-[0.96]"
+            disabled={!ready || pending || blockedReason !== null}
+            onClick={() => {
+              connect().catch(() => undefined);
+            }}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {pending ? "Connecting…" : "Connect"}
+          </Button>
+        )}
+      </div>
+      {connected || !(error || notice) ? null : (
+        <ComposioConnectCardStatus
+          error={error}
+          isOrgAdmin={isOrgAdmin}
+          name={name}
+          notice={notice}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Kept apart from the card so the card stays under the complexity limit. */
+function ComposioConnectCardStatus({
+  error,
+  isOrgAdmin,
+  name,
+  notice,
+}: {
+  error: { customAuth: boolean; message: string } | null;
+  isOrgAdmin: boolean;
+  name: string;
+  notice: string | null;
+}) {
+  // Composio has no shared OAuth app for this toolkit. Only an admin can fix it.
+  if (error?.customAuth) {
+    return isOrgAdmin ? (
+      <div className="flex flex-col gap-2" role="status">
+        <p className="text-sm">{name} needs a custom auth config</p>
+        <ComposioCustomAuthSteps name={name} />
+      </div>
+    ) : (
+      <p className="text-muted-foreground text-xs" role="status">
+        Ask an org admin to add a custom auth config for {name} in Composio.
+      </p>
+    );
+  }
+
+  return (
+    <p className="text-muted-foreground text-xs" role="status">
+      {error?.message ?? notice}
+    </p>
   );
 }
 
@@ -680,9 +1262,12 @@ function ChatMessageRow({
       className="mr-0 ml-auto min-w-0 max-w-full items-end justify-end overflow-visible"
       from="user"
     >
-      <MessageContent className="ml-auto min-w-0 max-w-full overflow-visible group-[.is-user]:ml-auto">
-        <UserMessageContent message={message} />
-      </MessageContent>
+      <UserMessageAttachments message={message} />
+      {message.content || message.questionnaireAnswers?.length ? (
+        <MessageContent className="ml-auto min-w-0 max-w-full overflow-visible group-[.is-user]:ml-auto group-[.is-user]:rounded-2xl">
+          <UserMessageContent message={message} />
+        </MessageContent>
+      ) : null}
       {canEdit ? (
         <button
           aria-label="Edit message"
@@ -748,23 +1333,7 @@ function isBranchableAssistantMessage(message: ChatListItem): boolean {
   );
 }
 
-function AssistantMessageActions({
-  message,
-  copyContent,
-  busy,
-  actionsDisabled = false,
-  onBranchMessage,
-  onRetryMessage,
-  usage,
-}: {
-  message: ChatListItem;
-  copyContent: string;
-  busy: boolean;
-  actionsDisabled?: boolean;
-  onBranchMessage?: (message: ChatListItem) => void;
-  onRetryMessage?: (message: ChatListItem) => void;
-  usage?: ChatUsage;
-}) {
+function CopyResponseButton({ copyContent }: { copyContent: string }) {
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -801,30 +1370,50 @@ function AssistantMessageActions({
     }
   }
 
-  const branchCreatedAt = isBranchableAssistantMessage(message)
-    ? message.createdAt
-    : null;
+  return (
+    <button
+      aria-label={copied ? "Copied" : "Copy response"}
+      className={cn(
+        "inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40",
+        copied && "text-emerald-600 dark:text-emerald-400"
+      )}
+      disabled={!copyContent.trim()}
+      onClick={() => void copyMessage()}
+      title={copied ? "Copied" : "Copy response"}
+      type="button"
+    >
+      {copied ? (
+        <CheckmarkCircle01Icon aria-hidden className="size-4" />
+      ) : (
+        <Copy01Icon aria-hidden className="size-4" />
+      )}
+    </button>
+  );
+}
 
+function AssistantMessageActions({
+  message,
+  copyContent,
+  busy,
+  actionsDisabled = false,
+  onBranchMessage,
+  onRetryMessage,
+  onSaveAsCase,
+  usage,
+}: {
+  message: ChatListItem;
+  copyContent: string;
+  busy: boolean;
+  actionsDisabled?: boolean;
+  onBranchMessage?: (message: ChatListItem) => void;
+  onRetryMessage?: (message: ChatListItem) => void;
+  onSaveAsCase?: (reply: SaveCaseReply) => void;
+  usage?: ChatUsage;
+}) {
   return (
     <div className="flex items-center gap-1 pt-1 opacity-60 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 group-active:opacity-100">
       {usage ? <ChatUsageBadge usage={usage} /> : null}
-      <button
-        aria-label={copied ? "Copied" : "Copy response"}
-        className={cn(
-          "inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40",
-          copied && "text-emerald-600 dark:text-emerald-400"
-        )}
-        disabled={!copyContent.trim()}
-        onClick={() => void copyMessage()}
-        title={copied ? "Copied" : "Copy response"}
-        type="button"
-      >
-        {copied ? (
-          <CheckmarkCircle01Icon aria-hidden className="size-4" />
-        ) : (
-          <Copy01Icon aria-hidden className="size-4" />
-        )}
-      </button>
+      <CopyResponseButton copyContent={copyContent} />
       {onRetryMessage ? (
         <button
           aria-label="Try again"
@@ -834,26 +1423,66 @@ function AssistantMessageActions({
           title="Try again"
           type="button"
         >
-          <Rotate02Icon aria-hidden className="size-4" />
+          <RefreshIcon aria-hidden className="size-4" />
         </button>
       ) : null}
-      {onBranchMessage && branchCreatedAt ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                aria-label="Message actions"
-                className={cn(
-                  "inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  busy && "pointer-events-none opacity-60"
-                )}
-                type="button"
-              />
-            }
-          >
-            <MoreHorizontalIcon aria-hidden className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56 min-w-56 p-1.5">
+      <AssistantMessageMenu
+        actionsDisabled={actionsDisabled}
+        busy={busy}
+        message={message}
+        onBranchMessage={onBranchMessage}
+        onSaveAsCase={onSaveAsCase}
+      />
+    </div>
+  );
+}
+
+function AssistantMessageMenu({
+  message,
+  busy,
+  actionsDisabled,
+  onBranchMessage,
+  onSaveAsCase,
+}: {
+  message: ChatListItem;
+  busy: boolean;
+  actionsDisabled: boolean;
+  onBranchMessage?: (message: ChatListItem) => void;
+  onSaveAsCase?: (reply: SaveCaseReply) => void;
+}) {
+  // The final reply, not every step of the turn: that is what an automation run keeps too.
+  const saveCaseReply =
+    onSaveAsCase && message.historyIndex != null
+      ? { expectedResult: message.content, messageIndex: message.historyIndex }
+      : null;
+
+  const branchCreatedAt = isBranchableAssistantMessage(message)
+    ? message.createdAt
+    : null;
+
+  if (!((onBranchMessage && branchCreatedAt) || saveCaseReply)) {
+    return null;
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            aria-label="Message actions"
+            className={cn(
+              "inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              busy && "pointer-events-none opacity-60"
+            )}
+            type="button"
+          />
+        }
+      >
+        <MoreHorizontalIcon aria-hidden className="size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56 min-w-56 p-1.5">
+        {onBranchMessage && branchCreatedAt ? (
+          <>
             <div className="px-2 py-1 text-muted-foreground text-xs">
               {formatSessionTimestamp(branchCreatedAt)}
             </div>
@@ -865,109 +1494,125 @@ function AssistantMessageActions({
               <GitBranchIcon aria-hidden className="size-4" />
               <span>Branch in new chat</span>
             </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
-    </div>
+          </>
+        ) : null}
+        {saveCaseReply ? (
+          <DropdownMenuItem
+            className="gap-2"
+            disabled={busy || actionsDisabled}
+            onClick={() => onSaveAsCase?.(saveCaseReply)}
+          >
+            <TestTube01Icon aria-hidden className="size-4" />
+            <span>Save as test case</span>
+          </DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 function UserMessageContent({ message }: { message: ChatListItem }) {
   if (message.questionnaireAnswers?.length) {
     return (
-      <div className="rounded-2xl border border-border/70 bg-muted/40 px-4 py-3">
-        <p className="mb-2 font-medium text-muted-foreground text-sm">
-          Answers
-        </p>
-        <div className="space-y-3">
-          {message.questionnaireAnswers.map((entry) => (
-            <div
-              className="space-y-1"
-              key={`${entry.questionId}:${entry.prompt}`}
-            >
-              <p className="whitespace-pre-wrap text-foreground">
+      <ol className="-my-1 divide-y divide-border">
+        {message.questionnaireAnswers.map((entry, index) => (
+          <li
+            className="flex gap-3 py-2.5"
+            key={`${entry.questionId}:${entry.prompt}`}
+          >
+            <span className="w-4 shrink-0 text-13 text-muted-foreground tabular-nums">
+              {index + 1}
+            </span>
+            <div className="min-w-0 space-y-0.5">
+              <p className="whitespace-pre-wrap text-13 text-muted-foreground">
                 {entry.prompt}
               </p>
-              <p className="whitespace-pre-wrap text-muted-foreground text-sm">
+              <p className="whitespace-pre-wrap font-medium text-[15px] text-foreground leading-snug">
                 {entry.answer}
               </p>
             </div>
-          ))}
-        </div>
-      </div>
+          </li>
+        ))}
+      </ol>
     );
   }
 
-  const pastedTextDocuments =
-    message.documents?.filter((document) =>
-      isPastedTextDocument(document.filename, document.mediaType)
-    ) ?? [];
+  return message.content ? (
+    <p className="whitespace-pre-wrap break-words text-foreground">
+      {message.content}
+    </p>
+  ) : null;
+}
 
-  const otherDocuments =
-    message.documents?.filter(
-      (document) => !isPastedTextDocument(document.filename, document.mediaType)
-    ) ?? [];
+/** Files sit above the bubble on the right, apart from the text. */
+function UserMessageAttachments({ message }: { message: ChatListItem }) {
+  const otherDocuments = message.documents ?? [];
+
+  if (
+    !(
+      otherDocuments.length ||
+      message.images?.length ||
+      message.imageAttachments?.length
+    )
+  ) {
+    return null;
+  }
 
   return (
-    <div className="space-y-2">
+    <div className="ml-auto flex w-full max-w-sm flex-col gap-2">
       {message.imageAttachments?.length ? (
-        <div className="flex flex-wrap gap-2">
-          {message.imageAttachments.map((image) => (
-            <ImageAttachmentPreview
-              description={image.description}
-              key={
-                image.url ??
-                `image-attachment-${message.id}-${image.description ?? "unnamed"}`
-              }
-              url={image.url}
-            />
-          ))}
+        <div className="flex w-full min-w-0 flex-col gap-2">
+          {message.imageAttachments.map((image, index) =>
+            image.url ? (
+              <div className="space-y-2" key={image.url}>
+                <DocumentAttachmentPreview
+                  document={{
+                    filename: `Image ${index + 1}`,
+                    mediaType: image.mediaType,
+                    url: image.url,
+                  }}
+                />
+                {image.description?.trim() ? (
+                  <p className="whitespace-pre-wrap text-sm">
+                    {image.description.trim()}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <ImageAttachmentPreview
+                description={image.description}
+                key={image.description}
+              />
+            )
+          )}
         </div>
       ) : null}
       {message.images?.length ? (
-        <div className="flex flex-wrap gap-2">
-          {message.images.map((image) => (
-            <img
-              alt=""
-              className="max-h-40 max-w-full rounded-md border border-border object-contain"
+        <div className="flex w-full min-w-0 flex-col gap-2">
+          {message.images.map((image, index) => (
+            <DocumentAttachmentPreview
+              document={{
+                attachmentId: /^\/v1\/attachments\/([^/]+)\/content$/.exec(
+                  image.url
+                )?.[1],
+                filename: `Image ${index + 1}`,
+                mediaType: image.mediaType,
+                url: image.url,
+              }}
               key={image.url}
-              src={image.url}
-            />
-          ))}
-        </div>
-      ) : null}
-      {pastedTextDocuments.length ? (
-        <div className="flex flex-wrap gap-2">
-          {pastedTextDocuments.map((document) => (
-            <TextAttachmentPreview
-              filename={document.filename}
-              key={`${document.filename}-${document.mediaType}`}
             />
           ))}
         </div>
       ) : null}
       {otherDocuments.length ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full min-w-0 flex-col gap-2">
           {otherDocuments.map((document) => (
-            <div
-              className="inline-flex max-w-full items-center gap-2 rounded-md border border-border bg-muted px-3 py-2"
-              key={`${document.filename}-${document.mediaType}`}
-            >
-              <File01Icon
-                aria-hidden
-                className="size-4 shrink-0 text-muted-foreground"
-              />
-              <span className="truncate text-foreground text-sm">
-                {document.filename}
-              </span>
-            </div>
+            <DocumentAttachmentPreview
+              document={document}
+              key={document.attachmentId ?? document.url ?? document.filename}
+            />
           ))}
         </div>
-      ) : null}
-      {message.content ? (
-        <p className="whitespace-pre-wrap break-words text-foreground">
-          {message.content}
-        </p>
       ) : null}
     </div>
   );

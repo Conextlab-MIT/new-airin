@@ -1,28 +1,56 @@
-import { Button } from "@nakama/ui/button";
-import { Card } from "@nakama/ui/card";
-import { Input } from "@nakama/ui/input";
-import { Upload04Icon } from "hugeicons-react";
+import { Button } from "@airin/ui/button";
+import { Card } from "@airin/ui/card";
+import { Input } from "@airin/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@airin/ui/input-group";
+import { Upload04Icon, ViewIcon, ViewOffIcon } from "hugeicons-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SetupStepBackupImport } from "@/components/setup-wizard/SetupStepBackupImport";
 import type { SetupAccountDraft } from "@/components/setup-wizard/setup-wizard.shared";
 
 interface SetupStepAccountProps {
+  initialDraft?: Partial<SetupAccountDraft> | null;
   onNext: (account: SetupAccountDraft) => void;
 }
 
 type SetupAccountMode = "account" | "backup";
 
-export function SetupStepAccount({ onNext }: SetupStepAccountProps) {
+function seedFromDraft(draft: Partial<SetupAccountDraft> | null | undefined) {
+  return {
+    confirmPassword: draft?.password ?? "",
+    email: draft?.email ?? "",
+    name: draft?.name ?? "",
+    password: draft?.password ?? "",
+    phone: draft?.phone ?? "",
+  };
+}
+
+export function SetupStepAccount({
+  onNext,
+  initialDraft,
+}: SetupStepAccountProps) {
   const navigate = useNavigate();
   const backupInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<SetupAccountMode>("account");
   const [initialBackupFile, setInitialBackupFile] = useState<File | null>(null);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [seeded] = useState(() => seedFromDraft(initialDraft));
+  const [name, setName] = useState(seeded.name);
+  const [email, setEmail] = useState(seeded.email);
+  const [phone, setPhone] = useState(seeded.phone);
+  const [password, setPassword] = useState(seeded.password);
+
+  const [confirmPassword, setConfirmPassword] = useState(
+    seeded.confirmPassword
+  );
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
 
   if (mode === "backup") {
@@ -121,15 +149,27 @@ export function SetupStepAccount({ onNext }: SetupStepAccountProps) {
           >
             Password
           </label>
-          <Input
-            id="setup-password"
-            minLength={8}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="••••••••"
-            required
-            type="password"
-            value={password}
-          />
+          <InputGroup>
+            <InputGroupInput
+              autoComplete="new-password"
+              id="setup-password"
+              minLength={8}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="••••••••"
+              required
+              type={showPassword ? "text" : "password"}
+              value={password}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPassword(!showPassword)}
+                size="icon-sm"
+              >
+                {showPassword ? <ViewOffIcon /> : <ViewIcon />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
         </div>
         <div>
           <label
@@ -138,14 +178,30 @@ export function SetupStepAccount({ onNext }: SetupStepAccountProps) {
           >
             Confirm Password
           </label>
-          <Input
-            id="setup-confirm"
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            placeholder="••••••••"
-            required
-            type="password"
-            value={confirmPassword}
-          />
+          <InputGroup>
+            <InputGroupInput
+              autoComplete="new-password"
+              id="setup-confirm"
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="••••••••"
+              required
+              type={showConfirmPassword ? "text" : "password"}
+              value={confirmPassword}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                aria-label={
+                  showConfirmPassword
+                    ? "Hide confirm password"
+                    : "Show confirm password"
+                }
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                size="icon-sm"
+              >
+                {showConfirmPassword ? <ViewOffIcon /> : <ViewIcon />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
         </div>
         {error && (
           <div className="rounded-md bg-red-50 px-3 py-2 text-red-800 text-sm dark:bg-red-950/30 dark:text-red-200">

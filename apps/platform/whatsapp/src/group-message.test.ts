@@ -3,8 +3,7 @@ import {
   explainGroupMessageHandling,
   extraJidsFromGroupParticipants,
   isWhatsAppBotAddress,
-  isWhatsAppGroupChat,
-  resolveChannelOrgKey,
+  rememberWhatsAppBotMessage,
   stripWhatsAppBotMention,
   type WhatsAppAccount,
 } from "./group-message";
@@ -15,19 +14,6 @@ const me: WhatsAppAccount = {
 };
 
 describe("group-message helpers", () => {
-  test("isWhatsAppGroupChat detects group JIDs", () => {
-    expect(isWhatsAppGroupChat("120363@g.us")).toBe(true);
-    expect(isWhatsAppGroupChat("628100000000@s.whatsapp.net")).toBe(false);
-    expect(isWhatsAppGroupChat("236283431522503@lid")).toBe(false);
-  });
-
-  test("resolveChannelOrgKey scopes org store by group or private chat", () => {
-    expect(resolveChannelOrgKey("120363@g.us", true)).toBe("g:120363@g.us");
-    expect(resolveChannelOrgKey("628100000000@s.whatsapp.net", false)).toBe(
-      "628100000000@s.whatsapp.net"
-    );
-  });
-
   test("isWhatsAppBotAddress matches phone and lid identities", () => {
     expect(isWhatsAppBotAddress("628100000000@s.whatsapp.net", me)).toBe(true);
     expect(isWhatsAppBotAddress("628100000000:12@s.whatsapp.net", me)).toBe(
@@ -43,7 +29,7 @@ describe("group-message helpers", () => {
         me,
         mentionedJids: ["628100000000@s.whatsapp.net"],
         quotedParticipant: null,
-        text: "@Nakama hello",
+        text: "@Airin hello",
       }).shouldHandle
     ).toBe(true);
 
@@ -56,14 +42,27 @@ describe("group-message helpers", () => {
       }).shouldHandle
     ).toBe(false);
 
+    rememberWhatsAppBotMessage("BOT_MSG_1");
+
     expect(
       explainGroupMessageHandling({
         me,
         mentionedJids: [],
+        quotedMessageId: "BOT_MSG_1",
         quotedParticipant: me.lid ?? null,
         text: "follow up",
       }).shouldHandle
     ).toBe(true);
+
+    expect(
+      explainGroupMessageHandling({
+        me,
+        mentionedJids: [],
+        quotedMessageId: "OWNER_TYPED_MSG",
+        quotedParticipant: me.id,
+        text: "follow up",
+      })
+    ).toEqual({ reason: "no-trigger", shouldHandle: false });
 
     expect(
       explainGroupMessageHandling({
@@ -111,7 +110,7 @@ describe("group-message helpers", () => {
   });
 
   test("stripWhatsAppBotMention removes @mention tokens", () => {
-    expect(stripWhatsAppBotMention("hi @Nakama there")).toBe("hi there");
-    expect(stripWhatsAppBotMention("@Nakama")).toBe("");
+    expect(stripWhatsAppBotMention("hi @Airin there")).toBe("hi there");
+    expect(stripWhatsAppBotMention("@Airin")).toBe("");
   });
 });

@@ -1,5 +1,5 @@
-import { NakamaApiError } from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+import { AirinApiError } from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 
 type OrganizationWithLlmTurnLimit = {
   monthlyLlmTokenLimit?: number | null;
@@ -93,7 +93,7 @@ export class OrgUsageQuotaService {
         organization.monthlyLlmTokenLimit > 0 &&
         status.tokens >= organization.monthlyLlmTokenLimit)
     ) {
-      throw new NakamaApiError("Monthly LLM quota reached.", 429);
+      throw new AirinApiError("Monthly LLM quota reached.", 429);
     }
 
     const reservationId = crypto.randomUUID();
@@ -108,7 +108,7 @@ export class OrgUsageQuotaService {
     });
 
     if (!reserved) {
-      throw new NakamaApiError("Monthly LLM quota reached.", 429);
+      throw new AirinApiError("Monthly LLM quota reached.", 429);
     }
 
     return () => this.db.releaseMonthlyLlmQuota(orgId, reservationId);

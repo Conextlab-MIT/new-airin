@@ -1,7 +1,8 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { NAKAMA_API_VERSION } from "./contract";
+import { AIRIN_API_VERSION } from "./contract";
+import { withDevSecretsKey } from "./dev-secrets-key";
 import { resolveServerUrl } from "./runtime";
 
 const STARTUP_TIMEOUT_MS = 30_000;
@@ -30,7 +31,7 @@ export async function ensureServerRunning(
 
   if (options.spawn === false) {
     throw new Error(
-      "Start the Nakama API server before starting an agent worker."
+      "Start the Airin API server before starting an agent worker."
     );
   }
 
@@ -39,13 +40,13 @@ export async function ensureServerRunning(
 
   const child = Bun.spawn(["bun", "run", serverEntry], {
     cwd: projectRoot,
-    env: process.env,
+    env: withDevSecretsKey(),
     stderr: "inherit",
     stdin: "ignore",
     stdout: "inherit",
   });
 
-  console.warn("Starting Nakama server...");
+  console.warn("Starting Airin server...");
 
   const readyUrl = await waitForServer(STARTUP_TIMEOUT_MS);
 
@@ -95,7 +96,7 @@ async function isServerHealthy(serverUrl: string): Promise<boolean> {
 
     const payload = ServerHealthSchema.parse(await response.json());
 
-    if (payload.ok !== true || payload.apiVersion !== NAKAMA_API_VERSION) {
+    if (payload.ok !== true || payload.apiVersion !== AIRIN_API_VERSION) {
       return false;
     }
 

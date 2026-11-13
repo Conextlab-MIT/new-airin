@@ -3,9 +3,9 @@ export {
   normalizeUrl,
   SupermemoryClient,
   SupermemoryError,
-} from "@nakama/core/supermemory-client";
+} from "@airin/core/supermemory-client";
 
-import { normalizeUrl } from "@nakama/core/supermemory-client";
+import { normalizeUrl } from "@airin/core/supermemory-client";
 
 type JsonValue =
   | boolean

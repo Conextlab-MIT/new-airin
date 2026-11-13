@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import {
   type ComponentProps,
   type MouseEvent,
@@ -9,16 +9,19 @@ import {
   useContext,
   useState,
 } from "react";
+import { Link } from "react-router-dom";
 import { type LinkSafetyModalProps, StreamdownContext } from "streamdown";
 import { ExternalLinkSafetyModal } from "@/components/ai-elements/external-link-safety-modal";
 import { YoutubeEmbed } from "@/components/ai-elements/youtube-embed";
+import { AuthContext } from "@/context/auth-context-shared";
+import { canOpenPage, inAppLinkPath, pageIdFromPath } from "@/lib/navigation";
 import { parseYoutubeVideoId } from "@/lib/youtube-url";
 
 type MarkdownAProps = ComponentProps<"a"> & {
   node?: unknown;
 };
 
-/** Streamdown `a` override: embed YouTube URLs, keep link-safety for everything else. */
+/** Streamdown `a` override: embed YouTube URLs, route Airin pages in-app, keep link-safety for everything else. */
 export function MarkdownA({
   href,
   children,
@@ -26,6 +29,7 @@ export function MarkdownA({
   node: _node,
   ...rest
 }: MarkdownAProps) {
+  const auth = useContext(AuthContext);
   const videoId = href ? parseYoutubeVideoId(href) : null;
 
   if (videoId) {
@@ -56,6 +60,42 @@ export function MarkdownA({
         </sup>
       );
     }
+  }
+
+  const appPath = href ? inAppLinkPath(href, window.location.origin) : null;
+
+  if (appPath) {
+    const pageId = pageIdFromPath(new URL(appPath, "http://app").pathname);
+
+    const allowed =
+      pageId !== null &&
+      auth !== null &&
+      canOpenPage(pageId, {
+        isPlatformAdmin: auth.user?.isPlatformAdmin === true,
+        orgRole: auth.activeOrg?.role,
+      });
+
+    // A link the user cannot open would only bounce to /chat.
+    if (!allowed) {
+      return <span className={className}>{children}</span>;
+    }
+
+    return (
+      <Link
+        {...rest}
+        className={cn(
+          "wrap-anywhere font-medium text-primary underline",
+          className
+        )}
+        data-streamdown="link"
+        // Streamdown sets target="_blank"; in-app pages open in this tab.
+        rel={undefined}
+        target={undefined}
+        to={appPath}
+      >
+        {children}
+      </Link>
+    );
   }
 
   return (

@@ -7,10 +7,8 @@ import { publishRelease, updateManifest } from "./publish-release.mjs";
 
 describe("desktop release metadata", () => {
   const manifest = {
-    files: [
-      { sha512: "checksum", size: 42, url: "Nakama-0.2.0-arm64-mac.zip" },
-    ],
-    path: "Nakama-0.2.0-arm64-mac.zip",
+    files: [{ sha512: "checksum", size: 42, url: "Airin-0.2.0-arm64-mac.zip" }],
+    path: "Airin-0.2.0-arm64-mac.zip",
     sha512: "checksum",
     version: "0.2.0",
   };
@@ -20,23 +18,23 @@ describe("desktop release metadata", () => {
     expect(output.files[0]).toEqual({
       sha512: "checksum",
       size: 42,
-      url: "https://github.com/ahmadrosid/nakama/releases/download/desktop-v0.2.0/Nakama-0.2.0-arm64-mac.zip",
+      url: "https://github.com/ahmadrosid/airin/releases/download/desktop-v0.2.0/Airin-0.2.0-arm64-mac.zip",
     });
     expect(output.path).toBe(output.files[0].url);
     expect(output.sha512).toBe("checksum");
-    expect(manifest.files[0].url).toBe("Nakama-0.2.0-arm64-mac.zip");
+    expect(manifest.files[0].url).toBe("Airin-0.2.0-arm64-mac.zip");
   });
   test("preserves DMG entries alongside the required ZIP", () => {
     const files = [
       ...manifest.files,
-      { sha512: "dmg-checksum", url: "Nakama-0.2.0-arm64.dmg" },
+      { sha512: "dmg-checksum", url: "Airin-0.2.0-arm64.dmg" },
     ];
 
     expect(
       updateManifest({ ...manifest, files }, "desktop-v0.2.0").files[1]
     ).toEqual({
       sha512: "dmg-checksum",
-      url: "https://github.com/ahmadrosid/nakama/releases/download/desktop-v0.2.0/Nakama-0.2.0-arm64.dmg",
+      url: "https://github.com/ahmadrosid/airin/releases/download/desktop-v0.2.0/Airin-0.2.0-arm64.dmg",
     });
     expect(() =>
       updateManifest({ ...manifest, files: files.slice(1) }, "desktop-v0.2.0")
@@ -61,25 +59,23 @@ describe("desktop release metadata", () => {
 
 test("Windows metadata accepts only the exact versioned installer", () => {
   const manifest = {
-    files: [
-      { sha512: "checksum", size: 42, url: "Nakama-0.2.0-x64-Setup.exe" },
-    ],
-    path: "Nakama-0.2.0-x64-Setup.exe",
+    files: [{ sha512: "checksum", size: 42, url: "Airin-0.2.0-x64-Setup.exe" }],
+    path: "Airin-0.2.0-x64-Setup.exe",
     sha512: "checksum",
     version: "0.2.0",
   };
 
   expect(updateManifest(manifest, "desktop-v0.2.0", "windows").path).toEndWith(
-    "/Nakama-0.2.0-x64-Setup.exe"
+    "/Airin-0.2.0-x64-Setup.exe"
   );
 
   for (const path of [
     "../payload.exe",
     "..\\payload.exe",
-    "Nakama-0.3.0-x64-Setup.exe",
+    "Airin-0.3.0-x64-Setup.exe",
     "https://example.com/payload.exe",
-    "Nakama-0.2.0-x64-Setup.exe?x",
-    "Nakama-0.2.0-arm64-Setup.exe",
+    "Airin-0.2.0-x64-Setup.exe?x",
+    "Airin-0.2.0-arm64-Setup.exe",
   ]) {
     expect(() =>
       updateManifest(
@@ -110,7 +106,7 @@ afterEach(async () => {
 });
 
 async function releaseFixture() {
-  const output = await mkdtemp(join(tmpdir(), "nakama-publish-test-"));
+  const output = await mkdtemp(join(tmpdir(), "airin-publish-test-"));
   temporary.push(output);
   const version = "0.2.0";
   const tag = `desktop-v${version}`;
@@ -122,7 +118,7 @@ async function releaseFixture() {
     const files = [];
 
     for (const suffix of suffixes) {
-      const filename = `Nakama-${version}-${suffix}`;
+      const filename = `Airin-${version}-${suffix}`;
       const content = Buffer.from(filename);
       await Bun.write(join(output, platform, filename), content);
       await Bun.write(
@@ -253,7 +249,7 @@ test("publishes all installers before independently promoting both feeds", async
 for (const change of ["missing", "checksum"]) {
   test(`rejects ${change} Windows artifact without creating a release`, async () => {
     const f = await releaseFixture();
-    const path = join(f.output, "windows/Nakama-0.2.0-x64-Setup.exe");
+    const path = join(f.output, "windows/Airin-0.2.0-x64-Setup.exe");
 
     if (change === "missing") {
       await rm(path);
@@ -291,17 +287,17 @@ test("retry repairs partial promotion using public bytes even when local artifac
   expect(f.releases.get("desktop-updates").assets.has("latest-mac.yml")).toBe(
     true
   );
-  const exe = f.releases.get(f.tag).assets.get("Nakama-0.2.0-x64-Setup.exe");
+  const exe = f.releases.get(f.tag).assets.get("Airin-0.2.0-x64-Setup.exe");
   await Bun.write(
-    join(f.output, "windows/Nakama-0.2.0-x64-Setup.exe"),
+    join(f.output, "windows/Airin-0.2.0-x64-Setup.exe"),
     "rebuilt"
   );
   f.events.length = 0;
   f.setFailure(undefined);
   await f.publish();
-  expect(
-    f.releases.get(f.tag).assets.get("Nakama-0.2.0-x64-Setup.exe")
-  ).toEqual(exe);
+  expect(f.releases.get(f.tag).assets.get("Airin-0.2.0-x64-Setup.exe")).toEqual(
+    exe
+  );
   expect(f.releases.get("desktop-updates").assets.has("latest.yml")).toBe(true);
   expect(f.events.filter((args) => args[1] === "upload").length).toBe(1);
 });
@@ -339,7 +335,7 @@ test("refuses incomplete public releases and inconsistent same-version feeds", a
     Buffer.from(Bun.YAML.stringify({ version: "0.2.0" }))
   );
   await expect(f.publish()).rejects.toThrow();
-  f.releases.get(f.tag).assets.delete("Nakama-0.2.0-x64-Setup.exe");
+  f.releases.get(f.tag).assets.delete("Airin-0.2.0-x64-Setup.exe");
   await expect(f.publish()).rejects.toThrow();
   expect(f.releases.get(f.tag).draft).toBe(false);
 });
@@ -351,7 +347,7 @@ test("uploaded bytes must match before a draft becomes public", async () => {
 
     if (args[0] === "api" && release?.assets.size === 8) {
       release.assets.set(
-        "Nakama-0.2.0-x64-Setup.exe",
+        "Airin-0.2.0-x64-Setup.exe",
         Buffer.from("damaged upload")
       );
     }

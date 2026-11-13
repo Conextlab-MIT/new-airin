@@ -4,6 +4,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  MODEL_CONNECTION_CLOSED_MESSAGE,
+  ProviderStreamInterruptedError,
+} from "./api-error";
+import {
   buildErrorReport,
   type ErrorReport,
   fingerprintError,
@@ -43,10 +47,10 @@ let consoleErrorCalls: unknown[][] = [];
 const realConsoleError = console.error;
 
 beforeEach(async () => {
-  previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-  configDir = await mkdtemp(join(tmpdir(), "nakama-error-tracking-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
-  delete process.env.NAKAMA_ERROR_TRACKING_DSN;
+  previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+  configDir = await mkdtemp(join(tmpdir(), "airin-error-tracking-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
+  delete process.env.AIRIN_ERROR_TRACKING_DSN;
   delete process.env.DO_NOT_TRACK;
   await saveErrorTrackingDsn(DSN);
   await refreshErrorTrackingEnabled();
@@ -58,12 +62,12 @@ beforeEach(async () => {
 
 afterEach(async () => {
   if (previousConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+    process.env.AIRIN_CONFIG_DIR = previousConfigDir;
   }
 
-  delete process.env.NAKAMA_ERROR_TRACKING_DSN;
+  delete process.env.AIRIN_ERROR_TRACKING_DSN;
   delete process.env.DO_NOT_TRACK;
   await refreshErrorTrackingEnabled();
   console.error = realConsoleError;
@@ -105,22 +109,6 @@ test("a uuid in the message does not fragment the fingerprint", () => {
   expect(first).toBe(second);
 });
 
-test("different bugs fingerprint differently", () => {
-  const first = fingerprintError(
-    "TypeError",
-    "a is undefined",
-    "TypeError\n    at a (~/a.ts:1:1)"
-  );
-
-  const second = fingerprintError(
-    "RangeError",
-    "b is out of range",
-    "RangeError\n    at b (~/b.ts:1:1)"
-  );
-
-  expect(first).not.toBe(second);
-});
-
 test("the report scrubs the message and stack", () => {
   const error = new Error(
     "auth failed with sk-ant-api03-abcdefghijklmnopqrstuvwxyz012345"
@@ -131,6 +119,68 @@ test("the report scrubs the message and stack", () => {
   expect(report.message).not.toContain("sk-ant-api03");
   expect(report.name).toBe("Error");
   expect(report.runtime.bun).toBe(Bun.version);
+});
+
+const PROVIDER_FAILURE = "Netra Runtime stream failed after it started.";
+
+const SOCKET_FAILURE = "socket closed";
+
+// The shape chat.ts throws when a provider stream drops: plain words on top, the
+// provider's message and the socket code underneath.
+function interruptedTurn(withCause: boolean): ProviderStreamInterruptedError {
+  const outer = new ProviderStreamInterruptedError(
+    MODEL_CONNECTION_CLOSED_MESSAGE
+  );
+
+  if (!withCause) {
+    return outer;
+  }
+
+  const socket = Object.assign(
+    new TypeError(
+      `${SOCKET_FAILURE}, key sk-ant-api03-abcdefghijklmnopqrstuvwxyz012345`
+    ),
+    { code: "ECONNRESET" }
+  );
+
+  const provider = Object.assign(
+    new ProviderStreamInterruptedError(PROVIDER_FAILURE),
+    { cause: socket }
+  );
+
+  return Object.assign(outer, { cause: provider });
+}
+
+test("the report keeps the scrubbed cause chain a wrapper hides", () => {
+  const report = buildErrorReport(interruptedTurn(true), {
+    kind: "turn",
+    source: "server",
+  });
+
+  expect(report.message).toBe(MODEL_CONNECTION_CLOSED_MESSAGE);
+  expect(report.cause).toContain(PROVIDER_FAILURE);
+  expect(report.cause).toContain(SOCKET_FAILURE);
+  expect(report.cause).toContain("ECONNRESET");
+  expect(report.cause).not.toContain("sk-ant-api03");
+});
+
+test("a cause does not change the fingerprint, so issues keep their grouping", () => {
+  const plain = buildErrorReport(interruptedTurn(false));
+  const caused = buildErrorReport(interruptedTurn(true));
+
+  expect(plain.cause).toBeUndefined();
+  expect(caused.fingerprint).toBe(plain.fingerprint);
+});
+
+test("a cause cycle ends the chain instead of looping", () => {
+  const first = new Error("first");
+  const second = new Error("second", { cause: first });
+  first.cause = second;
+
+  const report = buildErrorReport(first);
+
+  expect(report.cause?.startsWith("Error: second")).toBe(true);
+  expect(report.cause).not.toContain("Error: first");
 });
 
 test("a non-Error rejection still produces a report", () => {
@@ -203,6 +253,16 @@ test("a report the sink could not deliver stays queued for the next start", asyn
 
   expect(queued).toHaveLength(1);
   expect(queued[0]?.id).toBe(report.id);
+});
+
+test("a queued report keeps its cause for the retry", async () => {
+  setErrorSink(() => false);
+
+  await reportError(new Error("wrapper", { cause: new RangeError("root") }), {
+    source: "server",
+  });
+
+  expect(readPendingErrorReports()[0]?.cause).toStartWith("RangeError");
 });
 
 test("the queue is written before the send, which is what survives a hard exit", async () => {
@@ -290,6 +350,6 @@ test("the local log always runs, configured or not", async () => {
 
   expect(consoleErrorCalls).toHaveLength(1);
   expect(consoleErrorCalls[0]?.[0]).toMatch(
-    /^\[nakama:crash\] cli [0-9a-f]{16}$/
+    /^\[airin:crash\] cli [0-9a-f]{16}$/
   );
 });

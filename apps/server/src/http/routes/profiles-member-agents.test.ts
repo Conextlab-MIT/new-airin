@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
+import { AgentService } from "../../services/agent-service";
 import { ProfileService } from "../../services/profile-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -9,7 +10,7 @@ import {
   type TestBrowserSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-member-agents-routes-");
+setupTestConfigDir("airin-member-agents-routes-");
 
 const BASE = "http://localhost:4310";
 
@@ -28,6 +29,11 @@ async function setup() {
         profileService.deleteProfile(orgId, profileId),
       getProfile: (orgId: string, profileId: string) =>
         profileService.getProfile(orgId, profileId),
+      getProfileAccess: (orgId: string, profileId: string) =>
+        new AgentService(null, null, databaseAdapter).getProfileAccess(
+          orgId,
+          profileId
+        ),
       listProfiles: (orgId: string) => profileService.listProfiles(orgId),
       updateProfile: (
         orgId: string,
@@ -132,12 +138,12 @@ describe("member-owned agents", () => {
     expect(await listNames(other)).not.toContain("Mine");
   }, 20_000);
 
-  test("a member's describe-it request creates a private agent without Super Bot", async () => {
+  test("a member's describe-it request creates a private agent without Airin", async () => {
     const { addMember, listNames, request } = await setup();
     const owner = await addMember("owner3@example.com");
     const other = await addMember("other3@example.com");
 
-    const created = await request(owner, "/v1/profiles/with-super-bot", {
+    const created = await request(owner, "/v1/profiles/with-super-airin", {
       body: { prompt: "Draft clear short emails from my notes" },
       method: "POST",
     });

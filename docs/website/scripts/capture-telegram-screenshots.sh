@@ -4,11 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 source "$(dirname "$0")/capture-common.sh"
 SCREENSHOT_DIR="$(cd "$(dirname "$0")/.." && pwd)/public/screenshots"
-TEMP_CONFIG="/tmp/nakama-docs-telegram-screenshots-$$"
-COOKIE_JAR="/tmp/nakama-docs-telegram-cookies-$$.txt"
+TEMP_CONFIG="/tmp/airin-docs-telegram-screenshots-$$"
+COOKIE_JAR="/tmp/airin-docs-telegram-cookies-$$.txt"
 PORT=4316
 BASE_URL="http://127.0.0.1:${PORT}"
-SESSION=nakama-docs-telegram-screenshots
+SESSION=airin-docs-telegram-screenshots
 SERVER_PID=""
 VIEWPORT_WIDTH=1280
 VIEWPORT_HEIGHT=900
@@ -44,8 +44,8 @@ ensure_current_web_build "$ROOT"
 # its daemon + logs by PM2_HOME, so this keeps the captured logs isolated.
 export PM2_HOME="$TEMP_CONFIG/pm2"
 
-NAKAMA_CONFIG_DIR="$TEMP_CONFIG" NAKAMA_PORT="$PORT" \
-  bun run "$ROOT/apps/server/src/index.ts" > /tmp/nakama-docs-telegram-screenshot-server.log 2>&1 &
+AIRIN_CONFIG_DIR="$TEMP_CONFIG" AIRIN_PORT="$PORT" \
+  bun run "$ROOT/apps/server/src/index.ts" > /tmp/airin-docs-telegram-screenshot-server.log 2>&1 &
 SERVER_PID=$!
 
 for _ in $(seq 1 60); do
@@ -66,8 +66,8 @@ SETUP_BODY=$(curl --fail-with-body -sS -c "$COOKIE_JAR" -X POST "${BASE_URL}/v1/
   }")
 ORG_ID=$(printf '%s' "$SETUP_BODY" | bun -e 'const j=JSON.parse(await Bun.stdin.text()); process.stdout.write(j.activeOrgId);')
 
-CSRF_VAL=$(awk '$6=="nakama_csrf"{print $7}' "$COOKIE_JAR")
-SESSION_VAL=$(awk '$6=="nakama_session"{print $7}' "$COOKIE_JAR")
+CSRF_VAL=$(awk '$6=="airin_csrf"{print $7}' "$COOKIE_JAR")
+SESSION_VAL=$(awk '$6=="airin_session"{print $7}' "$COOKIE_JAR")
 
 # OpenAI provider so the audio transcription model picker becomes available.
 curl --fail-with-body -sS -b "$COOKIE_JAR" -X POST "${BASE_URL}/v1/providers" \
@@ -80,9 +80,9 @@ PROFILE_ID=$(curl --fail-with-body -sS -b "$COOKIE_JAR" \
   bun -e 'const j=JSON.parse(await Bun.stdin.text()); const p=j.profiles.find((profile) => profile.name === "Default Bot") ?? j.profiles[0]; process.stdout.write(p.id);')
 
 $AB --session "$SESSION" close 2>/dev/null || true
-$AB --session "$SESSION" cookies set nakama_session "$SESSION_VAL" \
+$AB --session "$SESSION" cookies set airin_session "$SESSION_VAL" \
   --url "${BASE_URL}/" --httpOnly --sameSite Lax
-$AB --session "$SESSION" cookies set nakama_csrf "$CSRF_VAL" \
+$AB --session "$SESSION" cookies set airin_csrf "$CSRF_VAL" \
   --url "${BASE_URL}/" --sameSite Lax
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ $AB --session "$SESSION" screenshot "$SCREENSHOT_DIR/telegram-bot-token.png"
 # ---------------------------------------------------------------------------
 # Seed only the isolated demo config: saving through HTTP validates the fake
 # token against Telegram and correctly rejects it.
-(cd "$ROOT" && NAKAMA_CONFIG_DIR="$TEMP_CONFIG" DOCS_ORG_ID="$ORG_ID" DOCS_PROFILE_ID="$PROFILE_ID" bun -e '
+(cd "$ROOT" && AIRIN_CONFIG_DIR="$TEMP_CONFIG" DOCS_ORG_ID="$ORG_ID" DOCS_PROFILE_ID="$PROFILE_ID" bun -e '
   const { saveTelegramConfig } = await import("./packages/core/src/telegram-config.ts");
   await saveTelegramConfig({
     orgId: process.env.DOCS_ORG_ID,
@@ -126,12 +126,12 @@ $AB --session "$SESSION" wait 400
 $AB --session "$SESSION" screenshot "$SCREENSHOT_DIR/telegram-pairing.png"
 
 # ---------------------------------------------------------------------------
-# Debugging: More -> View logs (stderr shows token / config errors).
+# Debugging: View logs (stderr shows token / config errors).
 # Give the worker time to poll Telegram with the fake token and record 401s.
 # ---------------------------------------------------------------------------
 # The setup page shows worker controls after one user links. Seed only this
-# isolated demo config so the log menu is visible without a real Telegram user.
-(cd "$ROOT" && NAKAMA_CONFIG_DIR="$TEMP_CONFIG" DOCS_ORG_ID="$ORG_ID" DOCS_PROFILE_ID="$PROFILE_ID" bun -e '
+# isolated demo config so the log button is visible without a real Telegram user.
+(cd "$ROOT" && AIRIN_CONFIG_DIR="$TEMP_CONFIG" DOCS_ORG_ID="$ORG_ID" DOCS_PROFILE_ID="$PROFILE_ID" bun -e '
   const { saveTelegramConfig } = await import("./packages/core/src/telegram-config.ts");
   await saveTelegramConfig({
     orgId: process.env.DOCS_ORG_ID,
@@ -141,23 +141,23 @@ $AB --session "$SESSION" screenshot "$SCREENSHOT_DIR/telegram-pairing.png"
 $AB --session "$SESSION" open "${BASE_URL}/profiles/${PROFILE_ID}/channels/telegram"
 $AB --session "$SESSION" wait 2500
 $AB --session "$SESSION" wait 8000
-$AB --session "$SESSION" eval "(() => { const button = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'More'); if (!button) throw new Error('Missing More button'); button.click(); })()"
-$AB --session "$SESSION" wait 400
-$AB --session "$SESSION" eval "(() => { const item = [...document.querySelectorAll('[role=menuitem]')].find(el => el.textContent.trim() === 'View logs'); if (!item) throw new Error('Missing View logs menu item'); item.click(); })()"
+$AB --session "$SESSION" eval "(() => { const button = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'View logs'); if (!button) throw new Error('Missing View logs button'); button.click(); })()"
 $AB --session "$SESSION" wait 1500
 $AB --session "$SESSION" set viewport "$VIEWPORT_WIDTH" 760
 # The dialog only fetches once on open, so click Refresh to pull the latest
 # stderr (which now contains the 401 errors from the fake token).
-$AB --session "$SESSION" eval "(() => { const button = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'Refresh'); if (!button) throw new Error('Missing Refresh button'); button.click(); })()"
+$AB --session "$SESSION" click '[aria-label="Log actions"]'
+$AB --session "$SESSION" wait 400
+$AB --session "$SESSION" eval "(() => { const item = [...document.querySelectorAll('[role=menuitem]')].find(el => el.textContent.trim() === 'Refresh'); if (!item) throw new Error('Missing Refresh menu item'); item.click(); })()"
 $AB --session "$SESSION" wait 1500
-$AB --session "$SESSION" eval "(() => { const button = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'Stderr'); if (!button) throw new Error('Missing Stderr button'); button.click(); })()"
+$AB --session "$SESSION" eval "(() => { const button = [...document.querySelectorAll('button')].find(el => el.textContent.trim().toLowerCase() === 'stderr'); if (!button) throw new Error('Missing Stderr button'); button.click(); })()"
 $AB --session "$SESSION" wait 1000
 $AB --session "$SESSION" screenshot "$SCREENSHOT_DIR/telegram-worker-logs.png"
 
 # ---------------------------------------------------------------------------
-# Step 3: Control center -> AI Providers -> Audio transcription model picker.
+# Step 3: Settings -> AI Providers -> Audio transcription model picker.
 # ---------------------------------------------------------------------------
-$AB --session "$SESSION" open "${BASE_URL}/customize/providers"
+$AB --session "$SESSION" open "${BASE_URL}/settings/providers"
 $AB --session "$SESSION" wait 2500
 $AB --session "$SESSION" set viewport "$VIEWPORT_WIDTH" 1000
 $AB --session "$SESSION" set media light
@@ -167,9 +167,9 @@ $AB --session "$SESSION" wait 400
 $AB --session "$SESSION" screenshot "$SCREENSHOT_DIR/telegram-audio-transcription.png"
 
 # ---------------------------------------------------------------------------
-# Outbound notifications: Control center -> Notifications destination form.
+# Outbound notifications: Settings -> Notifications destination form.
 # ---------------------------------------------------------------------------
-$AB --session "$SESSION" open "${BASE_URL}/customize/connections/notifications"
+$AB --session "$SESSION" open "${BASE_URL}/settings/connections/notifications"
 $AB --session "$SESSION" wait 2500
 $AB --session "$SESSION" set viewport "$VIEWPORT_WIDTH" 760
 $AB --session "$SESSION" set media light

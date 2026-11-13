@@ -1,5 +1,5 @@
-import type { AgentChannel, ProfileSummary } from "@nakama/core/contract";
-import { resolveProfileOrgBooleanOverride } from "@nakama/core/skills/profile-org-override";
+import type { AgentChannel, ProfileSummary } from "@airin/core/contract";
+import { resolveProfileOrgBooleanOverride } from "@airin/core/skills/profile-org-override";
 import { useEffect, useMemo, useState } from "react";
 import {
   SkillPostTurnReviewBanner,
@@ -35,6 +35,7 @@ const POST_TURN_OVERLAY_POLL_CHANNEL = {
   slack: false,
   subagent: false,
   task: false,
+  teams: false,
   telegram: false,
   web: true,
   whatsapp: false,

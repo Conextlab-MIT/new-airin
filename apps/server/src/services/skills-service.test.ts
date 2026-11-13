@@ -12,24 +12,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type ChatMessage,
+  composeLoadedSkillPrompt,
   ensureBundledSkillFiles,
   type GenerateChatInput,
   getProfileSoulDir,
   runReadFile,
   uploadOrganizationKnowledgeBaseDocument,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { createMinimalHonoApp } from "../http/test-app-helpers";
 import {
   loginPlatformAdminSession,
   loginUserSession,
 } from "../http/test-session-helpers";
 import { AgentService } from "./agent-service";
-import { createDefaultProfile } from "./agent-service-test-fixtures";
+import {
+  createDefaultProfile,
+  startStoppedTurn,
+} from "./agent-service-test-fixtures";
 import { AuthService } from "./auth-service";
 import { OrgService } from "./org-service";
 import { ProfileService } from "./profile-service";
-import { sessionTurnRegistry } from "./session-turn-registry";
 import { SkillCuratorService } from "./skill-curator-service";
 import { SkillProposalService } from "./skill-proposal-service";
 import { SkillsService } from "./skills-service";
@@ -52,8 +55,8 @@ describe("SkillsService", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skills-test-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skills-test-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const weatherDir = join(configDir, "agent", "skills", "weather");
     await mkdir(weatherDir, { recursive: true });
@@ -62,7 +65,7 @@ describe("SkillsService", () => {
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   async function setupPublishedSkill() {
@@ -232,11 +235,11 @@ export async function run(input, context) {
         { cognito, orgRole: "member" }
       );
 
-      const first = (await agent.resolveSession(id, "team_a"))!;
+      const first = (await agent.sessions.get(id, "team_a"))!;
       await first.send("First");
       expect(turns[0]!.tools ?? []).toEqual([]);
       await db.assignSkillToProfile("profile_parent", skill.id);
-      const second = (await agent.resolveSession(id, "team_a"))!;
+      const second = (await agent.sessions.get(id, "team_a"))!;
       expect(second).not.toBe(first);
       expect(second.getHistory()).toEqual(first.getHistory());
       await second.send("Second");
@@ -309,7 +312,7 @@ export async function run(input, context) {
           10_000
         )
       ).rejects.toMatchObject({ status: 404 });
-      const third = (await agent.resolveSession(id, "team_a"))!;
+      const third = (await agent.sessions.get(id, "team_a"))!;
       expect(third).not.toBe(second);
       expect(third.getHistory()).toEqual(second.getHistory());
       await third.send("Third");
@@ -335,14 +338,14 @@ export async function run(input, context) {
       expect(
         (await service.listSkillsForProfile(instance.id)).map((item) => item.id)
       ).toEqual(["global_skill"]);
-      const fourth = (await agent.resolveSession(id, "team_a"))!;
+      const fourth = (await agent.sessions.get(id, "team_a"))!;
       expect(fourth).not.toBe(third);
       expect(fourth.getHistory()).toEqual(third.getHistory());
       await fourth.send("Fourth");
       expect(turns[3]!.tools?.map((tool) => tool.name)).toContain("weather");
       await db.unassignSkillFromProfile("profile_parent", "global_skill");
       expect(await service.listSkillsForProfile(instance.id)).toEqual([]);
-      const fifth = (await agent.resolveSession(id, "team_a"))!;
+      const fifth = (await agent.sessions.get(id, "team_a"))!;
       expect(fifth).not.toBe(fourth);
       expect(fifth.getHistory()).toEqual(fourth.getHistory());
       await fifth.send("Fifth");
@@ -369,17 +372,17 @@ export async function run(input, context) {
       const modulePath = join(skill.sourcePath, file);
 
       const source = `import { writeFile } from "node:fs/promises";
-process.env.NAKAMA_SHARED_JS_CHILD = "child";
+process.env.AIRIN_SHARED_JS_CHILD = "child";
 export const name = "shared-notes";
 export const description = "Probe team context";
 export const parameters = {type: "object", properties: {message: {type: "string"}}};
 export async function run(input, context) {
   await writeFile("executed.marker", "team");
-  return { cwd: process.cwd(), workspace: context.workspaceRoot, orgId: context.orgId, profileId: context.profileId, config: process.env.NAKAMA_CONFIG_DIR ?? null, value: "original", message: input.message };
+  return { cwd: process.cwd(), workspace: context.workspaceRoot, orgId: context.orgId, profileId: context.profileId, config: process.env.AIRIN_CONFIG_DIR ?? null, value: "original", message: input.message };
 }
 `;
 
-      const originalChild = process.env.NAKAMA_SHARED_JS_CHILD;
+      const originalChild = process.env.AIRIN_SHARED_JS_CHILD;
       await writeFile(modulePath, source);
       await db.assignSkillToProfile("profile_team_a", skill.id);
       const agent = new AgentService(null, null, db);
@@ -399,7 +402,7 @@ export async function run(input, context) {
       )[0]!;
 
       expect(await blocked.run({}, context)).toHaveProperty("error");
-      expect(process.env.NAKAMA_SHARED_JS_CHILD).toBe(originalChild);
+      expect(process.env.AIRIN_SHARED_JS_CHILD).toBe(originalChild);
       await expect(readFile(join(root, "executed.marker"))).rejects.toThrow();
       await db.upsertOrganization({
         ...(await db.getOrganizationById("parent"))!,
@@ -429,7 +432,7 @@ export async function run(input, context) {
         properties: { message: { type: "string" } },
         type: "object",
       });
-      expect(process.env.NAKAMA_SHARED_JS_CHILD).toBe(originalChild);
+      expect(process.env.AIRIN_SHARED_JS_CHILD).toBe(originalChild);
       await expect(readFile(join(root, "executed.marker"))).rejects.toThrow();
 
       const result = await tool.run(
@@ -449,7 +452,7 @@ export async function run(input, context) {
       expect(await realpath((result as { cwd: string }).cwd)).toBe(
         await realpath(root)
       );
-      expect(process.env.NAKAMA_SHARED_JS_CHILD).toBe(originalChild);
+      expect(process.env.AIRIN_SHARED_JS_CHILD).toBe(originalChild);
       expect(await readFile(join(root, "executed.marker"), "utf8")).toBe(
         "team"
       );
@@ -512,7 +515,7 @@ import sys
 def run(payload, context):
     with open("executed.marker", "w") as handle:
         handle.write("team")
-    return {"cwd": os.getcwd(), "workspace": os.environ.get("NAKAMA_WORKSPACE_ROOT"), "config": os.environ.get("NAKAMA_CONFIG_DIR"), "value": "original"}
+    return {"cwd": os.getcwd(), "workspace": os.environ.get("AIRIN_WORKSPACE_ROOT"), "config": os.environ.get("AIRIN_CONFIG_DIR"), "value": "original"}
 
 if __name__ == "__main__":
     print(json.dumps(run(json.loads(sys.stdin.read() or "{}"), {})))
@@ -661,8 +664,14 @@ if __name__ == "__main__":
     ).toEqual([]);
     expect(await service.listSkillsForProfile("profile_team_a")).toEqual([]);
     expect(
-      await service.composeCatalogForProfile("team_a", "profile_team_a")
-    ).toContain("published-skill://published_skill/SKILL.md");
+      (
+        await service.loadSkillForModel(
+          "team_a",
+          "profile_team_a",
+          "shared-notes"
+        )
+      )?.skillFilePath
+    ).toBe("published-skill://published_skill/SKILL.md");
     expect(
       (await db.listSkillsForProfile("profile_team_a")).map((item) => item.id)
     ).toEqual([skill.id]);
@@ -715,17 +724,22 @@ if __name__ == "__main__":
       "profile_team_a"
     );
 
-    expect(catalog).toContain("published-skill://published_skill/SKILL.md");
+    expect(catalog).toContain("**shared-notes**");
 
     for (const source of [skill, local, privateSkill, sibling]) {
       expect(catalog).not.toContain(source.sourcePath);
     }
 
-    const explicit = await service.formatMatchedSkillsForPrompt(
+    const explicitSkill = await service.findExplicitSkillForMessage(
       "team_a",
       "profile_team_a",
       "/skill shared-notes"
     );
+
+    expect(explicitSkill).not.toBeNull();
+
+    const explicit = composeLoadedSkillPrompt(explicitSkill!);
+    expect(explicit).toContain("published-skill://published_skill/SKILL.md");
 
     expect(explicit).toContain("Published instructions");
     expect(explicit).not.toContain(skill.sourcePath);
@@ -735,7 +749,7 @@ if __name__ == "__main__":
       service.composeCatalogForProfile("team_a", "profile_team_a")
     ).rejects.toMatchObject({ status: 409 });
     await expect(
-      service.formatMatchedSkillsForPrompt(
+      service.findExplicitSkillForMessage(
         "team_a",
         "profile_team_a",
         "/skill shared-notes"
@@ -966,7 +980,7 @@ if __name__ == "__main__":
         { cognito, orgRole: "member" }
       );
 
-      const first = (await agent.resolveSession(id, "team_a"))!;
+      const first = (await agent.sessions.get(id, "team_a"))!;
       await first.send("First");
       expect(turns[0]!.tools?.map((tool) => tool.name) ?? []).not.toContain(
         "shared-notes"
@@ -992,7 +1006,7 @@ if __name__ == "__main__":
 
       await db.assignSkillToProfile("profile_team_a", skill.id);
       failBuild = true;
-      await expect(agent.resolveSession(id, "team_a")).rejects.toThrow();
+      await expect(agent.sessions.get(id, "team_a")).rejects.toThrow();
       expect(
         first.getHistory().filter((message) => message.role === "user")
       ).toHaveLength(1);
@@ -1001,14 +1015,13 @@ if __name__ == "__main__":
         questionnaire
       );
       failBuild = false;
-      expect(await agent.beginSessionTurn(id, "team_a")).toBe(true);
-      const second = (await agent.resolveSession(id, "team_a"))!;
+      expect(await startStoppedTurn(agent, id, "team_a")).toBe("started");
+      const second = (await agent.sessions.get(id, "team_a"))!;
       expect(second).not.toBe(first);
       expect(second.getHistory()).toEqual(first.getHistory());
       expect(await agent.getSessionQuestionnaire(id, "team_a")).toEqual(
         questionnaire
       );
-      sessionTurnRegistry.cancelTurn(id);
       await second.send("Second");
       expect(turns[1]!.tools?.map((tool) => tool.name)).toContain(
         "shared-notes"
@@ -1019,18 +1032,20 @@ if __name__ == "__main__":
         'export const name = "shared-notes"; export const parameters = {type: "object", properties: {current: {type: "number"}}}; export async function run() { return "done"; }'
       );
       await approve();
-      const updated = (await agent.resolveSession(id, "team_a"))!;
+      const updated = (await agent.sessions.get(id, "team_a"))!;
       expect(updated).not.toBe(second);
       await updated.send("Third");
+      // A turn can also trigger follow-up provider calls; the newest one has
+      // the rebuilt session's tools.
       expect(
-        turns[2]!.tools?.find((tool) => tool.name === "shared-notes")
+        turns.at(-1)!.tools?.find((tool) => tool.name === "shared-notes")
           ?.parameters
       ).toMatchObject({ properties: { current: { type: "number" } } });
       await db.deleteOrgSharedResource("parent", publication.id);
-      const revoked = (await agent.resolveSession(id, "team_a"))!;
+      const revoked = (await agent.sessions.get(id, "team_a"))!;
       expect(revoked).not.toBe(updated);
       await revoked.send("Fourth");
-      expect(turns[3]!.tools?.map((tool) => tool.name) ?? []).not.toContain(
+      expect(turns.at(-1)!.tools?.map((tool) => tool.name) ?? []).not.toContain(
         "shared-notes"
       );
       expect(
@@ -1089,17 +1104,15 @@ if __name__ == "__main__":
         { cognito, orgRole: "member" }
       );
 
-      const session = await agent.resolveSession(id, "team_a");
+      const session = await agent.sessions.get(id, "team_a");
       expect(session).not.toBeNull();
       await session!.send("First question");
-      expect(prompts[0]).toContain(
-        "published-skill://published_skill/SKILL.md"
-      );
+      expect(prompts[0]).toContain("**shared-notes**");
       expect(prompts[0]).not.toContain(skill.sourcePath);
       expect(prompts[0]).not.toContain("Published instructions");
       await db.deleteOrgSharedResource("parent", publication.id);
       await session!.send("Second question");
-      expect(prompts[1]).not.toContain("published-skill://published_skill");
+      expect(prompts[1]).not.toContain("**shared-notes**");
       await db.upsertOrganization({
         ...(await db.getOrganizationById("parent"))!,
         name: "Renamed parent",
@@ -1113,7 +1126,7 @@ if __name__ == "__main__":
       expect(prompts[2]).toContain("Renamed parent");
       expect(prompts[2]).toContain("Current instructions");
       expect(prompts[2]).not.toContain("Published instructions");
-      expect(await agent.resolveSession(id, "team_a")).toBe(session);
+      expect(await agent.sessions.get(id, "team_a")).toBe(session);
       expect(
         session!.getHistory().filter((message) => message.role === "user")
       ).toHaveLength(3);
@@ -1178,6 +1191,8 @@ if __name__ == "__main__":
         agent: {
           assignSkill: profiles.assignSkill.bind(profiles),
           getProfile: profiles.getProfile.bind(profiles),
+          getProfileAccess: (orgId: string, profileId: string) =>
+            new AgentService(null, null, db).getProfileAccess(orgId, profileId),
           unassignSkill: profiles.unassignSkill.bind(profiles),
         },
         databaseAdapter: db,
@@ -2060,7 +2075,7 @@ if __name__ == "__main__":
     ).rejects.toThrow();
   });
 
-  test("matches weather skill instructions for weather questions", async () => {
+  test("a message's words load no skill; load_skill loads it by name", async () => {
     const db = createInMemoryDatabaseAdapter();
     await db.upsertProfile({
       ...createDefaultProfile(),
@@ -2078,14 +2093,24 @@ if __name__ == "__main__":
 
     await db.assignSkillToProfile(PROFILE_ID, weather!.id);
 
-    const matched = await service.formatMatchedSkillsForPrompt(
+    expect(
+      await service.findExplicitSkillForMessage(
+        ORG_ID,
+        PROFILE_ID,
+        "What's the weather in Jakarta?"
+      )
+    ).toBeNull();
+
+    const loaded = await service.loadSkillForModel(
       ORG_ID,
       PROFILE_ID,
-      "What's the weather in Jakarta?"
+      "weather"
     );
 
-    expect(matched).toContain(weather!.description);
-    expect(matched).not.toContain(weatherSkillBody);
+    expect(loaded?.body).toContain(weatherSkillBody);
+    expect(
+      await service.loadSkillForModel(ORG_ID, PROFILE_ID, "not-assigned")
+    ).toBeNull();
   });
 
   test("includes full skill body for explicit skill activation", async () => {
@@ -2106,17 +2131,16 @@ if __name__ == "__main__":
 
     await db.assignSkillToProfile(PROFILE_ID, weather!.id);
 
-    const matched = await service.formatMatchedSkillsForPrompt(
+    const invoked = await service.findExplicitSkillForMessage(
       ORG_ID,
       PROFILE_ID,
       "/skill weather"
     );
 
-    expect(matched).toContain(weather!.description);
-    expect(matched).toContain(weatherSkillBody);
+    expect(invoked?.body).toContain(weatherSkillBody);
   });
 
-  test("includes full body for bundled create-automation matches", async () => {
+  test("load_skill returns the full bundled create-automation body", async () => {
     const db = createInMemoryDatabaseAdapter();
     await db.upsertProfile({
       ...createDefaultProfile(),
@@ -2135,17 +2159,16 @@ if __name__ == "__main__":
 
     await db.assignSkillToProfile(PROFILE_ID, skill!.id);
 
-    const matched = await service.formatMatchedSkillsForPrompt(
+    const loaded = await service.loadSkillForModel(
       ORG_ID,
       PROFILE_ID,
-      "Schedule a daily summary at 9am"
+      "create-automation"
     );
 
-    expect(matched).toContain(skill!.description);
-    expect(matched).toContain("runAt");
+    expect(loaded?.body).toContain("runAt");
   });
 
-  test("does not include create-automation body for unrelated messages", async () => {
+  test("load_skill refuses a skill that only runs on /skill", async () => {
     const db = createInMemoryDatabaseAdapter();
     await db.upsertProfile({
       ...createDefaultProfile(),
@@ -2153,71 +2176,41 @@ if __name__ == "__main__":
       orgId: ORG_ID,
     });
     const service = new SkillsService(db);
-    await ensureBundledSkillFiles();
-    await service.syncDiscoveredSkills();
 
-    const skill = (await service.listSkills()).skills.find(
-      (entry) => entry.name === "create-automation"
+    const skillDir = join(
+      getProfileSoulDir(ORG_ID, PROFILE_ID),
+      "skills",
+      "deploy-now"
     );
 
-    expect(skill).toBeDefined();
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      "---\nname: deploy-now\ndescription: Deploy the app.\ndisable-model-invocation: true\n---\n\nRun the deploy.\n"
+    );
+    await service.syncProfileSkills(ORG_ID, PROFILE_ID);
 
-    await db.assignSkillToProfile(PROFILE_ID, skill!.id);
-
-    const matched = await service.formatMatchedSkillsForPrompt(
-      ORG_ID,
-      PROFILE_ID,
-      "Explain how TLS works"
+    const deploy = (await service.listSkills()).skills.find(
+      (skill) => skill.name === "deploy-now"
     );
 
-    expect(matched).toBe("");
-  });
+    await db.assignSkillToProfile(PROFILE_ID, deploy!.id);
 
-  test("can append context only for matched skills", async () => {
-    const db = createInMemoryDatabaseAdapter();
-    await db.upsertProfile({
-      ...createDefaultProfile(),
-      id: PROFILE_ID,
-      orgId: ORG_ID,
-    });
-    const service = new SkillsService(db);
-    await ensureBundledSkillFiles();
-    await service.syncDiscoveredSkills();
-
-    const skill = (await service.listSkills()).skills.find(
-      (entry) => entry.name === "create-profile"
+    expect(
+      await service.loadSkillForModel(ORG_ID, PROFILE_ID, "deploy-now")
+    ).toBeNull();
+    expect(await service.hasModelLoadableSkills(ORG_ID, PROFILE_ID)).toBe(
+      false
     );
-
-    expect(skill).toBeDefined();
-
-    await db.assignSkillToProfile(PROFILE_ID, skill!.id);
-
-    const matched = await service.formatMatchedSkillsForPrompt(
-      ORG_ID,
-      PROFILE_ID,
-      "Create a support bot profile",
-      {
-        appendContext: (skills) =>
-          skills.some((entry) => entry.name === "create-profile")
-            ? "# Available Tools\n- read_file\n- write_file\n- edit_file"
-            : "",
-      }
-    );
-
-    expect(matched).toContain(skill!.description);
-    expect(matched).toContain("# Available Tools");
-
-    const unrelated = await service.formatMatchedSkillsForPrompt(
-      ORG_ID,
-      PROFILE_ID,
-      "Explain TLS",
-      {
-        appendContext: () =>
-          "# Available Tools\n- read_file\n- write_file\n- edit_file",
-      }
-    );
-
-    expect(unrelated).toBe("");
+    expect(
+      (
+        await service.findExplicitSkillForMessage(
+          ORG_ID,
+          PROFILE_ID,
+          "/skill deploy-now"
+        )
+      )?.name
+    ).toBe("deploy-now");
   });
 
   test("creates profile skills and syncs them to the database", async () => {
@@ -2308,7 +2301,7 @@ if __name__ == "__main__":
     );
 
     expect(prompt).toContain("agent-browser skill");
-    expect(prompt).toContain("/skill agent-browser");
+    expect(prompt).toContain("load_skill");
     expect(prompt).toContain("screenshot artifacts/");
   });
 

@@ -1,23 +1,23 @@
 import type {
-  ChatgptOAuthCredentials,
   CustomModelEntry,
   OpenRouterRoutingSettings,
   ProviderInstanceSummary,
   ProviderModelOption,
   UpdateProviderRequest,
   WireApi,
-  XaiOAuthCredentials,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   defaultDiscoveryBaseUrl,
   isDiscoveryModelProvider,
-} from "@nakama/core/discovery-providers";
+} from "@airin/core/discovery-providers";
+import { isOllamaCloudBaseUrl } from "@airin/core/ollama-provider-config";
+import { toast } from "@airin/ui/toast";
 import { useMemo, useState } from "react";
 import { isCatalogShortlistProvider } from "@/components/catalog-provider-model-fields.shared";
 import type { ModelListRow } from "@/components/ModelListEditor";
 import { normalizeModelListRows } from "@/components/model-list-editor.shared";
 import { isShortlistBrowseProvider } from "@/components/shortlist-browse-providers.shared";
-import { formatError } from "@/lib/client";
+import { client, formatError } from "@/lib/client";
 import {
   defaultOllamaSetupBaseUrl,
   type SelectedProvider,
@@ -52,11 +52,14 @@ function seedManageModelRows(
   }));
 }
 
+const CLEAR_KEY_UNDO_MS = 10_000;
+
 export function useProviderInstanceCard({
   instance,
   catalog,
   onUpdate,
   onDelete,
+  onManage,
   onError,
 }: {
   instance: ProviderInstanceSummary;
@@ -66,6 +69,10 @@ export function useProviderInstanceCard({
     request: UpdateProviderRequest
   ) => Promise<void>;
   onDelete: (providerId: string) => Promise<void>;
+  onManage?: (
+    providerId: string,
+    action: "clear" | "use-stored"
+  ) => Promise<void>;
   onError: (error: string | null) => void;
 }) {
   const [replaceKeyOpen, setReplaceKeyOpen] = useState(false);
@@ -75,19 +82,26 @@ export function useProviderInstanceCard({
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
-  const [xaiOAuth, setXaiOAuth] = useState<XaiOAuthCredentials | null>(null);
-
-  const [chatgptOAuth, setChatgptOAuth] =
-    useState<ChatgptOAuthCredentials | null>(null);
-
   const [showApiKey, setShowApiKey] = useState(false);
   const [editLabel, setEditLabel] = useState("");
   const [editBaseUrl, setEditBaseUrl] = useState("");
+
+  // Edit marks the field at fault, as Add does.
+  const [editFieldErrors, setEditFieldErrors] = useState<{
+    baseUrl: string | null;
+    displayName: string | null;
+    models: string | null;
+  }>({ baseUrl: null, displayName: null, models: null });
+
   const [editWireApi, setEditWireApi] = useState<WireApi>("chat");
   const [manageModels, setManageModels] = useState<ModelListRow[]>([]);
 
   const [openRouterRouting, setOpenRouterRouting] =
     useState<OpenRouterRoutingSettings>({});
+
+  // What the dialog showed when it opened, to tell if the user changed it.
+  const [openedSnapshot, setOpenedSnapshot] = useState("");
+  const [openedRows, setOpenedRows] = useState<ModelListRow[]>([]);
 
   // SAFETY: Provider instance summaries use the selected-provider contract.
   const providerType = instance.type as SelectedProvider;
@@ -117,24 +131,35 @@ export function useProviderInstanceCard({
     setDialogError(null);
     setOpenRouterRouting(instance.openRouterRouting ?? {});
 
-    setManageModels(seedManageModelRows(instance.customModels, instanceModels));
-
+    const rows = seedManageModelRows(instance.customModels, instanceModels);
+    setManageModels(rows);
+    setOpenedRows(rows);
+    setOpenedSnapshot(
+      editSnapshot(rows, "", "", "chat", instance.openRouterRouting ?? {})
+    );
     setManageOpen(true);
   };
 
   const openEdit = () => {
-    setDialogError(null);
-    setEditLabel(instance.label);
-    setEditBaseUrl(
+    const baseUrl =
       instance.baseUrl ??
-        (isOllama
-          ? defaultOllamaSetupBaseUrl(instance.hostMode ?? "local")
-          : isDiscovery
-            ? (defaultDiscoveryBaseUrl(providerType) ?? "")
-            : "")
-    );
-    setEditWireApi(instance.wireApi ?? "chat");
-    setManageModels(seedManageModelRows(instance.customModels, instanceModels));
+      (isOllama
+        ? defaultOllamaSetupBaseUrl(instance.hostMode ?? "local")
+        : isDiscovery
+          ? (defaultDiscoveryBaseUrl(providerType) ?? "")
+          : "");
+
+    const wireApi = instance.wireApi ?? "chat";
+    const rows = seedManageModelRows(instance.customModels, instanceModels);
+
+    setDialogError(null);
+    setEditFieldErrors({ baseUrl: null, displayName: null, models: null });
+    setEditLabel(instance.label);
+    setEditBaseUrl(baseUrl);
+    setEditWireApi(wireApi);
+    setManageModels(rows);
+    setOpenedRows(rows);
+    setOpenedSnapshot(editSnapshot(rows, instance.label, baseUrl, wireApi, {}));
     setEditOpen(true);
   };
 
@@ -158,37 +183,13 @@ export function useProviderInstanceCard({
     }
   };
 
+  const reconnect = async (
+    request: Pick<UpdateProviderRequest, "chatgptOAuth" | "xaiOAuth">
+  ) => {
+    await runUpdate(request, () => setReplaceKeyOpen(false));
+  };
+
   const handleReplaceKey = async () => {
-    if (isXaiOAuth) {
-      if (!xaiOAuth) {
-        setDialogError("Sign in with Grok before saving.");
-
-        return;
-      }
-
-      await runUpdate({ xaiOAuth }, () => {
-        setReplaceKeyOpen(false);
-        setXaiOAuth(null);
-      });
-
-      return;
-    }
-
-    if (isChatgpt) {
-      if (!chatgptOAuth) {
-        setDialogError("Sign in with ChatGPT before saving.");
-
-        return;
-      }
-
-      await runUpdate({ chatgptOAuth }, () => {
-        setReplaceKeyOpen(false);
-        setChatgptOAuth(null);
-      });
-
-      return;
-    }
-
     const nextError = validateApiKeyForProvider(apiKey, providerType, {
       ollamaHostMode: instance.hostMode ?? undefined,
     });
@@ -203,7 +204,68 @@ export function useProviderInstanceCard({
       setReplaceKeyOpen(false);
       setApiKey("");
       setShowApiKey(false);
+      // Say if the provider took the new key, not only that it saved.
+      void client
+        .checkProvider(instance.id)
+        .then(({ status }) =>
+          toast(
+            status === "ok"
+              ? `Key saved. ${instance.label} accepted it.`
+              : "Key saved."
+          )
+        )
+        .catch(() => toast("Key saved."));
     });
+  };
+
+  const handleManageKey = async (action: "clear" | "use-stored") => {
+    if (!onManage) {
+      return;
+    }
+
+    // A clear waits 10 seconds, so Undo can stop it.
+    if (action === "clear") {
+      let pending = true;
+
+      // Runs once: after the wait, or at once if the tab closes first, so a
+      // leaked key is not left saved by a quick reload.
+      const clearNow = () => {
+        if (!pending) {
+          return;
+        }
+
+        pending = false;
+        window.removeEventListener("pagehide", clearNow);
+        onManage(instance.id, "clear")
+          .then(() => toast(`${instance.label} key cleared.`))
+          .catch((error) => onError(formatError(error)));
+      };
+
+      setReplaceKeyOpen(false);
+      window.addEventListener("pagehide", clearNow);
+      toast(`Clearing the ${instance.label} key.`, CLEAR_KEY_UNDO_MS, {
+        label: "Undo",
+        onClick: () => {
+          pending = false;
+          window.removeEventListener("pagehide", clearNow);
+        },
+      });
+      setTimeout(clearNow, CLEAR_KEY_UNDO_MS);
+
+      return;
+    }
+
+    setBusy(true);
+    setDialogError(null);
+
+    try {
+      await onManage(instance.id, action);
+      setReplaceKeyOpen(false);
+    } catch (error) {
+      setDialogError(formatError(error));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -230,7 +292,11 @@ export function useProviderInstanceCard({
     const modelsError = validateCustomModelsInput(manageModels);
 
     if (displayNameError || baseUrlError || modelsError) {
-      setDialogError(displayNameError ?? baseUrlError ?? modelsError);
+      setEditFieldErrors({
+        baseUrl: baseUrlError,
+        displayName: displayNameError,
+        models: modelsError,
+      });
 
       return;
     }
@@ -245,9 +311,7 @@ export function useProviderInstanceCard({
     }
 
     if (isOllama) {
-      request.hostMode = editBaseUrl.toLowerCase().includes("ollama.com")
-        ? "cloud"
-        : "local";
+      request.hostMode = isOllamaCloudBaseUrl(editBaseUrl) ? "cloud" : "local";
     }
 
     if (!isOllama && providerType !== "netra") {
@@ -285,25 +349,38 @@ export function useProviderInstanceCard({
 
   const handleManageModelsChange = (rows: ModelListRow[]) => {
     setManageModels(rows);
+    setEditFieldErrors((current) => ({ ...current, models: null }));
 
     if (dialogError) {
       setDialogError(null);
     }
   };
 
+  const dirty =
+    (manageOpen || editOpen) &&
+    editSnapshot(
+      manageModels,
+      editOpen ? editLabel : "",
+      editOpen ? editBaseUrl : "",
+      editOpen ? editWireApi : "chat",
+      editOpen ? {} : openRouterRouting
+    ) !== openedSnapshot;
+
   return {
     apiKey,
     busy,
     catalogModelsForType,
-    chatgptOAuth,
     deleteOpen,
     dialogError,
+    dirty,
     editBaseUrl,
+    editFieldErrors,
     editLabel,
     editManageModels: manageModels,
     editOpen,
     editWireApi,
     handleDelete,
+    handleManageKey,
     handleManageModelsChange,
     handleReplaceKey,
     isCatalogShortlist,
@@ -319,14 +396,21 @@ export function useProviderInstanceCard({
     openManage,
     openRouterRouting,
     providerType,
+    reconnect,
     replaceKeyOpen,
     saveCompatible,
     saveManageModels,
+    saveSummary: dirty ? modelChangeSummary(openedRows, manageModels) : null,
     setApiKey,
-    setChatgptOAuth,
     setDeleteOpen,
-    setEditBaseUrl,
-    setEditLabel,
+    setEditBaseUrl: (value: string) => {
+      setEditBaseUrl(value);
+      setEditFieldErrors((current) => ({ ...current, baseUrl: null }));
+    },
+    setEditLabel: (value: string) => {
+      setEditLabel(value);
+      setEditFieldErrors((current) => ({ ...current, displayName: null }));
+    },
     setEditOpen,
     setEditWireApi,
     setManageModels,
@@ -334,8 +418,39 @@ export function useProviderInstanceCard({
     setOpenRouterRouting,
     setReplaceKeyOpen,
     setShowApiKey,
-    setXaiOAuth,
     showApiKey,
-    xaiOAuth,
   };
+}
+
+function editSnapshot(
+  models: ModelListRow[],
+  label: string,
+  baseUrl: string,
+  wireApi: WireApi,
+  routing: OpenRouterRoutingSettings
+): string {
+  return JSON.stringify({ baseUrl, label, models, routing, wireApi });
+}
+
+// What Save will change, for example "2 added · 1 removed · default changed".
+function modelChangeSummary(before: ModelListRow[], after: ModelListRow[]) {
+  const beforeIds = new Set(before.map((row) => row.id.trim()));
+
+  const afterIds = new Set(
+    after.flatMap((row) => (row.id.trim() ? [row.id.trim()] : []))
+  );
+
+  const added = [...afterIds].filter((id) => !beforeIds.has(id)).length;
+  const removed = [...beforeIds].filter((id) => !afterIds.has(id)).length;
+
+  const defaultOf = (rows: ModelListRow[]) =>
+    (rows.find((row) => row.default) ?? rows[0])?.id.trim();
+
+  const parts = [
+    added ? `${added} added` : null,
+    removed ? `${removed} removed` : null,
+    defaultOf(before) === defaultOf(after) ? null : "default changed",
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(" · ") : "Unsaved changes";
 }

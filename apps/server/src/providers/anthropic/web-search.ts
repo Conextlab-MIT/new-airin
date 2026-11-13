@@ -1,4 +1,14 @@
 import { createHash } from "node:crypto";
+import type {
+  ChatCompletionResult,
+  ChatMessage,
+  GenerateChatInput,
+  LlmToolDefinition,
+  ProviderName,
+  StreamChatHandlers,
+  ToolCall,
+} from "@airin/core";
+import { toAnthropicUserContent, WEB_SEARCH_TOOL_NAME } from "@airin/core";
 import type Anthropic from "@anthropic-ai/sdk";
 import type {
   ContentBlock,
@@ -9,17 +19,8 @@ import type {
   ToolResultBlockParam,
   ToolUnion,
 } from "@anthropic-ai/sdk/resources/messages/messages";
-import type {
-  ChatCompletionResult,
-  ChatMessage,
-  GenerateChatInput,
-  LlmToolDefinition,
-  ProviderName,
-  StreamChatHandlers,
-  ToolCall,
-} from "@nakama/core";
-import { toAnthropicUserContent, WEB_SEARCH_TOOL_NAME } from "@nakama/core";
 import { z } from "zod";
+import { resolveModelLimits } from "../models";
 import {
   buildTokenUsage,
   normalizeThinkingEffort,
@@ -96,13 +97,13 @@ export async function toAnthropicMessages(
 
         for (const part of message.providerContent) {
           const block = readRecord(part);
-          const { _nakamaPrefixHash, ...wireBlock } = block;
+          const { _airinPrefixHash, ...wireBlock } = block;
 
           if (
             replay?.model === "claude-sonnet-5-5" &&
             readRecord(replay.thinking.thinking).type === "between_tools" &&
             (block.type === "thinking" || block.type === "redacted_thinking") &&
-            _nakamaPrefixHash !==
+            _airinPrefixHash !==
               anthropicPrefixHash(result, [...content, wireBlock], replay)
           ) {
             continue;
@@ -244,7 +245,8 @@ export async function continueAnthropicUntilDone(
 
   const thinkingRequest = buildAnthropicThinkingRequest(
     options.thinking,
-    options.model
+    options.model,
+    options.provider
   );
 
   const replay: AnthropicReplay = {
@@ -287,7 +289,10 @@ export async function continueAnthropicUntilDone(
   }
 
   const requestBase: Omit<MessageCreateParams, "stream"> = {
-    max_tokens: 4096,
+    max_tokens: maxTokensForEffort(
+      thinkingRequest.output_config?.effort,
+      options
+    ),
     messages: apiMessages,
     model: options.model,
     system: options.system,
@@ -575,9 +580,36 @@ async function readAnthropicStream(
   };
 }
 
+// Adaptive thinking at xhigh/max would spend a 4096 cap on reasoning. A stream
+// can use the model's own output limit; a plain request stays under the SDK's
+// non-streaming limit (~21333 tokens).
+function maxTokensForEffort(
+  effort: string | null | undefined,
+  options: Pick<
+    ContinueAnthropicUntilDoneOptions,
+    "model" | "provider" | "stream"
+  >
+): number {
+  if (effort !== "xhigh" && effort !== "max") {
+    return 4096;
+  }
+
+  if (!options.stream) {
+    return 16_000;
+  }
+
+  const limits = resolveModelLimits(
+    options.provider ?? "anthropic",
+    options.model
+  );
+
+  return Math.max(16_000, limits.maxOutputTokens);
+}
+
 export function buildAnthropicThinkingRequest(
   providerOptions: GenerateChatInput["providerOptions"],
-  model: string
+  model: string,
+  provider: ProviderName = "anthropic"
 ): Pick<MessageCreateParams, "thinking" | "output_config"> {
   if (model === "claude-sonnet-5-5") {
     if (!providerOptions?.thinking?.enabled) {
@@ -592,7 +624,11 @@ export function buildAnthropicThinkingRequest(
 
     return {
       output_config: {
-        effort: normalizeThinkingEffort(providerOptions.thinking.effort),
+        effort: normalizeThinkingEffort(
+          providerOptions.thinking.effort,
+          model,
+          provider
+        ),
       },
       // SAFETY: The SDK type omits documented adaptive binding fields for these models.
       thinking: {
@@ -613,7 +649,11 @@ export function buildAnthropicThinkingRequest(
     return providerOptions?.thinking?.enabled
       ? {
           output_config: {
-            effort: normalizeThinkingEffort(providerOptions.thinking.effort),
+            effort: normalizeThinkingEffort(
+              providerOptions.thinking.effort,
+              model,
+              provider
+            ),
           },
           thinking,
         }
@@ -633,7 +673,11 @@ export function buildAnthropicThinkingRequest(
     return { thinking: { budget_tokens: 1024, type: "enabled" } };
   }
 
-  const effort = normalizeThinkingEffort(providerOptions.thinking.effort);
+  const effort = normalizeThinkingEffort(
+    providerOptions.thinking.effort,
+    model,
+    provider
+  );
 
   return {
     output_config: { effort },
@@ -734,7 +778,7 @@ function finalizeAnthropicResult(options: {
               ...readRecord(block),
               // Local persistence metadata, removed before every API request.
               // Hash the wire prefix (including this block), not UI/DB fields.
-              _nakamaPrefixHash: anthropicPrefixHash(
+              _airinPrefixHash: anthropicPrefixHash(
                 replay.messages,
                 blocks.slice(0, index + 1),
                 replay.replay

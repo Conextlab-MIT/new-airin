@@ -26,17 +26,14 @@ afterEach(() => {
 });
 
 describe("openAIModelSupportsThinking", () => {
-  test("denies gpt-4o-mini from the catalog", () => {
-    expect(openAIModelSupportsThinking("gpt-4o-mini")).toBe(false);
-  });
-
   test("allows gpt-5 and gpt-6 models", () => {
     expect(openAIModelSupportsThinking("gpt-5.4")).toBe(true);
     expect(openAIModelSupportsThinking("gpt-5.3-codex")).toBe(true);
     expect(openAIModelSupportsThinking("gpt-6-future")).toBe(true);
   });
 
-  test("denies gpt-4o variants by prefix", () => {
+  test("denies gpt-4o models from the catalog and by prefix", () => {
+    expect(openAIModelSupportsThinking("gpt-4o-mini")).toBe(false);
     expect(openAIModelSupportsThinking("gpt-4o-2025-08")).toBe(false);
   });
 
@@ -186,9 +183,13 @@ describe("OpenAI chat completions payload", () => {
 });
 
 describe("OpenAI tools + reasoning routing", () => {
-  test.each(["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-6-astra"])(
-    "%s keeps no-tool chat on Chat Completions without forcing none",
-    async (model) => {
+  test("GPT-6 models keep no-tool chat on Chat Completions", async () => {
+    for (const model of [
+      "gpt-6.1-sol",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-6-astra",
+    ]) {
       const requests: Array<{ url: string; body: CapturedOpenAIRequest }> = [];
 
       globalThis.fetch = asTestFetch(
@@ -219,7 +220,7 @@ describe("OpenAI tools + reasoning routing", () => {
       expect(requests[0]?.body.reasoning_effort).toBeUndefined();
       expect(requests[0]?.body.tools).toBeUndefined();
     }
-  );
+  });
 
   test("rejects Astra tools on a custom Chat Completions endpoint before HTTP", async () => {
     const fetchMock = mock(async () => Response.json({}));
@@ -247,9 +248,8 @@ describe("OpenAI tools + reasoning routing", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test.each([false, true])(
-    "rejects GPT-6.1 Sol tools on a custom endpoint before HTTP (stream: %s)",
-    async (streaming) => {
+  test("rejects GPT-6.1 Sol tools on a custom endpoint before HTTP", async () => {
+    for (const streaming of [false, true]) {
       const fetchMock = mock(async () => Response.json({}));
       globalThis.fetch = asTestFetch(fetchMock);
 
@@ -278,11 +278,10 @@ describe("OpenAI tools + reasoning routing", () => {
       ).rejects.toThrow();
       expect(fetchMock).not.toHaveBeenCalled();
     }
-  );
+  });
 
-  test.each(["openai", "vercel_ai_gateway"] as const)(
-    "%s respects its own tool protocol with a custom GPT-6.1 ID",
-    async (providerName) => {
+  test("providers use their own tool protocol with a custom GPT-6.1 ID", async () => {
+    for (const providerName of ["openai", "vercel_ai_gateway"] as const) {
       const model = "GPT-6.1-Sol-custom";
       globalThis.fetch = asTestFetch(
         async (url: RequestInfo | URL, init?: RequestInit) => {
@@ -344,11 +343,10 @@ describe("OpenAI tools + reasoning routing", () => {
 
       expect(result.content).toBe("Done");
     }
-  );
+  });
 
-  test.each(["text", "json"] as const)(
-    "GPT-6.1 Sol generateText supports %s without unsupported reasoning",
-    async (format) => {
+  test("GPT-6.1 Sol generateText supports both formats", async () => {
+    for (const format of ["text", "json"] as const) {
       globalThis.fetch = asTestFetch(
         async (url: RequestInfo | URL, init?: RequestInit) => {
           expect(String(url)).toBe(
@@ -379,11 +377,15 @@ describe("OpenAI tools + reasoning routing", () => {
 
       expect(result.content).toBe('{"title":"Migration"}');
     }
-  );
+  });
 
-  test.each(["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-6-astra"])(
-    "%s routes tools through Responses with or without explicit reasoning",
-    async (model) => {
+  test("GPT-6 models route tools through Responses", async () => {
+    for (const model of [
+      "gpt-6.1-sol",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-6-astra",
+    ]) {
       const requests: Array<{ url: string; body: CapturedOpenAIRequest }> = [];
 
       globalThis.fetch = asTestFetch(
@@ -446,7 +448,7 @@ describe("OpenAI tools + reasoning routing", () => {
         summary: "auto",
       });
     }
-  );
+  });
 
   test("routes gpt-5.6-luna tool calls through responses even without thinking", async () => {
     const fetchMock = mock(

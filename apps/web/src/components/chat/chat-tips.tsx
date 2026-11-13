@@ -1,10 +1,10 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { AlertCircleIcon, BulbIcon } from "hugeicons-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 const TIPS = [
-  "Use the Super Bot profile to create your own agents and tools.",
+  "Use the Airin profile to create your own agents and tools.",
   "Type / to use a skill — a quick shortcut for common tasks.",
   "Switch profiles from the composer to give the agent a different personality and tools.",
 ];
@@ -21,10 +21,10 @@ export function ChatComposerNotice({
   role?: React.AriaRole;
 }) {
   return (
-    <div className="px-4">
+    <div className="-mb-3 px-4">
       <div
         className={cn(
-          "relative overflow-hidden rounded-t-xl border-border border-x border-t bg-card/75 px-3 py-2",
+          "relative overflow-hidden rounded-t-xl border-border border-x border-t bg-card px-3 pt-1.5 pb-4.5",
           className
         )}
         role={role}
@@ -54,7 +54,7 @@ export function ChatComposerError({ message }: { message: string }) {
                 {before}
                 <Link
                   className="font-medium underline underline-offset-2 hover:text-destructive"
-                  to="/settings"
+                  to="/settings/preferences"
                 >
                   Settings
                 </Link>

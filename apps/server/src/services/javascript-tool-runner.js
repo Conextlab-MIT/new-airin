@@ -24,7 +24,7 @@ const payload = JSON.parse((await Bun.stdin.text()) || "{}");
 
 const context = skillMode === "--run-skill" ? { ...payload.context } : {};
 
-context.workspaceRoot = process.env.NAKAMA_WORKSPACE_ROOT;
+context.workspaceRoot = process.env.AIRIN_WORKSPACE_ROOT;
 
 const result =
   skillMode === "--describe-skill"

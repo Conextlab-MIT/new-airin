@@ -12,24 +12,27 @@ import type {
   StreamChatHandlers,
   ThinkingEffort,
   ToolCall,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   fetchWithoutIdleTimeout,
   messagesIncludeUserDocuments,
   messagesIncludeUserImages,
+  normalizeBaseUrl,
   toOpenAIChatUserContent,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import {
   buildChatCompletionResult,
+  buildProviderHttpError,
+  buildProviderResponseError,
   extractOpenAITokenUsage,
   finalizePendingToolCalls,
-  formatHttpErrorBody,
   mergePendingToolCall,
   normalizeThinkingEffort,
   notifyToolInputDelta,
   type PendingToolCall,
   parseJsonRecord,
+  readRecord,
   readSseEvents,
   sanitizeToolCallHistory,
 } from "../shared";
@@ -141,10 +144,6 @@ export function createOpenAIProvider(
   };
 }
 
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, "");
-}
-
 function providerLabel(providerName: ProviderName): string {
   if (providerName === "anthropic") {
     return "Anthropic";
@@ -152,6 +151,10 @@ function providerLabel(providerName: ProviderName): string {
 
   if (providerName === "opencode_go") {
     return "OpenCode Go";
+  }
+
+  if (providerName === "command_code") {
+    return "Command Code";
   }
 
   if (providerName === "deepseek") {
@@ -168,6 +171,22 @@ function providerLabel(providerName: ProviderName): string {
 
   if (providerName === "xiaomi") {
     return "Xiaomi MiMo";
+  }
+
+  if (providerName === "meta") {
+    return "Meta Model API";
+  }
+
+  if (providerName === "groq") {
+    return "Groq";
+  }
+
+  if (providerName === "cheaper_inference") {
+    return "Cheaper Inference";
+  }
+
+  if (providerName === "standardcompute") {
+    return "Standard Compute";
   }
 
   if (providerName === "vercel_ai_gateway") {
@@ -268,7 +287,7 @@ type OpenAIChatCompletionRequest = {
   stream?: true;
   stream_options?: { include_usage: boolean };
   thinking?: { type: "disabled" | "enabled" };
-  reasoning_effort?: ThinkingEffort | "none";
+  reasoning_effort?: ThinkingEffort | "minimal" | "none";
   enable_thinking?: boolean;
   reasoning?: { effort: ThinkingEffort; enabled: true };
   tool_choice?: "auto";
@@ -400,12 +419,21 @@ function toOpenAIAssistantMessage(
     role: "assistant",
   };
 
-  if (thinking && !(provider === "netra" && message.providerContent?.length)) {
+  // providerContent may hold another provider's items (OpenAI Responses
+  // output after a model switch); Netra only takes reasoning_details items.
+  const reasoningDetails =
+    provider === "netra"
+      ? message.providerContent?.filter((item) =>
+          String(readRecord(item).type ?? "").startsWith("reasoning.")
+        )
+      : undefined;
+
+  if (thinking && !reasoningDetails?.length) {
     result.reasoning_content = thinking;
   }
 
-  if (provider === "netra" && message.providerContent?.length) {
-    result.reasoning_details = message.providerContent;
+  if (reasoningDetails?.length) {
+    result.reasoning_details = reasoningDetails;
   }
 
   if (message.toolCalls?.length) {
@@ -513,7 +541,10 @@ async function buildChatCompletionRequestBody(options: {
   }
 
   if (provider === "deepseek") {
-    const thinkingBody = buildDeepSeekThinkingBody(options.thinking);
+    const thinkingBody = buildDeepSeekThinkingBody(
+      options.thinking,
+      options.model
+    );
 
     if (thinkingBody.thinking) {
       body.thinking = thinkingBody.thinking;
@@ -528,6 +559,17 @@ async function buildChatCompletionRequestBody(options: {
     body.thinking = buildXiaomiThinkingBody(options.thinking).thinking;
   }
 
+  // Muse Spark rejects "none" and reasons when the field is omitted.
+  if (provider === "meta") {
+    body.reasoning_effort = options.thinking?.enabled
+      ? normalizeThinkingEffort(
+          options.thinking.effort,
+          options.model,
+          provider
+        )
+      : "minimal";
+  }
+
   if (provider === "qwen" || provider === "qwen_cn") {
     body.enable_thinking = Boolean(options.thinking?.enabled);
   }
@@ -538,13 +580,21 @@ async function buildChatCompletionRequestBody(options: {
 
   if (provider === "vercel_ai_gateway" && options.thinking?.enabled) {
     body.reasoning = {
-      effort: normalizeThinkingEffort(options.thinking.effort),
+      effort: normalizeThinkingEffort(
+        options.thinking.effort,
+        options.model,
+        provider
+      ),
       enabled: true,
     };
   }
 
   if (provider === "perplexity" && options.thinking?.enabled) {
-    body.reasoning_effort = normalizeThinkingEffort(options.thinking.effort);
+    body.reasoning_effort = normalizeThinkingEffort(
+      options.thinking.effort,
+      options.model,
+      provider
+    );
   }
 
   if (hasTools) {
@@ -592,7 +642,8 @@ function formatPerplexityCitations(
 }
 
 function buildDeepSeekThinkingBody(
-  thinking: ProviderChatOptions["thinking"] | undefined
+  thinking: ProviderChatOptions["thinking"] | undefined,
+  model: string
 ) {
   if (thinking?.enabled === false) {
     return { thinking: { type: "disabled" as const } };
@@ -602,9 +653,11 @@ function buildDeepSeekThinkingBody(
     return {};
   }
 
-  const effort = normalizeThinkingEffort(thinking.effort);
-  // DeepSeek accepts low/high/max; map medium → high for compatibility.
-  const reasoningEffort = effort === "medium" ? "high" : effort;
+  const effort = normalizeThinkingEffort(thinking.effort, model, "deepseek");
+
+  // DeepSeek accepts low/high/max; medium and xhigh go to high.
+  const reasoningEffort =
+    effort === "medium" || effort === "xhigh" ? "high" : effort;
 
   return {
     reasoning_effort: reasoningEffort,
@@ -677,8 +730,10 @@ async function requestChatCompletion(
   });
 
   if (!response.ok) {
-    throw new Error(
-      formatHttpErrorBody(client.label, response.status, await response.text())
+    throw buildProviderHttpError(
+      client.label,
+      response.status,
+      await response.text()
     );
   }
 
@@ -696,7 +751,9 @@ async function requestChatCompletion(
   const thinking = readReasoningContent(message);
 
   if (!content.trim() && toolCalls.length === 0 && !thinking) {
-    throw new Error(`${client.label} returned an empty response.`);
+    throw buildProviderResponseError(
+      `${client.label} returned an empty response.`
+    );
   }
 
   return buildChatCompletionResult({
@@ -740,13 +797,17 @@ async function streamChatCompletion(
   });
 
   if (!response.ok) {
-    throw new Error(
-      formatHttpErrorBody(client.label, response.status, await response.text())
+    throw buildProviderHttpError(
+      client.label,
+      response.status,
+      await response.text()
     );
   }
 
   if (!response.body) {
-    throw new Error(`${client.label} returned an empty stream.`);
+    throw buildProviderResponseError(
+      `${client.label} returned an empty stream.`
+    );
   }
 
   return readOpenAIStream(
@@ -781,8 +842,10 @@ async function requestCompletion(
   });
 
   if (!response.ok) {
-    throw new Error(
-      formatHttpErrorBody(client.label, response.status, await response.text())
+    throw buildProviderHttpError(
+      client.label,
+      response.status,
+      await response.text()
     );
   }
 
@@ -797,7 +860,9 @@ async function requestCompletion(
   const usage = extractOpenAITokenUsage(payload.usage);
 
   if (!content) {
-    throw new Error(`${client.label} returned an empty response.`);
+    throw buildProviderResponseError(
+      `${client.label} returned an empty response.`
+    );
   }
 
   const result: GenerateTextResult = { content };
@@ -871,7 +936,7 @@ async function readOpenAIStream(
   }
 
   if (!content.trim() && toolCalls.length === 0 && !thinkingText) {
-    throw new Error(`${label} returned an empty response.`);
+    throw buildProviderResponseError(`${label} returned an empty response.`);
   }
 
   return buildChatCompletionResult({

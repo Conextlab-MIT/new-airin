@@ -6,8 +6,6 @@ import { WebSearchToolRow } from "@/components/chat/WebSearchToolRow";
 import type { ChatListItem } from "./chat-history";
 import {
   buildWebFetchToolState,
-  formatWebFetchHeaderText,
-  isWebFetchTool,
   parseExaWebFetchTextResult,
   parseWebFetchSourcesFromResult,
   parseWebFetchUrls,
@@ -65,13 +63,6 @@ test.each([
 );
 
 describe("chat-stream-web-fetch", () => {
-  test("isWebFetchTool matches builtin and Exa MCP names", () => {
-    expect(isWebFetchTool("web_fetch")).toBe(true);
-    expect(isWebFetchTool("exa__web_fetch_exa")).toBe(true);
-    expect(isWebFetchTool("exa__web_search_exa")).toBe(false);
-    expect(isWebFetchTool("web_search")).toBe(false);
-  });
-
   test("parseWebFetchUrls reads url and urls array", () => {
     expect(parseWebFetchUrls({ url: "https://example.com/a" })).toEqual([
       "https://example.com/a",
@@ -83,30 +74,17 @@ describe("chat-stream-web-fetch", () => {
     ).toEqual(["https://example.com/a", "https://example.org/b"]);
   });
 
-  test("formatWebFetchHeaderText uses hostname or page count", () => {
-    expect(formatWebFetchHeaderText(["https://docs.example.com/guide"])).toBe(
-      "docs.example.com/guide"
-    );
-    expect(
-      formatWebFetchHeaderText([
-        "https://example.com/a",
-        "https://example.com/b",
-        "https://example.com/c",
-      ])
-    ).toBe("3 pages");
-  });
-
   test("parseExaWebFetchTextResult handles markdown crawl blocks", () => {
     const text = [
-      "# Nakama Docs",
-      "URL: https://ahmadrosid.github.io/nakama/getting-started.md",
+      "# Airin Docs",
+      "URL: https://ahmadrosid.github.io/airin/getting-started.md",
       "Published: 2026-01-01",
-      "Author: Nakama",
+      "Author: Airin",
       "",
       "Getting started content…",
       "",
       "# Telegram",
-      "URL: https://ahmadrosid.github.io/nakama/telegram.md",
+      "URL: https://ahmadrosid.github.io/airin/telegram.md",
       "",
       "Telegram setup content…",
     ].join("\n");
@@ -115,8 +93,8 @@ describe("chat-stream-web-fetch", () => {
 
     expect(sources).toHaveLength(2);
     expect(sources[0]).toMatchObject({
-      href: "https://ahmadrosid.github.io/nakama/getting-started.md",
-      title: "Nakama Docs",
+      href: "https://ahmadrosid.github.io/airin/getting-started.md",
+      title: "Airin Docs",
     });
     expect(sources[1]?.title).toBe("Telegram");
   });

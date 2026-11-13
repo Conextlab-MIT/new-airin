@@ -1,11 +1,11 @@
-import { z } from "@hono/zod-openapi";
 import type {
   ListNotificationDestinationsResponse,
   NotificationDestinationSummary,
   NotificationDestinationWithSecret,
   RegenerateNotificationDestinationKeyResponse,
-} from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
+} from "@airin/core";
+import { AirinApiError } from "@airin/core";
+import { z } from "@hono/zod-openapi";
 import { NotificationDestinationService } from "../../services/notification-destination-service";
 import type { ServerOptions } from "../context";
 import { requireOrgAdminFromContext } from "../org-guards";
@@ -96,7 +96,7 @@ export function registerNotificationDestinationRoutes(
         await service.create(auth.activeOrgId!, body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -121,7 +121,7 @@ export function registerNotificationDestinationRoutes(
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -145,7 +145,7 @@ export function registerNotificationDestinationRoutes(
           )
         );
       } catch (error) {
-        if (error instanceof NakamaApiError) {
+        if (error instanceof AirinApiError) {
           return errorResponse(error.message, error.status);
         }
 
@@ -165,7 +165,7 @@ export function registerNotificationDestinationRoutes(
 
       return new Response(null, { status: 204 });
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 

@@ -2,7 +2,7 @@ import { join } from "node:path";
 import type {
   SkillConsolidateBodyInput,
   SkillConsolidateMode,
-} from "@nakama/agent";
+} from "@airin/agent";
 import {
   archiveSkillDirectory,
   BUNDLED_SKILL_NAMES,
@@ -16,13 +16,13 @@ import {
   resolveProfileOrgBooleanOverride,
   restoreArchivedSkillDirectory,
   writeTextFile,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   SkillCuratorRestoreMiss,
   SkillCuratorRunResult,
   SkillCuratorTrigger,
-} from "@nakama/core/contract";
-import type { DatabaseAdapter, StoredSkillRecord } from "@nakama/db";
+} from "@airin/core/contract";
+import type { DatabaseAdapter, StoredSkillRecord } from "@airin/db";
 import type { SkillProposalService } from "./skill-proposal-service";
 import type { SkillsService } from "./skills-service";
 

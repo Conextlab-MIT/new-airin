@@ -1,12 +1,12 @@
 import path from "node:path";
-import { NakamaApiError } from "../api-error";
+import { AirinApiError } from "../api-error";
 import type { ToolContext } from "../contract";
 import { getProfileSoulDir } from "../soul/resolve";
 
 /** Tool calls require organization membership. */
 export function requireToolOrgMember(context: ToolContext): void {
   if (context.orgRole !== "admin" && context.orgRole !== "member") {
-    throw new NakamaApiError("Forbidden", 403);
+    throw new AirinApiError("Forbidden", 403);
   }
 }
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   DISCORD_ARTIFACT_ATTACHMENT_MAX_BYTES,
   isDiscordAttachableArtifact,
-} from "@nakama/core/discord-attachment";
+} from "@airin/core/discord-attachment";
 import type { TextBasedChannel } from "discord.js";
 import { sendDiscordArtifactAttachment } from "./send-artifact-attachment";
 

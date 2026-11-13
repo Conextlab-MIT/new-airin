@@ -12,7 +12,7 @@ import type {
   ProviderClient,
   StreamChatHandlers,
   ToolCall,
-} from "@nakama/core";
+} from "@airin/core";
 import type { Fetcher } from "@openrouter/sdk";
 import { HTTPClient, OpenRouter } from "@openrouter/sdk";
 import type {
@@ -32,6 +32,7 @@ import {
 import { toOpenAIMessages } from "../openai";
 import {
   buildChatCompletionResult,
+  buildProviderHttpError,
   extractOpenAITokenUsage,
   finalizePendingToolCalls,
   mergePendingToolCall,
@@ -45,9 +46,9 @@ import {
 } from "../shared";
 import { openRouterModelSupportsThinking } from "./thinking";
 
-const OPENROUTER_REFERER = "https://github.com/ahmadrosid/nakama";
+const OPENROUTER_REFERER = "https://github.com/ahmadrosid/airin";
 
-const OPENROUTER_APP_TITLE = "Nakama";
+const OPENROUTER_APP_TITLE = "Airin";
 
 const PROVIDER_LABEL = "OpenRouter";
 
@@ -95,10 +96,10 @@ function formatOpenRouterError<ProviderError>(error: ProviderError): Error {
     return new Error(`${PROVIDER_LABEL} returned an invalid response.`);
   }
 
+  // Same mapping as the other adapters: an empty balance (402) is the
+  // caller's to fix, and the user reads OpenRouter's reason.
   if (error instanceof OpenRouterError) {
-    return new Error(
-      `${PROVIDER_LABEL} request failed (${error.statusCode}): ${error.body}`
-    );
+    return buildProviderHttpError(PROVIDER_LABEL, error.statusCode, error.body);
   }
 
   if (error instanceof Error) {
@@ -269,7 +270,11 @@ function buildOpenRouterReasoningRequest(
   }
 
   const reasoning: ChatRequestReasoning = {
-    effort: normalizeThinkingEffort(providerOptions.thinking.effort),
+    effort: normalizeThinkingEffort(
+      providerOptions.thinking.effort,
+      model,
+      "openrouter"
+    ),
     summary: "auto",
   };
 

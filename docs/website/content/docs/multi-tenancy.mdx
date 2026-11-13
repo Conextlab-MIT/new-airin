@@ -1,9 +1,9 @@
 ---
 title: "How Multi-tenancy Works"
-description: "Learn how organizations, roles, and tenant isolation work in Nakama."
+description: "Learn how organizations, roles, and tenant isolation work in Airin."
 ---
 
-Nakama lets teams use common resources while keeping their work private.
+Airin lets teams use common resources while keeping their work private.
 One installation can serve separate customers or teams within one organization.
 
 An organization can publish resources to its teams. Each team keeps its own
@@ -12,7 +12,7 @@ Existing organizations stay separate until an admin creates a team beneath one.
 
 ## Why this matters
 
-Multi-tenancy lets you run one Nakama server without mixing teams together.
+Multi-tenancy lets you run one Airin server without mixing teams together.
 
 For example:
 
@@ -60,7 +60,7 @@ Parent changes apply on the next resource read or agent turn.
 Teams can add local resources under their existing permissions.
 Publication does not assign every tool or skill to every agent.
 Use the existing agent assignment controls for permitted resources.
-Default Bot and Super Bot cannot be published.
+Default Bot and Airin cannot be published.
 
 Published tools do not supply parent credentials.
 Connect integrations for the executing team when setup is required.
@@ -110,14 +110,31 @@ When deciding permissions, think of it like this:
 - **Org admin** manages who is inside one organization
 - **Member** uses the bots
 
+## Who sees chat history
+
+Each person's chats stay private, so a teammate cannot read what you asked an agent.
+
+- The chat history shows only the chats you started, even on a shared agent. This is true for org admins too.
+- A **platform admin** can open any chat from a direct link, for support. Their own history still shows only their chats.
+- Telegram, Discord, Slack, and WhatsApp chats come from the messaging app, not from one person. Everyone who can use the agent sees them.
+- An older private chat with no owner, or whose owner was deleted, belongs to the first platform admin. Messaging-app chat owners stay unchanged.
+
 ## First-time setup
 
-When you install Nakama for the first time:
+When you install Airin for the first time:
 
 1. You create the first admin user
-2. Nakama creates the first organization
+2. Airin creates the first organization
 3. That admin can invite more people
 4. More organizations can be created later if needed
+
+## Limit who can join
+
+An org admin can list email domains under **Who can join** in the members settings. Once the list has a domain, it applies to every new member: invites and direct adds both refuse an address outside it. A domain also allows its subdomains, so `acme.com` allows `jane@eng.acme.com`. With an empty list, any address is allowed.
+
+A team uses its own list and its parent organization's list. A new address must pass both. A person who is already in the parent organization can join the team when the team's own list allows them.
+
+A platform admin who is also an admin of the org can still add or invite an address outside the list, for example a contractor. An org admin who needs that asks a platform admin, or adds the domain first.
 
 ## Common examples
 
@@ -129,6 +146,14 @@ Use separate organizations when you want clear separation between:
 - Different privacy boundaries
 
 If one team needs different bots but should still share users and data boundaries, use multiple **profiles** inside one organization instead.
+
+## Disable an account
+
+A platform admin can lock an account out without deleting it, for example when someone leaves or a password may be compromised. In the organization's **Members** list, open the actions menu beside the person and select **Disable**. The list then marks them **Disabled**.
+
+A disabled account cannot log in, and every request it makes is refused, including from sessions that were already open. Disabling applies to the whole deployment, not one organization. Airin refuses to disable the only admin of an organization. Select **Enable** to restore access.
+
+Channel pairings on Telegram, WhatsApp and Discord are tied to the chat app's user, not to an Airin account, so remove those separately.
 
 ## Remove an organization
 
@@ -153,7 +178,9 @@ admin** can change:
 - Discord bridge settings
 - the Composio project API key
 
-Those changes affect every organization. Telegram and WhatsApp bridge settings,
+Those changes affect every organization. Any member can still pick the thinking
+effort for one chat from the composer. That choice stays with the chat, and new
+chats start from the installation default. Telegram and WhatsApp bridge settings,
 enabled Composio apps, personal Composio connections, profiles, sessions, and
 organization memory stay scoped to one organization.
 

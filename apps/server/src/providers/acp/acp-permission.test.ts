@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type * as acp from "@agentclientprotocol/sdk";
-import type { ToolContext, ToolDefinition } from "@nakama/core";
-import { isNakamaToolPermission, setAcpToolAccess } from "./acp-mcp-tools";
+import type { ToolContext, ToolDefinition } from "@airin/core";
+import { isAirinToolPermission, setAcpToolAccess } from "./acp-mcp-tools";
 
 const echoTool: ToolDefinition = {
   description: "Echo",
@@ -19,21 +19,21 @@ function permissionFor(toolName: string): acp.ToolCallUpdate {
 }
 
 describe("ACP permission requests", () => {
-  test("approves a Nakama tool the chat was given", () => {
+  test("approves an Airin tool the chat was given", () => {
     const key = `permission-${crypto.randomUUID()}`;
     setAcpToolAccess(key, [echoTool], context);
 
     expect(
-      isNakamaToolPermission(key, permissionFor("mcp__nakama__echo_tool"))
+      isAirinToolPermission(key, permissionFor("mcp__airin__echo_tool"))
     ).toBe(true);
   });
 
-  test("does not approve a Nakama tool the chat was not given", () => {
+  test("does not approve an Airin tool the chat was not given", () => {
     const key = `permission-${crypto.randomUUID()}`;
     setAcpToolAccess(key, [echoTool], context);
 
     expect(
-      isNakamaToolPermission(key, permissionFor("mcp__nakama__delete_all"))
+      isAirinToolPermission(key, permissionFor("mcp__airin__delete_all"))
     ).toBe(false);
   });
 
@@ -41,17 +41,17 @@ describe("ACP permission requests", () => {
     const key = `permission-${crypto.randomUUID()}`;
     setAcpToolAccess(key, [echoTool], context);
 
-    expect(isNakamaToolPermission(key, permissionFor("Bash"))).toBe(false);
+    expect(isAirinToolPermission(key, permissionFor("Bash"))).toBe(false);
     expect(
-      isNakamaToolPermission(key, permissionFor("mcp__other__echo_tool"))
+      isAirinToolPermission(key, permissionFor("mcp__other__echo_tool"))
     ).toBe(false);
   });
 
   test("does not approve for a chat without tool access", () => {
     expect(
-      isNakamaToolPermission(
+      isAirinToolPermission(
         `unknown-${crypto.randomUUID()}`,
-        permissionFor("mcp__nakama__echo_tool")
+        permissionFor("mcp__airin__echo_tool")
       )
     ).toBe(false);
   });

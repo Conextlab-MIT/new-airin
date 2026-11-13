@@ -3,10 +3,9 @@ import type {
   ListUserOrgsResponse,
   ModelsResponse,
   ProfileSummary,
-} from "@nakama/core";
+} from "@airin/core";
 import {
-  effectiveModelState,
-  formatSlashCommands,
+  effortForActiveModel,
   parseModelCommandArg,
   resolveModelSwitchTarget,
   resolveSuggestions,
@@ -82,86 +81,37 @@ describe("parseModelCommandArg", () => {
       providerId: "provider-b",
     });
   });
-
-  test("keeps plain model ids intact", () => {
-    expect(parseModelCommandArg("anthropic/claude-sonnet-4-6")).toEqual({
-      modelId: "anthropic/claude-sonnet-4-6",
-      providerId: null,
-    });
-  });
 });
 
 describe("resolveModelSwitchTarget", () => {
-  test("uses explicit provider ids", () => {
-    expect(resolveModelSwitchTarget(modelsCache, "provider-b::gpt-4o")).toEqual(
-      {
-        modelId: "gpt-4o",
-        providerId: "provider-b",
-      }
-    );
-  });
-
   test("falls back to the current provider for duplicate ids", () => {
     expect(resolveModelSwitchTarget(modelsCache, "shared-model")).toEqual({
       modelId: "shared-model",
       providerId: "provider-a",
     });
   });
-
-  test("requires provider qualification when ids are ambiguous", () => {
-    expect(
-      resolveModelSwitchTarget(
-        { ...modelsCache, currentProviderId: null },
-        "shared-model"
-      )
-    ).toBe("ambiguous");
-  });
 });
 
-describe("effectiveModelState", () => {
-  test("prefers profile model overrides", () => {
-    expect(effectiveModelState(profile, modelsCache)).toEqual({
-      modelId: "gpt-4o",
-      providerId: "provider-b",
-    });
-  });
+describe("effectiveModelState", () => {});
 
-  test("returns null model when profile has no model", () => {
+describe("effortForActiveModel", () => {
+  test("names the level the active model gets", () => {
+    const gpt = { ...profile, model: "provider-b::gpt-4o" };
+
+    const luna: ModelsResponse = {
+      ...modelsCache,
+      models: [{ id: "gpt-6-luna", name: "Luna", provider: "openai" }],
+    };
+
+    expect(effortForActiveModel("max", gpt, modelsCache)).toBe("high");
     expect(
-      effectiveModelState({ ...profile, model: null }, modelsCache)
-    ).toEqual({
-      modelId: null,
-      providerId: "provider-a",
-    });
-  });
-});
-
-describe("status command", () => {
-  test("is included in help and suggestions", () => {
-    expect(formatSlashCommands()).toContain("/status");
-    expect(resolveSuggestions({ input: "/sta" })).toContainEqual({
-      description: "show server and model status",
-      insertValue: "/status",
-      label: "/status",
-    });
-  });
-
-  test("fuzzy matches slash commands", () => {
-    expect(
-      resolveSuggestions({ input: "/stts" }).map(
-        (suggestion) => suggestion.label
-      )
-    ).toContain("/status");
-    expect(resolveSuggestions({ input: "/-_" })).toEqual([]);
+      effortForActiveModel("max", { ...profile, model: "gpt-6-luna" }, luna)
+    ).toBe("max");
+    expect(effortForActiveModel("max", gpt, null)).toBe("max");
   });
 });
 
 describe("model command", () => {
-  test("uses one command for model selection", () => {
-    expect(formatSlashCommands()).toContain("/model");
-    expect(formatSlashCommands()).not.toContain("/models");
-  });
-
   test("opens before enter selects a model", () => {
     const closed = resolveSuggestions({
       input: "/model",

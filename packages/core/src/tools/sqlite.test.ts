@@ -8,22 +8,55 @@ import {
   runSqliteTool,
 } from "./sqlite";
 
-const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 afterEach(() => {
   if (previousConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+    process.env.AIRIN_CONFIG_DIR = previousConfigDir;
   }
 });
 
 describe("sqlite tool", () => {
+  test("stops at the row limit instead of reading every row", async () => {
+    const result = await runSqliteTool(
+      {
+        sql: "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3000000) SELECT i FROM n",
+      },
+      { orgId: "org_test" },
+      { databasePath: ":memory:" }
+    );
+
+    expect(result).toMatchObject({ truncated: true });
+    expect("rows" in result && result.rows).toHaveLength(1000);
+  });
+
+  test("stops at the size limit when rows are large", async () => {
+    const result = await runSqliteTool(
+      {
+        sql: "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100) SELECT i, replace(hex(zeroblob(50000)), '0', 'x') AS big FROM n",
+      },
+      { orgId: "org_test" },
+      { databasePath: ":memory:" }
+    );
+
+    expect(result).toMatchObject({ truncated: true });
+    expect("rows" in result && result.rows.length).toBeLessThan(11);
+  });
+
   test("returns columns and rows for SELECT", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-sqlite-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-sqlite-"));
     const databasePath = join(dir, "workflow-data.sqlite");
 
     try {
+      expect(
+        await runSqliteTool(
+          { sql: "PRAGMA synchronous" },
+          { orgId: "org_test" },
+          { databasePath }
+        )
+      ).toEqual({ columns: ["synchronous"], rows: [{ synchronous: 3 }] });
       await runSqliteTool(
         { sql: "CREATE TABLE items (name TEXT)" },
         { orgId: "org_test" },
@@ -75,7 +108,7 @@ describe("sqlite tool", () => {
   });
 
   test("inspects tables and preview rows", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-sqlite-inspect-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-sqlite-inspect-"));
     const databasePath = join(dir, "workflow-data.sqlite");
 
     try {
@@ -112,7 +145,7 @@ describe("sqlite tool", () => {
   });
 
   test("inspects a missing file as empty and rejects unknown tables", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-sqlite-missing-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-sqlite-missing-"));
     const databasePath = join(dir, "workflow-data.sqlite");
 
     try {
@@ -142,9 +175,9 @@ describe("sqlite tool", () => {
   });
 
   test("resolves a per-org file under the config dir", async () => {
-    process.env.NAKAMA_CONFIG_DIR = "/tmp/nakama-config-test";
+    process.env.AIRIN_CONFIG_DIR = "/tmp/airin-config-test";
     expect(getOrgWorkflowSqlitePath("org_abc")).toBe(
-      join("/tmp/nakama-config-test", "orgs", "org_abc", "workflow-data.sqlite")
+      join("/tmp/airin-config-test", "orgs", "org_abc", "workflow-data.sqlite")
     );
   });
 });

@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { ListOrgPluginsResponse, OrgRole } from "@nakama/core";
-import { getUserConfigDir, PLUGIN_MANIFEST_API_VERSION } from "@nakama/core";
+import type { ListOrgPluginsResponse, OrgRole } from "@airin/core";
 import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+  getProfileSoulDir,
+  getUserConfigDir,
+  PLUGIN_MANIFEST_API_VERSION,
+  readApiErrorMessage,
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
 import type { AuthService } from "../../services/auth-service";
 import { PluginService } from "../../services/plugin-service";
 import { setupTestConfigDir } from "../../test-config-dir";
@@ -25,7 +28,7 @@ import {
 
 afterEach(closePluginPackageRegistry);
 
-setupTestConfigDir("nakama-plugins-http-");
+setupTestConfigDir("airin-plugins-http-");
 
 const PASSWORD = "password123";
 
@@ -61,11 +64,11 @@ function pluginBundle(
       },
     ],
     apiVersion: PLUGIN_MANIFEST_API_VERSION,
-    author: "Nakama",
+    author: "Airin",
     description: "Notes",
     id: "notes",
     license: "MIT",
-    minNakamaVersion: "0.1.0",
+    minAirinVersion: "0.1.0",
     name: "Notes",
     skills: [],
     ui: {
@@ -81,7 +84,7 @@ function pluginBundle(
     "actions/wipe.js": Buffer.from(echoJs),
     "private.js": Buffer.from(echoJs),
     "migrations/001.sql": Buffer.from("SELECT 1;"),
-    "nakama.plugin.json": Buffer.from(JSON.stringify(manifest)),
+    "airin.plugin.json": Buffer.from(JSON.stringify(manifest)),
     "secret.txt": Buffer.from("backend-secret"),
     "ui/assets/app.js": Buffer.from("export {}"),
     "ui/index.js": Buffer.from(
@@ -197,6 +200,185 @@ async function installRelease(
 }
 
 describe("plugin HTTP API", () => {
+  test("local draft routes require platform approval and CSRF without organization middleware", async () => {
+    const { app, authService, databaseAdapter } = createApp();
+    const platform = await setupFreshInstallSession(app, databaseAdapter);
+    const orgId = platform.orgId!;
+    const now = new Date().toISOString();
+    await databaseAdapter.upsertProfile({
+      id: "local-super",
+      orgId,
+      name: "Super",
+      isSuper: true,
+      isDefault: false,
+      model: null,
+      systemPrompt: "",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const directory = resolve(
+      getProfileSoulDir(orgId, "local-super"),
+      "plugin-drafts/local-notes"
+    );
+
+    await mkdir(resolve(directory, "actions"), { recursive: true });
+    await writeFile(
+      resolve(directory, "package.json"),
+      JSON.stringify({ name: "@test/local-notes", version: "1.0.0" })
+    );
+    await writeFile(
+      resolve(directory, "airin.plugin.json"),
+      JSON.stringify({
+        id: "local-notes",
+        version: "1.0.0",
+        apiVersion: 1,
+        minAirinVersion: "0.1.0",
+        name: "Local notes",
+        description: "Local",
+        author: "Test",
+        license: "MIT",
+        skills: [],
+        actions: [
+          {
+            key: "list",
+            entry: "actions/list.js",
+            access: "member",
+            effect: "read",
+            exposeAsTool: true,
+            description: "List",
+            inputSchema: { type: "object" },
+          },
+        ],
+      })
+    );
+    await writeFile(resolve(directory, "actions/list.js"), echoJs);
+    const input = { orgId, profileId: "local-super", draftId: "local-notes" };
+    await seedUser(databaseAdapter, authService, {
+      email: "local-admin@example.com",
+      userId: "local-admin",
+      orgId,
+      role: "admin",
+    });
+
+    const admin = await loginUserSession(
+      app,
+      "local-admin@example.com",
+      PASSWORD,
+      orgId
+    );
+
+    for (const path of ["preview-local", "local-file", "install-local"]) {
+      const body = JSON.stringify({
+        ...input,
+        expectedDigest: "a".repeat(64),
+        expectedRevision: null,
+        path: "actions/list.js",
+      });
+
+      expect(
+        (
+          await jsonRequest(app, `/v1/platform/plugins/${path}`, admin, {
+            method: "POST",
+            body,
+          })
+        ).status
+      ).toBe(403);
+      expect(
+        (
+          await jsonRequest(app, `/v1/platform/plugins/${path}`, null, {
+            method: "POST",
+            body,
+          })
+        ).status
+      ).toBe(401);
+    }
+
+    const noCsrf = await app.fetch(
+      new Request("http://localhost:4310/v1/platform/plugins/preview-local", {
+        method: "POST",
+        headers: platform.headers({ "Content-Type": "application/json" }),
+        body: JSON.stringify(input),
+      })
+    );
+
+    expect(noCsrf.status).toBe(403);
+
+    const response = await jsonRequest(
+      app,
+      "/v1/platform/plugins/preview-local",
+      platform,
+      { method: "POST", body: JSON.stringify(input) }
+    );
+
+    expect(response.status).toBe(200);
+
+    // SAFETY: The authenticated test route returns the validated preview DTO.
+    const preview = (await response.json()) as {
+      digest: string;
+      expectedRevision: null;
+    };
+
+    const file = await jsonRequest(
+      app,
+      "/v1/platform/plugins/local-file",
+      platform,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...input,
+          expectedDigest: preview.digest,
+          path: "actions/list.js",
+        }),
+      }
+    );
+
+    expect(file.status).toBe(200);
+    expect(file.headers.get("content-type")).toContain("application/json");
+
+    const installed = await jsonRequest(
+      app,
+      "/v1/platform/plugins/install-local",
+      platform,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...input,
+          expectedDigest: preview.digest,
+          expectedRevision: null,
+        }),
+      }
+    );
+
+    expect(installed.status).toBe(200);
+
+    // SAFETY: The preceding successful install route returns an organization installation.
+    const installBody = (await installed.json()) as {
+      install: { lifecycleState: string };
+    };
+
+    expect(installBody.install.lifecycleState).toBe("disabled");
+
+    for (const changes of [
+      { orgId: "foreign" },
+      { profileId: "foreign" },
+      { draftId: "../local-notes" },
+    ]) {
+      expect(
+        (
+          await jsonRequest(
+            app,
+            "/v1/platform/plugins/preview-local",
+            platform,
+            {
+              method: "POST",
+              body: JSON.stringify({ ...input, ...changes }),
+            }
+          )
+        ).status
+      ).toBeGreaterThanOrEqual(400);
+    }
+  });
   // Fresh setup plus seven role logins can exceed 5s on Windows runners.
   test("AE6 authority matrix for platform, org roles, nonmember, and archived org", async () => {
     const { app, authService, databaseAdapter } = createApp();
@@ -659,6 +841,123 @@ describe("plugin HTTP API", () => {
     });
   });
 
+  test("an action error reaches the caller while host failures stay generic", async () => {
+    const { app, authService, databaseAdapter, pluginService } = createApp();
+    const admin = await setupFreshInstallSession(app, databaseAdapter);
+
+    const platform = await loginPlatformAdminSession(
+      app,
+      authService,
+      databaseAdapter
+    );
+
+    await installRelease(
+      app,
+      platform,
+      pluginBundle("1.0.0", {
+        "actions/list.js":
+          'export async function run() { throw new Error("contract_end must be an ISO-8601 date"); }',
+        "actions/wipe.js":
+          'export async function run(input, context) { await context.host({ type: "missing" }); return null; }',
+      })
+    );
+    await pluginService.addOrgPlugin(admin.orgId!, "notes");
+    const added = await pluginService.getOrgPluginDetail(admin.orgId!, "notes");
+    await pluginService.enableOrgPlugin(admin.orgId!, "notes", added!.revision);
+
+    const rejected = await jsonRequest(
+      app,
+      "/v1/plugins/notes/actions/list",
+      admin,
+      { body: JSON.stringify({ input: {} }), method: "POST" }
+    );
+
+    expect(rejected.status).toBe(422);
+    expect(await readApiErrorMessage(rejected)).toBe(
+      "contract_end must be an ISO-8601 date"
+    );
+
+    const hostFailure = await jsonRequest(
+      app,
+      "/v1/plugins/notes/actions/wipe",
+      admin,
+      { body: JSON.stringify({ input: {} }), method: "POST" }
+    );
+
+    expect(hostFailure.status).toBe(500);
+    expect(await readApiErrorMessage(hostFailure)).toBe(
+      "An unexpected server error occurred."
+    );
+  });
+
+  test("an action that runs past its deadline fails like an action error unless the host held it up", async () => {
+    const { app, authService, databaseAdapter, pluginService } = createApp({
+      // A host call that answers only when the deadline cancels it.
+      onHostRequest: (_request, _context, signal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener(
+            "abort",
+            () => reject(new Error("host call cancelled")),
+            { once: true }
+          );
+        }),
+    });
+
+    const admin = await setupFreshInstallSession(app, databaseAdapter);
+
+    const platform = await loginPlatformAdminSession(
+      app,
+      authService,
+      databaseAdapter
+    );
+
+    await installRelease(
+      app,
+      platform,
+      pluginBundle("1.0.0", {
+        "actions/list.js":
+          'export async function run() { console.error("stderr-secret-7f3a"); await new Promise((resolve) => setTimeout(resolve, 60_000)); }',
+        "actions/wipe.js":
+          'export async function run(input, context) { await context.host({ type: "slow" }); return null; }',
+      })
+    );
+    await pluginService.addOrgPlugin(admin.orgId!, "notes");
+    const added = await pluginService.getOrgPluginDetail(admin.orgId!, "notes");
+    await pluginService.enableOrgPlugin(admin.orgId!, "notes", added!.revision);
+
+    const previousTimeout = process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS;
+    process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS = "1000";
+
+    try {
+      const timedOut = await jsonRequest(
+        app,
+        "/v1/plugins/notes/actions/list",
+        admin,
+        { body: JSON.stringify({ input: {} }), method: "POST" }
+      );
+
+      expect(timedOut.status).toBe(422);
+      expect(await readApiErrorMessage(timedOut)).not.toContain(
+        "stderr-secret-7f3a"
+      );
+
+      const hostHeldUp = await jsonRequest(
+        app,
+        "/v1/plugins/notes/actions/wipe",
+        admin,
+        { body: JSON.stringify({ input: {} }), method: "POST" }
+      );
+
+      expect(hostHeldUp.status).toBe(500);
+    } finally {
+      if (previousTimeout === undefined) {
+        delete process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS;
+      } else {
+        process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS = previousTimeout;
+      }
+    }
+  }, 30_000);
+
   test("cookie-authenticated mutations require CSRF including npm package installs", async () => {
     const { app, authService, databaseAdapter } = createApp();
     await setupFreshInstallSession(app, databaseAdapter);
@@ -848,14 +1147,14 @@ describe("plugin HTTP API", () => {
       app,
       platform,
       pluginBundle("1.1.0", {
-        "nakama.plugin.json": JSON.stringify({
+        "airin.plugin.json": JSON.stringify({
           actions: [],
           apiVersion: PLUGIN_MANIFEST_API_VERSION,
-          author: "Nakama",
+          author: "Airin",
           description: "Notes",
           id: "notes",
           license: "MIT",
-          minNakamaVersion: "0.1.0",
+          minAirinVersion: "0.1.0",
           name: "Notes",
           skills: [],
           version: "1.1.0",
@@ -895,7 +1194,7 @@ describe("plugin HTTP API", () => {
     });
   });
 
-  test.each(["workflows", "supermemory"])(
+  test.each(["workflows", "supermemory", "data-view"])(
     "org admin installs official %s; member and CSRF failures are blocked",
     async (pluginId) => {
       const workerManager = {
@@ -995,6 +1294,50 @@ describe("plugin HTTP API", () => {
       expect(
         (await jsonRequest(app, reinstallPath, admin, reinstallRequest)).status
       ).toBe(409);
+
+      const disabled = await jsonRequest(
+        app,
+        `/v1/plugins/${pluginId}/disable`,
+        admin,
+        {
+          method: "POST",
+          body: JSON.stringify({ expectedRevision: refreshed.revision }),
+        }
+      );
+
+      expect(disabled.status).toBe(200);
+
+      const removed = await jsonRequest(
+        app,
+        `/v1/plugins/${pluginId}/uninstall`,
+        admin,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            expectedRevision: (await disabled.json()).revision,
+          }),
+        }
+      );
+
+      expect(removed.status).toBe(200);
+      const retained = await removed.json();
+      expect(retained.lifecycleState).toBe("retained");
+
+      const savedData = (await databaseAdapter.getOrgPlugin(orgId, pluginId))
+        ?.databaseGeneration;
+
+      const restored = await jsonRequest(app, reinstallPath, admin, {
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: retained.revision }),
+      });
+
+      expect(restored.status).toBe(200);
+      const restoredInstall = (await restored.json()).install;
+      expect(restoredInstall.lifecycleState).toBe("enabled");
+      expect(
+        (await databaseAdapter.getOrgPlugin(orgId, pluginId))
+          ?.databaseGeneration
+      ).toBe(savedData);
       const listed = await jsonRequest(app, "/v1/plugins", member);
       expect(
         (await listed.json()).plugins.some(

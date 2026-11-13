@@ -7,7 +7,7 @@ const lifecycleModuleUrl = new URL("./process-lifecycle.ts", import.meta.url)
   .href;
 
 test("uncaught exception exits nonzero after cleanup", async () => {
-  const tempDir = await mkdtemp(join(tmpdir(), "nakama-whatsapp-lifecycle-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "airin-whatsapp-lifecycle-"));
   const cleanupMarker = join(tempDir, "cleaned");
 
   try {

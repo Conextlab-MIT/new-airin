@@ -10,8 +10,8 @@ import {
   getOrgPluginDatabasePath,
   getOrgPluginDataDir,
   PLUGIN_MANIFEST_API_VERSION,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import {
   closePluginPackageRegistry,
   pluginPackage,
@@ -61,6 +61,12 @@ export async function run() {
 }
 `;
 
+const leakyThrowJs = `
+export async function run() {
+  throw new Error("cannot read /srv/airin/orgs/a/data.db " + "x".repeat(2000));
+}
+`;
+
 const badJsonJs = `
 export async function run() {
   process.stdout.write("not-json");
@@ -87,7 +93,7 @@ export async function run() {
 `;
 
 const missingDepJs = `
-import "nakama-plugin-missing-dep-u3-xyz";
+import "airin-plugin-missing-dep-u3-xyz";
 export async function run() {
   return { ok: true };
 }
@@ -118,11 +124,11 @@ function manifest(id: string, extras: TestJsonRecord = {}) {
       },
     ],
     apiVersion: PLUGIN_MANIFEST_API_VERSION,
-    author: "Nakama",
+    author: "Airin",
     description: "Runtime fixture",
     id,
     license: "MIT",
-    minNakamaVersion: "0.1.0",
+    minAirinVersion: "0.1.0",
     name: id,
     skills: [],
     version: "1.0.0",
@@ -137,7 +143,7 @@ function bundle(
 ): ReturnType<typeof pluginPackage> {
   return pluginPackage({
     "actions/echo.js": actionSource,
-    "nakama.plugin.json": JSON.stringify(manifest(id, extras)),
+    "airin.plugin.json": JSON.stringify(manifest(id, extras)),
   });
 }
 
@@ -166,7 +172,7 @@ describe("plugin runtime", () => {
 
   beforeEach(async () => {
     await resetPluginAdmissionForTests();
-    configDir = await mkdtemp(join(tmpdir(), "nakama-plugin-u3-"));
+    configDir = await mkdtemp(join(tmpdir(), "airin-plugin-u3-"));
   });
 
   afterEach(async () => {
@@ -457,7 +463,7 @@ describe("plugin runtime", () => {
       })
     ).rejects.toBeInstanceOf(Error);
 
-    process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS = "200";
+    process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS = "200";
 
     try {
       await expect(
@@ -471,7 +477,7 @@ describe("plugin runtime", () => {
         })
       ).rejects.toThrow(/timed out/i);
     } finally {
-      delete process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS;
+      delete process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS;
     }
 
     const controller = new AbortController();
@@ -504,6 +510,33 @@ describe("plugin runtime", () => {
     ).toBe("still-works");
   });
 
+  test("action errors keep the message but drop paths and excess length", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    const service = new PluginService(db, configDir);
+    await service.installPluginPackage(bundle("leaky-throw", leakyThrowJs));
+    await enablePlugin(db, "org_a", "leaky-throw", "1.0.0");
+
+    const failure = await service
+      .invokePluginAction({
+        access: "ui",
+        actionKey: "echo",
+        actor: { id: "user_1", role: "member" },
+        input: {},
+        orgId: "org_a",
+        pluginId: "leaky-throw",
+      })
+      .catch((error: Error) => error);
+
+    if (!(failure instanceof PluginHostError)) {
+      throw new Error("Expected a plugin action failure.");
+    }
+
+    expect(failure.code).toBe("action_failed");
+    expect(failure.message.startsWith("cannot read [path] xxx")).toBe(true);
+    expect(failure.message).not.toContain("/srv/");
+    expect(failure.message.length).toBeLessThanOrEqual(500);
+  });
+
   test("missing bundled dependency fails without automatic network install", async () => {
     const db = createInMemoryDatabaseAdapter();
     const service = new PluginService(db, configDir);
@@ -523,7 +556,7 @@ describe("plugin runtime", () => {
   });
 
   test("runner works when copied outside the repository cwd", async () => {
-    const elsewhere = await mkdtemp(join(tmpdir(), "nakama-plugin-runner-"));
+    const elsewhere = await mkdtemp(join(tmpdir(), "airin-plugin-runner-"));
 
     try {
       const runnerSource = fileURLToPath(
@@ -568,7 +601,7 @@ describe("plugin runtime", () => {
 
       expect(exitCode).toBe(0);
       expect(stderr).toBe("");
-      expect(JSON.parse(stdout).input).toEqual({ message: "outside" });
+      expect(JSON.parse(stdout).result.input).toEqual({ message: "outside" });
     } finally {
       await rm(elsewhere, { force: true, recursive: true });
     }

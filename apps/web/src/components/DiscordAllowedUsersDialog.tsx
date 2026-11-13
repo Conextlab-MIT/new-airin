@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -6,8 +6,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { InputGroup, InputGroupInput } from "@nakama/ui/input-group";
+} from "@airin/ui/dialog";
+import { InputGroup, InputGroupInput } from "@airin/ui/input-group";
 import { Delete02Icon } from "hugeicons-react";
 import { useState } from "react";
 import { useSaveDiscordSettings } from "@/hooks/use-app-queries";

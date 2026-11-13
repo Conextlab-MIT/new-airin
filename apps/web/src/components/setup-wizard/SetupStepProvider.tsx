@@ -1,5 +1,5 @@
-import type { CreateProviderResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { CreateProviderResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import { useState } from "react";
 import { ProviderSetupForm } from "@/components/ProviderSetupForm";
 import { useUpdateProfileMutation } from "@/hooks/use-resource-mutations";
@@ -91,6 +91,7 @@ export function SetupStepProvider({ onNext, onSkip }: SetupStepProviderProps) {
             density="compact"
             onSuccess={(result) => void finishSetup(result)}
             showHeading={false}
+            showModelPicker={false}
             submitLabel="Continue"
           />
           <div className="flex justify-end border-border border-t pt-4">

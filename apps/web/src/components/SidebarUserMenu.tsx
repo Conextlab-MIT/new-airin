@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -6,21 +6,22 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Input } from "@nakama/ui/input";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { Input } from "@airin/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import {
   Building03Icon,
   ComputerIcon,
   Logout03Icon,
   MoonIcon,
+  NewReleasesIcon,
   SparklesIcon,
   Sun01Icon,
   UserIcon,
@@ -30,10 +31,16 @@ import { Link } from "react-router-dom";
 import { UserContextEditorDialog } from "@/components/UserContextCard";
 import { useAppContext } from "@/context/use-app-context";
 import { useAuth } from "@/context/use-auth";
+import { useLocale } from "@/context/use-locale";
 import { useTheme } from "@/context/use-theme";
+import { useUiMode } from "@/context/use-ui-mode";
+import { useAirinVersionQuery } from "@/hooks/use-app-queries";
 import { client, formatError } from "@/lib/client";
 import { canAccessOrganizationPage, PAGE_PATHS } from "@/lib/navigation";
 import type { Theme } from "@/lib/theme";
+import type { UiMode } from "@/lib/ui-mode";
+
+const RELEASES_URL = "https://github.com/ahmadrosid/airin/releases";
 
 const THEME_OPTIONS: {
   id: Theme;
@@ -56,13 +63,38 @@ function accountInitials(name: string) {
   return letters.toUpperCase();
 }
 
-export function SidebarUserMenu() {
+export function SidebarUserMenu({
+  menuSide = "top",
+}: {
+  /** Where the account menu opens; footer uses `top`. */
+  menuSide?: "top" | "right" | "bottom" | "left";
+} = {}) {
   const { user, activeOrg, logout, refreshSession } = useAuth();
   const { health } = useAppContext();
   const { theme, setTheme } = useTheme();
+  const { uiMode, setUiMode } = useUiMode();
+  const { t } = useLocale();
+
+  const uiModeOptions: { id: UiMode; label: string }[] = [
+    { id: "owner", label: t("mode.owner") },
+    { id: "advanced", label: t("mode.advanced") },
+  ];
+
   const [profileOpen, setProfileOpen] = useState(false);
   const [personalisationOpen, setPersonalisationOpen] = useState(false);
   const version = health?.version?.trim();
+
+  // A dev or custom build has no release of its own, so it gets the list.
+  const releaseNotesUrl =
+    version && /^\d+\.\d+\.\d+$/.test(version)
+      ? `${RELEASES_URL}/tag/v${version}`
+      : RELEASES_URL;
+
+  const canCheckUpdates =
+    user?.isPlatformAdmin === true && health?.updateCheckEnabled === true;
+
+  const updateAvailable =
+    useAirinVersionQuery(canCheckUpdates).data?.updateAvailable === true;
 
   if (!user) {
     return null;
@@ -81,10 +113,10 @@ export function SidebarUserMenu() {
   const trigger = (
     <button
       aria-label="Account menu"
-      className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent/55 hover:text-foreground"
+      className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-sidebar-accent/55 hover:text-foreground"
       type="button"
     >
-      <span className="flex size-7 items-center justify-center rounded-md bg-muted font-semibold text-2xs text-foreground">
+      <span className="flex size-7 items-center justify-center rounded-full bg-muted font-semibold text-2xs text-foreground">
         {initial}
       </span>
     </button>
@@ -101,7 +133,7 @@ export function SidebarUserMenu() {
                 <DropdownMenuContent
                   align="end"
                   className="w-64 gap-0 overflow-hidden p-0"
-                  side="right"
+                  side={menuSide}
                   sideOffset={8}
                 >
                   <div className="flex items-center gap-2.5 px-3.5 py-3">
@@ -157,9 +189,58 @@ export function SidebarUserMenu() {
                         Organization
                       </DropdownMenuItem>
                     )}
+                    <DropdownMenuItem
+                      className="px-2.5 py-1.5"
+                      render={
+                        <a
+                          aria-label="What's new"
+                          href={releaseNotesUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                        />
+                      }
+                    >
+                      <NewReleasesIcon
+                        aria-hidden="true"
+                        className="size-4 text-muted-foreground"
+                      />
+                      What's new
+                    </DropdownMenuItem>
                   </div>
 
                   <div className="h-px bg-border" />
+
+                  <div className="flex items-center justify-between gap-3 px-3.5 py-2">
+                    <span className="text-muted-foreground text-sm">Mode</span>
+                    <div
+                      aria-label="Interface mode"
+                      className="flex gap-0.5 rounded-md bg-muted p-0.5"
+                      role="group"
+                    >
+                      {uiModeOptions.map((option) => {
+                        const selected = uiMode === option.id;
+
+                        return (
+                          <button
+                            aria-label={option.label}
+                            aria-pressed={selected}
+                            className={cn(
+                              "rounded-sm px-2 py-1 text-muted-foreground text-xs transition-colors hover:text-foreground",
+                              selected &&
+                                "bg-background text-foreground shadow-sm"
+                            )}
+                            key={option.id}
+                            onClick={() => {
+                              setUiMode(option.id);
+                            }}
+                            type="button"
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
                   <div className="flex items-center justify-between gap-3 px-3.5 py-2">
                     <span className="text-muted-foreground text-sm">Theme</span>
@@ -216,9 +297,24 @@ export function SidebarUserMenu() {
                   {version ? (
                     <>
                       <div className="h-px bg-border" />
-                      <p className="px-3.5 py-2 font-mono text-2xs text-muted-foreground tabular-nums">
-                        Nakama {version}
-                      </p>
+                      {canCheckUpdates ? (
+                        <DropdownMenuItem
+                          className="rounded-none px-3.5 py-2 font-mono text-2xs text-muted-foreground tabular-nums"
+                          render={<Link to={PAGE_PATHS.settings} />}
+                        >
+                          Airin {version}
+                          {updateAvailable ? (
+                            <span className="text-primary">
+                              {" "}
+                              · Update available
+                            </span>
+                          ) : null}
+                        </DropdownMenuItem>
+                      ) : (
+                        <p className="px-3.5 py-2 font-mono text-2xs text-muted-foreground tabular-nums">
+                          Airin {version}
+                        </p>
+                      )}
                     </>
                   ) : null}
                 </DropdownMenuContent>

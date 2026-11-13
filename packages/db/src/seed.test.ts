@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   BUILTIN_TOOL_IDS,
   GENERATE_IMAGE_TOOL_ID,
-} from "@nakama/core/tools/protected";
+} from "@airin/core/tools/protected";
 import { createInMemoryDatabaseAdapter } from "./index";
 import { ensureGenerateImageToolDefinition } from "./org-profiles";
 import {

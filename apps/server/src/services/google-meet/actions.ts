@@ -1,34 +1,65 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ProviderInstance, UserConfig } from "@airin/core";
+import type { MeetImportProgress } from "@airin/core/google-meet";
 import { z } from "zod";
+import type { ComposioService } from "../composio-service";
+import { importMeetRecording } from "../meet-recording-import";
 import { type Meeting, MeetingStore } from "./store";
-import { transcriptionConfig } from "./transcription";
 
-export function privateJson(
-  path: string,
-  data: { apiKey: string } | { enabled: boolean }
-) {
+export const OPENAI_PROVIDER_REQUIRED_MESSAGE =
+  "Add an OpenAI provider in AI Providers first.";
+
+const TRANSCRIPTION_PROVIDER_REQUIRED_MESSAGE =
+  "Connect a transcription provider on the Google Meet page first.";
+
+export interface MeetTranscriber {
+  instance: Pick<ProviderInstance, "apiKey" | "baseUrl" | "type">;
+  model: string;
+}
+
+// Meet calls OpenAI directly, so it takes the key from the AI provider settings:
+// the default provider when it is OpenAI, otherwise the first OpenAI provider.
+export function openaiProviderKey(config: UserConfig | null) {
+  const providers = (config?.providers ?? []).filter(
+    (provider) => provider.type === "openai" && provider.apiKey.trim()
+  );
+
+  const provider =
+    providers.find(({ id }) => id === config?.defaultProviderId) ??
+    providers[0];
+
+  return provider?.apiKey.trim() || null;
+}
+
+function privateJson(path: string, data: { enabled: boolean }) {
   const temporary = `${path}.${crypto.randomUUID()}.tmp`;
   writeFileSync(temporary, JSON.stringify(data), { mode: 0o600 });
   renameSync(temporary, path);
 }
 
-export function readSettings(directory: string) {
-  return transcriptionConfig(
-    JSON.parse(readFileSync(join(directory, "settings.json"), "utf8"))
-  );
-}
-
 export const meetingActionSchemas = {
+  "approve-extension": z
+    .object({ code: z.string().trim().min(1).max(16) })
+    .strict(),
   configure: z
     .object({
-      apiKey: z.string().max(4096).optional(),
       enabled: z.boolean().optional(),
     })
     .strict(),
   delete: z.object({ meetingId: z.string() }).strict(),
+  "extension-keys": z.object({}).strict(),
+  "import-progress": z.object({}).strict(),
+  "import-recording": z
+    .object({
+      fileId: z.string().regex(/^[A-Za-z0-9_-]{10,128}$/),
+      messageId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+    })
+    .strict(),
   leave: z.object({ meetingId: z.string() }).strict(),
   meetings: z.object({}).strict(),
+  recordings: z.object({}).strict(),
+  "revoke-extension": z.object({ keyId: z.string().max(64) }).strict(),
   "start-capture": z
     .object({
       durationMinutes: z.number().int().min(1).max(120).optional(),
@@ -53,9 +84,17 @@ export const meetingActionSchemas = {
 export interface MeetExecutionContext {
   actionKey: string;
   actor: { id: string; role: "admin" | "member" };
-  captureUrl?(): Promise<string>;
+  composio?: Pick<
+    ComposioService,
+    "listMeetRecordings" | "downloadMeetRecording"
+  >;
   createCapture?(meeting: Meeting): { token: string; url: string };
   dataDir: string;
+  importProgress?: {
+    get(): MeetImportProgress | null;
+    set(progress: MeetImportProgress | null): void;
+  };
+  openaiKey?(): string | null;
   orgId: string;
   profileId?: string;
   signal?: AbortSignal;
@@ -63,16 +102,21 @@ export interface MeetExecutionContext {
     request: { data: string; filename: string; mediaType: string },
     signal?: AbortSignal
   ): Promise<{ text: string }>;
+  /** The workspace transcription model, used for uploads and imports. */
+  transcriber?(): Promise<MeetTranscriber | null>;
 }
 
 export interface MeetActionInput {
   after?: number;
-  apiKey?: string;
+  code?: string;
   content?: string;
   durationMinutes?: number;
   enabled?: boolean;
+  fileId?: string;
   filename?: string;
+  keyId?: string;
   meetingId?: string;
+  messageId?: string;
   url?: string;
 }
 
@@ -84,6 +128,50 @@ export function meetEnabled(directory: string) {
   );
 }
 
+// Uploads and imports use the workspace transcription model. Installs that
+// only have an OpenAI provider keep working through Whisper.
+async function resolveTranscriber(
+  context: MeetExecutionContext,
+  openaiKey: string | null
+): Promise<MeetTranscriber | null> {
+  const selected = await context.transcriber?.();
+
+  if (selected) {
+    return selected;
+  }
+
+  return openaiKey
+    ? { instance: { apiKey: openaiKey, type: "openai" }, model: "whisper-1" }
+    : null;
+}
+
+async function transcriptionStatus(
+  context: MeetExecutionContext,
+  openaiKey: string | null
+) {
+  try {
+    const selected = await context.transcriber?.();
+
+    return {
+      configured: Boolean(selected || openaiKey),
+      transcription: selected
+        ? { model: selected.model, type: selected.instance.type }
+        : null,
+      transcriptionError: null,
+    };
+  } catch (error) {
+    // A broken setting must not hide the meeting list; the page shows why.
+    return {
+      configured: Boolean(openaiKey),
+      transcription: null,
+      transcriptionError:
+        error instanceof Error
+          ? error.message
+          : "Transcription setting is invalid",
+    };
+  }
+}
+
 export async function run(
   input: MeetActionInput,
   context: MeetExecutionContext
@@ -92,8 +180,11 @@ export async function run(
     .enum([
       "configure",
       "delete",
+      "import-progress",
+      "import-recording",
       "leave",
       "meetings",
+      "recordings",
       "start-capture",
       "status",
       "transcript",
@@ -114,24 +205,21 @@ export async function run(
 
   const store = new MeetingStore(context.dataDir, context.orgId);
 
+  // An agent sees its profile's meetings plus its member's own page meetings,
+  // which have no profile.
   const canAccess = (meeting: Meeting) =>
     (context.actor.role === "admin" || meeting.actorId === context.actor.id) &&
-    (!context.profileId || meeting.profileId === context.profileId);
+    (!context.profileId ||
+      meeting.profileId === context.profileId ||
+      (meeting.profileId === null && meeting.actorId === context.actor.id));
 
   try {
     const action = context.actionKey ?? "";
-    const settingsPath = join(context.dataDir, "settings.json");
+    const openaiKey = context.openaiKey?.() ?? null;
 
     if (action === "configure") {
       if (context.actor.role !== "admin") {
         throw new Error("Admin access required");
-      }
-
-      if (input.apiKey !== undefined) {
-        privateJson(
-          settingsPath,
-          transcriptionConfig({ apiKey: input.apiKey })
-        );
       }
 
       if (input.enabled !== undefined) {
@@ -141,7 +229,7 @@ export async function run(
       }
 
       return {
-        configured: existsSync(settingsPath),
+        configured: (await transcriptionStatus(context, openaiKey)).configured,
         enabled: meetEnabled(context.dataDir),
       };
     }
@@ -157,26 +245,28 @@ export async function run(
     if (action === "meetings") {
       return {
         canConfigure: context.actor.role === "admin",
-        captureProtocol: 2,
-        configured: existsSync(settingsPath),
+        ...(await transcriptionStatus(context, openaiKey)),
         enabled,
+        liveReady: Boolean(openaiKey),
         meetings: enabled
           ? store.list(
               context.actor.role === "admin" ? null : context.actor.id,
-              context.profileId ?? null
+              context.profileId ?? null,
+              context.actor.id
             )
           : [],
       };
     }
 
     if (action === "start-capture") {
-      readSettings(context.dataDir);
-
-      if (!(context.captureUrl && context.createCapture)) {
-        throw new Error("Capture service unavailable");
+      if (!openaiKey) {
+        throw new Error(OPENAI_PROVIDER_REQUIRED_MESSAGE);
       }
 
-      await context.captureUrl();
+      // Only an HTTP route knows the capture socket URL of the main server.
+      if (!context.createCapture) {
+        throw new Error("Capture socket URL is missing");
+      }
 
       const meeting = store.create(
         String(input.url ?? "").trim(),
@@ -260,6 +350,66 @@ export async function run(
         context.actor.id,
         context.profileId
       );
+    }
+
+    if (action === "import-progress") {
+      return { progress: context.importProgress?.get() ?? null };
+    }
+
+    if (action === "recordings" || action === "import-recording") {
+      if (!context.composio) {
+        throw new Error("Recording import is unavailable");
+      }
+
+      if (action === "recordings") {
+        return context.composio.listMeetRecordings(
+          context.orgId,
+          context.actor.id
+        );
+      }
+
+      const transcriber = await resolveTranscriber(context, openaiKey);
+
+      if (!transcriber) {
+        throw new Error(TRANSCRIPTION_PROVIDER_REQUIRED_MESSAGE);
+      }
+
+      const progress = context.importProgress;
+
+      try {
+        const result = await importMeetRecording(
+          context.composio,
+          {
+            // SAFETY: The surrounding code checked this value before the assertion.
+            fileId: input.fileId as string,
+            // SAFETY: The surrounding code checked this value before the assertion.
+            messageId: input.messageId as string,
+            model: transcriber.model,
+            orgId: context.orgId,
+            provider: transcriber.instance,
+            userId: context.actor.id,
+          },
+          context.signal ?? AbortSignal.timeout(20 * 60_000),
+          (step) => progress?.set(step)
+        );
+
+        context.signal?.throwIfAborted();
+
+        if (!result.text.trim()) {
+          throw new Error("Recording transcription returned no speech");
+        }
+
+        progress?.set({ step: "save" });
+
+        return store.importFile(
+          result.filename,
+          result.text,
+          context.actor.id,
+          context.profileId
+        );
+      } finally {
+        progress?.set(null);
+      }
     }
 
     const meeting = store.get(String(input.meetingId ?? ""));

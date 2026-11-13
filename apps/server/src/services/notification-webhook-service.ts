@@ -1,16 +1,16 @@
 import {
+  AirinApiError,
   type ChannelSendResult,
   createDiscordOutboundAdapter,
   createTelegramOutboundAdapter,
   createWhatsAppOutboundAdapter,
   type DiscordOutboundAdapter,
-  NakamaApiError,
   type NotificationWebhookRequest,
   normalizeNotificationWebhookRequest,
   type TelegramOutboundAdapter,
   type WhatsAppOutboundAdapter,
-} from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import type { AuthService } from "./auth-service";
 
 /** Max length for the required Idempotency-Key header value. */
@@ -50,14 +50,14 @@ function normalizeIdempotencyKey(value: string | null): string {
   const trimmed = value?.trim() ?? "";
 
   if (!trimmed) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Idempotency-Key header is required for notification webhooks.",
       400
     );
   }
 
   if (trimmed.length > NOTIFICATION_WEBHOOK_IDEMPOTENCY_KEY_MAX_LENGTH) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Idempotency-Key must be at most ${NOTIFICATION_WEBHOOK_IDEMPOTENCY_KEY_MAX_LENGTH} characters.`,
       400
     );
@@ -106,7 +106,7 @@ export class NotificationWebhookService {
       !(destination && apiKey) ||
       this.authService.hashToken(apiKey) !== destination.secretHash
     ) {
-      throw new NakamaApiError("Invalid notification credentials.", 401);
+      throw new AirinApiError("Invalid notification credentials.", 401);
     }
 
     const organization = await this.databaseAdapter.getOrganizationById(
@@ -114,7 +114,7 @@ export class NotificationWebhookService {
     );
 
     if (!organization || organization.archivedAt) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const eventId = normalizeIdempotencyKey(idempotencyKey);
@@ -128,7 +128,7 @@ export class NotificationWebhookService {
         )
       )
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Choose an agent connection for this notification destination.",
         409
       );
@@ -141,7 +141,7 @@ export class NotificationWebhookService {
         /^\d{17,20}$/.test(destination.config.channelId)
       )
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Choose a valid Discord channel for this destination.",
         409
       );
@@ -154,7 +154,7 @@ export class NotificationWebhookService {
     );
 
     if (!claimed) {
-      throw new NakamaApiError("Duplicate notification delivery.", 409);
+      throw new AirinApiError("Duplicate notification delivery.", 409);
     }
 
     let result: ChannelSendResult;
@@ -187,11 +187,11 @@ export class NotificationWebhookService {
         text: formatNotificationMessage(normalized, true),
       });
     } else {
-      throw new NakamaApiError("Unsupported notification channel.", 409);
+      throw new AirinApiError("Unsupported notification channel.", 409);
     }
 
     if (!result.ok) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         result.error ?? "Notification delivery failed.",
         502
       );

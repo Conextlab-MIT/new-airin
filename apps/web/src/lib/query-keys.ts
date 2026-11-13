@@ -9,6 +9,28 @@ export const queryKeys = {
   agentBrowser: {
     settings: ["agentBrowser", "settings"] as const,
   },
+  agentGroups: {
+    all: ["agentGroups"] as const,
+    detail: (groupId: string) => ["agentGroups", groupId] as const,
+    files: (groupId: string, folder: string) =>
+      ["agentGroups", groupId, "files", folder] as const,
+    memory: (groupId: string) => ["agentGroups", groupId, "memory"] as const,
+    session: (groupId: string, sessionId: string) =>
+      ["agentGroups", groupId, "sessions", sessionId] as const,
+    sessions: (groupId: string) =>
+      ["agentGroups", groupId, "sessions"] as const,
+    thread: (groupId: string, sessionId: string, messageId: number) =>
+      [
+        "agentGroups",
+        groupId,
+        "sessions",
+        sessionId,
+        "threads",
+        messageId,
+      ] as const,
+  },
+  airinUpgrade: ["system", "upgrade"] as const,
+  airinVersion: ["system", "version"] as const,
   artifacts: {
     profile: (profileId: string) => ["artifacts", profileId] as const,
     shareStatus: (profileId: string, path: string) =>
@@ -16,9 +38,13 @@ export const queryKeys = {
   },
   automations: {
     all: ["automations"] as const,
+    // Not under `runs`, so refreshing the list does not refetch a transcript.
+    run: (automationId: string, runId: string) =>
+      ["automations", automationId, "run", runId] as const,
     runs: (automationId: string) =>
       ["automations", automationId, "runs"] as const,
   },
+  backupStatus: ["data", "backupStatus"] as const,
   browserSessions: ["browserSessions"] as const,
   cerebrasModels: ["cerebrasModels"] as const,
   composio: {
@@ -45,12 +71,15 @@ export const queryKeys = {
     published: (orgId: string, publicationId: string) =>
       ["knowledgeBase", "published", orgId, publicationId] as const,
   },
+  language: {
+    settings: ["language", "settings"] as const,
+  },
   mcp: {
     all: ["mcp", "servers"] as const,
     detail: (serverId: string) => ["mcp", "servers", serverId] as const,
+    registry: (query: string) => ["mcp", "registry", query] as const,
   },
   models: ["models"] as const,
-  modelsDev: ["modelsDev"] as const,
   notificationDestinations: (orgId: string) =>
     ["notificationDestinations", orgId] as const,
   openRouterModels: ["openRouterModels"] as const,
@@ -58,6 +87,8 @@ export const queryKeys = {
     ["organizationOverview", parentOrgId, activeOrgId] as const,
   organizationPublicationCatalog: (orgId: string, kind: string) =>
     ["organizationPublicationCatalog", orgId, kind] as const,
+  // Under orgMembers, so a new invite refreshes this list too.
+  orgInvites: (orgId: string) => ["orgMembers", orgId, "invites"] as const,
   orgMembers: (orgId: string) => ["orgMembers", orgId] as const,
   orgMemory: (orgId: string) => ["orgMemory", orgId] as const,
   orgMemoryHistory: (orgId: string) => ["orgMemoryHistory", orgId] as const,
@@ -73,15 +104,23 @@ export const queryKeys = {
     releases: ["plugins", "releases"] as const,
     // Under releases so approving a release refreshes the check too.
     updates: ["plugins", "releases", "updates"] as const,
+    // Under releases so removing a release refreshes who still uses it.
+    usage: (pluginId: string) =>
+      ["plugins", "releases", "usage", pluginId] as const,
   },
   profiles: {
     all: ["profiles"] as const,
     detail: (profileId: string) => ["profiles", profileId] as const,
     history: (profileId: string) => ["profiles", profileId, "history"] as const,
+    regressionCases: (profileId: string) =>
+      ["profiles", profileId, "regressionCases"] as const,
   },
+  providerCheck: (providerId: string) =>
+    ["providers", providerId, "check"] as const,
   providerModelDiscovery: (providerId: string) =>
     ["providers", providerId, "modelDiscovery"] as const,
   providers: ["providers"] as const,
+  railPins: ["railPins"] as const,
   remoteModelDiscovery: (options: {
     providerId?: string;
     baseUrl?: string;
@@ -115,6 +154,10 @@ export const queryKeys = {
   skills: {
     all: ["skills"] as const,
     detail: (skillId: string) => ["skills", skillId] as const,
+    // Outside "skills" so invalidating installed skills does not refetch skills.sh.
+    marketplace: (query: string) => ["skills-marketplace", query] as const,
+    marketplacePreview: (command: string) =>
+      ["skills-marketplace", "preview", command] as const,
     published: (orgId: string, publicationId: string) =>
       ["skills", "published", orgId, publicationId] as const,
   },
@@ -125,6 +168,9 @@ export const queryKeys = {
     profile: (profileId: string) => ["soul", "profile", profileId] as const,
   },
   systemStatus: ["systemStatus"] as const,
+  teams: {
+    settings: ["teams", "settings"] as const,
+  },
   telegram: {
     requests: ["telegram", "requests"] as const,
     settings: ["telegram", "settings"] as const,

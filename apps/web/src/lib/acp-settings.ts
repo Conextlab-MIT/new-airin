@@ -3,7 +3,7 @@ import type {
   AcpAgentPresetSummary,
   AcpSessionSetting,
   ProviderModelOption,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
 /** A stable empty list, so hooks that depend on the presets do not re-run every render. */
 export const NO_ACP_AGENT_PRESETS: AcpAgentPresetSummary[] = [];

@@ -72,7 +72,7 @@ export async function createBot(
   client.on(Events.InteractionCreate, async (interaction) => {
     if (
       (interaction.isStringSelectMenu() || interaction.isButton()) &&
-      /^nakama:(org|profile|sessions):/.test(interaction.customId)
+      /^airin:(org|profile|sessions):/.test(interaction.customId)
     ) {
       try {
         // Private pickers can update in place; copied/foreign controls cannot mutate state.

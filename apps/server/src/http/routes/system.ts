@@ -1,15 +1,23 @@
 import { createHash } from "node:crypto";
-import { createRoute, z } from "@hono/zod-openapi";
 import {
-  getNakamaVersion,
+  AIRIN_API_VERSION,
+  AirinApiError,
+  getAirinVersion,
   isComposioConfiguredAsync,
-  NAKAMA_API_VERSION,
-} from "@nakama/core";
-import { BUILTIN_TOOL_IDS } from "@nakama/core/tools/protected";
+} from "@airin/core";
+import { BUILTIN_TOOL_IDS } from "@airin/core/tools/protected";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   getWebPublicUrlSettings,
   persistWebPublicUrl,
 } from "../../services/composio-callback-url";
+import {
+  checkAirinVersion,
+  isOnboardingEnabled,
+  isUpdateCheckEnabled,
+  readUpgradeState,
+  requestUpgrade,
+} from "../../services/system-status-service";
 import type { ServerOptions } from "../context";
 import {
   requireActiveOrgIdFromContext,
@@ -36,7 +44,7 @@ const DOCS_HTML = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Nakama API</title>
+    <title>Airin API</title>
   </head>
   <body>
     <div id="app"></div>
@@ -49,23 +57,39 @@ const DOCS_HTML = `<!doctype html>
 /**
  * Host page for HTML artifact previews. A `srcdoc` frame inherits the app's
  * strict CSP, so artifact scripts (inline or CDN) never ran. This page carries
- * its own permissive CSP and writes the HTML the parent posts into itself; the
+ * its own artifact CSP and writes the HTML the parent posts into itself; the
  * web client still loads it sandboxed without `allow-same-origin`.
  */
 export const ARTIFACT_FRAME_PATH = "/artifact-frame";
 
-export const ARTIFACT_FRAME_CSP =
-  "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; frame-ancestors 'self'";
+export const ARTIFACT_FRAME_CSP = [
+  "default-src 'none'",
+  "script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com https://code.jquery.com",
+  "style-src 'unsafe-inline' data: https://fonts.googleapis.com",
+  "font-src data: https://fonts.gstatic.com",
+  "img-src data:",
+  "media-src data:",
+  "connect-src 'none'",
+  "frame-src 'none'",
+  "object-src 'none'",
+  "worker-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  // allow-modals lets the print frame open the print dialog; the preview
+  // iframe's own sandbox attribute still leaves it out.
+  "sandbox allow-scripts allow-modals",
+  "frame-ancestors 'self'",
+].join("; ");
 
 const ARTIFACT_FRAME_HTML = `<!doctype html>
 <script>
   addEventListener("message", (event) => {
-    if (event.source !== parent || typeof event.data?.nakamaArtifactHtml !== "string") return;
+    if (event.source !== parent || typeof event.data?.airinArtifactHtml !== "string") return;
     document.open();
-    document.write(event.data.nakamaArtifactHtml);
+    document.write(event.data.airinArtifactHtml);
     document.close();
   });
-  parent.postMessage("nakama-artifact-frame-ready", "*");
+  parent.postMessage("airin-artifact-frame-ready", "*");
 </script>
 `;
 
@@ -92,7 +116,15 @@ export function registerSystemRoutes(
         description: "Whether a Composio project API key is saved locally.",
       }),
       ok: z.literal(true),
+      onboardingEnabled: z.boolean().openapi({
+        description:
+          "Whether AIRIN_ENABLE_ONBOARDING is on. The web app then asks a new user for a goal.",
+      }),
       providerConfigured: z.boolean(),
+      updateCheckEnabled: z.boolean().openapi({
+        description:
+          "False when AIRIN_DISABLE_UPDATE_CHECK is set. The web app then hides the release check.",
+      }),
       userConfigured: z.boolean(),
       version: z.string(),
     })
@@ -185,6 +217,117 @@ export function registerSystemRoutes(
     tags: ["Health"],
   });
 
+  const versionRoute = createRoute({
+    method: "get",
+    operationId: "getAirinVersion",
+    path: "/v1/system/version",
+    responses: {
+      200: {
+        content: {
+          "application/json": {
+            schema: z
+              .object({
+                current: z.string(),
+                latest: z.string(),
+                releaseUrl: z.string(),
+                updateAvailable: z.boolean(),
+              })
+              .openapi("AirinVersionResponse"),
+          },
+        },
+        description: "Running version and the newest GitHub release",
+      },
+      403: {
+        content: { "application/json": { schema: errorSchema } },
+        description: "Platform admin required",
+      },
+      404: {
+        content: { "application/json": { schema: errorSchema } },
+        description: "AIRIN_DISABLE_UPDATE_CHECK is set",
+      },
+      502: {
+        content: { "application/json": { schema: errorSchema } },
+        description: "Latest version unreachable",
+      },
+    },
+    summary: "Check for a newer Airin release",
+    tags: ["Health"],
+  });
+
+  const upgradeStateSchema = z
+    .object({
+      available: z.boolean(),
+      rollbacks: z.array(z.object({ at: z.string(), version: z.string() })),
+      status: z
+        .object({
+          at: z.string(),
+          message: z.string(),
+          state: z.enum(["running", "done", "failed", "rolled_back"]),
+          version: z.string(),
+        })
+        .nullable(),
+    })
+    .openapi("AirinUpgradeResponse");
+
+  const upgradeStateRoute = createRoute({
+    method: "get",
+    operationId: "getAirinUpgrade",
+    path: "/v1/system/upgrade",
+    responses: {
+      200: {
+        content: { "application/json": { schema: upgradeStateSchema } },
+        description: "Whether the updater runs, and the last upgrade",
+      },
+      403: {
+        content: { "application/json": { schema: errorSchema } },
+        description: "Platform admin required",
+      },
+    },
+    summary: "Read the upgrade status",
+    tags: ["Health"],
+  });
+
+  const startUpgradeRoute = createRoute({
+    method: "post",
+    operationId: "startAirinUpgrade",
+    path: "/v1/system/upgrade",
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: z
+              .object({
+                rollback: z.boolean().optional(),
+                version: z.string(),
+              })
+              .openapi("StartAirinUpgradeRequest"),
+          },
+        },
+        required: true,
+      },
+    },
+    responses: {
+      202: {
+        content: { "application/json": { schema: upgradeStateSchema } },
+        description: "Upgrade handed to the updater",
+      },
+      400: {
+        content: { "application/json": { schema: errorSchema } },
+        description: "Not a newer release",
+      },
+      403: {
+        content: { "application/json": { schema: errorSchema } },
+        description: "Platform admin required",
+      },
+      409: {
+        content: { "application/json": { schema: errorSchema } },
+        description: "No updater, or an upgrade is running",
+      },
+    },
+    summary: "Upgrade this install to a newer release",
+    tags: ["Health"],
+  });
+
   const getWebPublicUrlRoute = createRoute({
     method: "get",
     operationId: "getWebPublicUrl",
@@ -243,14 +386,16 @@ export function registerSystemRoutes(
 
     return c.json(
       {
-        apiVersion: NAKAMA_API_VERSION,
+        apiVersion: AIRIN_API_VERSION,
         builtinTools: BUILTIN_TOOL_NAMES,
         composioAvailable: false,
         composioConfigured,
         ok: true,
+        onboardingEnabled: isOnboardingEnabled(),
         providerConfigured: agent.providerConfigured,
+        updateCheckEnabled: isUpdateCheckEnabled(),
         userConfigured: humanUserCount > 0,
-        version: getNakamaVersion(),
+        version: getAirinVersion(),
       },
       200
     );
@@ -274,9 +419,54 @@ export function registerSystemRoutes(
         profileId && orgId ? { orgId, profileId } : orgId,
         {
           includeUsageByActor: auth.orgRole === "admin" || auth.isPlatformAdmin,
+          viewer: {
+            isPlatformAdmin: auth.isPlatformAdmin,
+            userId: auth.user.id,
+          },
         }
       ),
       200
+    );
+  });
+
+  app.openapi(versionRoute, async (c) => {
+    requirePlatformAdminFromContext(c);
+
+    if (!isUpdateCheckEnabled()) {
+      throw new AirinApiError("Update check is disabled.", 404);
+    }
+
+    return c.json(await checkAirinVersion(getAirinVersion()), 200);
+  });
+
+  app.openapi(upgradeStateRoute, async (c) => {
+    requirePlatformAdminFromContext(c);
+
+    return c.json(await readUpgradeState(getAirinVersion()), 200);
+  });
+
+  app.openAPIRegistry.registerPath(startUpgradeRoute);
+
+  app.post("/v1/system/upgrade", async (c) => {
+    requirePlatformAdminFromContext(c);
+
+    const body = await readJson(
+      c.req.raw,
+      z
+        .object({
+          rollback: z.boolean().optional(),
+          version: z.string().regex(/^\d+\.\d+\.\d+$/),
+        })
+        .strict()
+    );
+
+    return c.json(
+      await requestUpgrade(
+        body.version,
+        getAirinVersion(),
+        body.rollback ? "rollback" : "upgrade"
+      ),
+      202
     );
   });
 

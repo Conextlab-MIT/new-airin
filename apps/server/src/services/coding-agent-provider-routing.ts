@@ -5,8 +5,8 @@ import {
   type ProviderName,
   resolveOllamaHostMode,
   type UserConfig,
-} from "@nakama/core";
-import type { StoredCodingAgentHarnessKind } from "@nakama/db";
+} from "@airin/core";
+import type { StoredCodingAgentHarnessKind } from "@airin/db";
 import { CEREBRAS_CHAT_BASE_URL } from "../providers/cerebras";
 import { readApiKeyForInstance } from "../providers/create";
 import { FIREWORKS_INFERENCE_BASE_URL } from "../providers/fireworks";
@@ -75,7 +75,7 @@ export function isProviderCompatibleWithHarness(
   providerType: ProviderName,
   harnessKind: StoredCodingAgentHarnessKind
 ): boolean {
-  // Cursor Agent uses host Cursor auth — never Nakama provider passthrough.
+  // Cursor Agent uses host Cursor auth — never Airin provider passthrough.
   if (harnessKind === "cursor_agent") {
     return false;
   }
@@ -153,18 +153,18 @@ function incompatibilityMessage(
   providerType: ProviderName
 ): string {
   if (harnessKind === "claude_code") {
-    return `Claude Code requires an Anthropic provider (got ${providerType}). Configure an Anthropic provider in Settings → Provider.`;
+    return `Claude Code requires an Anthropic provider (got ${providerType}). Configure an Anthropic provider in Settings → AI Providers (/settings/providers).`;
   }
 
   if (harnessKind === "codex") {
-    return `Codex does not support the ${providerType} provider. Choose a compatible provider in Settings → Provider.`;
+    return `Codex does not support the ${providerType} provider. Choose a compatible provider in Settings → AI Providers (/settings/providers).`;
   }
 
   if (harnessKind === "pi") {
-    return `pi does not support the ${providerType} provider. Choose a compatible provider in Settings → Provider.`;
+    return `pi does not support the ${providerType} provider. Choose a compatible provider in Settings → AI Providers (/settings/providers).`;
   }
 
-  return `OpenCode does not support the ${providerType} provider. Choose a compatible provider in Settings → Provider.`;
+  return `OpenCode does not support the ${providerType} provider. Choose a compatible provider in Settings → AI Providers (/settings/providers).`;
 }
 
 export function resolveCodingAgentProviderRouting(options: {
@@ -194,7 +194,8 @@ export function resolveCodingAgentProviderRouting(options: {
   if (!resolved) {
     return {
       ...empty,
-      error: "No LLM provider is configured. Add one in Settings → Provider.",
+      error:
+        "No LLM provider is configured. Add one in Settings → AI Providers (/settings/providers).",
     };
   }
 
@@ -233,7 +234,7 @@ export function resolveCodingAgentProviderRouting(options: {
       ...empty,
       compatible: true,
       configured: true,
-      error: `Provider "${providerLabel}" has no API key. Add one in Settings → Provider.`,
+      error: `Provider "${providerLabel}" has no API key. Add one in Settings → AI Providers (/settings/providers).`,
       model,
       providerLabel,
       providerType: instance.type,
@@ -248,7 +249,8 @@ export function resolveCodingAgentProviderRouting(options: {
         ...empty,
         compatible: true,
         configured: true,
-        error: "Ollama Cloud requires an API key in Settings → Provider.",
+        error:
+          "Ollama Cloud requires an API key in Settings → AI Providers (/settings/providers).",
         model,
         providerLabel,
         providerType: instance.type,

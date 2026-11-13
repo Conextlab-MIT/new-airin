@@ -1,12 +1,15 @@
+import { AirinApiError } from "@airin/core/api-error";
 import {
   formatTranscript,
-  type MeetAction,
   type MeetActionInput,
   type MeetActionResults,
+  type MeetExtensionKey,
+  type MeetImportProgress,
   type Meeting,
+  type MeetSessionAction,
   type MeetOverview as Overview,
   type TranscriptSegment,
-} from "@nakama/core/google-meet";
+} from "@airin/core/google-meet";
 import {
   Button,
   Card,
@@ -19,21 +22,49 @@ import {
   DialogTitle,
   Input,
   Switch,
-} from "@nakama/ui";
+} from "@airin/ui";
+import { buttonVariants } from "@airin/ui/button-variants";
+import { useQuery } from "@tanstack/react-query";
 import {
+  AlertCircleIcon,
   ArrowRight01Icon,
   Copy01Icon,
   Delete02Icon,
   Download01Icon,
+  Mic01Icon,
+  Search01Icon,
+  Settings01Icon,
+  StopIcon,
+  Tick02Icon,
+  Upload01Icon,
+  Video01Icon,
 } from "hugeicons-react";
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
+import { SettingsPicker } from "@/components/settings/settings-model-select";
 import { useAuth } from "@/context/use-auth";
+import {
+  useCreateProviderMutation,
+  useSaveTranscriptionSettings,
+} from "@/hooks/use-app-queries";
+import { isAllowedComposioRedirectUrl } from "@/hooks/use-composio";
 import { client, formatError } from "@/lib/client";
+import {
+  encodeModelSelection,
+  TRANSCRIPTION_MODEL_OPTIONS,
+} from "@/lib/models";
+import {
+  type OpenRouterModelRow,
+  openRouterModelsQueryOptions,
+} from "@/lib/openrouter-models";
 
-type MeetCall = <Action extends MeetAction>(
+type MeetCall = <Action extends MeetSessionAction>(
   action: Action,
-  input?: MeetActionInput
+  input?: MeetActionInput,
+  signal?: AbortSignal
 ) => Promise<MeetActionResults[Action]>;
+
+type Recording = MeetActionResults["recordings"]["recordings"][number];
 
 function meetingStatus(meeting: Meeting) {
   if (
@@ -65,19 +96,111 @@ function meetingStatus(meeting: Meeting) {
   return meeting.transcriptFile ? "Transcript ready" : "No speech captured";
 }
 
+function isActive(meeting: Meeting) {
+  return ["queued", "joining", "recording", "transcribing"].includes(
+    meeting.state
+  );
+}
+
+function statusTone(meeting: Meeting) {
+  if (meeting.state === "failed") {
+    return meeting.transcriptFile ? "warning" : "danger";
+  }
+
+  return meeting.transcriptFile ? "success" : "muted";
+}
+
+function formatElapsed(milliseconds: number) {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const pad = (value: number) => String(value).padStart(2, "0");
+
+  return minutes >= 60
+    ? `${Math.floor(minutes / 60)}:${pad(minutes % 60)}:${pad(seconds % 60)}`
+    : `${pad(minutes)}:${pad(seconds % 60)}`;
+}
+
+function meetingLength(meeting: Meeting) {
+  if (meeting.sourceName) {
+    return "Uploaded";
+  }
+
+  const minutes = Math.round((meeting.updatedAt - meeting.createdAt) / 60_000);
+
+  return minutes < 1 ? "Under 1 min" : `${minutes} min`;
+}
+
+function useTranscriptSegments(
+  call: MeetCall,
+  signal: AbortSignal,
+  meetingId: string
+) {
+  const [segments, setSegments] = React.useState<TranscriptSegment[]>([]);
+  const [error, setError] = React.useState("");
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    let alive = true;
+    let cursor = 0;
+    let running = false;
+
+    function refresh() {
+      if (!alive || running || signal.aborted) {
+        return;
+      }
+
+      running = true;
+      void call("transcript", {
+        after: cursor,
+        meetingId,
+      })
+        .then((result) => {
+          if (alive && !signal.aborted) {
+            cursor = result.nextCursor;
+            setSegments((previous) => {
+              const seen = new Set(previous.map((segment) => segment.id));
+
+              return [
+                ...previous,
+                ...result.segments.filter((segment) => !seen.has(segment.id)),
+              ];
+            });
+            setError("");
+            setLoaded(true);
+          }
+        })
+        .catch((reason) => {
+          if (alive && !signal.aborted) {
+            setError(formatError(reason));
+          }
+        })
+        .finally(() => {
+          running = false;
+        });
+    }
+
+    void refresh();
+    const timer = setInterval(() => void refresh(), 2000);
+
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [meetingId, call, signal]);
+
+  return { error, loaded, segments };
+}
+
 function Settings({
   close,
-  configured,
   enabled: initialEnabled,
   call,
 }: {
   close(): void;
-  configured: boolean;
   enabled: boolean;
   call: MeetCall;
 }) {
   const [enabled, setEnabled] = React.useState(initialEnabled);
-  const [apiKey, setApiKey] = React.useState("");
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
 
@@ -87,11 +210,7 @@ function Settings({
     setError("");
 
     try {
-      await call("configure", {
-        apiKey: apiKey.trim() || undefined,
-        enabled,
-      });
-      setApiKey("");
+      await call("configure", { enabled });
       close();
     } catch (reason) {
       setError(formatError(reason));
@@ -122,45 +241,11 @@ function Settings({
             <span className="meet-enable-copy">Enable Google Meet</span>
             <Switch
               checked={enabled}
-              className={enabled ? "bg-blue-600" : undefined}
               disabled={busy}
               id="meet-enabled"
               onCheckedChange={setEnabled}
             />
           </label>
-          <div className="meet-row" style={{ justifyContent: "space-between" }}>
-            <label htmlFor="meet-api-key">OpenAI API key</label>
-            <a
-              href="https://platform.openai.com/api-keys"
-              rel="noreferrer"
-              style={{
-                fontSize: 14,
-                textDecoration: "underline",
-                textUnderlineOffset: 3,
-              }}
-              target="_blank"
-            >
-              Get an API key ↗
-            </a>
-          </div>
-          <Input
-            aria-describedby="meet-api-key-note"
-            autoComplete="off"
-            disabled={busy}
-            id="meet-api-key"
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={
-              configured
-                ? "Paste a new key to replace it"
-                : "Paste your key here"
-            }
-            type="password"
-            value={apiKey}
-          />
-          {configured && <p className="meet-status">A key is already saved.</p>}
-          <p className="meet-status" id="meet-api-key-note">
-            OpenAI charges for transcription separately from ChatGPT.
-          </p>
           {error && <p role="alert">{error}</p>}
           <DialogFooter>
             <Button
@@ -172,11 +257,7 @@ function Settings({
               Cancel
             </Button>
             <Button disabled={busy} type="submit">
-              {busy
-                ? "Saving…"
-                : enabled
-                  ? "Enable transcription"
-                  : "Save changes"}
+              {busy ? "Saving…" : "Save changes"}
             </Button>
           </DialogFooter>
         </form>
@@ -190,69 +271,24 @@ function Transcript({
   close,
   call,
   signal,
+  onDelete,
 }: {
   meeting: Meeting;
   close(): void;
   call: MeetCall;
   signal: AbortSignal;
+  onDelete(meeting: Meeting): void;
 }) {
-  const [segments, setSegments] = React.useState<TranscriptSegment[]>([]);
+  const { error, loaded, segments } = useTranscriptSegments(
+    call,
+    signal,
+    meeting.id
+  );
+
   const text = formatTranscript(segments, Boolean(meeting.sourceName));
-  const [error, setError] = React.useState("");
-  const [loaded, setLoaded] = React.useState(false);
   const [copyStatus, setCopyStatus] = React.useState("");
   const heading = React.useRef<HTMLHeadingElement>(null);
   React.useEffect(() => heading.current?.focus(), []);
-  React.useEffect(() => {
-    let alive = true;
-    let cursor = 0;
-    let running = false;
-
-    function refresh() {
-      if (!alive || running || signal.aborted) {
-        return;
-      }
-
-      running = true;
-      void call("transcript", {
-        after: cursor,
-        meetingId: meeting.id,
-      })
-        .then((result) => {
-          const value = result;
-
-          if (alive && !signal.aborted) {
-            cursor = value.nextCursor;
-            setSegments((previous) => {
-              const seen = new Set(previous.map((segment) => segment.id));
-
-              return [
-                ...previous,
-                ...value.segments.filter((segment) => !seen.has(segment.id)),
-              ];
-            });
-            setError("");
-            setLoaded(true);
-          }
-        })
-        .catch((reason) => {
-          if (alive && !signal.aborted) {
-            setError(formatError(reason));
-          }
-        })
-        .finally(() => {
-          running = false;
-        });
-    }
-
-    void refresh();
-    const timer = setInterval(() => void refresh(), 2000);
-
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [meeting.id, call, signal]);
 
   function download() {
     const url = URL.createObjectURL(
@@ -325,6 +361,18 @@ function Transcript({
           >
             <Download01Icon aria-hidden="true" size={16} />
           </Button>
+          {!isActive(meeting) && (
+            <Button
+              aria-label="Delete meeting"
+              className="meet-delete"
+              onClick={() => onDelete(meeting)}
+              size="icon"
+              title="Delete meeting"
+              variant="ghost"
+            >
+              <Delete02Icon aria-hidden="true" size={16} />
+            </Button>
+          )}
         </div>
       </div>
       {copyStatus && (
@@ -351,9 +399,7 @@ function Transcript({
         <Card className="meet-card">
           <p className="meet-empty" role="status">
             {loaded
-              ? ["queued", "joining", "recording", "transcribing"].includes(
-                  meeting.state
-                )
+              ? isActive(meeting)
                 ? "Waiting for speech…"
                 : "No speech was captured."
               : "Loading transcript…"}
@@ -364,89 +410,169 @@ function Transcript({
   );
 }
 
-function MeetingRow({
+function LiveMeeting({
   meeting,
   busy,
+  call,
+  signal,
   onStop,
-  onDelete,
   onOpen,
 }: {
   meeting: Meeting;
   busy: boolean;
+  call: MeetCall;
+  signal: AbortSignal;
   onStop(meetingId: string): void;
-  onDelete(meeting: Meeting): void;
+  onOpen(meeting: Meeting): void;
+}) {
+  const { segments } = useTranscriptSegments(call, signal, meeting.id);
+  const [now, setNow] = React.useState(Date.now);
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const label =
+    meeting.state === "recording" && !meeting.stopRequested
+      ? `Recording · ${formatElapsed(now - meeting.createdAt)}`
+      : meetingStatus(meeting);
+
+  return (
+    <Card className="meet-card">
+      <div className="meet-live-heading">
+        <div className="meet-meta">
+          <span className="meet-live-status" role="status">
+            <span aria-hidden="true" className="meet-live-dot" />
+            {label}
+          </span>
+          <h2 className="meet-live-title">
+            {meeting.title || "Untitled meeting"}
+          </h2>
+          <span className="meet-status">{meeting.url}</span>
+        </div>
+        <div className="meet-row">
+          <Button onClick={() => onOpen(meeting)}>Open transcript</Button>
+          <Button
+            disabled={
+              busy ||
+              !!meeting.stopRequested ||
+              meeting.state === "transcribing"
+            }
+            onClick={() => onStop(meeting.id)}
+            variant="outline"
+          >
+            <StopIcon aria-hidden="true" size={14} />
+            Stop
+          </Button>
+        </div>
+      </div>
+      <div className="meet-live-preview">
+        {segments.slice(-2).map((segment) => (
+          <p key={segment.id}>
+            <strong>{segment.speakerName || "Unknown speaker"}</strong>{" "}
+            {segment.text}
+          </p>
+        ))}
+        <span className="meet-status meet-listening">
+          <Mic01Icon aria-hidden="true" size={14} />
+          Listening…
+        </span>
+        {meeting.error && <p role="alert">{meeting.error}</p>}
+      </div>
+    </Card>
+  );
+}
+
+function MeetingRow({
+  meeting,
+  onOpen,
+}: {
+  meeting: Meeting;
   onOpen(meeting: Meeting): void;
 }) {
   return (
     <li>
-      <div className="meet-meeting">
-        <div className="meet-meta">
-          <h3>{meeting.title || meeting.sourceName || "Untitled meeting"}</h3>
+      <button
+        className="meet-meeting"
+        onClick={() => onOpen(meeting)}
+        type="button"
+      >
+        <span className="meet-meta">
+          <span className="meet-meeting-title">
+            {meeting.title || meeting.sourceName || "Untitled meeting"}
+          </span>
           <span className="meet-status">
-            {new Date(meeting.createdAt).toLocaleDateString(undefined, {
+            {new Date(meeting.createdAt).toLocaleString(undefined, {
               day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
-            {" · "}
-            {new Date(meeting.createdAt).toLocaleTimeString(undefined, {
               hour: "numeric",
               minute: "2-digit",
+              month: "short",
             })}
+            {" · "}
+            {meetingLength(meeting)}
           </span>
-        </div>
-        <div className="meet-row">
-          {meetingStatus(meeting) !== "Transcript ready" && (
-            <span className="meet-badge">{meetingStatus(meeting)}</span>
-          )}
-          {["queued", "joining", "recording", "transcribing"].includes(
-            meeting.state
-          ) && (
-            <Button
-              className="meet-action"
-              disabled={
-                busy ||
-                !!meeting.stopRequested ||
-                meeting.state === "transcribing"
-              }
-              onClick={() => onStop(meeting.id)}
-              size="sm"
-              variant="outline"
-            >
-              Stop transcription
-            </Button>
-          )}
-          {["finished", "failed"].includes(meeting.state) && (
-            <Button
-              aria-label="Delete meeting"
-              className="meet-action meet-delete"
-              disabled={busy}
-              onClick={() => {
-                onDelete(meeting);
-              }}
-              size="icon"
-              title="Delete meeting"
-              variant="ghost"
-            >
-              <Delete02Icon aria-hidden="true" size={16} />
-            </Button>
-          )}
-          <Button
-            aria-label={
-              meeting.transcriptFile ? "Read transcript" : "View details"
-            }
-            className="meet-open"
-            onClick={() => onOpen(meeting)}
-            size="icon"
-            title={meeting.transcriptFile ? "Read transcript" : "View details"}
-            variant="ghost"
-          >
-            <ArrowRight01Icon aria-hidden="true" size={16} />
-          </Button>
-        </div>
-      </div>
+        </span>
+        <span className="meet-badge" data-tone={statusTone(meeting)}>
+          {meetingStatus(meeting)}
+        </span>
+        <ArrowRight01Icon
+          aria-hidden="true"
+          className="meet-chevron"
+          size={16}
+        />
+      </button>
       {meeting.error && <p role="alert">{meeting.error}</p>}
     </li>
+  );
+}
+
+function MeetingHistory({
+  meetings,
+  onOpen,
+}: {
+  meetings: Meeting[];
+  onOpen(meeting: Meeting): void;
+}) {
+  const [query, setQuery] = React.useState("");
+  const search = query.trim().toLowerCase();
+
+  const history = meetings.filter(
+    (meeting) =>
+      !isActive(meeting) &&
+      (meeting.title || meeting.sourceName || "Untitled meeting")
+        .toLowerCase()
+        .includes(search)
+  );
+
+  return (
+    <Card className="meet-card">
+      <div className="meet-card-heading">
+        <h2>Meeting history</h2>
+        <label className="meet-search">
+          <Search01Icon aria-hidden="true" size={14} />
+          <input
+            aria-label="Search meetings"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search meetings"
+            type="search"
+            value={query}
+          />
+        </label>
+      </div>
+      {history.length ? (
+        <ul className="meet-list">
+          {history.map((meeting) => (
+            <MeetingRow key={meeting.id} meeting={meeting} onOpen={onOpen} />
+          ))}
+        </ul>
+      ) : (
+        <p className="meet-empty">
+          {search ? "No meetings match." : "No meetings yet."}
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -457,24 +583,190 @@ function ConnectionStatus({
   overview: Overview | null;
   connected: boolean;
 }) {
-  let connectionMessage =
-    "Connected. Start transcription from the extension in your Google Meet tab. Keep this page open.";
-
   if (!overview) {
-    connectionMessage = "Checking connection…";
-  } else if (!overview.configured) {
-    connectionMessage = "Set a transcription API key in Settings.";
+    return null;
+  }
+
+  if (overview.configured && overview.enabled && connected) {
+    return (
+      <span className="meet-connection" data-tone="success" role="status">
+        Extension connected
+      </span>
+    );
+  }
+
+  let message = "Extension not connected";
+  let tone = "muted";
+
+  if (!overview.configured) {
+    message = "Needs a provider";
+    tone = "warning";
   } else if (!overview.enabled) {
-    connectionMessage = "Google Meet is disabled.";
-  } else if (!connected) {
-    connectionMessage =
-      "Open the Chrome extension on this page and choose Connect this Nakama tab.";
+    message = "Disabled";
   }
 
   return (
-    <span className="meet-status" role="status">
-      {connectionMessage}
+    <span className="meet-connection" data-tone={tone} role="status">
+      {message}
     </span>
+  );
+}
+
+// Drive names Meet recordings "<event title> (<date> <zone>) - Recording".
+// Instant meetings have no event, so Google uses the meeting code instead.
+function recordingLabel(recording: {
+  date?: string;
+  name: string;
+  size: number;
+}) {
+  const match =
+    /^(.*?)\s*\((\d{4}-\d{2}-\d{2})[ T]?(\d{2}:\d{2})?[^)]*\)(?:\s*[-–]\s*Recording)?(?:\.\w+)?$/i.exec(
+      recording.name
+    );
+
+  const base = match?.[1]?.trim() || recording.name;
+  const code = /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(base);
+
+  const timestamp = Date.parse(
+    recording.date || (match ? `${match[2]}T${match[3] ?? "00:00"}` : "")
+  );
+
+  const date = Number.isNaN(timestamp) ? null : new Date(timestamp);
+
+  return {
+    day: date ? String(date.getDate()) : "",
+    details: [
+      date?.toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+      code ? base : null,
+      `${Math.ceil(recording.size / 1024 / 1024)} MB`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    month: date
+      ? date.toLocaleDateString(undefined, { month: "short" }).toUpperCase()
+      : "",
+    title: code ? "Instant meeting" : base,
+  };
+}
+
+function RecordingTile({
+  recording,
+}: {
+  recording: MeetActionResults["recordings"]["recordings"][number];
+}) {
+  const label = recordingLabel(recording);
+
+  return (
+    <>
+      <span aria-hidden="true" className="meet-date-tile">
+        {label.month ? (
+          <>
+            <span>{label.month}</span>
+            <strong>{label.day}</strong>
+          </>
+        ) : (
+          <Video01Icon size={18} />
+        )}
+      </span>
+      <span className="meet-meta">
+        <strong>{label.title}</strong>
+        <span className="meet-status">{label.details}</span>
+      </span>
+    </>
+  );
+}
+
+const IMPORT_STEPS = [
+  { label: "Download from Drive", step: "download" },
+  { label: "Extract audio", step: "extract" },
+  { label: "Transcribe with Whisper", step: "transcribe" },
+  { label: "Save to meeting history", step: "save" },
+] as const;
+
+// A measured fraction when the server reports one, otherwise null for a
+// sliding bar, so a long phase never looks frozen.
+function stepProgress(progress: MeetImportProgress | null) {
+  const megabytes = (bytes: number) => Math.round(bytes / 1024 / 1024);
+
+  if (progress?.step === "download" && progress.totalBytes && progress.bytes) {
+    return {
+      detail: `${megabytes(progress.bytes)} of ${megabytes(progress.totalBytes)} MB`,
+      fraction: Math.min(progress.bytes / progress.totalBytes, 1),
+    };
+  }
+
+  if (progress?.step === "transcribe" && progress.parts && progress.part) {
+    return {
+      detail:
+        progress.parts > 1 ? `Part ${progress.part} of ${progress.parts}` : "",
+      fraction:
+        progress.parts > 1 ? (progress.part - 1) / progress.parts : null,
+    };
+  }
+
+  return {
+    detail:
+      progress && progress.step !== "download" ? "" : "Preparing in Drive",
+    fraction: null,
+  };
+}
+
+function ImportSteps({ progress }: { progress: MeetImportProgress | null }) {
+  const current = IMPORT_STEPS.findIndex(
+    ({ step }) => step === (progress?.step ?? "download")
+  );
+
+  const active = stepProgress(progress);
+
+  return (
+    <ol aria-label="Import steps" className="meet-import-steps">
+      {IMPORT_STEPS.map(({ label, step }, index) => {
+        const state =
+          index < current ? "done" : index === current ? "active" : "pending";
+
+        return (
+          <li data-state={state} key={step}>
+            <span className="meet-import-step">
+              <span aria-hidden="true" className="meet-step-mark">
+                {state === "done" && <Tick02Icon size={14} />}
+              </span>
+              <span className={state === "active" ? "meet-shimmer" : undefined}>
+                {label}
+              </span>
+              {state === "active" && active.detail && (
+                <span className="meet-status">{active.detail}</span>
+              )}
+            </span>
+            {state === "active" && (
+              <span
+                aria-label={label}
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={
+                  active.fraction === null
+                    ? undefined
+                    : Math.round(active.fraction * 100)
+                }
+                className="meet-step-progress"
+                data-indeterminate={active.fraction === null || undefined}
+                role="progressbar"
+              >
+                <span
+                  style={
+                    active.fraction === null
+                      ? undefined
+                      : { width: `${Math.max(active.fraction * 100, 2)}%` }
+                  }
+                />
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -497,130 +789,1045 @@ function readUploadContent(file: File) {
   });
 }
 
-function useExtensionBridge(
-  call: MeetCall,
-  signal: AbortSignal,
-  setConnected: (connected: boolean) => void,
-  setSelected: (meeting: Meeting) => void
-) {
+function RecordingSources({
+  result,
+  isPlatformAdmin,
+  connecting,
+  onConnect,
+}: {
+  result: MeetActionResults["recordings"] | null;
+  isPlatformAdmin: boolean;
+  connecting: string;
+  onConnect(slug: string): void;
+}) {
+  if (!result?.composioConfigured) {
+    return result ? (
+      <p>
+        {isPlatformAdmin ? (
+          <>
+            Set up Composio in <a href="/connectors">Connectors</a> to import
+            recordings.
+          </>
+        ) : (
+          "Ask your platform admin to set up Composio to import recordings."
+        )}
+      </p>
+    ) : null;
+  }
+
+  if (result.gmailConnected && result.driveConnected) {
+    return null;
+  }
+
+  const connections = [
+    {
+      connected: result.gmailConnected,
+      logo: "gmail",
+      name: "Gmail",
+      slug: "gmail",
+    },
+    {
+      connected: result.driveConnected,
+      logo: "google-drive",
+      name: "Google Drive",
+      slug: "googledrive",
+    },
+  ];
+
+  return (
+    <ul className="meet-connections">
+      {connections.map(({ connected, logo, name, slug }) => (
+        <li key={name}>
+          <span className="meet-tile-icon">
+            <img alt="" height={20} src={`/icons/${logo}.svg`} width={20} />
+          </span>
+          <span className="meet-meta">
+            <strong>{name}</strong>
+            <span
+              className="meet-connection"
+              data-tone={connected ? "success" : "muted"}
+            >
+              {connected ? "Connected" : "Not connected"}
+            </span>
+          </span>
+          {!connected && (
+            <Button
+              disabled={!!connecting}
+              onClick={() => onConnect(slug)}
+              size="sm"
+              type="button"
+            >
+              {connecting === slug ? "Connecting…" : "Connect"}
+            </Button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function RecordingChoices({
+  importing,
+  picked,
+  progress,
+  ready,
+  recordings,
+  onSelect,
+}: {
+  importing: boolean;
+  picked: Recording | undefined;
+  progress: MeetImportProgress | null;
+  ready: boolean;
+  recordings: Recording[];
+  onSelect(key: string): void;
+}) {
+  if (importing && picked) {
+    return (
+      <div className="meet-import">
+        <div className="meet-import-recording">
+          <RecordingTile recording={picked} />
+        </div>
+        <ImportSteps progress={progress} />
+      </div>
+    );
+  }
+
+  if (!(ready && !importing)) {
+    return null;
+  }
+
+  if (recordings.length === 0) {
+    return <p>No Meet recording emails found.</p>;
+  }
+
+  return (
+    <fieldset className="meet-recordings">
+      <legend className="sr-only">Recording</legend>
+      {recordings.map((recording) => {
+        const key = `${recording.messageId}:${recording.fileId}`;
+
+        return (
+          <label key={key}>
+            <input
+              checked={recording === picked}
+              name="recording"
+              onChange={() => onSelect(key)}
+              type="radio"
+            />
+            <RecordingTile recording={recording} />
+            <span aria-hidden="true" className="meet-check">
+              <Tick02Icon size={14} />
+            </span>
+          </label>
+        );
+      })}
+    </fieldset>
+  );
+}
+
+function RecordingPicker({ close, call }: { close(): void; call: MeetCall }) {
+  const [result, setResult] = React.useState<
+    MeetActionResults["recordings"] | null
+  >(null);
+
+  const [error, setError] = React.useState("");
+  const [importing, setImporting] = React.useState(false);
+
+  const [progress, setProgress] = React.useState<MeetImportProgress | null>(
+    null
+  );
+
+  const importAbort = React.useRef<AbortController | null>(null);
+
+  const [selected, setSelected] = React.useState("");
+  const [connecting, setConnecting] = React.useState("");
+  const { user } = useAuth();
   React.useEffect(() => {
-    async function receive(event: MessageEvent) {
-      if (event.source !== window || event.origin !== window.location.origin) {
-        return;
-      }
-
-      const eventData = event.data;
-
-      if (!(eventData instanceof Object)) {
-        return;
-      }
-
-      if ("type" in eventData && eventData.type === "NAKAMA_MEET_EXTENSION") {
-        setConnected("connected" in eventData && eventData.connected === true);
-
-        return;
-      }
-
-      if (
-        !("type" in eventData) ||
-        eventData.type !== "NAKAMA_MEET_ACTION" ||
-        !("id" in eventData) ||
-        !("action" in eventData)
-      ) {
-        return;
-      }
-
-      const actions: Array<
-        | "meetings"
-        | "start-capture"
-        | "leave"
-        | "transcript"
-        | "show-transcript"
-      > = [
-        "meetings",
-        "start-capture",
-        "leave",
-        "transcript",
-        "show-transcript",
-      ];
-
-      const action = actions.find(
-        (candidate) => candidate === String(eventData.action)
-      );
-
-      if (!action) {
-        return;
-      }
-
-      const id = String(eventData.id);
-
-      const incoming =
-        "input" in eventData && eventData.input instanceof Object
-          ? eventData.input
-          : {};
-
-      const input: MeetActionInput = {
-        after: "after" in incoming ? Number(incoming.after) : undefined,
-        apiKey: "apiKey" in incoming ? String(incoming.apiKey) : undefined,
-        content: "content" in incoming ? String(incoming.content) : undefined,
-        enabled: "enabled" in incoming ? incoming.enabled === true : undefined,
-        filename:
-          "filename" in incoming ? String(incoming.filename) : undefined,
-        meetingId:
-          "meetingId" in incoming ? String(incoming.meetingId) : undefined,
-      };
-
-      try {
-        let result: MeetActionResults[MeetAction];
-
-        if (action === "show-transcript") {
-          const transcript = await call("transcript", input);
-          result = transcript;
-          setSelected(transcript.meeting);
-        } else {
-          result = await call(action, input);
+    let mounted = true;
+    call("recordings").then(
+      (value) => {
+        if (mounted) {
+          // SAFETY: The surrounding code checked this value before the assertion.
+          setResult(value as NonNullable<typeof result>);
         }
-
-        window.postMessage(
-          { id, result, type: "NAKAMA_MEET_RESULT" },
-          window.location.origin
-        );
-      } catch (reason) {
-        if (signal.aborted) {
-          return;
+      },
+      (reason) => {
+        if (mounted) {
+          setError(formatError(reason));
         }
-
-        window.postMessage(
-          { error: formatError(reason), id, type: "NAKAMA_MEET_RESULT" },
-          window.location.origin
-        );
       }
-    }
-
-    window.addEventListener("message", receive);
-
-    const ping = () =>
-      window.postMessage({ type: "NAKAMA_MEET_PING" }, window.location.origin);
-
-    ping();
-    const timer = setInterval(ping, 3000);
+    );
 
     return () => {
-      window.removeEventListener("message", receive);
-      clearInterval(timer);
+      mounted = false;
     };
-  }, [call, signal, setConnected, setSelected]);
+  }, [call]);
+
+  React.useEffect(() => {
+    if (!importing) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      call("import-progress").then(
+        (value) => setProgress(value.progress),
+        () => undefined
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [call, importing]);
+
+  React.useEffect(() => () => importAbort.current?.abort(), []);
+
+  async function importRecording(recording: Recording) {
+    const abort = new AbortController();
+    importAbort.current = abort;
+    setImporting(true);
+    setProgress(null);
+    setError("");
+
+    try {
+      await call(
+        "import-recording",
+        { fileId: recording.fileId, messageId: recording.messageId },
+        abort.signal
+      );
+      close();
+    } catch (reason) {
+      if (!abort.signal.aborted) {
+        setError(formatError(reason));
+      }
+    } finally {
+      importAbort.current = null;
+      setImporting(false);
+    }
+  }
+
+  async function connect(toolkitSlug: string) {
+    setConnecting(toolkitSlug);
+    setError("");
+
+    try {
+      const { redirectUrl } =
+        await client.connectMeetRecordingSource(toolkitSlug);
+
+      if (!(redirectUrl && isAllowedComposioRedirectUrl(redirectUrl))) {
+        throw new Error("Blocked an unexpected Composio redirect URL.");
+      }
+
+      window.location.href = redirectUrl;
+    } catch (reason) {
+      setError(formatError(reason));
+      setConnecting("");
+    }
+  }
+
+  const recordings = result?.recordings ?? [];
+
+  const recordingKey = (recording: Recording) =>
+    `${recording.messageId}:${recording.fileId}`;
+
+  const picked =
+    recordings.find((recording) => recordingKey(recording) === selected) ??
+    recordings[0];
+
+  const ready = Boolean(result?.gmailConnected && result.driveConnected);
+  const loading = !(result || error);
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (!(open || importing)) {
+          close();
+        }
+      }}
+      open
+    >
+      <DialogContent className="sm:max-w-xl">
+        {loading && <span aria-hidden="true" className="meet-loading-bar" />}
+        <DialogHeader>
+          <DialogTitle>
+            {importing ? "Importing recording" : "Import recording"}
+          </DialogTitle>
+          {loading && (
+            <p className="meet-status meet-shimmer" role="status">
+              Finding recordings…
+            </p>
+          )}
+        </DialogHeader>
+        {error && <p role="alert">{error}</p>}
+        {loading && (
+          <div aria-hidden="true" className="meet-recordings-placeholder">
+            {["48%", "40%", "54%"].map((width) => (
+              <span key={width}>
+                <span className="meet-date-tile" />
+                <span>
+                  <span style={{ width }} />
+                  <span style={{ width: "30%" }} />
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+        <RecordingSources
+          connecting={connecting}
+          isPlatformAdmin={user?.isPlatformAdmin === true}
+          onConnect={(slug) => void connect(slug)}
+          result={result}
+        />
+        <RecordingChoices
+          importing={importing}
+          onSelect={setSelected}
+          picked={picked}
+          progress={progress}
+          ready={ready}
+          recordings={recordings}
+        />
+        <DialogFooter className="meet-import-footer">
+          {importing && (
+            <p className="meet-status" role="status">
+              Keep this page open.
+            </p>
+          )}
+          <Button
+            onClick={() => (importing ? importAbort.current?.abort() : close())}
+            type="button"
+            variant="outline"
+          >
+            {importing ? "Cancel import" : "Cancel"}
+          </Button>
+          {ready && recordings.length > 0 && !importing && (
+            <Button
+              disabled={!picked}
+              onClick={() => picked && void importRecording(picked)}
+              type="button"
+            >
+              Import
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MeetingDeleteDialog({
+  call,
+  meeting,
+  onClose,
+  onDeleted,
+}: {
+  call: MeetCall;
+  meeting: Meeting | null;
+  onClose(): void;
+  onDeleted(id: string): void;
+}) {
+  if (!meeting) {
+    return null;
+  }
+
+  return (
+    <ConfirmDialog
+      confirmLabel="Delete meeting"
+      description={`This permanently deletes the meeting from ${new Date(meeting.createdAt).toLocaleString()} and its transcript. You can’t undo this.`}
+      onClose={onClose}
+      onConfirm={async () => {
+        await call("delete", { meetingId: meeting.id });
+        onDeleted(meeting.id);
+      }}
+      title="Delete meeting?"
+    />
+  );
+}
+
+const TRANSCRIPTION_PROVIDERS = [
+  { label: "OpenAI", model: "whisper-1", type: "openai" },
+  { label: "OpenRouter", model: "google/gemini-2.5-flash", type: "openrouter" },
+  { label: "Self-hosted", model: "", type: "openai_compatible" },
+] as const;
+
+type TranscriptionProvider = (typeof TRANSCRIPTION_PROVIDERS)[number];
+
+const KEY_URLS: Partial<Record<TranscriptionProvider["type"], string>> = {
+  openai: "https://platform.openai.com/api-keys",
+  openrouter: "https://openrouter.ai/keys",
+};
+
+type ModelOption = { id: string; name: string };
+
+// Router entries may send audio to a text-only model, and batch copies
+// answer later, so neither can transcribe on request.
+function isOpenRouterTranscriber(row: OpenRouterModelRow) {
+  return (
+    row.audio &&
+    !row.deprecated &&
+    !row.id.startsWith("openrouter/") &&
+    !row.id.endsWith(":batch")
+  );
+}
+
+function ModelSelect({
+  disabled,
+  models,
+  onChange,
+  placeholder,
+  value,
+}: {
+  disabled: boolean;
+  models: readonly ModelOption[];
+  onChange: (model: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  const selected = models.find((model) => model.id === value);
+
+  return (
+    <div className="meet-provider-field">
+      <span>Model</span>
+      <SettingsPicker
+        ariaLabel="Model"
+        disabled={disabled || models.length === 0}
+        emptyLabel="No model found."
+        onValueChange={onChange}
+        options={models.map((model) => ({
+          label: model.name,
+          value: model.id,
+        }))}
+        searchPlaceholder="Search models…"
+        triggerLabel={selected?.name ?? placeholder}
+        value={value}
+      />
+    </div>
+  );
+}
+
+function providerLabel(type: string) {
+  return (
+    TRANSCRIPTION_PROVIDERS.find((provider) => provider.type === type)?.label ??
+    type
+  );
+}
+
+// OpenAI lists the allowed transcription models; OpenRouter loads the audio
+// models from its catalog. Self-hosted model names are typed, not listed.
+function useTranscriptionModels(
+  type: TranscriptionProvider["type"],
+  model: string
+) {
+  const openRouter = type === "openrouter";
+
+  const catalog = useQuery({
+    ...openRouterModelsQueryOptions,
+    enabled: openRouter,
+  });
+
+  const models: readonly ModelOption[] = openRouter
+    ? (catalog.data ?? []).filter(isOpenRouterTranscriber)
+    : TRANSCRIPTION_MODEL_OPTIONS;
+
+  // Keep the default when the list has it, else the first model.
+  const selectedModel =
+    type === "openai_compatible" || models.some(({ id }) => id === model)
+      ? model
+      : (models[0]?.id ?? "");
+
+  return {
+    catalogError:
+      openRouter && catalog.error ? formatError(catalog.error) : null,
+    loading: openRouter && catalog.isLoading,
+    models,
+    selectedModel,
+  };
+}
+
+// Connects a provider for uploads and imports: checks the key, adds the
+// provider and makes it the workspace transcription model.
+function TranscriptionSetup({
+  onCancel,
+  onSaved,
+}: {
+  onCancel?: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [provider, setProvider] = React.useState<TranscriptionProvider>(
+    TRANSCRIPTION_PROVIDERS[0]
+  );
+
+  const [apiKey, setApiKey] = React.useState("");
+  const [baseUrl, setBaseUrl] = React.useState("");
+  const [model, setModel] = React.useState<string>(provider.model);
+  const [testing, setTesting] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const createProvider = useCreateProviderMutation();
+  const saveTranscription = useSaveTranscriptionSettings();
+  const custom = provider.type === "openai_compatible";
+  const keyUrl = KEY_URLS[provider.type];
+
+  const { catalogError, loading, models, selectedModel } =
+    useTranscriptionModels(provider.type, model);
+
+  const saving = React.useRef(false);
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+
+    if (saving.current) {
+      return;
+    }
+
+    saving.current = true;
+    setTesting(true);
+    setError("");
+
+    try {
+      const { status } = await client.checkProviderKey({
+        apiKey: apiKey.trim(),
+        baseUrl: custom ? baseUrl.trim() : undefined,
+        type: provider.type,
+      });
+
+      if (status === "rejected" || status === "needs-key") {
+        setError(`${provider.label} did not accept this key.`);
+
+        return;
+      }
+
+      if (status === "unreachable") {
+        setError(`Could not reach ${custom ? "this URL" : provider.label}.`);
+
+        return;
+      }
+
+      const created = await createProvider.mutateAsync({
+        apiKey: apiKey.trim() || undefined,
+        baseUrl: custom ? baseUrl.trim() : undefined,
+        // Self-hosted providers have no default name or model list.
+        customModels: custom ? [{ id: selectedModel.trim() }] : undefined,
+        label: custom ? "Self-hosted transcription" : undefined,
+        type: provider.type,
+      });
+
+      await saveTranscription.mutateAsync(
+        encodeModelSelection(created.provider.id, selectedModel.trim())
+      );
+      await onSaved();
+    } catch (reason) {
+      setError(formatError(reason));
+    } finally {
+      saving.current = false;
+      setTesting(false);
+    }
+  }
+
+  return (
+    <section aria-label="Transcription provider" className="meet-provider">
+      <h2>Connect a transcription provider</h2>
+      <div aria-label="Provider" className="meet-provider-tabs" role="tablist">
+        {TRANSCRIPTION_PROVIDERS.map((option) => (
+          <button
+            aria-selected={option.type === provider.type}
+            disabled={testing}
+            key={option.type}
+            onClick={() => {
+              setProvider(option);
+              setModel(option.model);
+              setApiKey("");
+              setError("");
+            }}
+            role="tab"
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <form className="meet-form" onSubmit={save}>
+        {custom && (
+          <label>
+            Base URL
+            <Input
+              disabled={testing}
+              onChange={(event) => setBaseUrl(event.target.value)}
+              placeholder="http://localhost:8000/v1"
+              required
+              type="url"
+              value={baseUrl}
+            />
+          </label>
+        )}
+        <div className="meet-provider-fields">
+          {custom ? (
+            <label>
+              Model
+              <Input
+                disabled={testing}
+                onChange={(event) => setModel(event.target.value)}
+                placeholder="whisper-1"
+                required
+                value={model}
+              />
+            </label>
+          ) : (
+            <ModelSelect
+              disabled={testing}
+              models={models}
+              onChange={setModel}
+              placeholder={loading ? "Loading models…" : "No models"}
+              value={selectedModel}
+            />
+          )}
+          <label>
+            {custom ? "API key (optional)" : "API key"}
+            <Input
+              aria-invalid={error ? true : undefined}
+              autoComplete="off"
+              disabled={testing}
+              onChange={(event) => {
+                setApiKey(event.target.value);
+                setError("");
+              }}
+              placeholder={provider.type === "openrouter" ? "sk-or-…" : "sk-…"}
+              required={!custom}
+              type="password"
+              value={apiKey}
+            />
+          </label>
+        </div>
+        {catalogError && (
+          <p className="meet-provider-error" role="alert">
+            <AlertCircleIcon aria-hidden="true" size={16} />
+            {catalogError}
+          </p>
+        )}
+        {error && (
+          <p className="meet-provider-error" role="alert">
+            <AlertCircleIcon aria-hidden="true" size={16} />
+            {error}
+          </p>
+        )}
+        <div className="meet-provider-actions">
+          {keyUrl && (
+            <a href={keyUrl} rel="noreferrer" target="_blank">
+              Get a key
+            </a>
+          )}
+          {onCancel && (
+            <Button
+              disabled={testing}
+              onClick={onCancel}
+              type="button"
+              variant="outline"
+            >
+              Cancel
+            </Button>
+          )}
+          <Button
+            aria-busy={testing}
+            disabled={testing || !selectedModel.trim()}
+            type="submit"
+          >
+            {testing ? "Testing…" : "Save and test"}
+          </Button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function TranscriptionConnected({
+  onChange,
+  overview,
+}: {
+  onChange?: () => void;
+  overview: Overview;
+}) {
+  // Installs set up before the provider picker transcribe with OpenAI Whisper.
+  const transcription = overview.transcription ?? {
+    model: "whisper-1",
+    type: "openai",
+  };
+
+  return (
+    <section aria-label="Transcription provider" className="meet-provider-row">
+      <div className="meet-setup-copy">
+        <strong>{providerLabel(transcription.type)}</strong>
+        <span className="meet-provider-model">{transcription.model}</span>
+      </div>
+      {onChange && (
+        <Button onClick={onChange} variant="outline">
+          Change
+        </Button>
+      )}
+    </section>
+  );
+}
+
+function LiveCaptureSetup({ liveReady }: { liveReady: boolean }) {
+  return (
+    <section aria-label="Live capture setup" className="meet-setup">
+      <span aria-hidden="true" className="meet-setup-icon">
+        <Mic01Icon size={18} />
+      </span>
+      <div className="meet-setup-copy">
+        <strong>Record live calls</strong>
+        <span>
+          {liveReady
+            ? "Install the Chrome extension, open its side panel and connect this Airin address."
+            : "Live calls need an OpenAI key."}
+        </span>
+      </div>
+      <a
+        className={buttonVariants({ variant: "outline" })}
+        download
+        href="/google-meet-extension.zip"
+      >
+        <Download01Icon aria-hidden="true" size={16} />
+        Download extension
+      </a>
+    </section>
+  );
+}
+
+// Same alphabet as the server's pairing codes: no 0/O, 1/I/L or U.
+const PAIR_CODE =
+  /^([23456789ABCDEFGHJKMNPQRSTVWXYZ]{3})-?([23456789ABCDEFGHJKMNPQRSTVWXYZ]{3})$/;
+
+function parsePairCode(value: string) {
+  const match = PAIR_CODE.exec(value.trim().toUpperCase());
+
+  return match ? `${match[1]}-${match[2]}` : null;
+}
+
+// The Meet extension opens ?pair=<code> so a member can approve it.
+function ExtensionApproval({
+  call,
+  enabled,
+  onApproved,
+}: {
+  call: MeetCall;
+  enabled: boolean;
+  onApproved(): void;
+}) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [value, setValue] = React.useState(() => searchParams.get("pair"));
+  const code = value === null ? null : parsePairCode(value);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [approved, setApproved] = React.useState(false);
+
+  async function approve() {
+    if (!(code && enabled)) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+
+    try {
+      await call("approve-extension", { code });
+      setApproved(true);
+      dropPairParam();
+      onApproved();
+    } catch (reason) {
+      // A 400 is a wrong, used or expired code. Never show raw server text.
+      setError(
+        reason instanceof AirinApiError && reason.status === 400
+          ? "This code is wrong, used or expired. Get a new code from the extension."
+          : "Could not connect this browser. Try again."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function dropPairParam() {
+    setSearchParams(
+      (params) => {
+        params.delete("pair");
+
+        return params;
+      },
+      { replace: true }
+    );
+  }
+
+  function close() {
+    setValue(null);
+    dropPairParam();
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  let blocked = "";
+
+  if (!code) {
+    blocked = "This code is not valid. Get a new code from the extension.";
+  } else if (!enabled) {
+    blocked = "Google Meet is disabled";
+  }
+
+  return (
+    <section aria-label="Connect browser" className="meet-setup">
+      <span aria-hidden="true" className="meet-setup-icon">
+        <Tick02Icon size={18} />
+      </span>
+      <div className="meet-setup-copy">
+        <strong>Connect browser</strong>
+        {code && <span className="meet-provider-model">{code}</span>}
+        {approved && <span role="status">Browser connected</span>}
+        {(error || blocked) && <p role="alert">{error || blocked}</p>}
+      </div>
+      {approved ? (
+        <Button onClick={close} variant="outline">
+          Done
+        </Button>
+      ) : (
+        <div className="meet-row">
+          <Button disabled={busy} onClick={close} variant="outline">
+            Cancel
+          </Button>
+          <Button
+            disabled={busy || Boolean(blocked)}
+            onClick={() => void approve()}
+          >
+            {busy ? "Approving…" : "Approve"}
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function formatDay(time: number) {
+  return new Date(time).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function ExtensionKeys({
+  call,
+  enabled,
+  onLoaded,
+  signal,
+}: {
+  call: MeetCall;
+  enabled: boolean;
+  onLoaded(count: number): void;
+  signal: AbortSignal;
+}) {
+  const [keys, setKeys] = React.useState<MeetExtensionKey[] | null>(null);
+  const [error, setError] = React.useState("");
+  const [removing, setRemoving] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    try {
+      const result = await call("extension-keys");
+
+      if (!signal.aborted) {
+        setKeys(result.keys);
+        setError("");
+        onLoaded(result.keys.length);
+      }
+    } catch (reason) {
+      if (!signal.aborted) {
+        setError(formatError(reason));
+      }
+    }
+  }, [call, onLoaded, signal]);
+
+  React.useEffect(() => {
+    if (enabled) {
+      void load();
+    }
+  }, [enabled, load]);
+
+  async function remove(keyId: string) {
+    setRemoving(keyId);
+    setError("");
+
+    try {
+      await call("revoke-extension", { keyId });
+      await load();
+    } catch (reason) {
+      if (!signal.aborted) {
+        setError(formatError(reason));
+      }
+    } finally {
+      setRemoving(null);
+    }
+  }
+
+  if (!enabled) {
+    return null;
+  }
+
+  return (
+    <Card className="meet-card">
+      <div className="meet-card-heading">
+        <h2>Connected browsers</h2>
+      </div>
+      {error && (
+        <p className="meet-empty" role="alert">
+          {error}
+        </p>
+      )}
+      {keys?.length ? (
+        <ul className="meet-list">
+          {keys.map((key) => (
+            <li className="meet-key" key={key.id}>
+              <span className="meet-meta">
+                <span className="meet-meeting-title">{key.label}</span>
+                <span className="meet-status">
+                  Added {formatDay(key.createdAt)}
+                  {" · "}
+                  {key.lastUsedAt
+                    ? `Last used ${formatDay(key.lastUsedAt)}`
+                    : "Not used yet"}
+                </span>
+              </span>
+              <Button
+                disabled={removing !== null}
+                onClick={() => void remove(key.id)}
+                size="sm"
+                variant="outline"
+              >
+                {removing === key.id ? "Removing…" : "Remove"}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="meet-empty">
+          {keys ? "No connected browsers." : "Loading…"}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+// Admins connect or change the provider; members only see what is set.
+function TranscriptionPanel({
+  onSaved,
+  overview,
+}: {
+  onSaved: () => Promise<void>;
+  overview: Overview;
+}) {
+  const [changing, setChanging] = React.useState(false);
+
+  if (overview.transcriptionError && !changing) {
+    return (
+      <div className="meet-provider-row">
+        <p className="meet-provider-error" role="alert">
+          <AlertCircleIcon aria-hidden="true" size={16} />
+          {overview.transcriptionError}
+        </p>
+        {overview.canConfigure && (
+          <Button onClick={() => setChanging(true)} variant="outline">
+            Change
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  if (overview.canConfigure && (changing || !overview.configured)) {
+    return (
+      <TranscriptionSetup
+        onCancel={overview.configured ? () => setChanging(false) : undefined}
+        onSaved={async () => {
+          await onSaved();
+          setChanging(false);
+        }}
+      />
+    );
+  }
+
+  if (!overview.configured) {
+    return (
+      <p className="meet-status">
+        Ask an admin to connect a transcription provider.
+      </p>
+    );
+  }
+
+  return (
+    <TranscriptionConnected
+      onChange={overview.canConfigure ? () => setChanging(true) : undefined}
+      overview={overview}
+    />
+  );
 }
 
 function MeetPage({ call, signal }: { call: MeetCall; signal: AbortSignal }) {
   const [overview, setOverview] = React.useState<Overview | null>(null);
   const [error, setError] = React.useState("");
-  const [extensionConnected, setExtensionConnected] = React.useState(false);
+  // A paired browser holds a live Meet key; the page reads them, not the tab.
+  const [browserCount, setBrowserCount] = React.useState(0);
   const [busy, setBusy] = React.useState(false);
-  const [settings, setSettings] = React.useState<boolean | null>(null);
+  const [settings, setSettings] = React.useState(false);
   const [deleting, setDeleting] = React.useState<Meeting | null>(null);
   const [selected, setSelected] = React.useState<Meeting | null>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Composio OAuth returns here with ?import=recording to resume the import.
+  const [recordingPicker, setRecordingPicker] = React.useState(
+    () => searchParams.get("import") === "recording"
+  );
+
+  // Bumped after an approval so the browser list reloads.
+  const [keysVersion, setKeysVersion] = React.useState(0);
+
+  // Extension v0.2 sends its actions through this page. Answer each with an
+  // update message and run nothing.
+  React.useEffect(() => {
+    function refuse(event: MessageEvent) {
+      const data: unknown = event.data;
+
+      if (
+        event.source !== window ||
+        event.origin !== window.location.origin ||
+        !(data instanceof Object) ||
+        !("type" in data) ||
+        data.type !== "AIRIN_MEET_ACTION" ||
+        !("id" in data)
+      ) {
+        return;
+      }
+
+      window.postMessage(
+        {
+          error: "Update the Airin Meet extension to v0.3.",
+          id: String(data.id),
+          type: "AIRIN_MEET_RESULT",
+        },
+        window.location.origin
+      );
+    }
+
+    window.addEventListener("message", refuse);
+
+    return () => window.removeEventListener("message", refuse);
+  }, []);
+
+  React.useEffect(() => {
+    if (searchParams.has("import")) {
+      setSearchParams(
+        (params) => {
+          params.delete("import");
+
+          return params;
+        },
+        { replace: true }
+      );
+    }
+  }, [searchParams, setSearchParams]);
   const uploadInput = React.useRef<HTMLInputElement>(null);
 
   async function upload(file: File) {
@@ -638,8 +1845,6 @@ function MeetPage({ call, signal }: { call: MeetCall; signal: AbortSignal }) {
       setUploading(false);
     }
   }
-
-  useExtensionBridge(call, signal, setExtensionConnected, setSelected);
 
   React.useEffect(() => {
     let alive = true;
@@ -676,7 +1881,7 @@ function MeetPage({ call, signal }: { call: MeetCall; signal: AbortSignal }) {
     };
   }, [call, signal]);
 
-  async function action(name: MeetAction, input: MeetActionInput) {
+  async function action(name: MeetSessionAction, input: MeetActionInput) {
     setBusy(true);
     setError("");
 
@@ -691,23 +1896,28 @@ function MeetPage({ call, signal }: { call: MeetCall; signal: AbortSignal }) {
   }
 
   const meetings = overview?.meetings ?? [];
+  const live = meetings.filter(isActive);
 
-  const groups = [
-    {
-      meetings: meetings.filter((meeting) =>
-        ["queued", "joining", "recording", "transcribing"].includes(
-          meeting.state
-        )
-      ),
-      title: "In progress",
-    },
-    {
-      meetings: meetings.filter((meeting) =>
-        ["finished", "failed"].includes(meeting.state)
-      ),
-      title: "Meeting history",
-    },
-  ];
+  const deleteDialog = (
+    <MeetingDeleteDialog
+      call={call}
+      meeting={deleting}
+      onClose={() => setDeleting(null)}
+      onDeleted={(id) => {
+        setSelected(null);
+        setOverview((previous) =>
+          previous
+            ? {
+                ...previous,
+                meetings: previous.meetings.filter(
+                  (meeting) => meeting.id !== id
+                ),
+              }
+            : previous
+        );
+      }}
+    />
+  );
 
   if (selected) {
     return (
@@ -719,135 +1929,116 @@ function MeetPage({ call, signal }: { call: MeetCall; signal: AbortSignal }) {
           meeting={
             meetings.find((meeting) => meeting.id === selected.id) ?? selected
           }
+          onDelete={setDeleting}
           signal={signal}
         />
+        {deleteDialog}
       </section>
     );
   }
 
   return (
     <section className="meet-page">
-      <a download href="/google-meet-extension.zip">
-        Download Chrome extension
-      </a>
-      {error && <p role="alert">{error}</p>}
-      <Card className="meet-card">
-        <div className="meet-card-heading">
-          <h2>Google Meet</h2>
+      <header className="meet-header">
+        <div className="meet-row">
+          <h1>Google Meet</h1>
+          <ConnectionStatus connected={browserCount > 0} overview={overview} />
+        </div>
+        <div className="meet-row">
+          <input
+            accept=".md,.markdown,.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm"
+            aria-label="Upload audio or Markdown"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+
+              if (file) {
+                void upload(file);
+              }
+            }}
+            ref={uploadInput}
+            type="file"
+          />
+          <Button
+            disabled={uploading}
+            onClick={() => uploadInput.current?.click()}
+            title="Audio up to 7 MB or Markdown up to 1 MB"
+            variant="outline"
+          >
+            <Upload01Icon aria-hidden="true" size={16} />
+            {uploading ? "Importing…" : "Upload file"}
+          </Button>
+          <Button
+            disabled={!(overview?.enabled && overview.configured)}
+            onClick={() => setRecordingPicker(true)}
+          >
+            <Video01Icon aria-hidden="true" size={16} />
+            Import recording
+          </Button>
           {overview?.canConfigure && (
             <Button
+              aria-label="Settings"
               onClick={() => setSettings(true)}
-              size="sm"
+              size="icon"
+              title="Settings"
               variant="outline"
             >
-              Settings
+              <Settings01Icon aria-hidden="true" size={16} />
             </Button>
           )}
         </div>
-        <div
-          className="meet-card-heading"
-          style={{ borderBottom: 0, borderTop: "1px solid var(--border)" }}
-        >
-          <ConnectionStatus
-            connected={extensionConnected}
-            overview={overview}
+      </header>
+      {overview && (
+        <TranscriptionPanel
+          onSaved={async () => setOverview(await call("meetings"))}
+          overview={overview}
+        />
+      )}
+      {overview && (
+        <>
+          <ExtensionApproval
+            call={call}
+            enabled={overview.enabled}
+            onApproved={() => setKeysVersion((value) => value + 1)}
           />
-        </div>
-      </Card>
+          {browserCount === 0 && (
+            <LiveCaptureSetup liveReady={overview.liveReady} />
+          )}
+          <ExtensionKeys
+            call={call}
+            enabled={overview.enabled}
+            key={keysVersion}
+            onLoaded={setBrowserCount}
+            signal={signal}
+          />
+        </>
+      )}
+      {error && <p role="alert">{error}</p>}
+      {live.map((meeting) => (
+        <LiveMeeting
+          busy={busy}
+          call={call}
+          key={meeting.id}
+          meeting={meeting}
+          onOpen={setSelected}
+          onStop={(meetingId) => void action("leave", { meetingId })}
+          signal={signal}
+        />
+      ))}
       {overview ? (
-        groups.flatMap((group) => {
-          if (group.title === "In progress" && !group.meetings.length) {
-            return [];
-          }
-
-          return [
-            <section key={group.title}>
-              <Card className="meet-card">
-                <div className="meet-card-heading">
-                  <h2>{group.title}</h2>
-                  <div className="meet-row">
-                    <span className="meet-status">{group.meetings.length}</span>
-                    {group.title === "Meeting history" && (
-                      <>
-                        <input
-                          accept=".md,.markdown,.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm"
-                          aria-label="Upload audio or Markdown"
-                          hidden
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            event.target.value = "";
-
-                            if (file) {
-                              void upload(file);
-                            }
-                          }}
-                          ref={uploadInput}
-                          type="file"
-                        />
-                        <Button
-                          disabled={uploading}
-                          onClick={() => uploadInput.current?.click()}
-                          size="sm"
-                          title="Audio up to 7 MB or Markdown up to 1 MB"
-                          variant="outline"
-                        >
-                          {uploading ? "Importing…" : "Upload file"}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {group.meetings.length ? (
-                  <ul className="meet-list">
-                    {group.meetings.map((meeting) => (
-                      <MeetingRow
-                        busy={busy}
-                        key={meeting.id}
-                        meeting={meeting}
-                        onDelete={setDeleting}
-                        onOpen={setSelected}
-                        onStop={(meetingId) =>
-                          void action("leave", { meetingId })
-                        }
-                      />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="meet-empty">No meetings yet.</p>
-                )}
-              </Card>
-            </section>,
-          ];
-        })
+        <MeetingHistory meetings={meetings} onOpen={setSelected} />
       ) : (
         <p>Loading…</p>
       )}
-      {deleting && (
-        <ConfirmDialog
-          confirmLabel="Delete meeting"
-          description={`This permanently deletes the meeting from ${new Date(deleting.createdAt).toLocaleString()} and its transcript. You can’t undo this.`}
-          onClose={() => setDeleting(null)}
-          onConfirm={async () => {
-            await call("delete", { meetingId: deleting.id });
-            setOverview((previous) =>
-              previous
-                ? {
-                    ...previous,
-                    meetings: previous.meetings.filter(
-                      (meeting) => meeting.id !== deleting.id
-                    ),
-                  }
-                : previous
-            );
-          }}
-          title="Delete meeting?"
-        />
+      {deleteDialog}
+      {recordingPicker && (
+        <RecordingPicker call={call} close={() => setRecordingPicker(false)} />
       )}
-      {(settings ?? (overview?.canConfigure && !overview.configured)) && (
+      {settings && (
         <Settings
           call={call}
           close={() => setSettings(false)}
-          configured={overview?.configured === true}
           enabled={overview?.enabled !== false}
         />
       )}
@@ -874,9 +2065,10 @@ function OrganizationMeetPage({ orgId }: { orgId: string }) {
   React.useEffect(() => {
     const abort = new AbortController();
     setScope({
-      call: async <Action extends MeetAction>(
+      call: async <Action extends MeetSessionAction>(
         action: Action,
-        input?: MeetActionInput
+        input?: MeetActionInput,
+        signal?: AbortSignal
       ): Promise<MeetActionResults[Action]> => {
         abort.signal.throwIfAborted();
 
@@ -884,7 +2076,7 @@ function OrganizationMeetPage({ orgId }: { orgId: string }) {
           action,
           input,
           orgId,
-          abort.signal
+          signal ? AbortSignal.any([abort.signal, signal]) : abort.signal
         );
 
         abort.signal.throwIfAborted();

@@ -1,4 +1,4 @@
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useMemo, useState } from "react";
 import { CatalogModelsBrowseList } from "@/components/CatalogModelsBrowseList";
 import {
@@ -6,28 +6,10 @@ import {
   ModelCostFilterSelect,
 } from "@/components/ModelBrowseShell";
 import { formatBrowseCapabilities } from "@/components/model-browse-utils";
-import { client } from "@/lib/client";
 import {
-  normalizeOpenRouterModels,
   type OpenRouterModelRow,
-  type OpenRouterModelsApiResponse,
+  openRouterModelsQueryOptions,
 } from "@/lib/openrouter-models";
-import { queryKeys } from "@/lib/query-keys";
-
-async function fetchOpenRouterModels(): Promise<OpenRouterModelRow[]> {
-  // SAFETY: The enclosing parser checks the value before this conversion.
-  const data = (await client.getExternalModelCatalog(
-    "openrouter"
-  )) as OpenRouterModelsApiResponse;
-
-  return normalizeOpenRouterModels(data);
-}
-
-const openRouterModelsQueryOptions = queryOptions({
-  queryFn: fetchOpenRouterModels,
-  queryKey: queryKeys.openRouterModels,
-  staleTime: 1000 * 60 * 30,
-});
 
 function useOpenRouterModels() {
   return useQuery(openRouterModelsQueryOptions);
@@ -36,6 +18,7 @@ function useOpenRouterModels() {
 type OpenRouterBrowseSelectHandler = (row: OpenRouterModelRow) => void;
 
 interface OpenRouterModelsBrowseListProps {
+  addedIds?: ReadonlySet<string>;
   className?: string;
   multiSelect?: boolean;
   onAddMany?: (rows: OpenRouterModelRow[]) => void;
@@ -45,6 +28,7 @@ interface OpenRouterModelsBrowseListProps {
 export function OpenRouterModelsBrowseList({
   onSelect,
   className,
+  addedIds,
   multiSelect,
   onAddMany,
 }: OpenRouterModelsBrowseListProps) {
@@ -62,6 +46,7 @@ export function OpenRouterModelsBrowseList({
 
   return (
     <CatalogModelsBrowseList<OpenRouterModelRow>
+      addedIds={addedIds}
       className={className}
       isDeprecated={(row) => row.deprecated}
       multiSelect={multiSelect}

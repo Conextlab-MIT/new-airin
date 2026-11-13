@@ -6,32 +6,37 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
       name="viewport"
     >
-    <title>Nakama</title>
-    <link href="/nakama-logo-dither.png" rel="icon" type="image/png">
+    <title>Airin</title>
+    <link href="/favicon-32.png" rel="icon" sizes="32x32" type="image/png">
+    <link href="/favicon-64.png" rel="icon" sizes="64x64" type="image/png">
+    <link
+      href="/icons/icon-192-v3.png"
+      rel="icon"
+      sizes="192x192"
+      type="image/png"
+    >
+    <link href="/icons/apple-touch-icon-v3.png" rel="apple-touch-icon">
     <link href="/manifest.webmanifest" rel="manifest">
-    <link href="/icons/apple-touch-icon.png" rel="apple-touch-icon">
     <meta
       content="#ffffff"
       media="(prefers-color-scheme: light)"
       name="theme-color"
     >
     <meta
-      content="#0a0a0b"
+      content="#0b0a10"
       media="(prefers-color-scheme: dark)"
       name="theme-color"
     >
     <meta content="yes" name="mobile-web-app-capable">
     <meta content="yes" name="apple-mobile-web-app-capable">
-    <meta content="Nakama" name="apple-mobile-web-app-title">
+    <meta content="Airin" name="apple-mobile-web-app-title">
     <script>
     "use strict";
 
     (() => {
-      var stored = localStorage.getItem("nakama-theme");
-
-      var resolved = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
+      var stored = localStorage.getItem("airin-theme");
+      // Fresh installs default to light for business owners.
+      var resolved = "light";
 
       if (stored === "light" || stored === "dark") {
         resolved = stored;
@@ -43,17 +48,6 @@
 
       document.documentElement.classList.toggle("dark", resolved === "dark");
       document.documentElement.style.colorScheme = resolved;
-
-      var favicon = document.querySelector('link[rel="icon"]');
-
-      if (favicon) {
-        favicon.setAttribute(
-          "href",
-          resolved === "light"
-            ? "/nakama-logo-dither-light.png"
-            : "/nakama-logo-dither.png"
-        );
-      }
     })();
     </script>
   </head>

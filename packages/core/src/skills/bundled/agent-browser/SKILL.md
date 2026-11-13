@@ -1,7 +1,6 @@
 ---
 name: agent-browser
 description: Use for login-walled portals and headless browser automation with agent-browser. Skip public HTTP reading and explain-only questions.
-include-body-on-match: true
 ---
 
 Use this skill when the task needs a **real browser**: login walls, forms, multi-step UI, or pages that `web_fetch` / `web_search` cannot reach.
@@ -26,12 +25,12 @@ If `bash` returns `command not found`, `ENOENT`, or similar for `agent-browser`,
 
 ### Optional: CloakBrowser (stealth Chromium)
 
-Stock Chrome from `agent-browser install` is the default. Use [CloakBrowser](https://github.com/CloakHQ/CloakBrowser) only when the site blocks that Chrome (bot detection / antibot). Cloak is **not** the default and is **not** bundled with Nakama.
+Stock Chrome from `agent-browser install` is the default. Use [CloakBrowser](https://github.com/CloakHQ/CloakBrowser) only when the site blocks that Chrome (bot detection / antibot). Cloak is **not** the default and is **not** bundled with Airin.
 
 The operator installs Cloak on the **same host** that runs `bash` and points agent-browser at Cloak's binary:
 
 ```bash
-# Host env for the Nakama process (inherited by bash)
+# Host env for the Airin process (inherited by bash)
 export AGENT_BROWSER_EXECUTABLE_PATH="/path/to/cloak-chromium"
 export AGENT_BROWSER_ARGS="<stealth args from Cloak's agent-browser example>"
 ```

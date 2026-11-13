@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import type { OrgRole } from "./contract";
 import { DISCORD_API_BASE_URL, DISCORD_USER_AGENT } from "./discord-config";
 import { isTelegramUserAuthorized } from "./telegram-config";
@@ -65,8 +65,8 @@ export function isTelegramDeliveryChatAuthorized(
 
 export function automationDeliveryDestinationForbidden(
   channel: "Discord" | "Telegram"
-): NakamaApiError {
-  return new NakamaApiError(
+): AirinApiError {
+  return new AirinApiError(
     `Ask an organization admin to approve this ${channel} destination. Members can only send automation results to their own paired conversations.`,
     403
   );
@@ -96,7 +96,7 @@ export async function assertTelegramBotCanPostToChat(options: {
   );
 
   if (!response.ok) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Telegram chat ${options.chatId} is not reachable by the configured bot.`,
       400
     );
@@ -110,7 +110,7 @@ export async function assertTelegramBotCanPostToChat(options: {
     payload.success &&
     payload.data.result?.permissions?.can_send_messages === false
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `The configured Telegram bot cannot post in chat ${options.chatId}.`,
       400
     );
@@ -152,7 +152,7 @@ export async function assertDiscordBotCanPostToChannel(options: {
   const botId = await resolveDiscordBotId(options.botToken, fetchImpl);
 
   if (!botId) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Could not verify the Discord bot for this channel. Check the Discord integration.",
       400
     );
@@ -169,7 +169,7 @@ export async function assertDiscordBotCanPostToChannel(options: {
   );
 
   if (!response.ok) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Discord channel ${options.channelId} is not reachable by the configured bot (${response.status}: ${await readErrorSummary(response)}).`,
       400
     );
@@ -188,7 +188,7 @@ export async function assertDiscordBotCanPostToChannel(options: {
     !hasDiscordPermission(granted, DISCORD_VIEW_CHANNEL) ||
     !hasDiscordPermission(granted, DISCORD_SEND_MESSAGES)
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `The configured Discord bot cannot post in channel ${options.channelId}.`,
       400
     );

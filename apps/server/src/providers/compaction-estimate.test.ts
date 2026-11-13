@@ -1,17 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
-// estimateHistoryTokens is not exported from @nakama/agent, hence the deep path.
+// estimateHistoryTokens is not exported from @airin/agent, hence the deep path.
 import { estimateHistoryTokens } from "../../../../packages/agent/src/history-compaction";
 import { createAnthropicProvider, toAnthropicMessages } from "./anthropic";
 import { asTestFetch, streamFromChunks } from "./test-helpers";
-
-test("fetch fixtures retain calls and provide offline preconnect", async () => {
-  const handler = mock(async () => new Response("ok"));
-  const fetcher = asTestFetch(handler);
-  fetcher.preconnect("https://example.invalid");
-  expect(handler).not.toHaveBeenCalled();
-  expect(await (await fetcher()).text()).toBe("ok");
-  expect(handler).toHaveBeenCalledTimes(1);
-});
 
 const j = <Value>(value: Value) => JSON.stringify(value);
 

@@ -4,7 +4,7 @@ import type {
   InviteOrgMemberRequest,
   PublishOrgSharedResourceRequest,
   UpdateOrgMemberRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   queryOptions,
   useMutation,
@@ -114,6 +114,23 @@ function invalidateOrgMembers(
   ]);
 }
 
+export function useOrgInvites(orgId: string | null) {
+  return useQuery({
+    enabled: Boolean(orgId),
+    queryFn: () => client.listOrgInvites(orgId ?? ""),
+    queryKey: queryKeys.orgInvites(orgId ?? ""),
+  });
+}
+
+export function useRevokeOrgInvite(orgId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (inviteId: string) => client.revokeOrgInvite(orgId, inviteId),
+    onSuccess: () => invalidateOrgMembers(queryClient, orgId),
+  });
+}
+
 export function useInviteOrgMember(orgId: string) {
   const queryClient = useQueryClient();
 
@@ -145,6 +162,17 @@ export function useUpdateOrgMember(orgId: string) {
       userId: string;
       request: UpdateOrgMemberRequest;
     }) => client.updateOrgMember(orgId, userId, request),
+    onSuccess: () => invalidateOrgMembers(queryClient, orgId),
+  });
+}
+
+/** Disabling is install-wide and needs a platform admin, like the route. */
+export function useSetOrgMemberDisabled(orgId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ disabled, userId }: { disabled: boolean; userId: string }) =>
+      client.setPlatformOrgMemberDisabled(orgId, userId, disabled),
     onSuccess: () => invalidateOrgMembers(queryClient, orgId),
   });
 }

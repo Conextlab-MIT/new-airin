@@ -1,4 +1,4 @@
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import {
   type QueryCacheNotifyEvent,
   QueryClient,
@@ -12,7 +12,7 @@ export const queryClient = new QueryClient({
       // A retry after a 429 only spends more of the budget it just ran out of.
       retry: (failureCount, error) =>
         failureCount < 1 &&
-        !(error instanceof NakamaApiError && error.status === 429),
+        !(error instanceof AirinApiError && error.status === 429),
     },
   },
 });
@@ -29,7 +29,7 @@ export async function invalidateQueries(
 export function onGlobalQueryError(event: QueryCacheNotifyEvent) {
   const error = event.query?.state?.error;
 
-  if (error instanceof NakamaApiError && error.status === 401) {
+  if (error instanceof AirinApiError && error.status === 401) {
     window.location.href = "/login";
   }
 }

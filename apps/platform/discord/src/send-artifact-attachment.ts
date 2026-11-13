@@ -3,7 +3,7 @@ import {
   formatDiscordAttachmentSizeLimitMessage,
   formatDiscordUnsupportedAttachmentMessage,
   isDiscordAttachableArtifact,
-} from "@nakama/core/discord-attachment";
+} from "@airin/core/discord-attachment";
 import { AttachmentBuilder, type TextBasedChannel } from "discord.js";
 
 export interface SendArtifactAttachmentInput {

@@ -1,12 +1,15 @@
-import { OpenAPIHono } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   formatServerError,
   log,
-  NakamaApiError,
   reportError,
-} from "@nakama/core";
+} from "@airin/core";
+import { isHtmlArtifactMimeType } from "@airin/core/artifact-mime";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import { bodyLimit } from "hono/body-limit";
+import { compress } from "hono/compress";
 import { requestId } from "hono/request-id";
+import { closeAgentGroupDatabases } from "../services/agent-group-store";
 import { sessionTurnRegistry } from "../services/session-turn-registry";
 import { tryServeStaticWeb } from "../static-web";
 import { createAuditLogMiddleware } from "./audit-log";
@@ -15,7 +18,13 @@ import type { ServerOptions } from "./context";
 import { serializeHttpOpenApiSpec } from "./openapi";
 import { createOrgContextMiddleware } from "./org-middleware";
 import { createRateLimitMiddleware } from "./rate-limit-middleware";
+import { MAX_HTTP_REQUEST_BODY_LIMIT_BYTES } from "./shared";
+
+export { MAX_HTTP_REQUEST_BODY_LIMIT_BYTES } from "./shared";
+
 import { registerAcpMcpRoutes } from "./routes/acp-mcp";
+import { registerAgentGroupRoutes } from "./routes/agent-groups";
+import { registerAgentMarketplaceRoutes } from "./routes/agent-marketplace";
 import { registerArtifactShareRoutes } from "./routes/artifact-shares";
 import { registerAuditEventRoutes } from "./routes/audit-events";
 import { registerAuthRoutes } from "./routes/auth";
@@ -27,6 +36,7 @@ import {
   registerComposioRoutes,
 } from "./routes/composio";
 import { registerDataPortabilityRoutes } from "./routes/data-portability";
+import { registerDemoWaitlistRoutes } from "./routes/demo-waitlist";
 import { registerGoogleMeetRoutes } from "./routes/google-meet";
 import { registerInternalAutomationRoutes } from "./routes/internal-automations";
 import { registerInternalCuratorRoutes } from "./routes/internal-curator";
@@ -41,11 +51,18 @@ import { registerPlatformOrgRoutes } from "./routes/platform-orgs";
 import { registerPluginRoutes } from "./routes/plugins";
 import { registerProfilePortabilityRoutes } from "./routes/profile-portability";
 import { registerProfileRoutes } from "./routes/profiles";
+import { registerRegressionCaseRunRoutes } from "./routes/regression-case-runs";
+import { registerRegressionCaseRoutes } from "./routes/regression-cases";
 import { registerSessionRoutes } from "./routes/sessions";
-import { registerSetupImportRoutes } from "./routes/setup-import";
+import {
+  assertSetupImportAllowed,
+  registerSetupImportRoutes,
+  SETUP_BACKUP_TOO_LARGE,
+} from "./routes/setup-import";
 import { registerSkillProposalRoutes } from "./routes/skill-proposals";
 import { registerSkillSuggestionRoutes } from "./routes/skill-suggestions";
 import { registerSkillRoutes } from "./routes/skills";
+import { registerSkillsMarketplaceRoutes } from "./routes/skills-marketplace";
 import {
   ARTIFACT_FRAME_CSP,
   ARTIFACT_FRAME_PATH,
@@ -53,9 +70,10 @@ import {
   DOCS_SCRIPT_URL,
   registerSystemRoutes,
 } from "./routes/system";
-import { registerTokenOptimizationRoutes } from "./routes/token-optimization";
+import { registerTeamsRoutes } from "./routes/teams";
 import { registerToolRoutes } from "./routes/tools";
 import { registerUserContextRoutes } from "./routes/user-context";
+import { registerWebPushRoutes } from "./routes/web-push";
 import { registerWorkerRoutes } from "./routes/workers";
 import { errorResponse, isSecureRequest } from "./shared";
 import type { HonoApp } from "./types";
@@ -67,21 +85,34 @@ import type { HonoApp } from "./types";
  * the two drift, which is the only thing keeping this constant honest.
  */
 const THEME_BOOTSTRAP_SCRIPT_HASH =
-  "sha256-HsiO8mtwNQyMUSzPhZ0Zgx52OUxlMda3rA2mB6m/SO0=";
+  "sha256-ccmZA+DQW+fCYJWBEiKXptNNdt/GBPFOLMhetVtPmLA=";
 
-// Regular JSON can carry a 5 MiB attachment after base64 expansion. Full-data
-// imports accept a 100 MiB archive, which expands to roughly 134 MiB as base64.
+// Regular JSON can carry a 5 MiB attachment after base64 expansion.
 export const DEFAULT_HTTP_REQUEST_BODY_LIMIT_BYTES = 10 * 1024 * 1024;
 
-export const MAX_HTTP_REQUEST_BODY_LIMIT_BYTES = 140 * 1024 * 1024;
-
 const LARGE_BODY_ROUTES = new Set([
+  // File tools validate decoded bytes; JSON escaping can exceed the normal cap.
+  "/v1/tools/tool_write_file/run",
+  "/v1/tools/tool_edit_file/run",
+  "/v1/profiles/pack/import",
+  "/v1/profiles/pack/import/preview",
+]);
+
+/**
+ * Data imports spool the body to disk with their own byte counter. Hono's
+ * bodyLimit buffers chunked bodies in memory, so these routes skip it.
+ */
+const STREAMING_BODY_ROUTES = new Set([
   "/v1/auth/setup/import/preview",
   "/v1/auth/setup/import/restore",
   "/v1/platform/data/import/preview",
   "/v1/platform/data/import/restore",
-  "/v1/profiles/pack/import",
-  "/v1/profiles/pack/import/preview",
+]);
+
+// The large body routes whose 413 gets the setup wizard's own message.
+const SETUP_IMPORT_ROUTES = new Set([
+  "/v1/auth/setup/import/preview",
+  "/v1/auth/setup/import/restore",
 ]);
 
 function readPositiveEnv(name: string): number | undefined {
@@ -111,10 +142,13 @@ export function createHonoApp(options: ServerOptions) {
         await Bun.sleep(25);
       }
 
+      closeAgentGroupDatabases();
       await beforeRestore?.();
     },
     onDataRestored: afterRestore
       ? async () => {
+          // Drops a handle a group reply reopened mid-restore.
+          closeAgentGroupDatabases();
           await afterRestore();
           restoringData = false;
         }
@@ -155,7 +189,7 @@ export function createHonoApp(options: ServerOptions) {
       }
     }
   });
-  const metricsEnabled = process.env.NAKAMA_METRICS === "true";
+  const metricsEnabled = process.env.AIRIN_METRICS === "true";
   let requests = 0;
   let serverErrors = 0;
 
@@ -187,7 +221,7 @@ export function createHonoApp(options: ServerOptions) {
   });
 
   app.onError((err) => {
-    if (err instanceof NakamaApiError) {
+    if (err instanceof AirinApiError) {
       if (err.status >= 500) {
         void reportError(err, { kind: "http", source: "server" });
       }
@@ -203,7 +237,13 @@ export function createHonoApp(options: ServerOptions) {
       return errorResponse("Invalid JSON in request body.", 400);
     }
 
-    // A NakamaApiError is a refusal the route chose. Anything that reaches here
+    // decodeURIComponent throws on a lone `%`. That is a bad request, not a
+    // server bug, so it must not reach the error tracker.
+    if (err instanceof URIError) {
+      return errorResponse("Invalid URL encoding.", 400);
+    }
+
+    // A AirinApiError is a refusal the route chose. Anything that reaches here
     // is a bug the caller only sees as a generic 500, so the tracker must see it.
     void reportError(err, { kind: "http", source: "server" });
 
@@ -216,8 +256,18 @@ export function createHonoApp(options: ServerOptions) {
       headers.set("X-Content-Type-Options", "nosniff");
       const isArtifactFrame = c.req.path === ARTIFACT_FRAME_PATH;
 
+      const isArtifactDocument =
+        isArtifactFrame ||
+        (/^\/v1\/profiles\/[^/]+\/artifacts\/content$/.test(c.req.path) &&
+          isHtmlArtifactMimeType(headers.get("Content-Type") ?? ""));
+
       if (!isArtifactFrame) {
         headers.set("X-Frame-Options", "DENY");
+      }
+
+      if (isArtifactDocument) {
+        headers.set("Permissions-Policy", "camera=(), microphone=()");
+        headers.set("Referrer-Policy", "no-referrer");
       }
 
       // Only set Referrer-Policy if it's not already set
@@ -239,9 +289,9 @@ export function createHonoApp(options: ServerOptions) {
 
       headers.set(
         "Content-Security-Policy",
-        isArtifactFrame
+        isArtifactDocument
           ? ARTIFACT_FRAME_CSP
-          : `default-src 'self'; script-src 'self' '${THEME_BOOTSTRAP_SCRIPT_HASH}'${docsScripts}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://logos.composio.dev; media-src 'self' blob:; object-src blob:; frame-src 'self' blob:; font-src 'self' data:${docsFonts}; connect-src 'self'${docsConnections};`
+          : `default-src 'self'; script-src 'self' '${THEME_BOOTSTRAP_SCRIPT_HASH}'${docsScripts}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://logos.composio.dev; media-src 'self' blob:; object-src blob:; worker-src 'self' blob:; frame-src 'self' blob: https://*.kernel.sh:* https://*.onkernel.com:*; font-src 'self' data:${docsFonts}; connect-src 'self'${docsConnections};`
       );
 
       // Also true behind a TLS terminator, which is where HSTS matters most.
@@ -274,6 +324,13 @@ export function createHonoApp(options: ServerOptions) {
     c.res = applySecurityHeaders(finalResponse);
   });
 
+  // JSON only. A stream (SSE, file, plain text) must reach the client as it is
+  // written, and compression buffers it.
+  app.use(
+    "/v1/*",
+    compress({ contentTypeFilter: /^application\/json(?:[;\s]|$)/i })
+  );
+
   const rejectOversizedBody = () =>
     errorResponse("Request body is too large.", 413);
 
@@ -284,7 +341,18 @@ export function createHonoApp(options: ServerOptions) {
 
   const importBodyLimit = bodyLimit({
     maxSize: MAX_HTTP_REQUEST_BODY_LIMIT_BYTES,
-    onError: rejectOversizedBody,
+    onError: async (c) => {
+      if (!SETUP_IMPORT_ROUTES.has(c.req.path)) {
+        return rejectOversizedBody();
+      }
+
+      // After the first admin, the route's own 409 is the answer, not setup advice.
+      if (options.databaseAdapter) {
+        await assertSetupImportAllowed(options.databaseAdapter);
+      }
+
+      return errorResponse(SETUP_BACKUP_TOO_LARGE, 413);
+    },
   });
 
   // Base64 expands a 20 MiB knowledge document to roughly 27 MiB.
@@ -294,6 +362,10 @@ export function createHonoApp(options: ServerOptions) {
   });
 
   app.use("*", (c, next) => {
+    if (STREAMING_BODY_ROUTES.has(c.req.path)) {
+      return next();
+    }
+
     if (
       c.req.method === "POST" &&
       /^\/v1\/profiles\/[^/]+\/knowledge-base(?:\/import-zip)?$/.test(
@@ -339,12 +411,12 @@ export function createHonoApp(options: ServerOptions) {
 
     return c.body(
       [
-        "# HELP nakama_http_requests_total HTTP responses served by this process.",
-        "# TYPE nakama_http_requests_total counter",
-        `nakama_http_requests_total ${requests}`,
-        "# HELP nakama_http_server_errors_total HTTP responses with a 5xx status.",
-        "# TYPE nakama_http_server_errors_total counter",
-        `nakama_http_server_errors_total ${serverErrors}`,
+        "# HELP airin_http_requests_total HTTP responses served by this process.",
+        "# TYPE airin_http_requests_total counter",
+        `airin_http_requests_total ${requests}`,
+        "# HELP airin_http_server_errors_total HTTP responses with a 5xx status.",
+        "# TYPE airin_http_server_errors_total counter",
+        `airin_http_server_errors_total ${serverErrors}`,
         "",
       ].join("\n")
     );
@@ -355,11 +427,13 @@ export function createHonoApp(options: ServerOptions) {
   app.use(
     "*",
     createRateLimitMiddleware({
-      authMax: readPositiveEnv("NAKAMA_RATE_LIMIT_AUTH_MAX"),
-      max: readPositiveEnv("NAKAMA_RATE_LIMIT_MAX"),
-      trustProxy: process.env.NAKAMA_TRUST_PROXY === "true",
+      authMax: readPositiveEnv("AIRIN_RATE_LIMIT_AUTH_MAX"),
+      max: readPositiveEnv("AIRIN_RATE_LIMIT_MAX"),
+      trustProxy: process.env.AIRIN_TRUST_PROXY === "true",
     })
   );
+
+  registerDemoWaitlistRoutes(app, options);
 
   app.use("*", createAuthMiddleware(options));
   registerInternalAutomationRoutes(app, options);
@@ -380,19 +454,25 @@ export function createHonoApp(options: ServerOptions) {
   registerSetupImportRoutes(app, options);
   registerWorkerRoutes(app, options);
   registerModelRoutes(app, options);
+  registerTeamsRoutes(app, options);
   registerUserContextRoutes(app, options);
   registerSessionRoutes(app, options);
   registerProfileRoutes(app, options);
   registerProfilePortabilityRoutes(app, options);
+  registerRegressionCaseRoutes(app, options);
+  registerRegressionCaseRunRoutes(app, options);
   registerArtifactShareRoutes(app, options);
   registerMcpRoutes(app, options);
+  registerSkillsMarketplaceRoutes(app);
   registerSkillRoutes(app, options);
   registerToolRoutes(app, options);
   registerPluginRoutes(app, options);
   registerGoogleMeetRoutes(app, options);
+  registerAgentGroupRoutes(app, options);
+  registerAgentMarketplaceRoutes(app, options);
   registerAutomationRoutes(app, options);
   registerNotificationDestinationRoutes(app, options);
-  registerTokenOptimizationRoutes(app, options);
+  registerWebPushRoutes(app);
   registerAutomationWorkerSettingsRoutes(app, options);
   registerCodingHarnessSettingsRoutes(app, options);
   registerComposioRoutes(app, options);

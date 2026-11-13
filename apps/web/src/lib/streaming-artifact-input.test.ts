@@ -73,7 +73,7 @@ describe("parseStreamingArtifactToolInput", () => {
     expect(
       parseStreamingArtifactToolInput(
         "write_file",
-        '{"path":"artifacts/report.md.nakama-meta.json","content":"{}"}'
+        '{"path":"artifacts/report.md.airin-meta.json","content":"{}"}'
       )
     ).toEqual({
       content: null,
@@ -87,7 +87,7 @@ describe("parseStreamingArtifactToolInput", () => {
     expect(
       parseStreamingArtifactToolInput(
         "write_file",
-        '{"path":"artifacts/report.md.nakama-meta","content":"{}"}'
+        '{"path":"artifacts/report.md.airin-meta","content":"{}"}'
       )
     ).toEqual({
       content: null,
@@ -99,7 +99,7 @@ describe("parseStreamingArtifactToolInput", () => {
     expect(
       parseStreamingArtifactToolInput(
         "write_file",
-        '{"path":"artifacts/tldr.md.nakama-m","content":"'
+        '{"path":"artifacts/tldr.md.airin-m","content":"'
       )
     ).toEqual({
       content: null,
@@ -123,7 +123,7 @@ describe("parseStreamingArtifactToolInput", () => {
     expect(
       parseStreamingArtifactToolInput(
         "write_file",
-        '{"path":"artifacts/report.md.nakama","content":"{}"}'
+        '{"path":"artifacts/report.md.airin","content":"{}"}'
       )
     ).toEqual({
       content: null,
@@ -134,7 +134,7 @@ describe("parseStreamingArtifactToolInput", () => {
   });
 
   test("rejects incomplete paths so sidecar writes cannot look like content files", () => {
-    // Sidecar path streams as `…md` before `.nakama-meta.json` is appended.
+    // Sidecar path streams as `…md` before `.airin-meta.json` is appended.
     expect(
       parseStreamingArtifactToolInput(
         "write_file",

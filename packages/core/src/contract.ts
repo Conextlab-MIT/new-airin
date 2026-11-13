@@ -18,7 +18,8 @@ export type JsonValue =
 export type AutomationTrigger =
   | { type: "manual" }
   | { type: "schedule"; cron: string; timezone?: string }
-  | { type: "runAt"; at: string; timezone?: string };
+  | { type: "runAt"; at: string; timezone?: string }
+  | { type: "webhook" };
 
 export interface AutomationStep {
   id: string;
@@ -45,6 +46,18 @@ export interface AutomationDelivery {
   to?: string;
 }
 
+/**
+ * What an automation run may use from its agent. Each list holds ids from the
+ * agent's own set; anything not listed, including what the agent gets later,
+ * is left out.
+ */
+export interface AutomationToolLimit {
+  /** Composio toolkit slugs, for example `gmail`. */
+  composioToolkits: string[];
+  mcpServerIds: string[];
+  toolIds: string[];
+}
+
 export interface AutomationDefinition {
   delivery?: AutomationDelivery;
   description: string;
@@ -52,6 +65,8 @@ export interface AutomationDefinition {
   name: string;
   prompt: string;
   steps: AutomationStep[];
+  /** No limit: the run gets every tool its agent has. */
+  toolLimit?: AutomationToolLimit;
   trigger: AutomationTrigger;
   version: number;
 }
@@ -60,11 +75,17 @@ export interface StoredAutomation extends AutomationDefinition {
   createdAt: string;
   enabled: boolean;
   lastRunAt?: string | null;
+  /** Set a moment after the last run ends, once its delivery is tried. */
+  lastRunDeliveryStatus?: AutomationDeliveryStatus | null;
   lastRunStatus?: AutomationRunStatus | null;
   nextRunAt?: string | null;
   orgId?: string | null;
   profileId: string;
+  /** The last person who saved it; runs use their Composio sign-ins. */
+  runAsUserId?: string | null;
   updatedAt: string;
+  /** Computed, not saved: set when the install has a public URL. */
+  webhookUrl?: string;
 }
 
 export type AutomationRunStatus = "running" | "completed" | "failed";
@@ -83,6 +104,8 @@ export interface AutomationRunRecord {
   progress?: ChatMessage[];
   /** Present when the API resolves read state for the current user. */
   read?: boolean;
+  /** Set when a signed webhook started the run. */
+  source?: "webhook";
   startedAt: string;
   status: AutomationRunStatus;
 }
@@ -92,6 +115,84 @@ export interface AutomationUnreadSummary {
   totalUnread: number;
 }
 
+export type RegressionCaseSourceType = "session" | "automation_run";
+
+/** Where a saved case came from, with the path that opens it. */
+export interface RegressionCaseSource {
+  /** Set only for `automation_run` sources. */
+  automationId: string | null;
+  id: string;
+  /**
+   * Web path to the source run. Automation runs open on the automations page,
+   * which has no per-run route yet.
+   */
+  path: string;
+  type: RegressionCaseSourceType;
+}
+
+/** A finished run saved with the result a member expected from it. */
+export interface RegressionCase {
+  createdAt: string;
+  createdByUserId: string | null;
+  expectedResult: string;
+  id: string;
+  input: string;
+  profileId: string;
+  source: RegressionCaseSource;
+}
+
+/** The cap on a case's `expectedResult`, in UTF-16 code units. */
+export const MAX_REGRESSION_EXPECTED_RESULT_LENGTH = 20_000;
+
+export type CreateRegressionCaseRequest =
+  | {
+      expectedResult: string;
+      /** The reply's index in the session history; its input is the user message before it. */
+      messageIndex: number;
+      sourceId: string;
+      sourceType: "session";
+    }
+  | {
+      automationId: string;
+      expectedResult: string;
+      sourceId: string;
+      sourceType: "automation_run";
+    };
+
+export interface RegressionCaseResponse {
+  case: RegressionCase;
+}
+
+export type RegressionCaseRunStatus = "completed" | "failed";
+
+export type RegressionCaseVerdict = "pass" | "fail";
+
+/** One rerun of a case against its profile's current config. */
+export interface RegressionCaseRun {
+  caseId: string;
+  createdAt: string;
+  createdByUserId: string | null;
+  /** Set when the run failed; `output` is then null. */
+  error: string | null;
+  id: string;
+  output: string | null;
+  status: RegressionCaseRunStatus;
+  /** A member's mark. Nothing grades a run automatically. */
+  verdict: RegressionCaseVerdict | null;
+  verdictAt: string | null;
+  verdictByUserId: string | null;
+}
+
+export interface RegressionCaseRunResponse {
+  run: RegressionCaseRun;
+}
+
+export interface ListRegressionCasesResponse {
+  cases: RegressionCase[];
+  /** Pass as `offset` for the next page; null when the page is the last one. */
+  nextOffset: number | null;
+}
+
 export const AGENT_CHANNELS = [
   "web",
   "cli",
@@ -99,6 +200,7 @@ export const AGENT_CHANNELS = [
   "whatsapp",
   "discord",
   "slack",
+  "teams",
   "automation",
   "task",
   "subagent",
@@ -115,12 +217,12 @@ export function parseAgentChannel(value: string): AgentChannel | null {
   return AGENT_CHANNELS.find((channel) => channel === value) ?? null;
 }
 
-export const NAKAMA_API_VERSION = 1;
+export const AIRIN_API_VERSION = 1;
 
 export interface HealthResponse {
-  apiVersion: typeof NAKAMA_API_VERSION;
+  apiVersion: typeof AIRIN_API_VERSION;
   /**
-   * Whether Nakama can reach the Composio API with the saved key.
+   * Whether Airin can reach the Composio API with the saved key.
    * Probed only on `GET /v1/system/status` (`server.composioAvailable`).
    * `GET /health` always returns `false` so liveness stays local and fast.
    */
@@ -128,9 +230,13 @@ export interface HealthResponse {
   /** A Composio project API key is saved on this server. */
   composioConfigured: boolean;
   ok: true;
+  /** `AIRIN_ENABLE_ONBOARDING` is on: a new user gets the goal prompt. */
+  onboardingEnabled: boolean;
   providerConfigured: boolean;
+  /** `AIRIN_DISABLE_UPDATE_CHECK` is not set: platform admins see newer releases. */
+  updateCheckEnabled: boolean;
   userConfigured: boolean;
-  /** App version (`NAKAMA_VERSION` or package.json). Not `apiVersion`. */
+  /** App version (`AIRIN_VERSION` or package.json). Not `apiVersion`. */
   version: string;
 }
 
@@ -189,9 +295,22 @@ export interface SlackWorkerStatus {
   running: boolean;
 }
 
+export interface TeamsWorkerStatus {
+  configured: boolean;
+  connected: boolean;
+  ok: boolean;
+  paired: boolean;
+  process?: WorkerProcessInfo;
+  running: boolean;
+}
+
 export interface WhatsAppWorkerStatus {
   configured: boolean;
   connected: boolean;
+  /** Set when WhatsApp linked an account this agent may not use. */
+  linkError?: string;
+  /** The agent that holds that account, when the viewer may see its org. */
+  linkOwner?: { agentName: string; orgName: string };
   ok: boolean;
   paired: boolean;
   process?: WorkerProcessInfo;
@@ -268,71 +387,6 @@ export interface McpStatus {
   serverCount: number;
 }
 
-/**
- * Bytes an optimiser removed from tool results before they entered the
- * conversation. Not tokens and not cost: see the route that serves it for why
- * converting these to either would be a fabrication.
- */
-export interface TokenOptimizationResponse {
-  /**
-   * Two arms. `optimized` is what an optimiser shortened; `control` is what went
-   * in untouched. One arm alone is not a comparison, it is a restatement that
-   * the feature was on.
-   */
-  arms: {
-    control: TokenOptimizationArm;
-    optimized: TokenOptimizationArm;
-  };
-  byTool: Array<{
-    bytesIn: number;
-    bytesOut: number;
-    calls: number;
-    tool: string;
-  }>;
-  /** One entry per day in the window, oldest first, zero-filled. */
-  days: Array<{
-    bytesIn: number;
-    bytesRemoved: number;
-    day: string;
-  }>;
-  /**
-   * Provider input tokens per turn, split by arm. The only tokens here; every
-   * other figure is bytes. Observational rather than randomised, so a workload
-   * difference between the arms is a confound, not a result.
-   */
-  inputTokens: {
-    control: TokenOptimizationTurnArm;
-    optimized: TokenOptimizationTurnArm;
-  };
-  optimizers: Array<{
-    enabled: boolean;
-    id: string;
-    /** Whether the binary is reachable on this host. Enabled without installed
-     * is the case an operator has to be told about, because the optimiser fails
-     * open and would otherwise look merely idle. */
-    installed: boolean;
-    tools: string[];
-  }>;
-  totals: {
-    bytesIn: number;
-    bytesRemoved: number;
-    calls: number;
-  };
-  trackedSince: string | null;
-  windowDays: number;
-}
-
-export interface TokenOptimizationUpdateResponse {
-  enabled: boolean;
-  /**
-   * Why the binary is still missing after switching the optimiser on, or null.
-   * Switching on triggers an install, and an operator who is told only that the
-   * binary is absent cannot tell a blocked download from one never attempted.
-   */
-  installError: string | null;
-  installed: boolean;
-}
-
 export interface CodingHarnessLoginCommand {
   command: string;
   name: string;
@@ -351,22 +405,6 @@ export interface CodingHarnessSettingsResponse {
   providerPassthroughEnabled: boolean;
 }
 
-export interface TokenOptimizationTurnArm {
-  arm: string;
-  /** Turns whose token count came from an estimate, not the provider. */
-  estimatedTurns: number;
-  inputTokens: number;
-  inputTokensPerTurn: number;
-  turns: number;
-}
-
-export interface TokenOptimizationArm {
-  arm: string;
-  bytesIn: number;
-  bytesOut: number;
-  calls: number;
-}
-
 export interface SystemStatusResponse {
   automationWorker: AutomationWorkerStatus;
   checkedAt: string;
@@ -375,6 +413,7 @@ export interface SystemStatusResponse {
   mcp: McpStatus;
   server: HealthResponse;
   slackWorker: SlackWorkerStatus;
+  teamsWorker: TeamsWorkerStatus;
   telegramWorker: TelegramWorkerStatus;
   whatsappWorker: WhatsAppWorkerStatus;
 }
@@ -385,10 +424,10 @@ export interface DataExportSkippedItem {
 }
 
 export interface DataExportManifest {
-  apiVersion: typeof NAKAMA_API_VERSION;
+  apiVersion: typeof AIRIN_API_VERSION;
   createdAt: string;
   fileCount: number;
-  kind: "nakama-export";
+  kind: "airin-export";
   skipped: DataExportSkippedItem[];
   sourceRootName: string;
   topLevelPaths: string[];
@@ -425,7 +464,7 @@ export interface SetupRestoreDataImportResponse
 }
 
 /**
- * Single-profile "pack" portability, distinct from full-root `nakama-export`.
+ * Single-profile "pack" portability, distinct from full-root `airin-export`.
  * Contains only one profile's portable workspace + name-based assignment
  * references — never provider keys, MCP config, or Composio connections.
  */
@@ -464,9 +503,9 @@ export interface ProfilePackMeta {
 }
 
 export interface ProfilePackManifest {
-  apiVersion: typeof NAKAMA_API_VERSION;
+  apiVersion: typeof AIRIN_API_VERSION;
   createdAt: string;
-  kind: "nakama-profile-export";
+  kind: "airin-profile-export";
   meta: ProfilePackMeta;
   skipped: ProfilePackSkippedItem[];
   sourceProfileId: string;
@@ -517,8 +556,35 @@ export interface UpdateWebPublicUrlRequest {
   webPublicUrl: string;
 }
 
+export interface AirinVersionResponse {
+  current: string;
+  latest: string;
+  releaseUrl: string;
+  updateAvailable: boolean;
+}
+
+export interface AirinUpgradeResponse {
+  /** False until the Compose updater service is running. */
+  available: boolean;
+  /** Versions with an archive of their data, newest first, current excluded. */
+  rollbacks: Array<{ at: string; version: string }>;
+  status: {
+    at: string;
+    message: string;
+    /** Image layers, while the new version downloads. */
+    progress?: { done: number; total: number };
+    state: "running" | "done" | "failed" | "rolled_back";
+    version: string;
+  } | null;
+}
+
+export interface BackupStatusResponse {
+  /** The last failed scheduled backup, until the next good backup. */
+  lastError: { at: string; message: string } | null;
+}
+
 export interface WebPublicUrlSettingsResponse {
-  /** Set when NAKAMA_WEB_PUBLIC_URL / NAKAMA_PUBLIC_URL overrides the saved value. */
+  /** Set when AIRIN_WEB_PUBLIC_URL / AIRIN_PUBLIC_URL overrides the saved value. */
   envOverride: string | null;
   webPublicUrl: string | null;
 }
@@ -622,6 +688,25 @@ export interface OrganizationSummary {
   skillsWriteApproval?: boolean;
   slug: string;
   updatedAt: string;
+}
+
+/** Platform-admin install overview (orgs, users, LLM rollup). */
+export interface PlatformOverviewOrgRow {
+  estimatedCostUsd: number;
+  id: string;
+  name: string;
+  slug: string;
+  totalTokens: number;
+}
+
+export interface PlatformOverviewResponse {
+  organizations: PlatformOverviewOrgRow[];
+  totals: {
+    estimatedCostUsd: number;
+    organizationCount: number;
+    totalTokens: number;
+    userCount: number;
+  };
 }
 
 export interface CreateOrganizationRequest {
@@ -786,7 +871,7 @@ export interface OrgUsageLeader {
 }
 
 export interface OrgUsageSummaryResponse {
-  /** Every agent by requests, Super Bot excluded. */
+  /** Every agent by requests, Airin excluded. */
   agents: OrgUsageLeader[];
   /** Estimated spend over the last 30 UTC days. */
   costUsd30d: number;
@@ -835,6 +920,8 @@ export interface SetActiveOrgRequest {
 
 export interface OrgMemberSummary {
   createdAt: string;
+  /** Set while the account is disabled; disabling is install-wide, not per org. */
+  disabledAt?: string | null;
   email: string;
   name: string | null;
   phone: string | null;
@@ -844,6 +931,10 @@ export interface OrgMemberSummary {
 
 export interface ListOrgMembersResponse {
   members: OrgMemberSummary[];
+}
+
+export interface ListOrgInvitesResponse {
+  invites: OrgInviteSummary[];
 }
 
 export interface AddOrgMemberRequest {
@@ -875,6 +966,8 @@ export interface BrowserSessionSummary {
   expiresAt: string;
   id: string;
   lastUsedAt: string | null;
+  /** Raw User-Agent the session signed in with; null for sessions not seen since it was recorded. */
+  userAgent: string | null;
 }
 
 export interface ListBrowserSessionsResponse {
@@ -1135,6 +1228,8 @@ export interface CreateSessionRequest {
   cognito?: boolean;
   model?: string;
   profileId?: string;
+  /** Overrides the install thinking effort for this session. */
+  thinkingEffort?: ThinkingEffort;
 }
 
 export interface CreateSessionResponse {
@@ -1143,7 +1238,10 @@ export interface CreateSessionResponse {
 
 export interface UpdateSessionRequest {
   model?: string | null;
+  parentSessionId?: null;
   pinned?: boolean;
+  /** Null goes back to the install thinking effort. */
+  thinkingEffort?: ThinkingEffort | null;
   title?: string;
 }
 
@@ -1152,6 +1250,8 @@ export interface BranchSessionRequest {
 }
 
 export interface BranchSessionResponse {
+  /** The source session's channel, which the branch keeps. */
+  channel: AgentChannel;
   sessionId: string;
 }
 
@@ -1170,6 +1270,8 @@ export interface AgentTodo {
 export interface AgentQuestionChoice {
   id: string;
   label: string;
+  /** The agent's suggested answer, listed first. */
+  recommended?: boolean;
 }
 
 export interface AgentQuestionItem {
@@ -1213,15 +1315,6 @@ export interface ChatContextUsage {
    * total may differ from `usedTokens` when the provider reports input size.
    */
   breakdown?: ChatContextUsageBreakdown;
-  /**
-   * Bytes an optimiser kept out of this session's context so far. Absent until
-   * something is actually removed, so the UI reports a measurement rather than
-   * announcing a feature. Bytes, not tokens: the label must carry a byte unit.
-   */
-  bytesKeptOut?: number;
-  /** Everything the handled tools produced this session, the denominator for
-   * the percentage. Present whenever bytesKeptOut is. */
-  bytesProduced?: number;
   contextWindow: number;
   source: ChatContextUsageSource;
   /** Denominator matching compaction usable context (window minus reserved output). */
@@ -1236,6 +1329,8 @@ export interface SessionMessagesResponse {
   messages: ChatMessage[];
   model: string | null;
   questionnaire: AgentQuestionnaire | null;
+  /** Null or absent follows the install thinking effort. */
+  thinkingEffort?: ThinkingEffort | null;
   todos: AgentTodo[];
 }
 
@@ -1247,13 +1342,16 @@ export interface SessionStatusResponse {
 export interface SessionSummary {
   /** True while a turn is streaming for this session on the serving process. */
   active: boolean;
+  branchMessageIndex: number | null;
   channel: AgentChannel;
   createdAt: string;
   id: string;
   messageCount: number;
+  parentSessionId: string | null;
   pinned: boolean;
   preview: string | null;
   profileId: string;
+  sortPosition: number | null;
   title: string | null;
   updatedAt: string;
 }
@@ -1359,6 +1457,7 @@ export type StreamEvent =
       toolCallId: string;
       tool: string;
       result: unknown;
+      images?: ImageAttachment[];
     }
   | { type: "todos_updated"; todos: AgentTodo[] }
   | { type: "questionnaire_updated"; questionnaire: AgentQuestionnaire | null }
@@ -1401,6 +1500,7 @@ export interface CreateAutomationRequest {
   name: string;
   profileId?: string;
   prompt: string;
+  toolLimit?: AutomationToolLimit;
   trigger: AutomationTrigger;
 }
 
@@ -1411,6 +1511,8 @@ export interface UpdateAutomationRequest {
   name?: string;
   profileId?: string;
   prompt?: string;
+  /** null removes the limit. */
+  toolLimit?: AutomationToolLimit | null;
   trigger?: AutomationTrigger;
 }
 
@@ -1418,8 +1520,18 @@ export interface RunAutomationResponse {
   run: AutomationRunRecord;
 }
 
+/** The secret is shown only in this response. */
+export interface CreateAutomationWebhookSecretResponse {
+  secret: string;
+}
+
+/** A finished run leaves out `progress`; `GetAutomationRunResponse` has it. */
 export interface ListAutomationRunsResponse {
   runs: AutomationRunRecord[];
+}
+
+export interface GetAutomationRunResponse {
+  run: AutomationRunRecord;
 }
 
 export interface MarkAutomationRunsReadResponse {
@@ -1431,9 +1543,13 @@ export type WorkflowStepKind =
   | "compare"
   | "assert"
   | "template"
+  | "agent"
   | "summarize";
 
 export type WorkflowCompareOp = "eq" | "near" | "contains";
+
+/** What a false compare or assert does: fail the run (default) or end it as skipped. */
+export type WorkflowCheckOnFail = "fail" | "skip";
 
 export interface WorkflowToolStep {
   id: string;
@@ -1446,6 +1562,7 @@ export interface WorkflowCompareStep {
   id: string;
   kind: "compare";
   left: unknown;
+  onFail?: WorkflowCheckOnFail;
   op: WorkflowCompareOp;
   right: unknown;
   tolerance?: number;
@@ -1455,6 +1572,7 @@ export interface WorkflowAssertStep {
   expected: unknown;
   id: string;
   kind: "assert";
+  onFail?: WorkflowCheckOnFail;
   path: string;
 }
 
@@ -1462,6 +1580,14 @@ export interface WorkflowTemplateStep {
   id: string;
   kind: "template";
   template: string;
+}
+
+export interface WorkflowAgentStep {
+  /** Output keys, each with a short note on what the agent puts there. */
+  fields: Record<string, string>;
+  id: string;
+  kind: "agent";
+  prompt: string;
 }
 
 export interface WorkflowSummarizeStep {
@@ -1475,6 +1601,7 @@ export type WorkflowStep =
   | WorkflowCompareStep
   | WorkflowAssertStep
   | WorkflowTemplateStep
+  | WorkflowAgentStep
   | WorkflowSummarizeStep;
 
 export interface WorkflowDefinition {
@@ -1494,7 +1621,7 @@ export interface StoredWorkflow extends WorkflowDefinition {
   updatedAt: string;
 }
 
-export type WorkflowRunStatus = "running" | "completed" | "failed";
+export type WorkflowRunStatus = "running" | "completed" | "failed" | "skipped";
 
 export type WorkflowRunStepStatus =
   | "pending"
@@ -1594,7 +1721,17 @@ export interface UpdateTimezoneRequest {
   timezone: string;
 }
 
-export type ThinkingEffort = "low" | "medium" | "high";
+export type AppLanguage = "id" | "en";
+
+export interface LanguageSettingsResponse {
+  language: AppLanguage;
+}
+
+export interface UpdateLanguageRequest {
+  language: AppLanguage;
+}
+
+export type ThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ThinkingSettings {
   effort: ThinkingEffort;
@@ -1657,7 +1794,7 @@ export interface UpdateImageGenerationRequest {
 }
 
 /** Search back-end that replaces the provider-hosted `web_search` tool. */
-export type WebSearchProvider = "exa" | "firecrawl";
+export type WebSearchProvider = "exa" | "firecrawl" | "serply";
 
 export interface WebSearchSettingsResponse {
   apiKeyMasked: string | null;
@@ -1665,6 +1802,8 @@ export interface WebSearchSettingsResponse {
   configured: boolean;
   endpoint: string | null;
   provider: WebSearchProvider | null;
+  savedAvailable?: boolean;
+  source?: "environment" | "settings" | "missing";
 }
 
 export interface UpdateWebSearchSettingsRequest {
@@ -1753,6 +1892,27 @@ export interface DiscordSettingsResponse {
   profileId: string;
 }
 
+export interface TeamsSettingsResponse {
+  allowedUserIds: string[];
+  clientId: string | null;
+  clientSecretConfigured: boolean;
+  configured: boolean;
+  handshakeCode: string | null;
+  handshakeExpiresAt: string | null;
+  messagingEndpoint: string | null;
+  pairedUserIds: string[];
+  profileId: string;
+  tenantId: string | null;
+}
+
+export interface UpdateTeamsSettingsRequest {
+  allowedUserIds?: string;
+  clientId?: string;
+  clientSecret?: string;
+  profileId?: string;
+  tenantId?: string;
+}
+
 export interface UpdateDiscordSettingsRequest {
   allowedUserIds?: string;
   botToken?: string;
@@ -1812,6 +1972,8 @@ export interface ComposioSettingsResponse {
   apiKeyMasked: string | null;
   composioReachable: boolean;
   configured: boolean;
+  savedAvailable?: boolean;
+  source?: "environment" | "settings" | "missing";
 }
 
 export interface UpdateComposioSettingsRequest {
@@ -1914,9 +2076,11 @@ export interface EmailSettingsResponse {
   imapPort: number | null;
   imapSecure: boolean | null;
   passwordMasked: string | null;
+  savedAvailable?: boolean;
   smtpHost: string | null;
   smtpPort: number | null;
   smtpSecure: boolean | null;
+  source?: "environment" | "settings" | "missing";
   username: string | null;
 }
 
@@ -1943,13 +2107,30 @@ export interface SendEmailTestResponse {
   to: string;
 }
 
+/** Cloud browser that agent-browser connects to instead of local Chrome. */
+export type AgentBrowserProvider = "kernel";
+
 export interface AgentBrowserStatusResponse {
+  apiKeyMasked: string | null;
   installCommand: string;
   installed: boolean;
   nextStep: "install" | null;
+  /** null means agent-browser launches Chrome on the Airin host. */
+  provider: AgentBrowserProvider | null;
   ready: boolean;
   statusMessage: string | null;
   version: string | null;
+}
+
+/** Live view of the caller's cloud browser; null when none is running. */
+export interface SessionBrowserResponse {
+  liveViewUrl: string | null;
+}
+
+export interface UpdateAgentBrowserSettingsRequest {
+  apiKey?: string;
+  /** null restores local Chrome. */
+  provider?: AgentBrowserProvider | null;
 }
 
 export type AgentBrowserInstallEvent =
@@ -2022,6 +2203,8 @@ export interface ProfileRef {
 }
 
 export interface ApiErrorResponse {
+  /** Stable machine-readable reason, e.g. `COMPOSIO_CUSTOM_AUTH_REQUIRED`. */
+  code?: string;
   error: string;
   profiles?: ProfileRef[];
   totpEnabled?: boolean;
@@ -2068,7 +2251,11 @@ export interface OpenRouterRoutingSettings {
 }
 
 export interface ProviderInstanceSummary {
+  /** The last 4 characters of the saved key, for admins only. */
+  apiKeyEnding?: string;
   baseUrl?: string | null;
+  /** The connected ChatGPT account's plan, such as `"free"` or `"plus"`. */
+  chatgptPlanType?: string;
   createdAt: string;
   customModels?: CustomModelEntry[];
   hasApiKey: boolean;
@@ -2077,6 +2264,9 @@ export interface ProviderInstanceSummary {
   label: string;
   modelCount: number;
   openRouterRouting?: OpenRouterRoutingSettings;
+  savedSecretAvailable?: boolean;
+  secretEnvName?: string;
+  secretSource?: "environment" | "settings" | "missing";
   type: ProviderName;
   wireApi?: WireApi | null;
 }
@@ -2087,7 +2277,7 @@ export interface ListProvidersResponse {
 }
 
 export interface CreateProviderRequest {
-  apiKey: string;
+  apiKey?: string;
   baseUrl?: string;
   chatgptOAuth?: ChatgptOAuthCredentials;
   customModels?: CustomModelEntry[];
@@ -2123,6 +2313,11 @@ export interface UpdateProviderResponse {
   provider: ProviderInstanceSummary;
 }
 
+/** What a live check of the saved key found. */
+export interface CheckProviderResponse {
+  status: "ok" | "rejected" | "needs-key" | "unreachable" | "unchecked";
+}
+
 export interface DeleteProviderResponse {
   defaultProviderId: string | null;
 }
@@ -2144,7 +2339,12 @@ export interface DiscoverModelsRequest {
   baseUrl?: string;
   hostMode?: OllamaHostMode;
   /** When set, discovery uses the matching remote fetch path (Ollama includes `/api/tags` fallback). */
-  provider?: "ollama" | "openai_compatible" | "fireworks" | "netra";
+  provider?:
+    | "ollama"
+    | "openai_compatible"
+    | "fireworks"
+    | "netra"
+    | "cloudflare";
   providerId?: string;
 }
 
@@ -2183,7 +2383,7 @@ export interface AcpSessionSettingsResponse {
   settings: AcpSessionSetting[];
 }
 
-/** An agent Nakama ships with, ready to save on a profile. */
+/** An agent Airin ships with, ready to save on a profile. */
 export interface AcpAgentPresetSummary {
   agent: AcpAgentConfig;
   id: string;
@@ -2200,6 +2400,8 @@ export interface ProfileSummary {
   /** Whether this profile may create and execute automations. */
   automationsEnabled?: boolean;
   createdAt: string;
+  /** Whether a super agent may create agent groups. */
+  groupsEnabled?: boolean;
   hasAvatar: boolean;
   id: string;
   isDefault?: boolean;
@@ -2345,6 +2547,24 @@ export interface InstallSkillRequest {
   zipBase64?: string;
 }
 
+export interface SkillsMarketplaceSkill {
+  installs: number;
+  name: string;
+  skillId: string;
+  source: string;
+}
+
+export interface SkillsMarketplaceResponse {
+  skills: SkillsMarketplaceSkill[];
+}
+
+export interface SkillInstallPreviewResponse {
+  description: string;
+  estimatedTokens: number;
+  files: { executable: boolean; path: string }[];
+  name: string;
+}
+
 export interface PatchSkillRequest {
   body?: string;
   description?: string;
@@ -2427,6 +2647,8 @@ export interface CreateMcpServerRequest {
   name: string;
   /** When testing an existing server, merges blank header/env values with stored secrets. */
   serverId?: string;
+  /** Start the browser sign-in even when the server answers without credentials. */
+  signIn?: boolean;
   transport: McpTransport;
 }
 
@@ -2448,6 +2670,31 @@ export interface TestMcpServerResponse {
   requiresAuthorization?: boolean;
   toolCount: number;
   tools: CachedMcpToolSummary[];
+}
+
+export interface McpRegistryRemoteHeader {
+  description?: string;
+  isRequired?: boolean;
+  isSecret?: boolean;
+  name: string;
+  value?: string;
+}
+
+export interface McpRegistryRemote {
+  headers?: McpRegistryRemoteHeader[];
+  type: string;
+  url: string;
+}
+
+export interface McpRegistryServer {
+  description?: string;
+  name: string;
+  remotes: McpRegistryRemote[];
+  transport: string;
+}
+
+export interface McpRegistrySearchResponse {
+  servers: McpRegistryServer[];
 }
 
 export interface ToolSummary {
@@ -2488,7 +2735,7 @@ export interface ProfileResponse {
   profile: ProfileDetail;
 }
 
-export interface CreateProfileWithSuperBotRequest {
+export interface CreateProfileWithSuperAirinRequest {
   name?: string;
   prompt: string;
 }
@@ -2511,6 +2758,7 @@ export interface UpdateProfileRequest {
   /** Platform admins only: the agent runs as a process on the server host. */
   acpAgent?: AcpAgentConfig | null;
   automationsEnabled?: boolean;
+  groupsEnabled?: boolean;
   model?: string | null;
   name?: string;
   /** Owner or admin: false keeps the agent private to its owner. */
@@ -2529,7 +2777,7 @@ export interface UpdateProfileRequest {
 
 export type ProfileChangeSource =
   | "dashboard"
-  | "super_bot"
+  | "super_airin"
   | "skill_manage"
   | "pack_import";
 
@@ -2612,9 +2860,13 @@ export interface ToolCredentialStatus {
     /** Only for non-secret variables. */
     value?: string;
   }[];
+  envName: string;
+  savedAvailable: boolean;
+  source: "environment" | "settings" | "missing";
 }
 
 export interface ToolSetupPlan {
+  createdAt?: string;
   description: string;
   id: string;
   name: string;
@@ -2622,7 +2874,7 @@ export interface ToolSetupPlan {
   profileId?: string;
   requiresApiKey: boolean;
   sessionId: string;
-  status: "pending" | "approved" | "ready";
+  status: "pending" | "approved" | "ready" | "rejected";
   toolId?: string;
 }
 
@@ -2681,7 +2933,16 @@ export interface UpdateSoulFileRequest {
   content: string;
 }
 
+/** Who saved an artifact. Absent when no owner was recorded (older files, shell writes). */
+export interface ArtifactCreator {
+  channel: string | null;
+  createdAt: string;
+  userId: string | null;
+  userName: string | null;
+}
+
 export interface ArtifactFile {
+  createdBy?: ArtifactCreator;
   filename: string;
   mimeType: string;
   path: string;
@@ -2904,6 +3165,7 @@ export type ProviderName =
   | "ollama"
   | "openai_compatible"
   | "opencode_go"
+  | "command_code"
   | "cloudflare"
   | "chatgpt"
   | "xai_oauth"
@@ -2914,8 +3176,12 @@ export type ProviderName =
   | "zhipu"
   | "zhipu_cn"
   | "xai"
+  | "groq"
+  | "cheaper_inference"
+  | "standardcompute"
   | "together"
   | "xiaomi"
+  | "meta"
   | "qwen"
   | "qwen_cn"
   | "vercel_ai_gateway";
@@ -3065,6 +3331,11 @@ export interface ChatCompletionResult {
   }>;
   content: string;
   toolCalls: ToolCall[];
+  /**
+   * The provider stopped because the reply reached its output token limit, so
+   * the text or the last tool call may be cut off.
+   */
+  truncated?: boolean;
   usage?: ChatUsage;
 }
 
@@ -3106,6 +3377,7 @@ export interface StreamChatHandlers {
     toolCallId: string;
     tool: string;
     result: unknown;
+    images?: ImageAttachment[];
   }) => void;
   onToolInputDelta?: (event: {
     toolCallId: string;
@@ -3159,6 +3431,12 @@ export interface ToolContext {
   /** Emits concise live status lines while a sub-agent child loop runs (parent web UI). */
   emitSubAgentActivity?: (label: string) => void;
   /**
+   * When true (save_artifact is in the session tool list), write_file and delete_file
+   * refuse paths under artifacts/ so every saved artifact goes through save_artifact
+   * and gets an owner row, and an existing one is never deleted to reuse its name.
+   */
+  forbidArtifactFileWrites?: boolean;
+  /**
    * When true (a cognito session), write_file / write_docx / edit_file / delete_file
    * refuse MEMORY.md and memory-archive/YYYY-MM.md under the profile workspace, so a
    * chat that leaves no trace cannot leave one through the file tools either.
@@ -3169,7 +3447,7 @@ export interface ToolContext {
    * refuse paths matching skills/<name>/SKILL.md under the profile workspace.
    */
   forbidProfileSkillMarkdownWrites?: boolean;
-  /** Platform admin flag for Super Bot bind checks (same as HTTP ProfileAccess). */
+  /** Platform admin flag for Airin bind checks (same as HTTP ProfileAccess). */
   isPlatformAdmin?: boolean;
   listPublishedKnowledgeDocuments?: () => Promise<
     PublishedKnowledgeBaseDocument[]
@@ -3184,6 +3462,11 @@ export interface ToolContext {
   };
   /** Invalidates the cached skills catalog after a live skill mutation. */
   onSkillCatalogChange?: () => void;
+  /**
+   * Returns a reminder when the session still has open todos, else null. The
+   * chat loop uses it to keep the model working instead of ending the turn.
+   */
+  openTodosReminder?: () => Promise<string | null>;
   orgId?: string;
   /** Org role of the invoking user. Org-memory tools gate on this; undefined means deny-by-default. */
   orgRole?: OrgRole;
@@ -3194,27 +3477,10 @@ export interface ToolContext {
     filePath: string,
     maxBytes: number
   ) => Promise<Uint8Array>;
-  /**
-   * Records bytes an optimiser removed from a tool result before insertion.
-   * Passed in rather than imported because the database lives in the server and
-   * this runs in core. Optional and fire-and-forget: a platform that does not
-   * record anything simply leaves it undefined.
-   */
-  recordToolOutputSavings?: (saving: {
-    bytesIn: number;
-    bytesOut: number;
-    optimizer: string;
-    tool: string;
-  }) => void;
-  /**
-   * Records what the provider actually charged for one request, tagged with
-   * whether the optimiser was active. This is the only honest route from bytes
-   * to tokens: the provider counts, split by arm.
-   */
+  /** Records what the provider actually charged for one request. */
   recordTurnUsage?: (turn: {
     estimated: boolean;
     inputTokens: number;
-    optimized: boolean;
     outputTokens: number;
   }) => void;
   searchKnowledge?: (input: {
@@ -3227,13 +3493,10 @@ export interface ToolContext {
     truncated: boolean;
   } | null>;
   sessionId?: string;
+  /** Agent group folder the file tools may also read and write (absolute path). */
+  sharedDir?: string;
   /** Aborts when the caller cancels the turn. Long-running tools should stop their work on it. */
   signal?: AbortSignal;
-  /**
-   * Per-org override for the tool-output optimiser. Undefined means the setting
-   * was never chosen, which falls back to the server's NAKAMA_OMNI env var.
-   */
-  tokenOptimizerEnabled?: boolean | null;
   /**
    * Present only in a cognito session. Attachments there have no `sessions`
    * row to reference, so they are written with a null session_id and their
@@ -3251,14 +3514,20 @@ export interface ToolContext {
   };
   workflowId?: string;
   workflowRunId?: string;
-  /** Profile workspace root (~/.nakama/orgs/{orgId}/profiles/{profileId}/). */
+  /** Profile workspace root (~/.airin/orgs/{orgId}/profiles/{profileId}/). */
   workspaceRoot?: string;
 }
 
 export interface ToolDefinition<Input = unknown, Output = unknown> {
+  /** Rechecked before a deferred tool is returned by discovery. */
+  canDiscover?: (context: ToolContext) => Promise<boolean>;
   description: string;
-  /** Assigned plugin tools in this group are discovered per user turn. */
+  /** Assigned tools in this group are loaded through discovery. */
   discoveryGroup?: string;
+  /** What the group is for, shown beside it in the discovery catalog. */
+  discoveryHint?: string;
+  /** Plugins default to one turn; MCP discoveries can last for the session. */
+  discoveryScope?: "session";
   /**
    * When true, the LLM provider runs this tool itself and `run` is never
    * called. Only `web_search` uses it today: the built-in stub is hosted, a
@@ -3269,6 +3538,11 @@ export interface ToolDefinition<Input = unknown, Output = unknown> {
   /** When true, this tool may run concurrently with other parallelSafe tools in the same turn. */
   parallelSafe?: boolean;
   parameters?: JsonSchema;
+  /**
+   * Set from an MCP server's `readOnlyHint`. A regression rerun runs only
+   * these and its allowlisted tools.
+   */
+  readOnly?: boolean;
   run(input: Input, context: ToolContext): Promise<Output>;
 }
 
@@ -3282,6 +3556,7 @@ export type ComposioUserConnectionStatus =
   | "error";
 
 export type ComposioToolErrorCode =
+  | "COMPOSIO_CUSTOM_AUTH_REQUIRED"
   | "COMPOSIO_NOT_CONNECTED"
   | "COMPOSIO_TRANSIENT"
   | "COMPOSIO_POLICY";
@@ -3312,6 +3587,23 @@ export interface ComposioUserConnectionSummary {
   updatedAt: string;
 }
 
+/** One step a new user can take to get their agent ready for their goal. */
+export type SetupChecklistItem =
+  | { kind: "connect_toolkit"; title: string; toolkitSlug: string }
+  | { kind: "enable_skill"; skillId: string; title: string }
+  | { kind: "write_context"; scope: "org"; title: string };
+
+export interface SetupChecklistRequest {
+  /** The agent the user is about to chat with; skill items target it. */
+  profileId: string;
+}
+
+export interface SetupChecklistResponse {
+  /** USER.md "Help with", or the goal read from the rest of the context. */
+  goal: string | null;
+  items: SetupChecklistItem[];
+}
+
 export interface ComposioCatalogToolkitSummary {
   description: string | null;
   logoUrl: string | null;
@@ -3324,7 +3616,7 @@ export interface ListComposioToolkitsResponse {
   catalogError: string | null;
   /** @deprecated Use composioReachable. */
   composioAvailable: boolean;
-  /** Nakama can reach the Composio API with the saved key. */
+  /** Airin can reach the Composio API with the saved key. */
   composioReachable: boolean;
   /** A Composio project API key is saved on this server. */
   configured: boolean;
@@ -3339,11 +3631,22 @@ export interface EnableComposioToolkitRequest {
 export interface ComposioConnectRequest {
   /** Browser origin for OAuth callback (e.g. http://localhost:3003). */
   callbackOrigin?: string;
+  /** Path on this site to land on after sign-in, e.g. `/profiles?profile=…`. */
+  returnTo?: string;
 }
 
 export interface ComposioConnectResponse {
-  redirectUrl: string;
+  /** True when the account is ready without an OAuth redirect. */
+  connected?: boolean;
+  /**
+   * Composio OAuth URL when the toolkit needs sign-in. Null when the toolkit
+   * needs no auth (or is already ready) and tools were synced in this call.
+   */
+  redirectUrl: string | null;
 }
+
+/** Composio has no managed OAuth app for the toolkit, for example Google Forms. */
+export const COMPOSIO_CUSTOM_AUTH_REQUIRED = "COMPOSIO_CUSTOM_AUTH_REQUIRED";
 
 export interface ProfileComposioToolkitAssignment {
   allowedActions: string[] | null;
@@ -3373,7 +3676,33 @@ export interface PluginReleaseSummary {
   digest: string;
   manifest: PluginManifest;
   pluginId: string;
+  /** Missing in older exports; treat as legacy provenance. */
+  source?: "legacy" | "npm" | "official" | "local" | "agent";
   version: string;
+}
+
+export interface LocalPluginDraftRequest {
+  draftId: string;
+  orgId: string;
+  profileId: string;
+}
+
+export interface LocalPluginPreviewResponse
+  extends PluginPackagePreviewResponse {
+  draft: LocalPluginDraftRequest;
+  expectedRevision: number | null;
+  files: Array<{ path: string; size: number }>;
+}
+
+export interface InstallLocalPluginRequest extends LocalPluginDraftRequest {
+  expectedDigest: string;
+  expectedRevision: number | null;
+}
+
+export interface ReadLocalPluginFileRequest extends LocalPluginDraftRequest {
+  expectedDigest: string;
+  offset?: number;
+  path: string;
 }
 
 export interface OrgPluginSummary {
@@ -3416,6 +3745,21 @@ export interface ListOrgPluginsResponse {
 
 export interface ListPluginReleasesResponse {
   releases: PluginReleaseSummary[];
+}
+
+/** An organization that still holds a plugin, so its releases cannot be removed. */
+export interface PluginUsageOrg {
+  /** Agents in this organization with one of the plugin's tools or skills. */
+  agents: Array<{ id: string; name: string }>;
+  lifecycleState: OrgPluginLifecycleState;
+  name: string;
+  orgId: string;
+  revision: number;
+  selectedVersion: string | null;
+}
+
+export interface PluginUsageResponse {
+  orgs: PluginUsageOrg[];
 }
 
 /** A registry version newer than anything approved for this plugin. */

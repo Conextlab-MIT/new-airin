@@ -4,12 +4,12 @@ import {
   isEmailConfigComplete,
   loadEmailConfig,
   toMailboxConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   CachedMcpTool,
   DatabaseAdapter,
   StoredMcpServerRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import type { JsonValue, McpToolArguments } from "./mcp-client-manager";
 import type { McpService } from "./mcp-service";
 

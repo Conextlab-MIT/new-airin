@@ -1,10 +1,21 @@
-import type { StoredAutomation } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { cn } from "@nakama/ui/utils";
+import type { StoredAutomation } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { cn } from "@airin/ui/utils";
+import {
+  Copy01Icon,
+  PencilEdit02Icon,
+  PlayIcon,
+  RefreshIcon,
+} from "hugeicons-react";
+import { useState } from "react";
+import { useCreateAutomationWebhookSecretMutation } from "@/hooks/use-automations";
 import { formatFutureRelativeTime } from "@/lib/chat-history";
+import { formatError } from "@/lib/client";
+import { buildNotificationWebhookUrl } from "@/lib/notification-destinations";
 import {
   ListSkeleton,
   RunHistoryList,
@@ -138,6 +149,7 @@ function AutomationSummaryCard({
             type="button"
             variant="outline"
           >
+            <PencilEdit02Icon aria-hidden className="size-4" />
             Edit
           </Button>
           <Button
@@ -149,7 +161,9 @@ function AutomationSummaryCard({
           >
             {runningId === selected.id ? (
               <Spinner className="size-3.5" />
-            ) : null}
+            ) : (
+              <PlayIcon aria-hidden className="size-4" />
+            )}
             Run now
           </Button>
           <div className="ml-auto flex items-center gap-2">
@@ -158,6 +172,7 @@ function AutomationSummaryCard({
               <span className="font-medium text-foreground">
                 {selectedProfileName}
               </span>
+              {selected.toolLimit ? " · Limited tools" : null}
             </p>
             <Button
               className="px-3.5 text-destructive hover:text-destructive"
@@ -171,6 +186,111 @@ function AutomationSummaryCard({
             </Button>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CopyValue({ value }: { value: string }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus("copied");
+    } catch {
+      setStatus("failed");
+    }
+
+    window.setTimeout(() => setStatus("idle"), 2000);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <code className="max-w-full break-all rounded-md border border-border bg-background px-2.5 py-1 text-xs">
+        {value}
+      </code>
+      <Button
+        onClick={() => void copy()}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        <Copy01Icon aria-hidden className="size-4" />
+        {status === "copied"
+          ? "Copied"
+          : status === "failed"
+            ? "Copy failed"
+            : "Copy"}
+      </Button>
+    </div>
+  );
+}
+
+function WebhookCard({
+  automationId,
+  webhookUrl,
+}: {
+  automationId: string;
+  webhookUrl?: string;
+}) {
+  const createSecret = useCreateAutomationWebhookSecretMutation();
+  const [secret, setSecret] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const url =
+    webhookUrl ??
+    buildNotificationWebhookUrl(
+      window.location.origin,
+      `/v1/automations/${encodeURIComponent(automationId)}/webhook`
+    );
+
+  async function handleCreate(): Promise<void> {
+    try {
+      setSecret(await createSecret.mutateAsync(automationId));
+    } catch (error) {
+      // The dialog stays open and shows this message.
+      throw new Error(formatError(error));
+    }
+  }
+
+  return (
+    <Card className="shadow-none">
+      <CardContent className="space-y-3 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-medium text-sm">Webhook</h3>
+          <Button
+            disabled={createSecret.isPending}
+            onClick={() => setConfirmOpen(true)}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <RefreshIcon aria-hidden className="size-3.5" />
+            New secret
+          </Button>
+        </div>
+        <CopyValue value={url} />
+        {secret ? (
+          <div className="space-y-2">
+            <p
+              className="text-emerald-700 text-xs dark:text-emerald-300"
+              role="status"
+            >
+              Copy it now. It will not be shown again.
+            </p>
+            <CopyValue value={secret} />
+          </div>
+        ) : null}
+        {confirmOpen ? (
+          <ConfirmDialog
+            confirmLabel="Make secret"
+            description="Any old secret stops working at once."
+            onClose={() => setConfirmOpen(false)}
+            onConfirm={handleCreate}
+            title="Make a new webhook secret?"
+          />
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -210,9 +330,16 @@ export function AutomationDetailPanel(state: DetailState) {
         setDeleteTarget={setDeleteTarget}
       />
 
+      {selected.trigger.type === "webhook" ? (
+        <WebhookCard
+          automationId={selected.id}
+          webhookUrl={selected.webhookUrl}
+        />
+      ) : null}
+
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="font-normal text-muted-foreground/55 text-sm">
+          <h3 className="font-medium text-muted-foreground text-sm">
             Run history
           </h3>
           <p className="type-body text-xs">

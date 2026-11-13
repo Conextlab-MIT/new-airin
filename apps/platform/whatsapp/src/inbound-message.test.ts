@@ -1,14 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import {
   extractInboundText,
-  isPrivateWhatsAppChat,
   isSelfWhatsAppChat,
   isWhatsAppOutboundEcho,
   parseInboundWhatsAppMessage,
   rememberWhatsAppOutbound,
   resetWhatsAppOutboundForTests,
-  shouldHandleInboundMessage,
 } from "./inbound-message";
+
+function handles(
+  ...args: Parameters<typeof parseInboundWhatsAppMessage>
+): boolean {
+  return parseInboundWhatsAppMessage(...args) !== null;
+}
 
 const ME = {
   id: "6281379292556@s.whatsapp.net",
@@ -49,12 +53,6 @@ describe("inbound message routing", () => {
     ).toBe(false);
   });
 
-  test("accepts private phone and lid chats", () => {
-    expect(isPrivateWhatsAppChat("6281379292556@s.whatsapp.net")).toBe(true);
-    expect(isPrivateWhatsAppChat("236283431522503@lid")).toBe(true);
-    expect(isPrivateWhatsAppChat("123@g.us")).toBe(false);
-  });
-
   test("handles message-yourself traffic marked fromMe", () => {
     const me = {
       id: "6281379292556@s.whatsapp.net",
@@ -62,7 +60,7 @@ describe("inbound message routing", () => {
     };
 
     expect(
-      shouldHandleInboundMessage(
+      handles(
         {
           key: { fromMe: true, remoteJid: "236283431522503@lid" },
           message: { conversation: "hello" },
@@ -75,7 +73,7 @@ describe("inbound message routing", () => {
 
   test("ignores fromMe messages in other chats", () => {
     expect(
-      shouldHandleInboundMessage(
+      handles(
         {
           key: { fromMe: true, remoteJid: "9999999999@s.whatsapp.net" },
           message: { conversation: "hello" },
@@ -135,9 +133,9 @@ describe("inbound message routing", () => {
       },
     };
 
-    expect(shouldHandleInboundMessage(groupPhoto, ME)).toBe(true);
+    expect(handles(groupPhoto, ME)).toBe(true);
     expect(
-      shouldHandleInboundMessage(
+      handles(
         {
           ...groupPhoto,
           message: { imageMessage: { mimetype: "image/jpeg" } },
@@ -168,40 +166,9 @@ describe("inbound message routing", () => {
     expect(extractInboundText(payload as any)).toBe("hi from toJSON");
   });
 
-  test("ignores group messages without a mention, reply, or slash command", () => {
-    expect(
-      shouldHandleInboundMessage(
-        {
-          key: {
-            participant: "9999999999@s.whatsapp.net",
-            remoteJid: "120363@g.us",
-          },
-          message: { conversation: "hello everyone" },
-        },
-        ME
-      )
-    ).toBe(false);
-  });
-
-  test("handles plain group messages when mention is not required", () => {
-    expect(
-      shouldHandleInboundMessage(
-        {
-          key: {
-            participant: "9999999999@s.whatsapp.net",
-            remoteJid: "120363@g.us",
-          },
-          message: { conversation: "hello everyone" },
-        },
-        ME,
-        { requireGroupMention: false }
-      )
-    ).toBe(true);
-  });
-
   test("handles group mentions, replies, and slash commands", () => {
     expect(
-      shouldHandleInboundMessage(
+      handles(
         {
           key: {
             participant: "9999999999@s.whatsapp.net",
@@ -210,7 +177,7 @@ describe("inbound message routing", () => {
           message: {
             extendedTextMessage: {
               contextInfo: { mentionedJid: [ME.id] },
-              text: "@Nakama hello",
+              text: "@Airin hello",
             },
           },
         },
@@ -218,8 +185,10 @@ describe("inbound message routing", () => {
       )
     ).toBe(true);
 
+    rememberWhatsAppOutbound({ id: "BOT_MSG_1", jid: "120363@g.us" });
+
     expect(
-      shouldHandleInboundMessage(
+      handles(
         {
           key: {
             participant: "9999999999@s.whatsapp.net",
@@ -227,7 +196,7 @@ describe("inbound message routing", () => {
           },
           message: {
             extendedTextMessage: {
-              contextInfo: { participant: ME.lid },
+              contextInfo: { participant: ME.lid, stanzaId: "BOT_MSG_1" },
               text: "follow up",
             },
           },
@@ -237,7 +206,25 @@ describe("inbound message routing", () => {
     ).toBe(true);
 
     expect(
-      shouldHandleInboundMessage(
+      handles(
+        {
+          key: {
+            participant: "9999999999@s.whatsapp.net",
+            remoteJid: "120363@g.us",
+          },
+          message: {
+            extendedTextMessage: {
+              contextInfo: { participant: ME.id, stanzaId: "OWNER_TYPED_MSG" },
+              text: "follow up",
+            },
+          },
+        },
+        ME
+      )
+    ).toBe(false);
+
+    expect(
+      handles(
         {
           key: { fromMe: true, remoteJid: "120363@g.us" },
           message: { conversation: "/status" },
@@ -258,7 +245,7 @@ describe("inbound message routing", () => {
         message: {
           extendedTextMessage: {
             contextInfo: { mentionedJid: [ME.lid] },
-            text: "@Nakama hello",
+            text: "@Airin hello",
           },
         },
       },
@@ -272,11 +259,12 @@ describe("inbound message routing", () => {
       me: ME,
       mentionedJids: [ME.lid],
       messageId: null,
+      quotedMessageId: null,
       quotedParticipant: null,
       quotedText: null,
       senderJid: "9999999999@s.whatsapp.net",
       senderJids: ["9999999999@s.whatsapp.net", "104784384290844@lid"],
-      text: "@Nakama hello",
+      text: "@Airin hello",
     });
   });
 
@@ -296,18 +284,20 @@ describe("inbound message routing", () => {
                 conversation:
                   "Update Daily Well PHSS 20-08-2026\nSFT-01 Unload flow",
               },
+              stanzaId: "QUOTED_MSG_1",
             },
-            text: "@Nakama ini data laporan hari berikutnya",
+            text: "@Airin ini data laporan hari berikutnya",
           },
         },
       },
       ME
     );
 
+    expect(inbound?.quotedMessageId).toBe("QUOTED_MSG_1");
     expect(inbound?.quotedParticipant).toBe("6281352311912@s.whatsapp.net");
     expect(inbound?.quotedText).toBe(
       "Update Daily Well PHSS 20-08-2026\nSFT-01 Unload flow"
     );
-    expect(inbound?.text).toBe("@Nakama ini data laporan hari berikutnya");
+    expect(inbound?.text).toBe("@Airin ini data laporan hari berikutnya");
   });
 });

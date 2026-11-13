@@ -7,7 +7,7 @@ import {
   setupFreshInstallSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-login-timing-test-");
+setupTestConfigDir("airin-login-timing-test-");
 
 class CountingAuthService extends AuthService {
   verifyCalls = 0;

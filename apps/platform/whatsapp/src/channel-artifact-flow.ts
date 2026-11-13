@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import type { NakamaClient } from "@nakama/client";
+import type { AirinClient } from "@airin/client";
 import {
   formatMissingAttachArtifactMessage,
   getMostRecentDeliverableArtifact,
-} from "@nakama/core";
-import type { ChannelSessionStore } from "@nakama/core/channel-session-store";
+} from "@airin/core";
+import type { ChannelSessionStore } from "@airin/core/channel-session-store";
 import type { WASocket } from "@whiskeysockets/baileys";
 import {
   formatWhatsAppArtifactOversizeError,
@@ -25,7 +25,7 @@ export interface PreparedWhatsAppArtifactCandidate {
 
 /** `/attach` shortcut: most recent registry artifact, or a missing-artifact message. */
 export async function maybeSendWhatsAppAttachOnlyCommand(input: {
-  client: NakamaClient;
+  client: AirinClient;
   conversationKey: string;
   profileId: string;
   sessionStore: ChannelSessionStore;
@@ -53,7 +53,7 @@ export async function maybeSendWhatsAppAttachOnlyCommand(input: {
 }
 
 export async function sendArtifactDocumentForPath(input: {
-  client: NakamaClient;
+  client: AirinClient;
   profileId: string;
   path: string;
   filename: string;

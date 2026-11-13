@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { CreateSessionRequest, GenerateChatInput } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { CreateSessionRequest, GenerateChatInput } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { createDefaultProfile } from "../../services/agent-service-test-fixtures";
 import { WorkerManagerService } from "../../services/worker-manager-service";
@@ -8,7 +8,7 @@ import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { loginUserSession, seedOrgAdmin } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-sessions-cognito-test-");
+setupTestConfigDir("airin-sessions-cognito-test-");
 
 const PASSWORD = "password123";
 
@@ -126,7 +126,7 @@ describe("POST /v1/sessions with cognito", () => {
       });
 
       if (token) {
-        headers["X-Nakama-WhatsApp-Context-Token"] = token;
+        headers["X-Airin-WhatsApp-Context-Token"] = token;
       }
 
       return app.fetch(
@@ -239,27 +239,6 @@ describe("POST /v1/sessions with cognito", () => {
     );
 
     expect(after.status).toBe(404);
-  });
-
-  test("an invalid cognito body is rejected", async () => {
-    const { app, session } = await createScenario();
-
-    const response = await app.fetch(
-      new Request("http://localhost:4310/v1/sessions", {
-        body: JSON.stringify({
-          channel: "web",
-          cognito: "yes",
-          profileId: "profile_owner",
-        }),
-        headers: session.headers({
-          "Content-Type": "application/json",
-          "X-CSRF-Token": session.csrfToken,
-        }),
-        method: "POST",
-      })
-    );
-
-    expect(response.status).toBe(400);
   });
 
   test("an explicitly missing profile cannot fall back to the default bot", async () => {

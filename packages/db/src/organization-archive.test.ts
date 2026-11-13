@@ -32,6 +32,54 @@ async function seedTwoActiveOrgs(db: DatabaseAdapter, createdAt: string) {
 }
 
 describe("organization archive persistence", () => {
+  test("membership lists preserve each organization's curator clocks and quotas", async () => {
+    const db = createSqliteMemoryAdapter();
+    const now = "2026-10-25T00:00:00.000Z";
+    await seedTwoActiveOrgs(db, now);
+    await db.upsertOrganization({
+      createdAt: now,
+      id: "org_a",
+      monthlyLlmTokenLimit: 7000,
+      monthlyLlmTurnLimit: 500,
+      monthlyLlmWarningPercent: 55,
+      name: "A",
+      skillsCuratorArchiveAfterDays: 120,
+      skillsCuratorStaleAfterDays: 45,
+      slug: "a",
+      updatedAt: now,
+    });
+
+    for (const orgId of ["org_a", "org_b"]) {
+      await db.upsertOrgMember({
+        createdAt: now,
+        orgId,
+        role: "admin",
+        userId: "user_1",
+      });
+    }
+
+    const memberships = await db.listUserOrganizations("user_1");
+    expect(memberships.map((entry) => entry.organization)).toMatchObject([
+      {
+        id: "org_a",
+        monthlyLlmTokenLimit: 7000,
+        monthlyLlmTurnLimit: 500,
+        monthlyLlmWarningPercent: 55,
+        skillsCuratorArchiveAfterDays: 120,
+        skillsCuratorStaleAfterDays: 45,
+      },
+      {
+        id: "org_b",
+        monthlyLlmTokenLimit: undefined,
+        monthlyLlmTurnLimit: 0,
+        monthlyLlmWarningPercent: 80,
+        skillsCuratorArchiveAfterDays: 90,
+        skillsCuratorStaleAfterDays: 30,
+      },
+    ]);
+    expect(await db.listUserOrganizations("user_other")).toEqual([]);
+  });
+
   test("parent round-trips through lookups and survives ordinary updates", async () => {
     const db = createSqliteMemoryAdapter();
     const now = "2026-10-11T00:00:00.000Z";
@@ -591,6 +639,7 @@ describe("shared agent instance persistence", () => {
       acpAgent: null,
       acpSettings: null,
       automationsEnabled: true,
+      groupsEnabled: true,
       id: "instance_a",
       orgId: "team_a",
       ownerUserId: null,
@@ -707,7 +756,7 @@ describe("shared agent instance persistence", () => {
   });
 
   test("failed source-link insertion rolls back the new profile", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "nakama-shared-agent-"));
+    const directory = mkdtempSync(join(tmpdir(), "airin-shared-agent-"));
     const path = join(directory, "test.sqlite");
     const database = await createSqliteDatabase(`file:${path}`);
     const raw = new Database(path);
@@ -874,7 +923,7 @@ describe("atomic team creation records", () => {
     await expect(
       db.beginOrgTeamCreation({ ...input, adminUserId: "missing" })
     ).rejects.toThrow();
-    await db.disableUser("admin", "now");
+    expect(await db.disableUserUnlessLastAdmin("admin", "now")).toBe(true);
     await expect(db.beginOrgTeamCreation(input)).rejects.toThrow();
     await db.enableUser("admin");
 
@@ -922,7 +971,7 @@ describe("atomic team creation records", () => {
   test.each(["org_members", "org_team_creation_requests"])(
     "failure writing %s rolls back the child and admin",
     async (table) => {
-      const directory = mkdtempSync(join(tmpdir(), "nakama-team-creation-"));
+      const directory = mkdtempSync(join(tmpdir(), "airin-team-creation-"));
       const path = join(directory, "test.sqlite");
       const database = await createSqliteDatabase(`file:${path}`);
       const raw = new Database(path);

@@ -1,92 +1,42 @@
-# Nakama Architecture
+# Airin Architecture
 
-Nakama is an agent platform for teams. The platform does not replace the team. One shared server runtime serves thin clients.
+Airin is an agent platform for teams. The platform does not replace the team. One shared server runtime serves thin clients.
 
 The org is the isolation boundary. Profiles, sessions, tools, MCP, skills, automations, attachments, and usage are org-scoped unless they are platform-level.
 
 Security trust boundaries, STRIDE analysis, and residual risks are maintained in
 [`THREAT_MODEL.md`](./THREAT_MODEL.md).
 
+The words session, chat, turn, branch, child chat, and cognito chat have one meaning each. [`GLOSSARY.md`](./GLOSSARY.md) defines them.
+
 ## System overview
 
 ```mermaid
 flowchart TB
-  subgraph clients ["Clients"]
-    web["apps/web"]
-    cli["apps/cli"]
-    tg["apps/platform/telegram"]
-    wa["apps/platform/whatsapp"]
-    dc["apps/platform/discord"]
-    sl["apps/platform/slack"]
-  end
-
-  subgraph sdk ["@nakama/client"]
-    client["HTTP + SSE client"]
-  end
+  clients["Clients: apps/web, apps/cli, apps/desktop"]
+  channels["Channel workers: telegram, whatsapp, discord, slack, teams"]
+  client["@airin/client (HTTP + SSE)"]
 
   subgraph server ["apps/server"]
-    http["Hono HTTP app"]
-    auth["Auth + CSRF middleware"]
-    org["Org context middleware"]
+    http["Hono app: rate limit, auth, org, routes"]
     agent["AgentService"]
-    routes["Routes"]
-    workers["WorkerManagerService"]
-    notif["Notification services"]
-    plugins["PluginService"]
+    workers["WorkerManagerService (PM2)"]
   end
 
-  subgraph runtime ["Runtime services"]
-    harness["@nakama/agent"]
-    tools["Tool resolver + handlers"]
-    providers["Provider adapters"]
-    mcp["MCP registry + bridge"]
-    persist["Session persistence"]
-  end
-
-  subgraph data ["State"]
-    db["@nakama/db (SQLite)"]
-    soul["~/.nakama/orgs/.../profiles/..."]
-    orgmem["~/.nakama/orgs/{orgId}/MEMORY.md"]
-    config["~/.nakama/config.ini"]
-    files["Attachments / knowledge files"]
-  end
-
-  subgraph workers2 ["Platform workers"]
-    automation["automation worker"]
-    telegram["telegram worker"]
-    whatsapp["whatsapp worker"]
-    discord["discord worker"]
-    slack["slack worker"]
-    pluginworkers["plugin workers"]
-  end
+  runtime["@airin/agent, tools, providers, MCP, plugins"]
+  automation["automation worker + plugin workers"]
+  state["State: SQLite, ~/.airin soul + org MEMORY.md, config.ini, files"]
 
   clients --> client
+  channels --> client
   client -->|"HTTP / SSE + X-Org-Id"| http
-  http --> auth
-  http --> org
-  http --> routes
-  routes --> agent
-  routes --> workers
-  routes --> notif
-  routes --> plugins
-  agent --> harness
-  agent --> tools
-  agent --> providers
-  agent --> mcp
-  agent --> plugins
-  agent --> persist
-  harness --> db
-  persist --> db
-  tools --> soul
-  agent --> soul
-  agent --> orgmem
-  db --> files
-  server --> config
+  http --> agent
+  http --> workers
+  agent --> runtime
+  agent --> state
+  runtime --> state
+  workers --> channels
   workers --> automation
-  workers --> telegram
-  workers --> whatsapp
-  workers --> discord
-  workers --> pluginworkers
 ```
 
 Apps can import from `packages/*`. Packages must not import from `apps/*`.
@@ -94,19 +44,19 @@ Apps can import from `packages/*`. Packages must not import from `apps/*`.
 ## Repo map
 
 ```text
-nakama/
+airin/
 ├── apps/
 │   ├── server/                 # HTTP API, auth, org, agent runtime
 │   ├── web/                    # Dashboard
 │   ├── cli/                    # Terminal client
-│   └── platform/{automation,telegram,whatsapp,discord,slack}/
+│   ├── desktop/                # Electron app with a bundled local server
+│   └── platform/{automation,telegram,whatsapp,discord,slack,teams}/
 ├── packages/
 │   ├── agent/                  # Prompt assembly, tool loop, chat session
 │   ├── core/                   # Contracts, soul, config, builtin tools
 │   ├── db/                     # SQLite schema, adapters, migrations
 │   ├── client/                 # Shared HTTP/SSE client
 │   ├── plugins/                # Bundled plugins, including workflows, Supermemory, and Google Meet
-│   ├── telegram-manager/      # Telegram manager client and store
 │   └── ui/                    # Shared UI components
 └── docs/website/
 ```
@@ -117,6 +67,9 @@ nakama/
 |---|---|
 | Clients (`web`, `cli`, channels) | Thin HTTP and SSE client. This layer has no agent loop. |
 | `apps/server` `AgentService` | Assembles the profile, provider, tools, MCP, soul, Composio, org-memory, attachments, and persistence. |
+| `SessionRuntime` (`session-runtime.ts`) | Turns a session id into a chat. It holds the chat caches and builds a chat again when it is out of date. |
+| `TurnRunner` (`turn-runner.ts`) | Runs one turn of a session, from the lock to the post-turn hooks. |
+| Turn kinds (`turn-kinds.ts`) | One table that gives each kind of turn its platform tools and prompt lines. |
 | `packages/agent` | This package owns prompts, the tool loop, compaction, and `AgentChatSession`. |
 | `packages/core` | This package owns contracts, soul compose, builtins, channel helpers, and config. |
 | `packages/db` | This package owns the schema and adapters for persisted entities. |
@@ -129,75 +82,67 @@ The entrypoint is [`apps/server/src/http/app.ts`](./apps/server/src/http/app.ts)
 The HTTP app does these steps in this order:
 
 1. The app serves static web assets if `webDistDir` is set.
-2. The app applies auth and CSRF middleware.
-3. Internal routes for automation, curator, notification webhooks, Composio OAuth, and MCP OAuth run before org middleware.
-4. Org middleware resolves the active org and checks membership. Audit logging runs after it when the database is available.
-5. Routes call services.
-6. The same Hono registration produces `/openapi.json`.
+2. Rate limiting runs before auth, so a flood is refused before it reaches bcrypt or the database.
+3. The app applies auth and CSRF middleware.
+4. Internal routes run before org middleware: internal automations and curator, notification webhooks, ACP MCP, Composio OAuth and MCP OAuth.
+5. Org middleware resolves the active org and checks membership. Audit logging runs after it when the database is available.
+6. All other routes run after org middleware and call services.
+7. The same Hono registration produces `/openapi.json`.
 
-These route groups run before org middleware: `internal-automations`, `internal-curator`, `notification-webhooks`, Composio OAuth, MCP OAuth.
-
-These route groups run after org middleware: `system`, `audit-events`, `auth`, `setup-import`, `workers`, `models`, `user-context`, `sessions`, `profiles`, `profile-portability`, `artifact-shares`, `mcp`, `skills`, `tools`, `plugins`, `automations`, `notification-destinations`, `token-optimization`, `automation-worker-settings`, `coding-harnesses`, `composio`, `platform-orgs`, `data-portability`, `org-members`, `org-memory`, `org-curator`, `skill-proposals`, `skill-suggestions`.
+A new route goes after org middleware unless it cannot have an org context. The order is in `app.ts`.
 
 ## Multi-tenancy
 
-Org-scoped authenticated requests need an active org. The middleware resolves it from `X-Org-Id`, the plugin UI path, or the active org in the auth context or session. Local-token requests can fall back to the user's first org. Auth and platform routes skip this check.
+Org-scoped authenticated requests need an active org. The middleware resolves it from `X-Org-Id`, the plugin UI path, or the active org in the auth context or session. A local-token request with no org uses the user's org only when they belong to exactly one; with more, it returns 400. Auth and platform routes skip this check.
 
-Org roles are `admin`, `member`, and `viewer`. A platform admin uses `/v1/platform/*`.
-
-- [`org-middleware.ts`](./apps/server/src/http/org-middleware.ts)
-- [`org-guards.ts`](./apps/server/src/http/org-guards.ts)
-- [`org-service.ts`](./apps/server/src/services/org-service.ts)
+Org roles are `admin` and `member`. A platform admin uses `/v1/platform/*`. Files to change: [`apps/server/AGENTS.md`](./apps/server/AGENTS.md).
 
 ## Agent runtime
 
 `AgentService` in [`agent-service.ts`](./apps/server/src/services/agent-service.ts) assembles the agent runtime.
 
-The service loads the profile, the soul, the provider, and the model. The service attaches builtin tools, custom JS tools, custom Python tools, MCP tools, and enabled plugin tools. The service attaches Composio tools and org-memory tools when they apply. Super Bot gets extra tools when the profile permits them. The service also attaches questionnaire, todo, and attachments. Discord sessions get Discord artifact tools.
+The service loads the profile, the soul, the provider, and the model. The service attaches builtin tools, custom JS tools, custom Python tools, MCP tools, and enabled plugin tools. The service attaches Composio tools and org-memory tools when they apply. Airin gets extra tools when the profile permits them. Discord sessions get Discord artifact tools.
 
-Prompt layers:
+The kind of turn decides the platform tools on top of the profile's own: automation, todo, questionnaire, `sub_agent`, `skill_manage`, and org-memory proposals. It also decides the prompt lines added after the profile's prompt. The kinds are `chat`, `branch`, `cognito`, `child`, `sub_agent`, `group_member`, `automation`, `plugin_workflow`, `plugin_summarize`, and `acp_draft`. For example, a child chat, a sub-agent run, and a group member turn get no todo, questionnaire, automation, or `sub_agent` tools. A cognito chat gets no org-memory proposals and no `skill_manage`. The table is [`turn-kinds.ts`](./apps/server/src/services/turn-kinds.ts).
 
-1. [`soul/compose.ts`](./packages/core/src/soul/compose.ts) supplies soul content.
-2. [`skills/compose.ts`](./packages/core/src/skills/compose.ts) supplies the skills catalog and agent-browser text.
-3. The service adds org memory from `~/.nakama/orgs/{orgId}/MEMORY.md` for roles that are not `viewer`.
-4. [`chat-prompt.ts`](./packages/agent/src/chat-prompt.ts) supplies structure and tool instructions.
-5. [`chat.ts`](./packages/agent/src/chat.ts) generates the per-turn reply.
-
-Per-turn context can include todos, matched skills, and Composio connections. A knowledge-base catalog can also attach to the system prompt.
+Prompt layers, in order: soul content, skills catalog, org memory from `~/.airin/orgs/{orgId}/MEMORY.md` (every org role), chat structure and tool instructions, then per-turn context (todos, matched skills, Composio connections). A knowledge-base catalog can also attach to the system prompt. Files and functions: [`packages/core/AGENTS.md`](./packages/core/AGENTS.md#system-prompt).
 
 ## Sessions
 
-- Live state is the in-memory `AgentChatSession`.
+- Live state is the in-memory `AgentChatSession`, which [`session-runtime.ts`](./apps/server/src/services/session-runtime.ts) holds.
+- The runtime builds a stored chat from its session record on first use. It holds at most 50 stored chats and evicts the least recently used one that has no turn running.
+- The runtime builds a chat again when what the profile may use (tools, skills, plugins) changes. A rebuilt chat gets the same record and the owner's access, so it equals the first one.
 - Durable history is SQLite `session_messages` through [`session-persistence.ts`](./apps/server/src/services/session-persistence.ts).
-- Cognito sessions are intentionally ephemeral: their history stays in memory and has no `sessions` or `session_messages` row.
+- Cognito sessions are intentionally ephemeral: their history stays in memory and has no `sessions` or `session_messages` row. The runtime keeps them in a separate store.
 - Questionnaire and todo are on `sessions` metadata.
 - The tables are `sessions`, `session_messages`, and `attachments`.
 
+## Turns
+
+[`turn-runner.ts`](./apps/server/src/services/turn-runner.ts) runs every message turn of a session. The SSE route, the JSON route, and the `sub_agent` tool call it, and each one only chooses how to show the turn.
+
+1. The runner finds the session record, then takes the session's turn lock. A session that another turn holds answers busy.
+2. It reopens a closed chat, checks the shared agent and the model, and gets the chat from the session runtime.
+3. It sends the message with one abort signal. A closed request, a stopped parent, or `close_session` aborts it.
+4. It ends the turn on the overall deadline, or on the first-token deadline if the provider sends nothing.
+5. It publishes every event to [`session-turn-registry.ts`](./apps/server/src/services/session-turn-registry.ts), so another tab can follow the turn.
+6. It frees the lock, then schedules the title. After a successful turn that is not in a child chat, it also schedules the skill review.
+
+Turns outside a session (automations, plugin summaries, in-memory sub-agents, group member turns) use `AgentService.openOneShotChat` with their turn kind.
+
 ## Tools and MCP
 
-| Kind | Where |
-|---|---|
-| Builtin definitions | `packages/core/src/tools/*` |
-| Server runtime tools | `apps/server/src/tools/*` |
-| Custom JS | `javascript-tool-loader.ts` |
-| Custom Python | `python-tool-loader.ts` |
-| MCP | `mcp-tool-bridge.ts` |
-| Composio | `composio-tool-bridge.ts` |
-| Plugins | `plugin-service.ts` |
-
-Tool definitions are shared; `profile_tools` controls which custom tools a profile can use. Super Bot can get extra runtime tools when the profile permits them.
+Builtin definitions live in `packages/core/src/tools/` and server runtime tools in `apps/server/src/tools/`. Custom JS, custom Python, MCP, Composio and plugin tools each have a loader or bridge in `apps/server/src/services/`. Tool definitions are shared; `profile_tools` controls which custom tools a profile can use. Airin can get extra runtime tools when the profile permits them. Loaders and workspace paths: [`packages/core/AGENTS.md`](./packages/core/AGENTS.md#tool-execution--workspace).
 
 ## Workers and automations
 
 The server starts workers with PM2 through [`worker-manager-service.ts`](./apps/server/src/services/worker-manager-service.ts).
 
 - `apps/platform/automation` does scheduled work and skill-curator ticks.
-- `apps/platform/telegram`, `whatsapp`, `discord`, and `slack` are channel bridges.
+- `apps/platform/telegram`, `whatsapp`, `discord`, `slack`, and `teams` are channel bridges.
 - Installed plugins can contribute their own workers.
 
-The database stores automations in `automations` and `automation_runs`.
-
-The services are `automation-service.ts` and `automation-runner.ts`.
+The database stores automations in `automations` and `automation_runs`. The services are `automation-service.ts` and `automation-runner.ts`.
 
 ## Notifications and attachments
 
@@ -205,44 +150,19 @@ Destinations and inbound webhooks use `notification-destination-service.ts` and 
 
 Attachments have SQLite records and files on disk. The server adds them to provider messages through `attachment-service.ts`.
 
-## CLI terminal UI
-
-| File | Purpose |
-|---|---|
-| `terminal-renderer.ts` | Composer, transcript, stream, and status rules |
-| `terminal-layout.ts` | Viewport, pinned input, stream buffer, frame component, and cursor |
-| `virtual-message-list.ts` | Transcript wrap and spacing |
-
-`PersistentPrompt` sends composer state to `TerminalRenderer`, which calls `buildComposerLines()`. `TerminalLayout` reserves composer rows. The transcript uses `beginMessage`, `writelnScroll`, and `endMessage`. The stream writes to `streamBuffer`. `endStream()` seals the stream.
-
-Spacing has layers. User-bubble padding, composer padding, and inter-message gaps are different. `shouldInsertLeadingGap` adds a gap before a message. `endStream()` adds a gap after the stream.
-
 ## Persistence
 
-The schema is [`packages/db/sql/schema.sql`](./packages/db/sql/schema.sql).
+[`packages/db/sql/schema.sql`](./packages/db/sql/schema.sql) has every table. Main areas: tenant and auth, agent config, sessions and attachments, automations and workflows, approvals, Composio, notifications, plugins, audit, usage stats.
 
-The internal `sessions.app_user_id` column marks retired sessions from the removed external-app integration. Normal reads and writes exclude these rows. Private files remain under `retired-app-users/` outside profile workspaces and are included only in full operator backups.
+`sessions.app_user_id` marks retired sessions from the removed external-app integration. Normal reads and writes exclude them. Their files stay under `retired-app-users/`, in full operator backups only.
 
-| Area | Tables |
-|---|---|
-| Tenant / auth | `organizations`, `users`, `org_members`, `org_invites`, `browser_sessions`, `channel_org_mappings`, `password_reset_tokens`, `user_mfa_backup_codes`, `user_passkeys`, `user_passkey_challenges` |
-| Agent config | `profiles`, `tools`, `profile_tools`, `skills`, `profile_skills`, `profile_skill_usage`, `mcp_servers`, `profile_mcp_servers` |
-| Runtime | `sessions`, `session_messages`, `attachments`, `artifact_shares` |
-| Execution | `automations`, `automation_runs`, `automation_run_read_state`, `automation_run_steps`, `workflows`, `workflow_runs`, `workflow_run_steps` |
-| Approvals | `org_memory_proposals`, `skill_proposals`, `skill_suggestions` |
-| Composio | `composio_toolkits`, `profile_composio_toolkits`, `composio_user_connections` |
-| Notifications | `notification_destinations`, `notification_webhook_deliveries` |
-| Plugins | `plugin_releases`, `org_plugins` |
-| Audit / files | `audit_events`, `profile_change_events`, `file_pins` |
-| Analytics / config | `llm_usage_stats`, `llm_usage_model_stats`, `workspace_settings` |
-
-Org memory is also on disk at `~/.nakama/orgs/{orgId}/MEMORY.md`.
+Org memory is also on disk at `~/.airin/orgs/{orgId}/MEMORY.md`.
 
 ## Invariants
 
-- Packages must not import from `apps/*`.
 - The server examines org membership before org-scoped routes.
-- Profiles control behavior and tool availability.
+- Profiles control behavior. The profile and the kind of turn together control tool availability.
+- A session runs one turn at a time.
 - Message history is durable except for intentionally ephemeral Cognito sessions.
 - The same Hono app produces OpenAPI and serves runtime requests.
 - Channel apps are transport bridges. They are not separate agent runtimes.

@@ -2,12 +2,12 @@ import type {
   ProfileDetail,
   ProfileSummary,
   UpdateProfileRequest,
-} from "@nakama/core/contract";
-import { resolveProfileOrgBooleanOverride } from "@nakama/core/skills/profile-org-override";
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/core/contract";
+import { resolveProfileOrgBooleanOverride } from "@airin/core/skills/profile-org-override";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { toast } from "@airin/ui/toast";
 import { type ReactNode, useState } from "react";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { useAuth } from "@/context/use-auth";

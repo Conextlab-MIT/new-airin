@@ -1,4 +1,4 @@
-import type { StoredWorkflow, WorkflowDefinition } from "@nakama/core";
+import type { StoredWorkflow, WorkflowDefinition } from "@airin/core";
 import type { DatabaseAdapter, StoredWorkflowRecord } from "./types";
 
 export class DatabaseWorkflowStore {

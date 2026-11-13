@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { ChatMessage, ToolCall } from "@nakama/core";
+import type { ChatMessage, ToolCall } from "@airin/core";
+import { AirinApiError, ProviderStreamInterruptedError } from "@airin/core";
 import {
+  buildProviderHttpError,
   extractOpenAITokenUsage,
   finalizePendingToolCalls,
+  formatHttpErrorBody,
   mergePendingToolCall,
   normalizeThinkingEffort,
   type PendingToolCall,
@@ -53,6 +56,56 @@ describe("provider shared helpers", () => {
     ]);
   });
 
+  test("readSseEvents turns a dropped socket into a stream interruption after earlier events", async () => {
+    const events: string[] = [];
+    let sent = false;
+
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent) {
+          const drop = new TypeError(
+            "The socket connection was closed unexpectedly."
+          );
+
+          controller.error(Object.assign(drop, { code: "ECONNRESET" }));
+
+          return;
+        }
+
+        sent = true;
+        controller.enqueue(new TextEncoder().encode('data: {"chunk":1}\n\n'));
+      },
+    });
+
+    const error = await readSseEvents(body, ({ data }) => {
+      events.push(data);
+    }).catch((caught) => caught);
+
+    expect(events).toEqual(['{"chunk":1}']);
+    expect(error).toBeInstanceOf(ProviderStreamInterruptedError);
+    expect(error.status).toBe(502);
+    expect(error.cause).toMatchObject({
+      code: "ECONNRESET",
+      message: "The socket connection was closed unexpectedly.",
+    });
+  });
+
+  test("readSseEvents keeps an abort as an abort", async () => {
+    const abort = new DOMException("The operation was aborted.", "AbortError");
+
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(abort);
+      },
+    });
+
+    const error = await readSseEvents(body, () => undefined).catch(
+      (caught) => caught
+    );
+
+    expect(error).toBe(abort);
+  });
+
   test("parseJsonRecord returns empty objects for invalid JSON", () => {
     expect(parseJsonRecord('{"ok":true}')).toEqual({ ok: true });
     expect(parseJsonRecord("[]")).toEqual({});
@@ -92,9 +145,25 @@ describe("provider shared helpers", () => {
   });
 
   test("normalizeThinkingEffort falls back to medium", () => {
-    expect(normalizeThinkingEffort("low")).toBe("low");
-    expect(normalizeThinkingEffort("high")).toBe("high");
-    expect(normalizeThinkingEffort(undefined)).toBe("medium");
+    expect(normalizeThinkingEffort("low", "gpt-5.4", "openai")).toBe("low");
+    expect(normalizeThinkingEffort("high", "gpt-5.4", "openai")).toBe("high");
+    expect(normalizeThinkingEffort(undefined, "gpt-5.4", "openai")).toBe(
+      "medium"
+    );
+  });
+
+  test("normalizeThinkingEffort lowers xhigh/max to what the host and model accept", () => {
+    expect(normalizeThinkingEffort("max", "gpt-6-luna", "openai")).toBe("max");
+    expect(normalizeThinkingEffort("max", "gpt-5.4", "openai")).toBe("xhigh");
+    expect(
+      normalizeThinkingEffort("xhigh", "deepseek-v4.1-flash", "deepseek")
+    ).toBe("high");
+    expect(
+      normalizeThinkingEffort("max", "gemini-3.6-flash", "openrouter")
+    ).toBe("high");
+    expect(
+      normalizeThinkingEffort("max", "deepseek-v4-flash:cloud", "ollama")
+    ).toBe("high");
   });
 
   const user = (content: string): ChatMessage => ({ content, role: "user" });
@@ -176,5 +245,47 @@ describe("extractOpenAITokenUsage", () => {
         total_tokens: 6358,
       })
     ).toEqual({ inputTokens: 6348, outputTokens: 10, totalTokens: 6358 });
+  });
+});
+
+describe("buildProviderHttpError", () => {
+  test("maps a rejected API key to 400 so it is never reported as a server bug, keeping the provider's message", () => {
+    const body = JSON.stringify({
+      error: { message: "Incorrect API key provided." },
+    });
+
+    const error = buildProviderHttpError("OpenAI", 401, body);
+
+    expect(error).toBeInstanceOf(AirinApiError);
+    expect(error.status).toBe(400);
+    expect(error.message).toBe(formatHttpErrorBody("OpenAI", 401, body));
+  });
+
+  test("maps a 402 or 403 to 400 and every other provider failure to 502", () => {
+    expect(buildProviderHttpError("OpenAI", 402, "").status).toBe(400);
+    expect(buildProviderHttpError("OpenAI", 403, "").status).toBe(400);
+    expect(buildProviderHttpError("OpenAI", 429, "").status).toBe(502);
+    expect(buildProviderHttpError("OpenAI", 500, "").status).toBe(502);
+  });
+
+  test("maps an account refusal sent with another status to 400", () => {
+    const quota = { code: "insufficient_quota", type: "insufficient_quota" };
+    const rateLimit = { code: "rate_limit_exceeded", type: "requests" };
+
+    // Raw HTTP bodies nest the error; OpenAI SDK errors arrive flat.
+    expect(
+      buildProviderHttpError("OpenAI", 429, JSON.stringify({ error: quota }))
+        .status
+    ).toBe(400);
+    expect(
+      buildProviderHttpError("OpenAI", 429, JSON.stringify(quota)).status
+    ).toBe(400);
+    expect(
+      buildProviderHttpError(
+        "OpenAI",
+        429,
+        JSON.stringify({ error: rateLimit })
+      ).status
+    ).toBe(502);
   });
 });

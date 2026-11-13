@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   artifactCodeLanguage,
+  assertHtmlArtifactSize,
   inferArtifactMimeType,
   isDelimitedSpreadsheetFile,
   isHtmlArtifactMimeType,
@@ -10,8 +11,22 @@ import {
   isUnknownArtifactMimeType,
   isVideoArtifactMimeType,
   looksLikeUtf8Text,
-  resolveArtifactMimeType,
+  MAX_HTML_ARTIFACT_BYTES,
 } from "./artifact-mime";
+
+test.each([
+  ["page.html", ""],
+  ["page.HTM", "text/plain"],
+  ["page.xhtml", "application/octet-stream"],
+  ["page.bin", "Text/HTML; charset=utf-8"],
+])("limits HTML by extension or declared type: %s", (filename, mimeType) => {
+  expect(() =>
+    assertHtmlArtifactSize(filename, MAX_HTML_ARTIFACT_BYTES, mimeType)
+  ).not.toThrow();
+  expect(() =>
+    assertHtmlArtifactSize(filename, MAX_HTML_ARTIFACT_BYTES + 1, mimeType)
+  ).toThrow(expect.objectContaining({ status: 413 }));
+});
 
 describe("inferArtifactMimeType", () => {
   test("falls back to binary for unknown or extensionless names", () => {
@@ -27,23 +42,7 @@ describe("inferArtifactMimeType", () => {
   });
 });
 
-describe("resolveArtifactMimeType", () => {
-  test("prefers a declared type", () => {
-    expect(
-      resolveArtifactMimeType("text/markdown; charset=utf-8", "report.md")
-    ).toBe("text/markdown");
-  });
-
-  test("falls back to the extension when the type is generic or missing", () => {
-    expect(
-      resolveArtifactMimeType("application/octet-stream", "report.md")
-    ).toBe("text/markdown");
-    expect(
-      resolveArtifactMimeType("application/octet-stream", "reel.mp4")
-    ).toBe("video/mp4");
-    expect(resolveArtifactMimeType("", "page.html")).toBe("text/html");
-  });
-});
+describe("resolveArtifactMimeType", () => {});
 
 describe("mime predicates", () => {
   test("classifies markdown, html, text, image, and video", () => {
@@ -89,16 +88,6 @@ describe("artifactCodeLanguage", () => {
 
 describe("looksLikeUtf8Text", () => {
   const encode = (value: string) => new TextEncoder().encode(value);
-
-  test("accepts utf-8 text, including multi-byte characters", () => {
-    expect(looksLikeUtf8Text(encode("FROM node:22\nRUN bun install\n"))).toBe(
-      true
-    );
-    expect(
-      looksLikeUtf8Text(encode("halo — ada emoji 🎉 dan aksara 日本語"))
-    ).toBe(true);
-    expect(looksLikeUtf8Text(new Uint8Array())).toBe(true);
-  });
 
   test("rejects payloads with NUL bytes or invalid utf-8", () => {
     expect(

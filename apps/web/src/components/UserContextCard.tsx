@@ -1,13 +1,13 @@
-import { NakamaApiError } from "@nakama/core/api-error";
-import { Button } from "@nakama/ui/button";
+import { AirinApiError } from "@airin/core/api-error";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 import { useState } from "react";
 import { UserContextForm } from "@/components/UserContextForm";
 import { useAuth } from "@/context/use-auth";
@@ -22,8 +22,8 @@ import {
 import { formatError } from "@/lib/client";
 
 function formatUserContextError(error: Error): string {
-  if (error instanceof NakamaApiError && error.status === 404) {
-    return "This feature needs a newer Nakama server. Restart the server and try again.";
+  if (error instanceof AirinApiError && error.status === 404) {
+    return "This feature needs a newer Airin server. Restart the server and try again.";
   }
 
   return formatError(error);
@@ -31,6 +31,8 @@ function formatUserContextError(error: Error): string {
 
 interface UserContextEditorDialogProps {
   onOpenChange: (open: boolean) => void;
+  /** Runs after USER.md is written, before the dialog closes. */
+  onSaved?: () => void;
   open: boolean;
 }
 
@@ -38,6 +40,7 @@ interface UserContextEditorDialogProps {
 export function UserContextEditorDialog({
   open,
   onOpenChange,
+  onSaved,
 }: UserContextEditorDialogProps) {
   const { activeOrg } = useAuth();
 
@@ -45,6 +48,7 @@ export function UserContextEditorDialog({
     <UserContextDialogSession
       key={activeOrg?.id}
       onOpenChange={onOpenChange}
+      onSaved={onSaved}
       open
     />
   ) : null;
@@ -53,6 +57,7 @@ export function UserContextEditorDialog({
 function UserContextDialogSession({
   open,
   onOpenChange,
+  onSaved,
 }: UserContextEditorDialogProps) {
   const { activeOrg, user } = useAuth();
   const orgId = activeOrg?.id ?? null;
@@ -101,6 +106,7 @@ function UserContextDialogSession({
       setSavedContent(content);
       clearUserContextDraft(orgId);
       setHint("Saved. Start a new chat to apply.");
+      onSaved?.();
       onOpenChange(false);
       await refetch();
     } catch (error) {
@@ -201,9 +207,7 @@ function UserContextStatusCopy({
 
   return (
     <p className="text-muted-foreground text-xs">
-      {isActive
-        ? "USER.md is set for this org"
-        : "Answer a few questions so replies fit how you work"}
+      {isActive ? "Set for this org" : "Not set up"}
     </p>
   );
 }
@@ -226,10 +230,12 @@ export function UserContextSettings() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="min-w-0 space-y-0.5">
-          <p className="font-medium text-foreground text-sm">Personalisation</p>
-          <UserContextStatusCopy isActive={isActive} loadError={loadError} />
+          <p className="text-foreground text-sm">Personalisation</p>
+          {isLoading ? null : (
+            <UserContextStatusCopy isActive={isActive} loadError={loadError} />
+          )}
         </div>
 
         {isLoading ? <Spinner /> : null}
@@ -237,7 +243,6 @@ export function UserContextSettings() {
         {isLoading || loadError ? null : (
           <Button
             onClick={() => setEditorOpen(true)}
-            size="sm"
             type="button"
             variant="outline"
           >

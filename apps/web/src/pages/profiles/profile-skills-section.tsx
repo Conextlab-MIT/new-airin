@@ -2,9 +2,9 @@ import type {
   ProfileDetail,
   SkillSummary,
   SkillUsageSummary,
-} from "@nakama/core/contract";
-import { BUNDLED_SKILL_NAMES } from "@nakama/core/skills/bundled-names";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { BUNDLED_SKILL_NAMES } from "@airin/core/skills/bundled-names";
+import { Button } from "@airin/ui/button";
 import { Delete02Icon } from "hugeicons-react";
 import { useMemo } from "react";
 import { useAuth } from "@/context/use-auth";
@@ -177,7 +177,7 @@ function ProfileSkillsToolbar({
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 className="font-normal text-muted-foreground/55 text-sm">Skills</h3>
+        <h3 className="font-medium text-muted-foreground text-sm">Skills</h3>
         {assignedCount > 0 ? (
           <p className="type-body mt-1 text-xs">{assignedCount} assigned</p>
         ) : null}

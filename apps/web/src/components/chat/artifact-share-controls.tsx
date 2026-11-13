@@ -1,4 +1,4 @@
-import { DropdownMenuItem } from "@nakama/ui/dropdown-menu";
+import { DropdownMenuItem } from "@airin/ui/dropdown-menu";
 import { Share04Icon } from "hugeicons-react";
 import { ArtifactSharePublishDialog } from "@/components/chat/artifact-share-publish-dialog";
 import type { ArtifactShareControlsState } from "@/components/chat/use-artifact-share-controls";

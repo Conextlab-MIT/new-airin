@@ -1,4 +1,4 @@
-import type { JsonSchema, ProviderClient } from "@nakama/core";
+import type { JsonSchema, ProviderClient } from "@airin/core";
 import { z } from "zod";
 
 const JsonObjectSchema = z.record(z.string(), z.json());
@@ -18,7 +18,7 @@ export interface SuggestToolParamsInput {
 }
 
 const SUGGEST_PARAMS_SYSTEM = [
-  "You generate JSON parameter objects for testing Nakama custom tools.",
+  "You generate JSON parameter objects for testing Airin custom tools.",
   "Return only a valid JSON object matching the tool schema.",
   "Do not use markdown fences, labels, or surrounding prose.",
 ].join("\n");

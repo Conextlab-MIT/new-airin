@@ -1,18 +1,18 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Input } from "@nakama/ui/input";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { Input } from "@airin/ui/input";
+import { cn } from "@airin/ui/utils";
 import {
   CheckmarkCircle01Icon,
   Copy01Icon,

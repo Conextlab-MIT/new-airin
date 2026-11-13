@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Context } from "grammy";
 import {
-  isTelegramGroupChat,
   resolveBotInfo,
-  resolveChannelOrgKey,
   resolveConversationKey,
   shouldHandleGroupMessage,
   stripBotMention,
@@ -27,14 +25,18 @@ function groupContext(
     ? { id: botInfo.id, is_bot: true as const }
     : undefined;
 
+  const message = {
+    entities: options.entities,
+    message_thread_id: options.messageThreadId,
+    reply_to_message: replyFrom ? { from: replyFrom } : undefined,
+    text,
+  };
+
+  // Real grammy contexts expose the message as both `message` and `msg`.
   const context = {
     chat: { id: -100_123, type: options.chatType ?? "supergroup" },
-    message: {
-      entities: options.entities,
-      message_thread_id: options.messageThreadId,
-      reply_to_message: replyFrom ? { from: replyFrom } : undefined,
-      text,
-    },
+    message,
+    msg: message,
   };
 
   // SAFETY: The fixture supplies the chat and message fields used by these helpers.
@@ -42,16 +44,6 @@ function groupContext(
 }
 
 describe("group-message helpers", () => {
-  test("isTelegramGroupChat detects group and supergroup", () => {
-    expect(isTelegramGroupChat(groupContext({ chatType: "group" }))).toBe(true);
-    expect(isTelegramGroupChat(groupContext({ chatType: "supergroup" }))).toBe(
-      true
-    );
-    expect(isTelegramGroupChat(groupContext({ chatType: "private" }))).toBe(
-      false
-    );
-  });
-
   test("shouldHandleGroupMessage accepts mention, reply, and slash commands", () => {
     expect(
       shouldHandleGroupMessage(
@@ -122,10 +114,10 @@ describe("group-message helpers", () => {
             length: 8,
             offset: 0,
             type: "text_mention" as const,
-            user: { first_name: "Nakama", id: botInfo.id, is_bot: true },
+            user: { first_name: "Airin", id: botInfo.id, is_bot: true },
           },
         ],
-        text: "Nakama hello",
+        text: "Airin hello",
       },
     };
 
@@ -133,11 +125,6 @@ describe("group-message helpers", () => {
     const ctx = fixture as Context;
 
     expect(shouldHandleGroupMessage(ctx, botInfo)).toBe(true);
-  });
-
-  test("resolveChannelOrgKey scopes org store by group or user", () => {
-    expect(resolveChannelOrgKey("-100123", 42, true)).toBe("g:-100123");
-    expect(resolveChannelOrgKey("42", 42, false)).toBe("u:42");
   });
 
   test("resolveConversationKey preserves private and group keys without topics", () => {

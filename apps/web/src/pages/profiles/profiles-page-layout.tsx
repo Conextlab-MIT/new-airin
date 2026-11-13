@@ -1,11 +1,11 @@
-import { NakamaApiError } from "@nakama/core/api-error";
-import { Button } from "@nakama/ui/button";
+import { AirinApiError } from "@airin/core/api-error";
+import { Button } from "@airin/ui/button";
 import { SquareLock02Icon } from "hugeicons-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/use-auth";
 import { useAppNavigation } from "@/hooks/use-app-navigation";
 import { PAGE_PATHS, teamDetailPath } from "@/lib/navigation";
-import { resolveSuperBotChatProfileId } from "@/lib/profiles";
+import { resolveSuperAirinChatProfileId } from "@/lib/profiles";
 import { ProfileConfigTab } from "@/pages/profiles/profile-config-tab";
 import { PageState, ProfilesEmptyState } from "@/pages/profiles/profiles-ui";
 import type { ProfilesPageState } from "@/pages/profiles/use-profiles-page";
@@ -17,16 +17,16 @@ function useProfilesPageLayoutMeta(state: ProfilesPageState) {
   const canCreateProfile = user?.isPlatformAdmin === true;
   const canPack = isOrgAdmin || canCreateProfile;
   const { navigateToNewChat } = useAppNavigation();
-  const superBotProfileId = resolveSuperBotChatProfileId(profiles);
+  const superAirinProfileId = resolveSuperAirinChatProfileId(profiles);
 
-  const onAskSuperBot = superBotProfileId
-    ? () => navigateToNewChat(superBotProfileId)
+  const onAskSuperAirin = superAirinProfileId
+    ? () => navigateToNewChat(superAirinProfileId)
     : undefined;
 
   return {
     canCreateProfile,
     canPack,
-    onAskSuperBot,
+    onAskSuperAirin,
   };
 }
 
@@ -63,7 +63,7 @@ function ProfilesPageError({
 }
 
 function isForbiddenError(error: Error | null): boolean {
-  return error instanceof NakamaApiError && error.status === 403;
+  return error instanceof AirinApiError && error.status === 403;
 }
 
 function ProfileForbiddenState() {
@@ -95,16 +95,21 @@ function ProfileForbiddenState() {
           <span className="font-medium text-foreground">
             {activeOrg?.name ?? "this team"}
           </span>{" "}
-          is {role}. Ask the owner or an admin to share it with you.
+          is {role}. This agent is private, admin-only, or does not exist.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
-        <Button render={<Link to={PAGE_PATHS.chat} />} type="button">
+        <Button
+          nativeButton={false}
+          render={<Link to={PAGE_PATHS.chat} />}
+          type="button"
+        >
           Back to chat
         </Button>
         {activeOrg ? (
           <Button
+            nativeButton={false}
             render={<Link to={teamDetailPath(activeOrg.id)} />}
             type="button"
             variant="outline"
@@ -121,12 +126,12 @@ function ProfilesMainSection({
   state,
   canCreateProfile,
   canPack,
-  onAskSuperBot,
+  onAskSuperAirin,
 }: {
   state: ProfilesPageState;
   canCreateProfile: boolean;
   canPack: boolean;
-  onAskSuperBot?: () => void;
+  onAskSuperAirin?: () => void;
 }) {
   const {
     profiles,
@@ -150,7 +155,7 @@ function ProfilesMainSection({
           canCreate={canCreateProfile}
           canImport={canPack}
           disabled={busy}
-          onAskSuperBot={onAskSuperBot}
+          onAskSuperAirin={onAskSuperAirin}
           onCreate={() => setCreateOpen(true)}
           onImport={() => setImportOpen(true)}
         />
@@ -193,7 +198,7 @@ export function ProfilesPageLayout(state: ProfilesPageState) {
     detailError,
   } = state;
 
-  const { canCreateProfile, canPack, onAskSuperBot } =
+  const { canCreateProfile, canPack, onAskSuperAirin } =
     useProfilesPageLayoutMeta(state);
 
   if (profilesLoading && profiles.length === 0) {
@@ -212,7 +217,7 @@ export function ProfilesPageLayout(state: ProfilesPageState) {
         <ProfilesMainSection
           canCreateProfile={canCreateProfile}
           canPack={canPack}
-          onAskSuperBot={onAskSuperBot}
+          onAskSuperAirin={onAskSuperAirin}
           state={state}
         />
       </section>

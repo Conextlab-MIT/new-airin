@@ -1,4 +1,4 @@
-import type { ArtifactFile } from "@nakama/core/contract";
+import type { ArtifactFile } from "@airin/core/contract";
 import { useArtifactAttachmentPreviewPanel } from "@/components/chat/use-artifact-attachment-preview-panel";
 import { artifactBasename } from "@/pages/files/files-artifact-folders";
 import { FileEntry } from "@/pages/files/files-artifact-list-view";

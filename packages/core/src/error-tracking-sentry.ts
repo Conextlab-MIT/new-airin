@@ -11,7 +11,7 @@ import {
 
 const SEND_TIMEOUT_MS = 3000;
 
-const SENTRY_CLIENT = "nakama/1";
+const SENTRY_CLIENT = "airin/1";
 
 export interface SentryDsn {
   endpoint: string;
@@ -19,7 +19,7 @@ export interface SentryDsn {
 }
 
 /**
- * The slice of the Sentry event payload nakama actually sends. Hand-rolled because no
+ * The slice of the Sentry event payload airin actually sends. Hand-rolled because no
  * SDK is in use, and named so the payload is a checked shape rather than a bag: a
  * typo in a key here is silently ignored by the ingest and impossible to spot later.
  */
@@ -30,7 +30,7 @@ export interface SentryEvent {
   };
   event_id: string;
   exception: { values: { type: string; value: string }[] };
-  extra?: { stack: string };
+  extra?: { cause?: string; stack?: string };
   fingerprint: string[];
   level: "error" | "info";
   logger: string;
@@ -49,7 +49,7 @@ export interface SentryEvent {
 /**
  * One protocol covers Sentry, GlitchTip, Bugsink, Rustrak and self-hosted Sentry: they
  * all accept the same envelope endpoint and X-Sentry-Auth header, so the operator picks
- * the platform and nakama does not have to know which one it is talking to.
+ * the platform and airin does not have to know which one it is talking to.
  *
  * The envelope endpoint, not the older store one. Store is deprecated in Sentry and
  * removed outright in Rustrak, which answers 400 to it, so an envelope is the one shape
@@ -101,7 +101,7 @@ export function toSentryEvent(report: ErrorReport): SentryEvent {
     // stack frames differ between installs.
     fingerprint: [report.fingerprint],
     level: report.kind === "test" ? "info" : "error",
-    logger: "nakama",
+    logger: "airin",
     platform: "node",
     tags: {
       api_version: String(report.runtime.apiVersion),
@@ -116,8 +116,18 @@ export function toSentryEvent(report: ErrorReport): SentryEvent {
     // a self-hosted install is often the operator's own machine or cluster name.
   };
 
+  const extra: NonNullable<SentryEvent["extra"]> = {};
+
   if (report.stack) {
-    event.extra = { stack: report.stack };
+    extra.stack = report.stack;
+  }
+
+  if (report.cause) {
+    extra.cause = report.cause;
+  }
+
+  if (extra.stack || extra.cause) {
+    event.extra = extra;
   }
 
   return event;

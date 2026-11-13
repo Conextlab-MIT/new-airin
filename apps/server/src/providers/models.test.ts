@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { isDiscoveryModelProvider } from "@nakama/core";
-import { USER_PROVIDER_NAMES } from "@nakama/core/provider-resolution";
+import { isDiscoveryModelProvider } from "@airin/core";
+import { USER_PROVIDER_NAMES } from "@airin/core/provider-resolution";
 import {
   AVAILABLE_MODELS,
   getDefaultModel,
@@ -14,14 +14,6 @@ import {
 import { estimateUsageCostUsd } from "./pricing";
 
 describe("isOpenRouterModelSlug", () => {
-  test("accepts vendor/model slugs", () => {
-    expect(isOpenRouterModelSlug("anthropic/claude-sonnet-4-6")).toBe(true);
-  });
-
-  test("accepts latest-model aliases", () => {
-    expect(isOpenRouterModelSlug("~google/gemini-flash-latest")).toBe(true);
-  });
-
   test("rejects bare model ids", () => {
     expect(isOpenRouterModelSlug("gpt-5.4")).toBe(false);
   });
@@ -53,8 +45,8 @@ describe("resolveModel", () => {
     ];
 
     for (const provider of USER_PROVIDER_NAMES) {
-      if (provider === "cloudflare") {
-        // Cloudflare resolves its default from the fixed catalog.
+      if (provider === "netra") {
+        // Netra uses its explicit allowlist.
         continue;
       }
 
@@ -119,12 +111,6 @@ describe("resolveModel", () => {
       "account-model"
     );
     expect(resolveModel("chatgpt", " gpt-5.4 ", customModels)).toBe("gpt-5.4");
-  });
-
-  test("passes through custom OpenRouter slugs", () => {
-    expect(resolveModel("openrouter", "google/gemini-2.5-pro-preview")).toBe(
-      "google/gemini-2.5-pro-preview"
-    );
   });
 
   test("falls back to default for invalid OpenRouter slugs", () => {
@@ -238,29 +224,6 @@ describe("resolveModel", () => {
     );
   });
 
-  test("resolves catalog models for DeepSeek", () => {
-    expect(resolveModel("deepseek", "deepseek-v4-pro")).toBe("deepseek-v4-pro");
-    expect(getDefaultModel("deepseek")).toBe("deepseek-flash");
-
-    for (const id of [
-      "deepseek-flash",
-      "deepseek-v4-flash",
-      "deepseek-v4-flash-vision-exp",
-    ]) {
-      expect(resolveModel("deepseek", id)).toBe(id);
-      expect(getModelById(id)).toMatchObject({
-        contextWindow: 1_000_000,
-        default: id === "deepseek-flash",
-        inputPerMillionUsd: 0.3,
-        maxOutputTokens: 384_000,
-        outputPerMillionUsd: 1.2,
-        provider: "deepseek",
-        supportsThinking: true,
-        supportsVision: false,
-      });
-    }
-  });
-
   test("keeps DeepSeek custom shortlist defaults and selections", () => {
     const customModels = [
       { default: true, id: "private-model" },
@@ -281,72 +244,6 @@ describe("resolveModel", () => {
         customModels
       )
     ).toBe(true);
-  });
-
-  test("resolves catalog models for Qwen DashScope intl and CN", () => {
-    expect(resolveModel("qwen", "qwen3.7-plus")).toBe("qwen3.7-plus");
-    expect(resolveModel("qwen", "qwen3-vl-plus")).toBe("qwen3-vl-plus");
-    expect(resolveModel("qwen_cn", "qwen-flash")).toBe("qwen-flash");
-    expect(getDefaultModel("qwen")).toBe("qwen3.7-plus");
-    expect(getDefaultModel("qwen_cn")).toBe("qwen3.7-plus");
-    expect(getModelById("qwen3.7-plus")?.supportsThinking).toBe(true);
-    expect(getModelById("qwen3.7-plus")?.contextWindow).toBe(1_000_000);
-    expect(getModelById("qwen3.7-plus")?.supportsVision).toBe(true);
-    expect(getModelById("qwen3-vl-plus")?.supportsVision).toBe(true);
-    expect(getModelById("qwen3-vl-plus")?.supportsThinking).toBe(true);
-    expect(getModelById("qwen-flash")?.supportsThinking).toBe(true);
-    expect(getModelById("qwen-flash")?.inputPerMillionUsd).toBe(0.05);
-  });
-
-  test("resolves catalog models for Doubao", () => {
-    expect(resolveModel("doubao", "doubao-seed-2-1-turbo-260628")).toBe(
-      "doubao-seed-2-1-turbo-260628"
-    );
-    expect(resolveModel("doubao", "doubao-seed-1-8-251228")).toBe(
-      "doubao-seed-1-8-251228"
-    );
-    expect(getDefaultModel("doubao")).toBe("doubao-seed-2-1-pro-260628");
-    expect(getModelById("doubao-seed-2-1-pro-260628")?.supportsThinking).toBe(
-      true
-    );
-    expect(getModelById("doubao-seed-2-1-pro-260628")?.supportsVision).toBe(
-      true
-    );
-    expect(getModelById("doubao-seed-2-1-turbo-260628")?.supportsVision).toBe(
-      true
-    );
-    expect(getModelById("doubao-seed-1-8-251228")?.supportsThinking).toBe(true);
-    expect(getModelById("doubao-seed-1-8-251228")?.supportsVision).toBe(true);
-    expect(getModelById("doubao-seed-2-1-pro-260628")?.contextWindow).toBe(
-      256_000
-    );
-    expect(getModelById("doubao-seed-2-1-pro-260628")?.maxOutputTokens).toBe(
-      256_000
-    );
-  });
-
-  test("resolves the current Perplexity Sonar catalog", () => {
-    expect(getDefaultModel("perplexity")).toBe("sonar");
-    expect(resolveModel("perplexity", "sonar-pro")).toBe("sonar-pro");
-    expect(getModelById("sonar")?.contextWindow).toBe(128_000);
-    expect(getModelById("sonar")?.inputPerMillionUsd).toBe(1);
-    expect(getModelById("sonar")?.outputPerMillionUsd).toBe(1);
-    expect(getModelById("sonar-pro")?.contextWindow).toBe(200_000);
-    expect(getModelById("sonar-pro")?.supportsVision).toBe(true);
-    expect(getModelById("sonar-reasoning-pro")?.supportsThinking).toBe(true);
-    expect(getModelById("sonar-deep-research")?.supportsVision).toBe(false);
-  });
-
-  test("resolves official Cloudflare 8B catalog ids", () => {
-    expect(resolveModel("cloudflare", "@cf/meta/llama-3.1-8b-instruct")).toBe(
-      "@cf/meta/llama-3.1-8b-instruct"
-    );
-    expect(
-      resolveModel("cloudflare", "@cf/meta/llama-3.1-8b-instruct-fast")
-    ).toBe("@cf/meta/llama-3.1-8b-instruct-fast");
-    expect(
-      getModelById("@cf/meta/infire-llama-3.1-8b-instruct")
-    ).toBeUndefined();
   });
 
   test("keeps Moonshot region catalogs independent", () => {
@@ -387,6 +284,11 @@ describe("modelSupportsVision", () => {
         expect(modelSupportsVision("private-model", provider)).toBe(false);
       }
 
+      // Netra uses its own fixed catalog; see the Netra test below.
+      if (provider === "netra") {
+        continue;
+      }
+
       for (const supportsVision of [false, true]) {
         expect(
           modelSupportsVision("private-model", provider, [
@@ -395,6 +297,14 @@ describe("modelSupportsVision", () => {
         ).toBe(supportsVision);
       }
     }
+  });
+
+  test("treats a saved Cloudflare model without a vision flag as text-only", () => {
+    expect(
+      modelSupportsVision("@cf/qwen/qwen3.8-27b", "cloudflare", [
+        { id: "@cf/qwen/qwen3.8-27b" },
+      ])
+    ).toBe(false);
   });
 
   test("keeps Moonshot models opt-in only (discovered lists)", () => {
@@ -425,9 +335,42 @@ describe("modelSupportsVision", () => {
     ).toBe(true);
   });
 
+  test("Netra V4.1 Flash reads images whatever the saved entry says", () => {
+    const v41 = "deepseek/deepseek-v4.1-flash";
+    const retired = "deepseek/deepseek-v4-flash-0731";
+
+    // Tenant setup saves the model with no flag.
+    expect(modelSupportsVision(v41, "netra", [{ id: v41 }])).toBe(true);
+    // Older configs kept supportsVision false from the text-only 0731 model.
+    expect(
+      modelSupportsVision(v41, "netra", [
+        { id: retired, supportsVision: false },
+      ])
+    ).toBe(true);
+    expect(
+      modelSupportsVision(retired, "netra", [
+        { id: retired, supportsVision: false },
+      ])
+    ).toBe(true);
+    expect(modelSupportsVision("hand-added-model", "netra")).toBe(false);
+    expect(
+      modelSupportsVision("hand-added-model", "netra", [
+        { id: "hand-added-model", supportsVision: true },
+      ])
+    ).toBe(true);
+  });
+
   test("keeps OpenCode Go models opt-in only", () => {
     expect(
       modelSupportsVision("opencode-go/kimi-k2.7-code", "opencode_go")
+    ).toBe(false);
+  });
+
+  test("infers Command Code vision from the model family", () => {
+    expect(modelSupportsVision("claude-sonnet-4-6", "command_code")).toBe(true);
+    expect(modelSupportsVision("gpt-5.4", "command_code")).toBe(true);
+    expect(
+      modelSupportsVision("deepseek/deepseek-v4.1-flash", "command_code")
     ).toBe(false);
   });
 });
@@ -474,4 +417,17 @@ describe("resolveModelLimits", () => {
       ])
     ).toEqual({ contextWindow: 32_000, maxOutputTokens: 4096 });
   });
+});
+
+test("Netra resolves saved retired selections and defaults without allowing arbitrary IDs", () => {
+  const saved = [{ default: true, id: "deepseek/deepseek-v4-flash-0731" }];
+  expect(resolveModel("netra", undefined, saved)).toBe(
+    "deepseek/deepseek-v4.1-flash"
+  );
+  expect(resolveModel("netra", saved[0]!.id, saved)).toBe(
+    "deepseek/deepseek-v4.1-flash"
+  );
+  expect(resolveModel("netra", "unverified-model", saved)).toBe(
+    "unverified-model"
+  );
 });

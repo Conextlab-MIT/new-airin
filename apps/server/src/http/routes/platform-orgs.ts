@@ -1,10 +1,11 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   CreateOrganizationResponse,
   ListOrganizationsResponse,
   OrganizationResponse,
   OrgInviteCreatedResponse,
-} from "@nakama/core/contract";
+  PlatformOverviewResponse,
+} from "@airin/core/contract";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { ServerOptions } from "../context";
 import { requirePlatformAdminFromContext } from "../org-guards";
 import { errorResponse, json, readJson } from "../shared";
@@ -14,7 +15,7 @@ export function registerPlatformOrgRoutes(
   app: HonoApp,
   options: ServerOptions
 ): void {
-  const { orgService } = options;
+  const { agent, databaseAdapter, orgService } = options;
 
   const errorSchema = z
     .object({ error: z.string() })
@@ -537,5 +538,70 @@ export function registerPlatformOrgRoutes(
     await orgService.eraseUser(userId, auth.user.id);
 
     return new Response(null, { status: 204 });
+  });
+
+  app.openAPIRegistry.registerPath(
+    createRoute({
+      method: "get",
+      operationId: "getPlatformOverview",
+      path: "/v1/platform/overview",
+      responses: {
+        200: {
+          content: {
+            "application/json": {
+              schema: z
+                .object({})
+                .passthrough()
+                .openapi("PlatformOverviewResponse"),
+            },
+          },
+          description: "Install-wide platform overview",
+        },
+        500: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Error",
+        },
+      },
+      summary: "Get platform overview for superadmins",
+      tags: ["Platform"],
+    })
+  );
+
+  app.get("/v1/platform/overview", async (c) => {
+    requirePlatformAdminFromContext(c);
+
+    if (!(orgService && databaseAdapter)) {
+      return errorResponse("Organization service not configured", 500);
+    }
+
+    const organizations = await orgService.listOrganizations();
+    const userCount = await databaseAdapter.countUsers();
+    const rows: PlatformOverviewResponse["organizations"] = [];
+
+    let totalTokens = 0;
+    let estimatedCostUsd = 0;
+
+    for (const org of organizations) {
+      const stats = await agent.getLlmUsageStats(org.id);
+      totalTokens += stats.totalTokens;
+      estimatedCostUsd += stats.estimatedCostUsd;
+      rows.push({
+        estimatedCostUsd: stats.estimatedCostUsd,
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        totalTokens: stats.totalTokens,
+      });
+    }
+
+    return json<PlatformOverviewResponse>({
+      organizations: rows,
+      totals: {
+        estimatedCostUsd,
+        organizationCount: organizations.length,
+        totalTokens,
+        userCount,
+      },
+    });
   });
 }

@@ -1,13 +1,13 @@
-import { parseAgentQuestionnaireAnswersMessage } from "@nakama/core/agent-questionnaire";
+import { parseAgentQuestionnaireAnswersMessage } from "@airin/core/agent-questionnaire";
 import type {
   AgentChannel,
   AgentQuestionAnswer,
   ChatMessage,
   ChatUsage,
   SessionMessageMeta,
-} from "@nakama/core/contract";
-import { AGENT_CHANNELS } from "@nakama/core/contract";
-import { extractThinkingFromAssistantMessage } from "@nakama/core/thinking-content";
+} from "@airin/core/contract";
+import { AGENT_CHANNELS } from "@airin/core/contract";
+import { extractThinkingFromAssistantMessage } from "@airin/core/thinking-content";
 import {
   stripImageDescriptionsFromDisplayText,
   userContentToDisplayDocuments,
@@ -20,6 +20,7 @@ import {
 } from "@/lib/chat-stream-web-search";
 import { addChatUsage } from "@/lib/chat-usage";
 import { createClientId } from "@/lib/client-id";
+import type { DisplayDocument } from "@/lib/pasted-text";
 
 export interface RequestedChatSession {
   profileId: string;
@@ -46,7 +47,7 @@ export function buildNewChatPath(profileId?: string | null): string {
   return `${buildChatBasePath()}?${params.toString()}`;
 }
 
-/** Profile id from `?new=1&profile=…` when opening a new chat (e.g. Super Bot from Tools). */
+/** Profile id from `?new=1&profile=…` when opening a new chat (e.g. Airin from Tools). */
 export function readRequestedProfileFromNewChatSearch(
   search: string
 ): string | null {
@@ -91,7 +92,7 @@ export function readRequestedDraftKeyFromNewChatSearch(
   return draftKey || null;
 }
 
-export const CHAT_DRAFT_STORAGE_PREFIX = "nakama:chat-draft:";
+export const CHAT_DRAFT_STORAGE_PREFIX = "airin:chat-draft:";
 
 export function consumeStoredChatDraft(key: string): string | null {
   if (typeof sessionStorage === "undefined") {
@@ -121,7 +122,7 @@ export function chatComposerDraftKey(
   sessionId: string | null
 ): string | null {
   return userId && orgId && profileId
-    ? `nakama:composer-draft:${JSON.stringify([userId, orgId, profileId, sessionId])}`
+    ? `airin:composer-draft:${JSON.stringify([userId, orgId, profileId, sessionId])}`
     : null;
 }
 
@@ -169,7 +170,7 @@ export function isChatSessionPath(pathname: string): boolean {
   return chatProfileIdFromPath(pathname) !== null;
 }
 
-const ACTIVE_CHAT_PROFILE_STORAGE_KEY = "nakama:active-chat-profile";
+const ACTIVE_CHAT_PROFILE_STORAGE_KEY = "airin:active-chat-profile";
 
 export function activeChatProfileStorageKey(orgId: string): string {
   return `${ACTIVE_CHAT_PROFILE_STORAGE_KEY}:${orgId}`;
@@ -392,7 +393,7 @@ export interface ChatListItem {
   artifactStreaming?: boolean;
   content: string;
   createdAt?: string;
-  documents?: Array<{ filename: string; mediaType: string }>;
+  documents?: DisplayDocument[];
   /** Client-only: turn failed (e.g. upstream 429); not part of server history. */
   failed?: boolean;
   historyIndex?: number;
@@ -415,6 +416,8 @@ export interface ChatListItem {
   toolCallId?: string;
   toolCompletedAt?: number;
   toolGroupId?: string;
+  /** Images the tool returned, as display URLs. */
+  toolImages?: Array<{ mediaType: string; url: string }>;
   // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- This dictionary holds external JSON keys until the boundary parser validates each value.
   toolInput?: Record<string, unknown>;
   toolInputAccumulatedJson?: string;
@@ -431,7 +434,7 @@ export interface FailedChatTurn {
   text: string;
 }
 
-const FAILED_CHAT_TURN_STORAGE_PREFIX = "nakama:failed-chat-turn:";
+const FAILED_CHAT_TURN_STORAGE_PREFIX = "airin:failed-chat-turn:";
 
 export function storeFailedChatTurn(
   sessionId: string,
@@ -487,11 +490,11 @@ export function clearFailedChatTurn(sessionId: string): void {
 }
 
 export function sessionStorageKey(profileId: string): string {
-  return `nakama:session:${profileId}`;
+  return `airin:session:${profileId}`;
 }
 
 export function lastChatModelStorageKey(profileId: string): string {
-  return `nakama:last-model:${profileId}`;
+  return `airin:last-model:${profileId}`;
 }
 
 /**
@@ -538,6 +541,7 @@ const HISTORY_SESSION_CHANNEL = {
   slack: true,
   subagent: false,
   task: false,
+  teams: true,
   telegram: true,
   web: true,
   whatsapp: true,
@@ -557,6 +561,7 @@ const READ_ONLY_SESSION_CHANNEL = {
   slack: true,
   subagent: false,
   task: false,
+  teams: true,
   telegram: true,
   web: false,
   whatsapp: true,
@@ -595,6 +600,8 @@ export function formatSessionChannelLabel(channel: AgentChannel): string {
       return "Discord";
     case "slack":
       return "Slack";
+    case "teams":
+      return "Microsoft Teams";
     case "web":
       return "Web";
     default:
@@ -769,6 +776,26 @@ export function chatMessagesToListItems(
         toolCallId: message.toolCallId,
         toolCompletedAt: message.toolCompletedAt,
         toolGroupId: message.toolGroupId,
+        toolImages: message.attachments?.flatMap((part) => {
+          // Stored tool images are `image_ref`; inline `image` is the fallback.
+          if (part.type === "image_ref") {
+            return [
+              {
+                mediaType: part.mediaType,
+                url: `/v1/attachments/${encodeURIComponent(part.attachmentId)}/content`,
+              },
+            ];
+          }
+
+          return part.type === "image"
+            ? [
+                {
+                  mediaType: part.mediaType,
+                  url: `data:${part.mediaType};base64,${part.data}`,
+                },
+              ]
+            : [];
+        }),
         toolInput: toolInputs.get(message.toolCallId),
         toolResult: parseToolResult(message.content),
         toolStartedAt: message.toolStartedAt,
@@ -845,4 +872,40 @@ function formatRelativeTime(value: string, tense: "past" | "future"): string {
   }
 
   return formatSessionTimestamp(value);
+}
+
+const BROWSER_PATTERNS: [RegExp, string][] = [
+  [/Edg\//, "Edge"],
+  [/OPR\//, "Opera"],
+  [/Firefox\//, "Firefox"],
+  [/Chrome\//, "Chrome"],
+  [/Safari\//, "Safari"],
+];
+
+const OS_PATTERNS: [RegExp, string][] = [
+  [/iPhone|iPad/, "iOS"],
+  [/Android/, "Android"],
+  [/Mac OS X|Macintosh/, "macOS"],
+  [/Windows/, "Windows"],
+  [/CrOS/, "ChromeOS"],
+  [/Linux/, "Linux"],
+];
+
+/** "Chrome on macOS" from a User-Agent, so two sessions can be told apart. */
+export function describeDevice(userAgent: string | null): string {
+  if (!userAgent) {
+    return "Unknown browser";
+  }
+
+  const browser = BROWSER_PATTERNS.find(([pattern]) =>
+    pattern.test(userAgent)
+  )?.[1];
+
+  const os = OS_PATTERNS.find(([pattern]) => pattern.test(userAgent))?.[1];
+
+  if (browser && os) {
+    return `${browser} on ${os}`;
+  }
+
+  return browser ?? os ?? "Unknown browser";
 }

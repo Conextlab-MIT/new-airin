@@ -1,5 +1,4 @@
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,15 +7,17 @@ import {
   DialogHeader,
   DialogOverlay,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { Cancel01Icon } from "hugeicons-react";
 import { AutomationEditorForm } from "@/pages/automations/automations-components";
 import type { AutomationsPageState } from "@/pages/automations/use-automations-page";
 
 type AutomationsDialogsProps = Pick<
   AutomationsPageState,
+  | "automations"
   | "busy"
   | "editDraft"
   | "setEditDraft"
@@ -27,9 +28,11 @@ type AutomationsDialogsProps = Pick<
   | "updateEditDraft"
   | "profiles"
   | "profilesLoading"
+  | "toolOptions"
 >;
 
 export function AutomationsDialogs({
+  automations,
   busy,
   editDraft,
   setEditDraft,
@@ -40,6 +43,7 @@ export function AutomationsDialogs({
   updateEditDraft,
   profiles,
   profilesLoading,
+  toolOptions,
 }: AutomationsDialogsProps) {
   return (
     <>
@@ -76,6 +80,11 @@ export function AutomationsDialogs({
                     busy={busy}
                     onChange={updateEditDraft}
                     profiles={profiles}
+                    savedTrigger={
+                      automations.find((item) => item.id === editDraft.id)
+                        ?.trigger
+                    }
+                    toolOptions={toolOptions}
                   />
                 </div>
 

@@ -1,6 +1,6 @@
-import { generateSessionTitleFromMessages } from "@nakama/agent";
-import type { ChatMessage, UserConfig } from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+import { generateSessionTitleFromMessages } from "@airin/agent";
+import type { ChatMessage, UserConfig } from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import { createProviderForProfile } from "./provider-instance-helpers";
 
 const SESSION_TITLE_FALLBACK = "Untitled";
@@ -20,6 +20,22 @@ export class SessionTitleService {
         error
       );
     });
+  }
+
+  /** A title for messages kept outside the session store, such as a group chat. */
+  async titleFor(
+    profileId: string,
+    messages: readonly ChatMessage[]
+  ): Promise<string | null> {
+    const provider = await createProviderForProfile(
+      this.db,
+      profileId,
+      this.getUserConfig()
+    );
+
+    return provider
+      ? generateSessionTitleFromMessages(messages, { provider })
+      : null;
   }
 
   private async generateSessionTitle(sessionId: string): Promise<void> {

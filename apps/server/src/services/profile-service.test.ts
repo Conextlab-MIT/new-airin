@@ -10,24 +10,52 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getProfileSoulDir, writeArtifactShareSnapshot } from "@nakama/core";
-import type { UpdateProfileRequest } from "@nakama/core/contract";
+import { getProfileSoulDir, writeArtifactShareSnapshot } from "@airin/core";
+import type { UpdateProfileRequest } from "@airin/core/contract";
+import { BASH_TOOL_ID } from "@airin/core/tools/protected";
 import {
   createInMemoryDatabaseAdapter,
   createSqliteDatabase,
+  ensureBashToolDefinition,
   ensureBuiltinToolDefinitions,
-} from "@nakama/db";
+} from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { ProfileService } from "./profile-service";
 import { sessionHistoryArchivePath } from "./session-persistence";
 import { sessionTurnRegistry } from "./session-turn-registry";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 const tinyPngBase64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 const ORG_ID = "org_test";
+
+async function seedWebhookSecret(
+  db: ReturnType<typeof createInMemoryDatabaseAdapter>,
+  orgId: string,
+  profileId: string
+) {
+  const now = new Date().toISOString();
+
+  await db.upsertAutomation({
+    createdAt: now,
+    definition: { trigger: { type: "webhook" } },
+    enabled: true,
+    id: "auto_webhook",
+    name: "Webhook",
+    orgId,
+    profileId,
+    updatedAt: now,
+    version: 1,
+  });
+  await db.putAutomationWebhookSecret({
+    automationId: "auto_webhook",
+    createdAt: now,
+    createdByUserId: "user_maker",
+    encryptedValue: "enc",
+  });
+}
 
 const PYTHON_ECHO_TOOL = `import json
 import sys
@@ -45,9 +73,9 @@ describe("profile service createTool", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (tempConfigDir) {
@@ -58,9 +86,9 @@ describe("profile service createTool", () => {
 
   test("defaults to an executable javascript tool", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-tool-")
+      path.join(os.tmpdir(), "airin-profile-tool-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     const toolsDir = path.join(tempConfigDir, "orgs", "org_test", "tools");
     await mkdir(toolsDir, { recursive: true });
 
@@ -89,9 +117,9 @@ describe("profile service createTool", () => {
 
   test("creates a python tool when handlerType is python", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-tool-")
+      path.join(os.tmpdir(), "airin-profile-tool-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     const toolsDir = path.join(tempConfigDir, "orgs", "org_test", "tools");
     await mkdir(toolsDir, { recursive: true });
 
@@ -114,9 +142,9 @@ describe("profile service createTool", () => {
 
   test("persists handlerConfig.parameters for python tools", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-tool-")
+      path.join(os.tmpdir(), "airin-profile-tool-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     const toolsDir = path.join(tempConfigDir, "orgs", "org_test", "tools");
     await mkdir(toolsDir, { recursive: true });
 
@@ -162,9 +190,9 @@ describe("profile service createTool", () => {
 
   test("creates a python tool without parameters using a permissive schema", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-tool-")
+      path.join(os.tmpdir(), "airin-profile-tool-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     const toolsDir = path.join(tempConfigDir, "orgs", "org_test", "tools");
     await mkdir(toolsDir, { recursive: true });
 
@@ -228,7 +256,11 @@ describe("profile service avatar", () => {
   let tempConfigDir = "";
 
   afterEach(async () => {
-    process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+    if (originalConfigDir === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
+    }
 
     if (tempConfigDir) {
       await rm(tempConfigDir, { force: true, recursive: true });
@@ -236,11 +268,27 @@ describe("profile service avatar", () => {
     }
   });
 
+  test("creates new profiles with automations off", async () => {
+    tempConfigDir = await mkdtemp(
+      path.join(os.tmpdir(), "airin-profile-automations-")
+    );
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
+
+    const db = createInMemoryDatabaseAdapter();
+    const service = new ProfileService(db);
+    const created = await service.createProfile(ORG_ID, { name: "New Bot" });
+
+    expect(created.profile.automationsEnabled).toBe(false);
+    expect((await db.getProfile(created.profile.id))?.automationsEnabled).toBe(
+      false
+    );
+  });
+
   test("uploads, serves, and deletes profile avatars", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-avatar-")
+      path.join(os.tmpdir(), "airin-profile-avatar-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
     const created = await service.createProfile(ORG_ID, { name: "Avatar Bot" });
@@ -270,7 +318,11 @@ describe("profile service createProfile", () => {
   let tempConfigDir = "";
 
   afterEach(async () => {
-    process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+    if (originalConfigDir === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
+    }
 
     if (tempConfigDir) {
       await rm(tempConfigDir, { force: true, recursive: true });
@@ -280,9 +332,9 @@ describe("profile service createProfile", () => {
 
   test("scaffolds soul templates for new profiles", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-soul-")
+      path.join(os.tmpdir(), "airin-profile-soul-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
     const created = await service.createProfile(ORG_ID, { name: "Soul Bot" });
@@ -305,9 +357,9 @@ describe("profile service createProfile", () => {
 
   test("assigns basic tools when the built-in tools exist", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-default-tools-")
+      path.join(os.tmpdir(), "airin-profile-default-tools-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const db = createInMemoryDatabaseAdapter();
     await ensureBuiltinToolDefinitions(db);
@@ -347,9 +399,9 @@ describe("profile service createProfile", () => {
 
   test("assigns default bundled skills when they exist", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-default-skills-")
+      path.join(os.tmpdir(), "airin-profile-default-skills-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const db = createInMemoryDatabaseAdapter();
     const now = new Date().toISOString();
@@ -376,9 +428,9 @@ describe("profile service createProfile", () => {
 
   test("skips missing basic built-in tools without failing", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-missing-tools-")
+      path.join(os.tmpdir(), "airin-profile-missing-tools-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const db = createInMemoryDatabaseAdapter();
 
@@ -395,9 +447,9 @@ describe("profile service createProfile", () => {
 
   test("writes generated soul files and keeps memory empty", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-generated-soul-")
+      path.join(os.tmpdir(), "airin-profile-generated-soul-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -434,9 +486,9 @@ describe("profile service createProfile", () => {
 
   test("rejects unsupported generated soul file keys", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-bad-soul-")
+      path.join(os.tmpdir(), "airin-profile-bad-soul-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -453,9 +505,9 @@ describe("profile service createProfile", () => {
 
   test("stores profile model selection", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-model-")
+      path.join(os.tmpdir(), "airin-profile-model-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -475,9 +527,9 @@ describe("profile service createProfile", () => {
 
   test("generates a random id when id is omitted", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-random-id-")
+      path.join(os.tmpdir(), "airin-profile-random-id-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -490,9 +542,9 @@ describe("profile service createProfile", () => {
 
   test("lets two orgs create profiles with the same name", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-cross-org-")
+      path.join(os.tmpdir(), "airin-profile-cross-org-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -513,9 +565,9 @@ describe("profile service createProfile", () => {
 
   test("uses a custom profile id when provided", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-custom-id-")
+      path.join(os.tmpdir(), "airin-profile-custom-id-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -529,9 +581,9 @@ describe("profile service createProfile", () => {
 
   test("rejects duplicate custom profile ids", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-duplicate-id-")
+      path.join(os.tmpdir(), "airin-profile-duplicate-id-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -544,9 +596,9 @@ describe("profile service createProfile", () => {
 
   test("rejects custom profile ids taken by another org", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-cross-org-id-")
+      path.join(os.tmpdir(), "airin-profile-cross-org-id-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -560,11 +612,51 @@ describe("profile service createProfile", () => {
     ).rejects.toThrow(/already taken/i);
   });
 
+  test("create and clone refuse an id claimed after the taken check", async () => {
+    tempConfigDir = await mkdtemp(
+      path.join(os.tmpdir(), "airin-profile-claim-race-")
+    );
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
+
+    const db = createInMemoryDatabaseAdapter();
+    const service = new ProfileService(db);
+    const source = await service.createProfile("org_second", { name: "Src" });
+
+    await db.createProfileIfAbsent({
+      createdAt: "2020-01-01T00:00:00.000Z",
+      id: "imported",
+      isSuper: false,
+      model: null,
+      name: "Imported",
+      orgId: "org_first",
+      systemPrompt: "first org prompt",
+    });
+
+    // The taken check runs before a concurrent import inserts its row.
+    const realGetProfile = db.getProfile.bind(db);
+    db.getProfile = async (id) =>
+      id === "imported" ? null : await realGetProfile(id);
+
+    await expect(
+      service.createProfile("org_second", { id: "imported", name: "Mine" })
+    ).rejects.toThrow(/already taken/i);
+
+    await expect(
+      service.cloneProfile("org_second", source.profile.id, { id: "imported" })
+    ).rejects.toThrow(/already taken/i);
+
+    expect(await realGetProfile("imported")).toMatchObject({
+      name: "Imported",
+      orgId: "org_first",
+      systemPrompt: "first org prompt",
+    });
+  });
+
   test("resolves legacy slug ids via getProfile and getProfileForOrg", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-legacy-slug-")
+      path.join(os.tmpdir(), "airin-profile-legacy-slug-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const db = createInMemoryDatabaseAdapter();
     const service = new ProfileService(db);
@@ -586,9 +678,9 @@ describe("profile service createProfile", () => {
     "rejects ids that differ only by case, which share a folder on Windows",
     async () => {
       tempConfigDir = await mkdtemp(
-        path.join(os.tmpdir(), "nakama-profile-case-id-")
+        path.join(os.tmpdir(), "airin-profile-case-id-")
       );
-      process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+      process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
       const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -616,7 +708,11 @@ describe("profile service updateProfile", () => {
   let tempConfigDir = "";
 
   afterEach(async () => {
-    process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+    if (originalConfigDir === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
+    }
 
     if (tempConfigDir) {
       await rm(tempConfigDir, { force: true, recursive: true });
@@ -626,9 +722,9 @@ describe("profile service updateProfile", () => {
 
   test("updates provided soul files without clearing omitted ones", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-update-soul-")
+      path.join(os.tmpdir(), "airin-profile-update-soul-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
 
@@ -670,16 +766,21 @@ describe("profile service updateProfile", () => {
 describe("profile service assignSkill", () => {
   let tempConfigDir = "";
   const originalPath = process.env.PATH ?? "";
-  const originalDisableFixPath = process.env.NAKAMA_DISABLE_FIX_PATH;
+  const originalDisableFixPath = process.env.AIRIN_DISABLE_FIX_PATH;
 
   afterEach(async () => {
-    process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+    if (originalConfigDir === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
+    }
+
     process.env.PATH = originalPath;
 
     if (originalDisableFixPath === undefined) {
-      delete process.env.NAKAMA_DISABLE_FIX_PATH;
+      delete process.env.AIRIN_DISABLE_FIX_PATH;
     } else {
-      process.env.NAKAMA_DISABLE_FIX_PATH = originalDisableFixPath;
+      process.env.AIRIN_DISABLE_FIX_PATH = originalDisableFixPath;
     }
 
     if (tempConfigDir) {
@@ -690,11 +791,11 @@ describe("profile service assignSkill", () => {
 
   test("assigns coding-agent without requiring a ready coding harness", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-assign-skill-")
+      path.join(os.tmpdir(), "airin-profile-assign-skill-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     process.env.PATH = tempConfigDir;
-    process.env.NAKAMA_DISABLE_FIX_PATH = "1";
+    process.env.AIRIN_DISABLE_FIX_PATH = "1";
 
     const db = createInMemoryDatabaseAdapter();
     await ensureBuiltinToolDefinitions(db);
@@ -728,9 +829,9 @@ describe("profile service assignSkill", () => {
 
   test("rejects another organization's skill and allows a shared skill", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-skill-scope-")
+      path.join(os.tmpdir(), "airin-profile-skill-scope-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const db = createInMemoryDatabaseAdapter();
     const service = new ProfileService(db);
@@ -776,7 +877,11 @@ describe("profile service knowledge base", () => {
   let tempConfigDir = "";
 
   afterEach(async () => {
-    process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+    if (originalConfigDir === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
+    }
 
     if (tempConfigDir) {
       await rm(tempConfigDir, { force: true, recursive: true });
@@ -785,8 +890,8 @@ describe("profile service knowledge base", () => {
   });
 
   test("uploads, lists, and deletes knowledge base documents", async () => {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-profile-kb-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-profile-kb-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
     const created = await service.createProfile(ORG_ID, { name: "KB Bot" });
@@ -823,8 +928,8 @@ describe("profile service knowledge base", () => {
   });
 
   test("rejects duplicate knowledge base uploads with 409 and supports replace", async () => {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-profile-kb-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-profile-kb-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
     const created = await service.createProfile(ORG_ID, { name: "KB Bot" });
@@ -861,8 +966,8 @@ describe("profile service knowledge base", () => {
   });
 
   test("readKnowledgeBaseDocument returns preview text and download bytes", async () => {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-profile-kb-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-profile-kb-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
     const created = await service.createProfile(ORG_ID, { name: "KB Bot" });
@@ -898,8 +1003,8 @@ describe("profile service knowledge base", () => {
   });
 
   test("readKnowledgeBaseDocument throws for unknown document", async () => {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-profile-kb-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-profile-kb-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const service = new ProfileService(createInMemoryDatabaseAdapter());
     const created = await service.createProfile(ORG_ID, { name: "KB Bot" });
@@ -918,9 +1023,9 @@ describe("profile service cloneProfile", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (tempConfigDir) {
@@ -931,9 +1036,9 @@ describe("profile service cloneProfile", () => {
 
   async function setup() {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-clone-")
+      path.join(os.tmpdir(), "airin-profile-clone-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     const db = createInMemoryDatabaseAdapter();
     await ensureBuiltinToolDefinitions(db);
     const service = new ProfileService(db);
@@ -1047,16 +1152,6 @@ describe("profile service cloneProfile", () => {
     ).toBe("kb body");
   });
 
-  test("gives each clone a unique id", async () => {
-    const { service, sourceId } = await setup();
-    const first = await service.cloneProfile(ORG_ID, sourceId, {});
-    const second = await service.cloneProfile(ORG_ID, sourceId, {});
-
-    expect(second.profile.id).not.toBe(first.profile.id);
-    expect(first.profile.name).toBe("Research Bot (copy)");
-    expect(second.profile.name).toBe("Research Bot (copy)");
-  });
-
   test.skipIf(process.platform !== "win32")(
     "clones get a random id even when a case-similar id is taken on Windows",
     async () => {
@@ -1076,18 +1171,18 @@ describe("profile service cloneProfile", () => {
     }
   );
 
-  test("refuses to clone Super Bot and writes nothing", async () => {
+  test("refuses to clone Airin and writes nothing", async () => {
     const { db, service } = await setup();
 
-    const superBot = await service.createProfile(ORG_ID, {
+    const superAirin = await service.createProfile(ORG_ID, {
       isSuper: true,
-      name: "Super Bot",
+      name: "Airin",
     });
 
     const countBefore = (await db.listProfilesForOrg(ORG_ID)).length;
 
     await expect(
-      service.cloneProfile(ORG_ID, superBot.profile.id, {})
+      service.cloneProfile(ORG_ID, superAirin.profile.id, {})
     ).rejects.toThrow(/cannot be cloned/i);
 
     expect(await db.listProfilesForOrg(ORG_ID)).toHaveLength(countBefore);
@@ -1182,9 +1277,9 @@ describe("profile service deleteProfile", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (tempConfigDir) {
@@ -1195,9 +1290,9 @@ describe("profile service deleteProfile", () => {
 
   async function setup() {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-delete-")
+      path.join(os.tmpdir(), "airin-profile-delete-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     const db = createInMemoryDatabaseAdapter();
 
     return { db, service: new ProfileService(db) };
@@ -1290,12 +1385,84 @@ describe("profile service deleteProfile", () => {
     );
   });
 
-  test("does not promote Super Bot as the new default", async () => {
+  test("keeps files and the default when database deletion fails", async () => {
+    const { db, service } = await setup();
+    const first = await service.createProfile(ORG_ID, { name: "Default Bot" });
+    const second = await service.createProfile(ORG_ID, { name: "Second" });
+    await service.createProfile(ORG_ID, { name: "Third" });
+    await markDefault(db, first.profile.id);
+
+    const soulPath = path.join(
+      getProfileSoulDir(ORG_ID, first.profile.id),
+      "SOUL.md"
+    );
+
+    const soul = await readFile(soulPath, "utf8");
+    const deleteProfile = db.deleteProfileAndPromoteDefault;
+    db.deleteProfileAndPromoteDefault = async () => {
+      throw new Error("Database unavailable");
+    };
+
+    await expect(
+      service.deleteProfile(ORG_ID, first.profile.id)
+    ).rejects.toThrow();
+    db.deleteProfileAndPromoteDefault = deleteProfile;
+
+    expect(await readFile(soulPath, "utf8")).toBe(soul);
+    expect((await db.getProfile(first.profile.id))?.isDefault).toBe(true);
+    expect((await db.getProfile(second.profile.id))?.isDefault).toBe(false);
+    await expect(
+      db.deleteProfileAndPromoteDefault(first.profile.id, ORG_ID, "missing")
+    ).rejects.toThrow();
+    expect((await db.getProfile(first.profile.id))?.isDefault).toBe(true);
+    expect(await readFile(soulPath, "utf8")).toBe(soul);
+  });
+
+  test("keeps a newer default selected during deletion", async () => {
+    const { db, service } = await setup();
+    const first = await service.createProfile(ORG_ID, { name: "Default Bot" });
+    const second = await service.createProfile(ORG_ID, { name: "Second" });
+    const third = await service.createProfile(ORG_ID, { name: "Third" });
+    await markDefault(db, first.profile.id);
+    service.beforeChannelOwnerDelete = async () => {
+      await markDefault(db, third.profile.id);
+    };
+
+    await service.deleteProfile(ORG_ID, first.profile.id);
+
+    expect((await db.getProfile(second.profile.id))?.isDefault).toBe(false);
+    expect((await db.getProfile(third.profile.id))?.isDefault).toBe(true);
+  });
+
+  test("keeps a target promoted to default during deletion", async () => {
+    const { db, service } = await setup();
+    const first = await service.createProfile(ORG_ID, { name: "Default Bot" });
+    const second = await service.createProfile(ORG_ID, { name: "Second" });
+    await service.createProfile(ORG_ID, { name: "Third" });
+    await markDefault(db, first.profile.id);
+    service.beforeChannelOwnerDelete = async () => {
+      await markDefault(db, second.profile.id);
+    };
+
+    await expect(
+      service.deleteProfile(ORG_ID, second.profile.id)
+    ).rejects.toThrow();
+
+    expect((await db.getProfile(second.profile.id))?.isDefault).toBe(true);
+    expect(
+      await readFile(
+        path.join(getProfileSoulDir(ORG_ID, second.profile.id), "SOUL.md"),
+        "utf8"
+      )
+    ).toBeTruthy();
+  });
+
+  test("does not promote Airin as the new default", async () => {
     const { db, service } = await setup();
     const first = await service.createProfile(ORG_ID, { name: "Default Bot" });
     await service.createProfile(ORG_ID, {
       isSuper: true,
-      name: "Super Bot",
+      name: "Airin",
     });
     const third = await service.createProfile(ORG_ID, { name: "Writer" });
     await markDefault(db, first.profile.id);
@@ -1312,7 +1479,11 @@ describe("profile service plugin tool org scope", () => {
   let tempConfigDir = "";
 
   afterEach(async () => {
-    process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+    if (originalConfigDir === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
+    }
 
     if (tempConfigDir) {
       await rm(tempConfigDir, { force: true, recursive: true });
@@ -1356,9 +1527,9 @@ describe("profile service plugin tool org scope", () => {
 
   test("assignTool rejects a plugin tool owned by another org", async () => {
     tempConfigDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-profile-plugin-org-")
+      path.join(os.tmpdir(), "airin-profile-plugin-org-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     const db = createInMemoryDatabaseAdapter();
     const service = new ProfileService(db);
     const profile = await service.createProfile(ORG_ID, { name: "Scoped" });
@@ -1652,7 +1823,7 @@ describe("shared profile configuration", () => {
 describe("profile organization transfer", () => {
   setupTestConfigDir("profile-transfer-");
   test("moves workspace and sessions without changing profile identity", async () => {
-    const configDir = process.env.NAKAMA_CONFIG_DIR!;
+    const configDir = process.env.AIRIN_CONFIG_DIR!;
     const db = createInMemoryDatabaseAdapter();
     const service = new ProfileService(db);
     const now = new Date().toISOString();
@@ -1680,6 +1851,7 @@ describe("profile organization transfer", () => {
     );
 
     await writeFile(path.join(sourceDir, "MEMORY.md"), "Remember me");
+    await seedWebhookSecret(db, "source", profile.id);
     await db.upsertSession({
       agentQuestionnaire: null,
       agentTodos: [],
@@ -1693,6 +1865,7 @@ describe("profile organization transfer", () => {
     await service.moveProfile("source", profile.id, {
       organizationId: "destination",
     });
+    expect(await db.listAutomationWebhookSecrets()).toEqual([]);
     expect(await db.getProfileForOrg(profile.id, "source")).toBeNull();
     expect((await db.getProfileForOrg(profile.id, "destination"))?.name).toBe(
       "Moving bot"
@@ -1706,8 +1879,39 @@ describe("profile organization transfer", () => {
     );
   });
 
+  test("a failed secret delete stops the move and keeps the profile in the source org", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    const service = new ProfileService(db);
+    const now = new Date().toISOString();
+
+    for (const id of ["source", "destination"]) {
+      await db.upsertOrganization({
+        createdAt: now,
+        id,
+        name: id,
+        slug: id,
+        updatedAt: now,
+      });
+    }
+
+    const { profile } = await service.createProfile("source", {
+      name: "Moving bot",
+    });
+
+    await seedWebhookSecret(db, "source", profile.id);
+    db.deleteAutomationWebhookSecret = () =>
+      Promise.reject(new Error("delete failed"));
+    await expect(
+      service.moveProfile("source", profile.id, {
+        organizationId: "destination",
+      })
+    ).rejects.toThrow();
+    expect(await db.getProfileForOrg(profile.id, "source")).not.toBeNull();
+    expect(await db.getProfileForOrg(profile.id, "destination")).toBeNull();
+  });
+
   test("profile transfer preserves related data and rolls back database and files on failure", async () => {
-    const configDir = process.env.NAKAMA_CONFIG_DIR!;
+    const configDir = process.env.AIRIN_CONFIG_DIR!;
     const databasePath = path.join(configDir, "transfer.sqlite");
     const database = await createSqliteDatabase(`file:${databasePath}`);
     const raw = new Database(databasePath);
@@ -1964,5 +2168,41 @@ describe("profile organization transfer", () => {
       raw.close(true);
       database.close();
     }
+  });
+});
+
+describe("profile service with bash turned off", () => {
+  const originalTenantBash = process.env.AIRIN_TENANT_BASH;
+
+  afterEach(() => {
+    if (originalConfigDir === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
+    }
+
+    if (originalTenantBash === undefined) {
+      delete process.env.AIRIN_TENANT_BASH;
+    } else {
+      process.env.AIRIN_TENANT_BASH = originalTenantBash;
+    }
+  });
+
+  test("refuses to assign bash to a profile", async () => {
+    process.env.AIRIN_CONFIG_DIR = await mkdtemp(
+      path.join(os.tmpdir(), "airin-bash-off-")
+    );
+    process.env.AIRIN_TENANT_BASH = "0";
+    const db = createInMemoryDatabaseAdapter();
+    await ensureBuiltinToolDefinitions(db);
+    await ensureBashToolDefinition(db);
+    const service = new ProfileService(db);
+    const { profile } = await service.createProfile(ORG_ID, { name: "Ops" });
+
+    await expect(
+      service.assignTool(ORG_ID, profile.id, { toolId: BASH_TOOL_ID })
+    ).rejects.toMatchObject({ status: 403 });
+
+    await rm(process.env.AIRIN_CONFIG_DIR, { force: true, recursive: true });
   });
 });

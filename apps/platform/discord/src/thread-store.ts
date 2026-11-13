@@ -1,6 +1,6 @@
 import { dirname, join } from "node:path";
-import { getDiscordConfigDir } from "@nakama/core/discord-config";
-import { readTextOrNull, writeTextFile } from "@nakama/core/fs";
+import { getDiscordConfigDir } from "@airin/core/discord-config";
+import { readTextOrNull, writeTextFile } from "@airin/core/fs";
 import { z } from "zod";
 
 /** Persisted ownership of Discord threads the bot started. */

@@ -2,14 +2,14 @@ import type {
   SkillCreatedBy,
   SkillDetail,
   SkillUsageSummary,
-} from "@nakama/core/contract";
-import { BUNDLED_SKILL_NAMES } from "@nakama/core/skills/bundled-names";
-import { Button } from "@nakama/ui/button";
-import { CodeBlock } from "@nakama/ui/code-block";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
-import { Textarea } from "@nakama/ui/textarea";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/core/contract";
+import { BUNDLED_SKILL_NAMES } from "@airin/core/skills/bundled-names";
+import { Button } from "@airin/ui/button";
+import { CodeBlock } from "@airin/ui/code-block";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
+import { Textarea } from "@airin/ui/textarea";
+import { cn } from "@airin/ui/utils";
 import { Link } from "react-router-dom";
 import { isPluginOwned } from "@/hooks/use-plugins";
 import { formatSessionRelativeTime } from "@/lib/chat-history";

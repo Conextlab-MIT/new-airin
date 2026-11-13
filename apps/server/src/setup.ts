@@ -10,9 +10,16 @@ import {
   resolveProvider,
   saveUserConfig,
   type UserConfig,
-} from "@nakama/core";
-import { NETRA_AGENT_MODEL_ID } from "@nakama/core/discovery-providers";
+} from "@airin/core";
+import {
+  NETRA_AGENT_MODEL_ID,
+  resolveNetraModelId,
+} from "@airin/core/discovery-providers";
 import { createProviderFromActiveConfig } from "./providers";
+import {
+  type ManagedSecrets,
+  providerSecretEnvNames,
+} from "./services/managed-secrets";
 
 export interface ProviderBootstrap {
   provider: ProviderClient | null;
@@ -36,11 +43,11 @@ async function bootstrapProviderFromEnv(
   }
 
   const netraModel =
-    providerType === "netra" ? readEnvValue(env, "NETRA_MODEL") : null;
-
-  if (providerType === "netra" && netraModel !== NETRA_AGENT_MODEL_ID) {
-    return null;
-  }
+    providerType === "netra"
+      ? resolveNetraModelId(
+          readEnvValue(env, "NETRA_MODEL") ?? NETRA_AGENT_MODEL_ID
+        )
+      : null;
 
   const instance = {
     apiKey: "",
@@ -61,12 +68,40 @@ async function bootstrapProviderFromEnv(
   return config;
 }
 
-export async function ensureProviderConfigured(): Promise<ProviderBootstrap> {
+export async function ensureProviderConfigured(
+  secrets?: ManagedSecrets
+): Promise<ProviderBootstrap> {
   await ensureUserConfigDir();
   let userConfig = await loadUserConfig();
 
+  const hydrate = async (
+    config: UserConfig | null
+  ): Promise<UserConfig | null> =>
+    config && secrets
+      ? {
+          ...config,
+          providers: await Promise.all(
+            config.providers.map(async (instance) => ({
+              ...instance,
+              apiKey:
+                (
+                  await secrets.resolve(
+                    "global",
+                    `provider:${instance.id}`,
+                    providerSecretEnvNames(instance.id, instance.type)
+                  )
+                ).value ?? "",
+            }))
+          ),
+        }
+      : config;
+
+  userConfig = await hydrate(userConfig);
+
   if (!isProviderConfigured(userConfig, process.env)) {
-    userConfig = (await bootstrapProviderFromEnv(process.env)) ?? userConfig;
+    userConfig =
+      (await hydrate(await bootstrapProviderFromEnv(process.env))) ??
+      userConfig;
   }
 
   const provider = createProviderFromActiveConfig(userConfig, process.env);

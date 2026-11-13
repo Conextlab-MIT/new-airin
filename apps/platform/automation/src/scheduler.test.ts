@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { NakamaClient } from "@nakama/client";
-import type { AutomationSchedule } from "@nakama/core";
+import type { AirinClient } from "@airin/client";
+import type { AutomationSchedule } from "@airin/core";
 import { AutomationWorkerScheduler } from "./scheduler";
 
 function createMockClient(
@@ -11,7 +11,7 @@ function createMockClient(
     getTimezone: () => Promise<string>;
     listSkillCuratorOrgs: () => Promise<{ orgs: [] }>;
   }> = {}
-): NakamaClient {
+): AirinClient {
   const mockClient = {
     getTimezone: async () => "UTC",
     listAutomationSchedules: async () => [],
@@ -21,7 +21,7 @@ function createMockClient(
   };
 
   // SAFETY: The scheduler calls only the methods supplied by this mock.
-  return mockClient as NakamaClient;
+  return mockClient as AirinClient;
 }
 
 describe("AutomationWorkerScheduler", () => {

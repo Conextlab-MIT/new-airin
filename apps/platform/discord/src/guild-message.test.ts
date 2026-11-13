@@ -6,7 +6,7 @@ import {
   stripBotMention,
 } from "./guild-message";
 
-const BOT_INFO = { id: "999000111222333444", username: "nakamabot" };
+const BOT_INFO = { id: "999000111222333444", username: "airinbot" };
 
 const GUILD_ID = "guild_1";
 

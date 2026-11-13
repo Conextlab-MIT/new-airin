@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createTypingLoop } from "@nakama/core/channel-typing-loop";
+import { createTypingLoop } from "@airin/core/channel-typing-loop";
 import type { WASocket } from "@whiskeysockets/baileys";
 
 const JID = "628100000000@s.whatsapp.net";

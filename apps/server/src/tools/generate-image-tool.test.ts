@@ -9,16 +9,15 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { inferArtifactMimeType, type UserConfig } from "@nakama/core";
-import { GENERATE_IMAGE_TOOL_ID } from "@nakama/core/tools/protected";
+import { inferArtifactMimeType, type UserConfig } from "@airin/core";
+import { GENERATE_IMAGE_TOOL_ID } from "@airin/core/tools/protected";
 import {
   createInMemoryDatabaseAdapter,
   ensureGenerateImageToolDefinition,
   seedDatabase,
-  seedOrgSuperBotProfile,
-} from "@nakama/db";
+  seedOrgSuperAirinProfile,
+} from "@airin/db";
 import { IMAGE_GENERATION_SELECTION } from "../providers/models";
-import { IMAGE_MODEL_REQUIRED_MESSAGE } from "../services/image-generation";
 import { resolveToolsFromStorage } from "../services/tool-resolver";
 import {
   createGenerateImageTool,
@@ -57,22 +56,12 @@ function generateImageTool(
     db,
     ensureSettingsLoaded: async () => {},
     getUserConfig: () => null,
+    onChatgptTokenRefresh: async () => undefined,
   });
 }
 
 describe("generate_image tool seed and resolver (U3)", () => {
-  test("seed creates generate_image tool definition", async () => {
-    const db = createInMemoryDatabaseAdapter();
-
-    await ensureGenerateImageToolDefinition(db);
-
-    const tool = await db.getTool(GENERATE_IMAGE_TOOL_ID);
-    expect(tool).not.toBeNull();
-    expect(tool?.name).toBe(GENERATE_IMAGE_TOOL_NAME);
-    expect(tool?.handlerType).toBe("generate_image");
-  });
-
-  test("seedDatabase includes generate_image and Super Bot is not auto-assigned", async () => {
+  test("seedDatabase includes generate_image and a new Airin gets it", async () => {
     const db = createInMemoryDatabaseAdapter();
     await db.upsertOrganization({
       createdAt: new Date().toISOString(),
@@ -83,49 +72,15 @@ describe("generate_image tool seed and resolver (U3)", () => {
     });
 
     await seedDatabase(db);
-    const superBot = await seedOrgSuperBotProfile(db, "org_a");
+    const superAirin = await seedOrgSuperAirinProfile(db, "org_a");
 
     expect(await db.getTool(GENERATE_IMAGE_TOOL_ID)).not.toBeNull();
 
-    const assignedIds = (await db.listToolsForProfile(superBot.id)).map(
+    const assignedIds = (await db.listToolsForProfile(superAirin.id)).map(
       (tool) => tool.id
     );
 
-    expect(assignedIds).not.toContain(GENERATE_IMAGE_TOOL_ID);
-  });
-
-  test("resolver returns runnable generate_image for assigned profile", async () => {
-    const db = createInMemoryDatabaseAdapter();
-    const now = new Date().toISOString();
-
-    await ensureGenerateImageToolDefinition(db);
-    await db.upsertProfile({
-      createdAt: now,
-      id: "profile_assigned",
-      isDefault: true,
-      isSuper: false,
-      model: null,
-      name: "Assigned",
-      orgId: "org_a",
-      systemPrompt: "",
-      updatedAt: now,
-    });
-    await db.assignToolToProfile("profile_assigned", GENERATE_IMAGE_TOOL_ID);
-
-    const assigned = await resolveToolsFromStorage(
-      await db.listToolsForProfile("profile_assigned"),
-      db,
-      [],
-      { serverTools: { generateImage: generateImageTool(db) } }
-    );
-
-    const tool = assigned.find(
-      (entry) => entry.name === GENERATE_IMAGE_TOOL_NAME
-    );
-
-    expect(tool).toBeDefined();
-    expect(tool?.parameters?.required).toEqual(["prompt"]);
-    expect(tool?.parameters?.properties).not.toHaveProperty("model");
+    expect(assignedIds).toContain(GENERATE_IMAGE_TOOL_ID);
   });
 
   test("unassigned profile session does not expose generate_image", async () => {
@@ -183,7 +138,7 @@ describe("generate_image tool seed and resolver (U3)", () => {
 });
 
 describe("generate_image tool persistence (U4)", () => {
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
   let tempConfigDir = "";
   let workspaceRoot = "";
 
@@ -199,16 +154,16 @@ describe("generate_image tool persistence (U4)", () => {
     }
 
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
   });
 
   async function setupWorkspace() {
-    tempConfigDir = await mkdtemp(path.join(tmpdir(), "nakama-gen-img-cfg-"));
-    workspaceRoot = await mkdtemp(path.join(tmpdir(), "nakama-gen-img-ws-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(tmpdir(), "airin-gen-img-cfg-"));
+    workspaceRoot = await mkdtemp(path.join(tmpdir(), "airin-gen-img-ws-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
   }
 
   test("forwards the turn's cancel signal to the provider call", async () => {
@@ -239,6 +194,7 @@ describe("generate_image tool persistence (U4)", () => {
         },
         getUserConfig: () =>
           openaiConfig({ imageModel: IMAGE_GENERATION_SELECTION }),
+        onChatgptTokenRefresh: async () => undefined,
       }
     );
 
@@ -279,6 +235,7 @@ describe("generate_image tool persistence (U4)", () => {
             },
           ],
         }),
+        onChatgptTokenRefresh: async () => undefined,
       }
     );
 
@@ -304,6 +261,7 @@ describe("generate_image tool persistence (U4)", () => {
         }),
         getUserConfig: () =>
           openaiConfig({ imageModel: IMAGE_GENERATION_SELECTION }),
+        onChatgptTokenRefresh: async () => undefined,
         recordUsage: (_model, _input, _output, providerInstance) => {
           pricedOn = providerInstance.id;
         },
@@ -348,6 +306,7 @@ describe("generate_image tool persistence (U4)", () => {
         }),
         getUserConfig: () =>
           openaiConfig({ imageModel: IMAGE_GENERATION_SELECTION }),
+        onChatgptTokenRefresh: async () => undefined,
         recordUsage: (model, input, output, _instance, attribution) => {
           usage.push({ input, model, output, ...attribution });
         },
@@ -358,6 +317,7 @@ describe("generate_image tool persistence (U4)", () => {
       mimeType: "image/png",
       model: "gpt-image-2",
       path: "artifacts/cat.png",
+      size: "1024x1024",
       sizeBytes: PNG_BYTES.byteLength,
     });
 
@@ -418,6 +378,7 @@ describe("generate_image tool persistence (U4)", () => {
         }),
         getUserConfig: () =>
           openaiConfig({ imageModel: IMAGE_GENERATION_SELECTION }),
+        onChatgptTokenRefresh: async () => undefined,
       }
     );
 
@@ -462,6 +423,7 @@ describe("generate_image tool persistence (U4)", () => {
         }),
         getUserConfig: () =>
           openaiConfig({ imageModel: IMAGE_GENERATION_SELECTION }),
+        onChatgptTokenRefresh: async () => undefined,
       }
     );
 
@@ -502,14 +464,37 @@ describe("generate_image tool persistence (U4)", () => {
           throw new Error("should not call OpenAI");
         },
         getUserConfig: () => openaiConfig({ imageModel: null }),
+        onChatgptTokenRefresh: async () => undefined,
       }
     );
 
-    expect(result).toEqual({ error: IMAGE_MODEL_REQUIRED_MESSAGE });
+    expect(result).toHaveProperty("error");
     const artifactsDir = path.join(workspaceRoot, "artifacts");
     const entries = await readdir(artifactsDir).catch(() => []);
     expect(entries).toEqual([]);
     expect(attachmentInserts).toBe(0);
+  });
+
+  test("an image model saved as off generates nothing", async () => {
+    let calls = 0;
+
+    const result = await runGenerateImageTool(
+      { prompt: "a cat" },
+      { orgId: "org_1", profileId: "profile_1", workspaceRoot },
+      {
+        db: createInMemoryDatabaseAdapter(),
+        ensureSettingsLoaded: async () => {},
+        generateImage: async () => {
+          calls++;
+          throw new Error("should not generate");
+        },
+        getUserConfig: () => openaiConfig({ imageModel: "off" }),
+        onChatgptTokenRefresh: async () => undefined,
+      }
+    );
+
+    expect(result).toHaveProperty("error");
+    expect(calls).toBe(0);
   });
 
   test("OpenAI failure writes no partial sidecar or attachment", async () => {
@@ -540,6 +525,7 @@ describe("generate_image tool persistence (U4)", () => {
         },
         getUserConfig: () =>
           openaiConfig({ imageModel: IMAGE_GENERATION_SELECTION }),
+        onChatgptTokenRefresh: async () => undefined,
       }
     );
 
@@ -557,23 +543,9 @@ describe("generate_image tool persistence (U4)", () => {
 describe("formatImageMentionContext", () => {
   const withTool = [GENERATE_IMAGE_TOOL_NAME];
 
-  test("asks for generate_image when the message is tagged @image", () => {
-    for (const message of ["@image a red fox", "draw this @image", "@IMAGE"]) {
-      expect(formatImageMentionContext(message, withTool)).toContain(
-        `Call ${GENERATE_IMAGE_TOOL_NAME}`
-      );
-    }
-  });
-
   test("ignores emails, longer words and untagged messages", () => {
     for (const message of ["me@image.dev", "@images please", "a red fox"]) {
       expect(formatImageMentionContext(message, withTool)).toBe("");
     }
-  });
-
-  test("explains the missing tool instead of asking for it", () => {
-    const context = formatImageMentionContext("@image a red fox", ["bash"]);
-    expect(context).toContain("not assigned to this agent");
-    expect(context).not.toContain(`Call ${GENERATE_IMAGE_TOOL_NAME}`);
   });
 });

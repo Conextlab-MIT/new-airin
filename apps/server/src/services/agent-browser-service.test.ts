@@ -1,19 +1,26 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { REDACTED_SECRET_VALUE } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { createHonoApp } from "../http/app";
 import { setupFreshInstallSession } from "../http/test-session-helpers";
+import { asTestFetch } from "../providers/test-helpers";
 import {
   getAgentBrowserInstallCommand,
   getAgentBrowserStatus,
+  getUserBrowser,
   installAgentBrowser,
+  saveAgentBrowserConfig,
+  stopUserBrowser,
 } from "../services/agent-browser-service";
 import { AgentService } from "../services/agent-service";
 import { AuthService } from "../services/auth-service";
+import { ensureKernelBrowser } from "../services/kernel-browser";
 import { OrgService } from "../services/org-service";
+import { setupTestManagedSecrets } from "../test-config-dir";
 import * as cliPackageInstall from "./cli-package-install";
 import {
   waitForExit,
@@ -25,22 +32,22 @@ const testPosix = test.skipIf(process.platform === "win32");
 
 describe("agent-browser service", () => {
   const originalPath = process.env.PATH ?? "";
-  const originalDisableFixPath = process.env.NAKAMA_DISABLE_FIX_PATH;
+  const originalDisableFixPath = process.env.AIRIN_DISABLE_FIX_PATH;
   let tempBinDir = "";
 
   beforeEach(async () => {
-    tempBinDir = await mkdtemp(join(tmpdir(), "nakama-agent-browser-bin-"));
+    tempBinDir = await mkdtemp(join(tmpdir(), "airin-agent-browser-bin-"));
     process.env.PATH = tempBinDir;
-    process.env.NAKAMA_DISABLE_FIX_PATH = "1";
+    process.env.AIRIN_DISABLE_FIX_PATH = "1";
   });
 
   afterEach(async () => {
     process.env.PATH = originalPath;
 
     if (originalDisableFixPath === undefined) {
-      delete process.env.NAKAMA_DISABLE_FIX_PATH;
+      delete process.env.AIRIN_DISABLE_FIX_PATH;
     } else {
-      process.env.NAKAMA_DISABLE_FIX_PATH = originalDisableFixPath;
+      process.env.AIRIN_DISABLE_FIX_PATH = originalDisableFixPath;
     }
 
     if (tempBinDir) {
@@ -138,32 +145,32 @@ describe("agent-browser service", () => {
 
 describe("agent-browser settings routes", () => {
   const originalPath = process.env.PATH ?? "";
-  const originalDisableFixPath = process.env.NAKAMA_DISABLE_FIX_PATH;
+  const originalDisableFixPath = process.env.AIRIN_DISABLE_FIX_PATH;
   let tempBinDir = "";
   let configDir = "";
 
   beforeEach(async () => {
     tempBinDir = await mkdtemp(
-      join(tmpdir(), "nakama-agent-browser-route-bin-")
+      join(tmpdir(), "airin-agent-browser-route-bin-")
     );
     configDir = await mkdtemp(
-      join(tmpdir(), "nakama-agent-browser-route-config-")
+      join(tmpdir(), "airin-agent-browser-route-config-")
     );
     process.env.PATH = tempBinDir;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-    process.env.NAKAMA_DISABLE_FIX_PATH = "1";
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    process.env.AIRIN_DISABLE_FIX_PATH = "1";
   });
 
   afterEach(async () => {
     process.env.PATH = originalPath;
 
     if (originalDisableFixPath === undefined) {
-      delete process.env.NAKAMA_DISABLE_FIX_PATH;
+      delete process.env.AIRIN_DISABLE_FIX_PATH;
     } else {
-      process.env.NAKAMA_DISABLE_FIX_PATH = originalDisableFixPath;
+      process.env.AIRIN_DISABLE_FIX_PATH = originalDisableFixPath;
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (tempBinDir) {
       await rm(tempBinDir, { force: true, recursive: true });
@@ -398,3 +405,195 @@ setInterval(() => {}, 1000);
   await writeFile(scriptPath, script, "utf8");
   await chmod(scriptPath, 0o755);
 }
+
+describe("Kernel browser runtime", () => {
+  const originalFetch = globalThis.fetch;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
+  const kernelEnvKeys = ["AIRIN_BROWSER_PROVIDER", "KERNEL_API_KEY"] as const;
+
+  const originalKernelEnv = Object.fromEntries(
+    kernelEnvKeys.map((key) => [key, process.env[key]])
+  );
+
+  let configDir = "";
+  const store = setupTestManagedSecrets();
+  let requests: Array<{ body: unknown; method: string; url: string }> = [];
+  let browsers: Map<string, Record<string, string>>;
+
+  const context = {
+    orgId: "org-a",
+    profileId: "agent-1",
+    sessionId: "chat-1",
+    userId: "user-1",
+  };
+
+  beforeEach(async () => {
+    configDir = await mkdtemp(join(tmpdir(), "airin-kernel-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
+
+    for (const key of kernelEnvKeys) {
+      delete process.env[key];
+    }
+
+    requests = [];
+    browsers = new Map();
+
+    globalThis.fetch = asTestFetch(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const method = init?.method ?? "GET";
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+        requests.push({ body, method, url: url.pathname });
+
+        if (url.pathname === "/profiles") {
+          return Response.json({}, { status: 200 });
+        }
+
+        if (url.pathname === "/browsers" && method === "POST") {
+          const created = {
+            browser_live_view_url: `https://live.onkernel.com/${body.name}`,
+            cdp_ws_url: `wss://cdp.onkernel.com/${body.name}`,
+            session_id: `kernel-${browsers.size + 1}`,
+          };
+
+          browsers.set(body.name, created);
+
+          return Response.json(created);
+        }
+
+        const name = decodeURIComponent(url.pathname.split("/").pop() ?? "");
+        const browser = browsers.get(name);
+
+        if (method === "DELETE") {
+          browsers.delete(name);
+
+          return new Response(null, { status: browser ? 204 : 404 });
+        }
+
+        return browser
+          ? Response.json(browser)
+          : Response.json({}, { status: 404 });
+      }
+    );
+  });
+
+  afterEach(async () => {
+    globalThis.fetch = originalFetch;
+
+    for (const key of kernelEnvKeys) {
+      if (originalKernelEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = originalKernelEnv[key];
+      }
+    }
+
+    if (originalConfigDir === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
+    }
+
+    await rm(configDir, { force: true, recursive: true });
+  });
+
+  test("uses the Kernel key from the host env", async () => {
+    process.env.AIRIN_BROWSER_PROVIDER = "kernel";
+    process.env.KERNEL_API_KEY = "env-key";
+
+    expect((await getAgentBrowserStatus()).provider).toBe("kernel");
+  });
+
+  test("keeps another user off the first user's browser", async () => {
+    await saveAgentBrowserConfig(
+      { apiKey: "kernel-key", provider: "kernel" },
+      store()
+    );
+    await ensureKernelBrowser("kernel-key", "org-a", "user-1");
+
+    expect((await getUserBrowser("org-a", "user-2")).liveViewUrl).toBeNull();
+  });
+
+  test("requires a Kernel API key to save", async () => {
+    await expect(
+      saveAgentBrowserConfig({ provider: "kernel" }, store())
+    ).rejects.toThrow();
+
+    process.env.KERNEL_API_KEY = "env-key";
+
+    await saveAgentBrowserConfig({ provider: "kernel" }, store());
+    expect((await getAgentBrowserStatus()).provider).toBe("kernel");
+  });
+
+  test("keeps the Kernel key out of config.ini", async () => {
+    await saveAgentBrowserConfig(
+      { apiKey: "kernel-key", provider: "kernel" },
+      store()
+    );
+
+    const config = await readFile(join(configDir, "config.ini"), "utf8");
+
+    expect(config).toContain("provider=kernel");
+    expect(config).not.toContain("kernel-key");
+    expect((await store().resolve("global", "kernel-browser")).value).toBe(
+      "kernel-key"
+    );
+    expect((await getAgentBrowserStatus()).apiKeyMasked).not.toBeNull();
+  });
+
+  test("keeps the saved key when the redacted value comes back", async () => {
+    await saveAgentBrowserConfig(
+      { apiKey: "kernel-key", provider: "kernel" },
+      store()
+    );
+    await saveAgentBrowserConfig(
+      { apiKey: REDACTED_SECRET_VALUE, provider: "kernel" },
+      store()
+    );
+
+    expect((await store().resolve("global", "kernel-browser")).value).toBe(
+      "kernel-key"
+    );
+  });
+
+  test("restores local Chrome when the provider is cleared", async () => {
+    await saveAgentBrowserConfig(
+      { apiKey: "kernel-key", provider: "kernel" },
+      store()
+    );
+    await saveAgentBrowserConfig({ provider: null }, store());
+
+    const status = await getAgentBrowserStatus();
+
+    expect(status.provider).toBeNull();
+    expect(status.apiKeyMasked).toBeNull();
+    expect(
+      (await store().resolve("global", "kernel-browser")).value
+    ).toBeNull();
+  });
+
+  test("does not show one org the browser of another org", async () => {
+    await saveAgentBrowserConfig(
+      { apiKey: "kernel-key", provider: "kernel" },
+      store()
+    );
+    await ensureKernelBrowser("kernel-key", "org-a", "user-1");
+
+    expect((await getUserBrowser("org-a", "user-1")).liveViewUrl).toBe(
+      "https://live.onkernel.com/airin-org-a-user-user-1"
+    );
+    expect((await getUserBrowser("org-b", "user-1")).liveViewUrl).toBeNull();
+  });
+
+  test("stops the session browser", async () => {
+    await saveAgentBrowserConfig(
+      { apiKey: "kernel-key", provider: "kernel" },
+      store()
+    );
+    await ensureKernelBrowser("kernel-key", "org-a", "user-1");
+
+    await stopUserBrowser("org-a", "user-1");
+
+    expect((await getUserBrowser("org-a", "user-1")).liveViewUrl).toBeNull();
+  });
+});

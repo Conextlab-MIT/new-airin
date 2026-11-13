@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { canRunToolCallsInParallel } from "@nakama/agent";
-import type { AgentService } from "../services/agent-service";
+import { canRunToolCallsInParallel } from "@airin/agent";
+import type { ChatCompletionResult, GenerateChatInput } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
+import { AgentService } from "../services/agent-service";
+import { createDefaultProfile } from "../services/agent-service-test-fixtures";
+import { sessionTurnRegistry } from "../services/session-turn-registry";
+import { setupTestConfigDir } from "../test-config-dir";
 import { formatToolActivityLabel } from "./sub-agent-activity";
 import type { SubAgentRunResult } from "./sub-agent-shared";
 import { createSubAgentTool, runSubAgentTool } from "./sub-agent-tool";
@@ -148,4 +153,408 @@ test("tool activity accepts missing details for every tool branch", () => {
   expect(
     formatToolActivityLabel("write_file", { path: "/tmp/report.md" })
   ).toBe("Writing report.md");
+});
+
+describe("sub_agent background", () => {
+  test("starts a child chat, one level deep and at most five per chat", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    await db.upsertProfile(createDefaultProfile());
+    const agent = new AgentService(null, null, db);
+
+    const parentId = await agent.createSession(ORG_ID, "web", PROFILE_ID);
+    const parentContext = { ...TOOL_CONTEXT, sessionId: parentId };
+
+    const started = await runSubAgentTool(
+      { background: true, task: "Draft the marketing plan" },
+      parentContext,
+      agent
+    );
+
+    expect(started.status).toBe("success");
+    expect(await db.getSession(started.sessionId ?? "")).toMatchObject({
+      parentSessionId: parentId,
+      title: "Draft the marketing plan",
+    });
+
+    const fromChild = await runSubAgentTool(
+      { background: true, task: "Go deeper" },
+      { ...TOOL_CONTEXT, sessionId: started.sessionId },
+      agent
+    );
+
+    expect(fromChild.status).toBe("fail");
+
+    for (let index = 0; index < 4; index += 1) {
+      expect(
+        (
+          await runSubAgentTool(
+            { background: true, task: `Topic ${index}` },
+            parentContext,
+            agent
+          )
+        ).status
+      ).toBe("success");
+    }
+
+    expect(
+      (
+        await runSubAgentTool(
+          { background: true, task: "One too many" },
+          parentContext,
+          agent
+        )
+      ).status
+    ).toBe("fail");
+
+    const branch = await agent.createSession(ORG_ID, "web", PROFILE_ID);
+    const branchRecord = await db.getSession(branch);
+
+    if (branchRecord) {
+      await db.upsertSession({
+        ...branchRecord,
+        branchMessageIndex: 0,
+        parentSessionId: parentId,
+      });
+    }
+
+    // A branch also has a parent, and must keep sub_agent.
+    expect(
+      (
+        await runSubAgentTool(
+          { background: true, task: "From a branch" },
+          { ...TOOL_CONTEXT, sessionId: branch },
+          agent
+        )
+      ).status
+    ).toBe("success");
+
+    const stranger = await agent.createSession(ORG_ID, "web", PROFILE_ID);
+
+    expect(
+      (
+        await runSubAgentTool(
+          { background: true, sessionId: stranger, task: "Continue" },
+          parentContext,
+          agent
+        )
+      ).status
+    ).toBe("fail");
+  });
+
+  test("a foreground run also gets its own chat under the parent", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    await db.upsertProfile(createDefaultProfile());
+    const agent = new AgentService(null, null, db);
+    const parentId = await agent.createSession(ORG_ID, "web", PROFILE_ID);
+
+    // No provider here, so the turn fails; the chat it ran in is what counts.
+    const result = await runSubAgentTool(
+      { task: "Summarize the plan", timeoutMs: 60_000 },
+      { ...TOOL_CONTEXT, sessionId: parentId },
+      agent
+    );
+
+    expect((await db.getSession(result.sessionId ?? ""))?.parentSessionId).toBe(
+      parentId
+    );
+  });
+
+  test("a child of a Telegram chat is a web chat that the org shares", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    await db.upsertProfile(createDefaultProfile());
+    const agent = new AgentService(null, null, db);
+
+    const parentId = await agent.createSession(
+      ORG_ID,
+      "telegram",
+      PROFILE_ID,
+      "user_bot"
+    );
+
+    const privateId = await agent.createSession(
+      ORG_ID,
+      "web",
+      PROFILE_ID,
+      "user_bot"
+    );
+
+    const started = await runSubAgentTool(
+      { background: true, task: "Draft the marketing plan" },
+      { ...TOOL_CONTEXT, sessionId: parentId },
+      agent
+    );
+
+    const childId = started.sessionId ?? "";
+
+    expect((await db.getSession(childId))?.channel).toBe("web");
+
+    for (const id of [childId, privateId]) {
+      await db.appendMessagesForSession(id, [
+        {
+          createdAt: new Date().toISOString(),
+          id: `msg_${id}`,
+          payload: { content: "hello", role: "user" },
+          seq: 0,
+          sessionId: id,
+        },
+      ]);
+    }
+
+    const member = { user: { id: "user_member" } };
+
+    await expect(
+      agent.assertSessionProfileAccess(childId, ORG_ID, member)
+    ).resolves.toBeUndefined();
+    await expect(
+      agent.assertSessionProfileAccess(privateId, ORG_ID, member)
+    ).rejects.toMatchObject({ status: 404 });
+
+    const { sessions } = await agent.listSessions(
+      ORG_ID,
+      PROFILE_ID,
+      "web",
+      member
+    );
+
+    expect(sessions.map((session) => session.id)).toEqual([childId]);
+
+    await expect(agent.detachSession(childId, ORG_ID)).rejects.toMatchObject({
+      status: 400,
+    });
+
+    const branch = await agent.branchSession(
+      childId,
+      0,
+      ORG_ID,
+      member.user.id
+    );
+
+    const branchId = branch?.sessionId ?? "";
+
+    await expect(
+      agent.assertSessionProfileAccess(branchId, ORG_ID, member)
+    ).resolves.toBeUndefined();
+    expect(
+      (
+        await agent.listSessions(ORG_ID, PROFILE_ID, "web", member)
+      ).sessions.map((session) => session.id)
+    ).toContain(branchId);
+
+    await expect(
+      agent.assertSessionProfileAccess(branchId, ORG_ID, {
+        user: { id: "user_other" },
+      })
+    ).rejects.toMatchObject({ status: 404 });
+
+    await expect(
+      agent.closeSession(privateId, ORG_ID, member)
+    ).rejects.toMatchObject({ status: 404 });
+    expect(await agent.closeSession(childId, ORG_ID, member)).toBe(true);
+
+    expect(await agent.purgeSession(parentId, ORG_ID)).toBe(true);
+    expect(await db.getSession(childId)).toBeNull();
+  });
+
+  test("the cap counts only open sub_agent chats", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    await db.upsertProfile(createDefaultProfile());
+    const agent = new AgentService(null, null, db);
+    const parentId = await agent.createSession(ORG_ID, "web", PROFILE_ID);
+    const parentContext = { ...TOOL_CONTEXT, sessionId: parentId };
+
+    for (let index = 0; index < 5; index += 1) {
+      const branchId = await agent.createSession(ORG_ID, "web", PROFILE_ID);
+      const branch = await db.getSession(branchId);
+
+      if (branch) {
+        await db.upsertSession({
+          ...branch,
+          branchMessageIndex: 0,
+          parentSessionId: parentId,
+        });
+      }
+    }
+
+    const children: string[] = [];
+
+    for (let index = 0; index < 5; index += 1) {
+      const started = await runSubAgentTool(
+        { background: true, task: `Topic ${index}` },
+        parentContext,
+        agent
+      );
+
+      expect(started.status).toBe("success");
+      children.push(started.sessionId ?? "");
+    }
+
+    const oneTooMany = () =>
+      runSubAgentTool(
+        { background: true, task: "One more" },
+        parentContext,
+        agent
+      );
+
+    expect((await oneTooMany()).status).toBe("fail");
+
+    await db.updateSessionClosedAt(children[0] ?? "", new Date().toISOString());
+
+    expect((await oneTooMany()).status).toBe("success");
+  });
+});
+
+describe("sub_agent child chats", () => {
+  setupTestConfigDir("airin-sub-agent-child-");
+
+  interface Captured {
+    names: string[];
+    system: string;
+  }
+
+  /** Each turn goes through `respond`; the last call's tools and prompt land in `captured`. */
+  async function createService(
+    respond: (input: GenerateChatInput) => Promise<ChatCompletionResult>
+  ) {
+    const db = createInMemoryDatabaseAdapter();
+    await db.upsertProfile(createDefaultProfile());
+
+    // Platform tool groups only attach when the profile owns at least one tool.
+    const now = new Date().toISOString();
+    await db.upsertTool({
+      createdAt: now,
+      description: "Test tool",
+      handlerConfig: { modulePath: "test.js" },
+      handlerType: "javascript",
+      id: "tool_sub_agent_seed",
+      name: "test_tool",
+      updatedAt: now,
+    });
+    await db.assignToolToProfile(PROFILE_ID, "tool_sub_agent_seed");
+
+    const service = new AgentService(null, null, db);
+    const captured: Captured = { names: [], system: "" };
+
+    const record = (input: GenerateChatInput) => {
+      captured.names = (input.tools ?? []).map((tool) => tool.name);
+      captured.system = input.system;
+
+      return respond(input);
+    };
+
+    Object.assign(service, {
+      _providerConfigured: true,
+      createHarnessForProfile: () => ({
+        provider: { generateChat: record, name: "openai", streamChat: record },
+      }),
+    });
+
+    return { captured, db, service };
+  }
+
+  const answer = (reply: string): Promise<ChatCompletionResult> =>
+    Promise.resolve({
+      assistantMessage: { content: reply, role: "assistant", toolCalls: [] },
+      content: reply,
+      toolCalls: [],
+    });
+
+  test("a child chat has no question, todo or sub_agent tools", async () => {
+    const { captured, service } = await createService(() => answer("Done"));
+    const parentId = await service.createSession(ORG_ID, "web", PROFILE_ID);
+
+    const parent = await service.sessions.get(parentId, ORG_ID);
+    await parent?.send({ message: "hi" });
+    expect(captured.names).toContain("ask_user_question");
+    expect(captured.names).toContain("todo_write");
+
+    const result = await runSubAgentTool(
+      { task: "Summarize the plan" },
+      { ...TOOL_CONTEXT, sessionId: parentId },
+      service
+    );
+
+    expect(result).toMatchObject({ output: "Done", status: "success" });
+    expect(captured.names).not.toContain("ask_user_question");
+    expect(captured.names).not.toContain("todo_write");
+    expect(captured.names).not.toContain("sub_agent");
+    expect(captured.system).toContain("Do not spawn sub-agents.");
+  });
+
+  test("a cognito chat runs sub_agent in memory and leaves no chat", async () => {
+    const { db, service } = await createService(() => answer("Done"));
+
+    const parentId = await service.createSession(
+      ORG_ID,
+      "web",
+      PROFILE_ID,
+      null,
+      { cognito: true }
+    );
+
+    const context = { ...TOOL_CONTEXT, sessionId: parentId };
+
+    expect(
+      await runSubAgentTool({ task: "Research it" }, context, service)
+    ).toMatchObject({ output: "Done", status: "success" });
+
+    expect(
+      (
+        await runSubAgentTool(
+          { background: true, task: "Research it" },
+          context,
+          service
+        )
+      ).status
+    ).toBe("fail");
+
+    expect(await db.listSessions()).toHaveLength(0);
+  });
+
+  test("stopping the parent stops the child it waits for", async () => {
+    const { service } = await createService(
+      (input) =>
+        new Promise((_, reject) => {
+          input.signal?.addEventListener("abort", () =>
+            reject(new Error("aborted"))
+          );
+        })
+    );
+
+    const parentId = await service.createSession(ORG_ID, "web", PROFILE_ID);
+    const stop = new AbortController();
+
+    const pending = runSubAgentTool(
+      { task: "Take forever", timeoutMs: 60_000 },
+      { ...TOOL_CONTEXT, sessionId: parentId, signal: stop.signal },
+      service
+    );
+
+    setTimeout(() => stop.abort(), 20);
+    const result = await pending;
+
+    expect(result.status).toBe("fail");
+    // The child turn ended, so the child chat takes a new message.
+    expect(sessionTurnRegistry.isActive(result.sessionId ?? "")).toBe(false);
+  });
+
+  test("a child that runs past timeoutMs reports timeout", async () => {
+    const { service } = await createService(
+      (input) =>
+        new Promise((_, reject) => {
+          input.signal?.addEventListener("abort", () =>
+            reject(new Error("aborted"))
+          );
+        })
+    );
+
+    const parentId = await service.createSession(ORG_ID, "web", PROFILE_ID);
+
+    const result = await runSubAgentTool(
+      { task: "Take forever", timeoutMs: 50 },
+      { ...TOOL_CONTEXT, sessionId: parentId },
+      service
+    );
+
+    expect(result.status).toBe("timeout");
+  });
 });

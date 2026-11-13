@@ -2,20 +2,19 @@
 name: coding-backend-codex
 description: Runtime prompt layer for Codex coding agent runs.
 disable-model-invocation: true
-include-body-on-match: true
 ---
 
-Use Codex for coding tasks when the Coding Agent Harness context selects it. Follow that context's command template and run it through Nakama's `bash` tool with `codingAgent: true`, `cwd` set to the target project, and a task-appropriate `timeoutMs`.
+Use Codex for coding tasks when the Coding Agent Harness context selects it. Follow that context's command template and run it through Airin's `bash` tool with `codingAgent: true`, `cwd` set to the target project, and a task-appropriate `timeoutMs`.
 
 ## Prerequisites
 
-- Install Codex on the Nakama host if needed: `npm install -g @openai/codex`.
+- Install Codex on the Airin host if needed: `npm install -g @openai/codex`.
 - Authenticate with `codex login` or configure `OPENAI_API_KEY`. A missing API key does not imply that CLI login is missing.
 - Check `codex --version` and `codex login status` when installation or auth is uncertain.
 
 ## One-shot coding
 
-`codex exec` is non-interactive and works with Nakama's pipe-based `bash` tool. Do not request a PTY or use an interactive `codex` session there.
+`codex exec` is non-interactive and works with Airin's pipe-based `bash` tool. Do not request a PTY or use an interactive `codex` session there.
 
 ```bash
 codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never 'Make the requested change, run targeted checks, and summarize the result.'

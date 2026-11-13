@@ -1,25 +1,29 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   formatServerError,
   type ListToolsResponse,
-  NakamaApiError,
   type ProfileResponse,
   type RunToolResponse,
   type SuggestToolParamsResponse,
   type ToolResponse,
   type ToolSourceResponse,
-} from "@nakama/core";
+} from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   approveToolSetup,
-  loadToolApiKey,
+  getToolApiKeyStatus,
   loadToolEnv,
   loadToolSetup,
+  manageToolApiKey,
   readToolEnvDeclarations,
+  rejectToolSetup,
   saveToolApiKey,
   saveToolEnv,
 } from "../../services/custom-tool-shared";
+import { omitUnavailableToolDetails } from "../../services/tool-resolver";
 import type { ServerOptions } from "../context";
 import {
+  profileResponseFor,
   requireActiveOrgIdFromContext,
   requireOrgAdminOrPlatformAdminFromContext,
   requirePlatformAdminFromContext,
@@ -46,7 +50,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
 
   const setupParams = z.object({ setupId: z.string().uuid() });
 
-  for (const method of ["get", "post"] as const) {
+  for (const method of ["get", "post", "delete"] as const) {
     app.openAPIRegistry.registerPath(
       createRoute({
         method,
@@ -106,6 +110,16 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
 
     return json(
       await approveToolSetup(orgId, c.req.param("setupId"), body.data)
+    );
+  });
+  app.delete("/v1/tool-setups/:setupId", async (c) => {
+    requireOrgAdminOrPlatformAdminFromContext(c);
+
+    return json(
+      await rejectToolSetup(
+        requireActiveOrgIdFromContext(c),
+        c.req.param("setupId")
+      )
     );
   });
 
@@ -433,7 +447,9 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
       ?.ensureOrganization(orgId)
       .catch(() => undefined);
 
-    return json<ListToolsResponse>(await agent.listTools(orgId));
+    return json<ListToolsResponse>(
+      await omitUnavailableToolDetails(await agent.listTools(orgId))
+    );
   });
 
   app.post("/v1/tools", async (c) => {
@@ -448,6 +464,9 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
 
   const credentialStatusSchema = z.object({
     configured: z.boolean(),
+    envName: z.string(),
+    savedAvailable: z.boolean(),
+    source: z.enum(["environment", "settings", "missing"]),
     env: z
       .array(
         z.object({
@@ -495,16 +514,37 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
     );
   }
 
+  for (const [method, suffix, operationId] of [
+    ["delete", "", "clearToolCredential"],
+    ["post", "/use-stored", "useStoredToolCredential"],
+  ] as const) {
+    app.openAPIRegistry.registerPath(
+      createRoute({
+        method,
+        operationId,
+        path: `/v1/tools/{toolId}/credentials${suffix}`,
+        request: { params: toolIdParam },
+        responses: {
+          200: {
+            content: { "application/json": { schema: credentialStatusSchema } },
+            description: "Credential status",
+          },
+        },
+        tags: ["Tools"],
+      })
+    );
+  }
+
   async function requireCredentialTool(orgId: string, toolId: string) {
     const { tools } = await agent.listTools(orgId);
     const tool = tools.find((entry) => entry.id === toolId);
 
     if (!tool) {
-      throw new NakamaApiError("Tool not found.", 404);
+      throw new AirinApiError("Tool not found.", 404);
     }
 
     if (!(tool.handlerType === "javascript" || tool.handlerType === "python")) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Only custom JavaScript or Python tools take an API key.",
         400
       );
@@ -515,16 +555,16 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
 
   async function credentialStatus(orgId: string, toolId: string) {
     const declared = await requireCredentialTool(orgId, toolId);
-    const configured = Boolean(await loadToolApiKey(orgId, toolId));
+    const status = await getToolApiKeyStatus(orgId, toolId);
 
     if (declared.length === 0) {
-      return { configured };
+      return status;
     }
 
     const saved = await loadToolEnv(orgId, toolId);
 
     return {
-      configured,
+      ...status,
       // Secret values never leave the server; plain values such as a base
       // URL come back so an admin can see and edit them.
       env: declared.map((entry) => ({
@@ -539,8 +579,9 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
   app.get("/v1/tools/:toolId/credentials", async (c) => {
     requireOrgAdminOrPlatformAdminFromContext(c);
     const orgId = requireActiveOrgIdFromContext(c);
+    const toolId = c.req.param("toolId");
 
-    return json(await credentialStatus(orgId, c.req.param("toolId")));
+    return json(await credentialStatus(orgId, toolId));
   });
 
   app.put("/v1/tools/:toolId/credentials", async (c) => {
@@ -554,7 +595,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
     );
 
     if (!body.success) {
-      throw new NakamaApiError("Enter a valid value.", 400);
+      throw new AirinApiError("Enter a valid value.", 400);
     }
 
     if ("env" in body.data) {
@@ -565,6 +606,20 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
 
     return json(await credentialStatus(orgId, toolId));
   });
+
+  for (const [method, suffix, action] of [
+    ["delete", "", "clear"],
+    ["post", "/use-stored", "use-stored"],
+  ] as const) {
+    app[method](`/v1/tools/:toolId/credentials${suffix}`, async (c) => {
+      requireOrgAdminOrPlatformAdminFromContext(c);
+      const orgId = requireActiveOrgIdFromContext(c);
+      const toolId = c.req.param("toolId");
+      await requireCredentialTool(orgId, toolId);
+
+      return json(await manageToolApiKey(orgId, toolId, action));
+    });
+  }
 
   app.get("/v1/tools/:toolId/source", async (c) => {
     requireOrgAdminOrPlatformAdminFromContext(c);
@@ -592,7 +647,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
     const existing = await agent.getTool(toolId);
 
     if (existing.tool.pluginId) {
-      throw new NakamaApiError("Plugin-owned tools cannot be deleted.", 409);
+      throw new AirinApiError("Plugin-owned tools cannot be deleted.", 409);
     }
 
     await agent.deleteTool(toolId);
@@ -614,7 +669,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
         })
       );
     } catch (error) {
-      const status = error instanceof NakamaApiError ? error.status : 400;
+      const status = error instanceof AirinApiError ? error.status : 400;
 
       return json({ error: formatServerError(error) }, status);
     }
@@ -635,7 +690,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
         )
       );
     } catch (error) {
-      const status = error instanceof NakamaApiError ? error.status : 400;
+      const status = error instanceof AirinApiError ? error.status : 400;
 
       return json({ error: formatServerError(error) }, status);
     }
@@ -666,16 +721,19 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
       const tool = await options.databaseAdapter?.getTool(body.toolId);
 
       if (tool?.handlerType === "bash") {
-        throw new NakamaApiError("Forbidden", 403);
+        throw new AirinApiError("Forbidden", 403);
       }
     }
 
     return json<ProfileResponse>(
-      await agent.assignTool(
-        orgId,
-        decodeURIComponent(c.req.param("profileId")),
-        body,
-        { actorUserId: auth.user.id, source: "dashboard" }
+      profileResponseFor(
+        c,
+        await agent.assignTool(
+          orgId,
+          decodeURIComponent(c.req.param("profileId")),
+          body,
+          { actorUserId: auth.user.id, source: "dashboard" }
+        )
       )
     );
   });
@@ -688,11 +746,14 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
     const orgId = requireActiveOrgIdFromContext(c);
 
     return json<ProfileResponse>(
-      await agent.unassignTool(
-        orgId,
-        decodeURIComponent(c.req.param("profileId")),
-        decodeURIComponent(c.req.param("toolId")),
-        { actorUserId: auth.user.id, source: "dashboard" }
+      profileResponseFor(
+        c,
+        await agent.unassignTool(
+          orgId,
+          decodeURIComponent(c.req.param("profileId")),
+          decodeURIComponent(c.req.param("toolId")),
+          { actorUserId: auth.user.id, source: "dashboard" }
+        )
       )
     );
   });

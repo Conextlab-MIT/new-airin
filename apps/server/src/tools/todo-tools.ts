@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@nakama/core";
+import type { ToolDefinition } from "@airin/core";
 import { z } from "zod";
 import type { AgentTodoState } from "../services/agent-todo-state";
 

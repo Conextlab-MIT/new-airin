@@ -1,7 +1,7 @@
 import * as readline from "node:readline/promises";
-import type { NakamaClient } from "@nakama/client";
-import type { ProfileSummary } from "@nakama/core";
-import { pickProfileForOrg } from "@nakama/core";
+import type { AirinClient } from "@airin/client";
+import type { ProfileSummary } from "@airin/core";
+import { pickProfileForOrg } from "@airin/core";
 import { loadSavedCliProfileId, saveCliProfileId } from "./cli-config";
 import { printLine } from "./terminal-safe";
 
@@ -116,7 +116,7 @@ function findProfile(
 }
 
 export async function resolveStartupProfile(
-  client: NakamaClient,
+  client: AirinClient,
   options: CliProfileOptions
 ): Promise<{ profileId: string; profile: ProfileSummary }> {
   const { profiles } = await client.listProfiles();
@@ -147,12 +147,12 @@ export async function resolveStartupProfile(
     }
   }
 
-  const superBot = profiles.find((profile) => profile.isSuper);
+  const superAirin = profiles.find((profile) => profile.isSuper);
 
-  if (superBot) {
-    await saveCliProfileId(superBot.id);
+  if (superAirin) {
+    await saveCliProfileId(superAirin.id);
 
-    return { profile: superBot, profileId: superBot.id };
+    return { profile: superAirin, profileId: superAirin.id };
   }
 
   if (!(process.stdin.isTTY && process.stdout.isTTY)) {

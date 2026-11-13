@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createAgentChatSession } from "@nakama/agent";
+import { createAgentChatSession } from "@airin/agent";
 import {
   type ChatMessage,
   getProfileArtifactsDir,
@@ -11,7 +11,7 @@ import {
   loadUserConfig,
   readFileTool,
   writeFileTool,
-} from "@nakama/core";
+} from "@airin/core";
 import { createOpenAIProvider } from "../providers/openai";
 import { withMswCassette } from "../testing/llm-msw-cassette";
 import { sendWhatsAppArtifactTool } from "./send-discord-artifact-tool";
@@ -63,13 +63,11 @@ for (const scenario of cases) {
       model: "gpt-5.6-luna",
     });
 
-    const previous = process.env.NAKAMA_CONFIG_DIR;
+    const previous = process.env.AIRIN_CONFIG_DIR;
 
-    const home = await mkdtemp(
-      path.join(tmpdir(), "nakama-whatsapp-cassette-")
-    );
+    const home = await mkdtemp(path.join(tmpdir(), "airin-whatsapp-cassette-"));
 
-    process.env.NAKAMA_CONFIG_DIR = home;
+    process.env.AIRIN_CONFIG_DIR = home;
 
     try {
       const orgId = "org_test";
@@ -94,7 +92,6 @@ for (const scenario of cases) {
             channel: "whatsapp",
             orgId,
             profileId,
-            tokenOptimizerEnabled: false,
             workspaceRoot: getProfileSoulDir(orgId, profileId),
           },
           tools: [
@@ -163,9 +160,9 @@ for (const scenario of cases) {
       }
     } finally {
       if (previous === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previous;
+        process.env.AIRIN_CONFIG_DIR = previous;
       }
 
       await rm(home, { force: true, recursive: true });

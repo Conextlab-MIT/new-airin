@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
+import { AgentService } from "../../services/agent-service";
 import { ProfileService } from "../../services/profile-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -8,7 +9,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-profiles-skills-write-approval-test-");
+setupTestConfigDir("airin-profiles-skills-write-approval-test-");
 
 function createApp() {
   const databaseAdapter = createInMemoryDatabaseAdapter();
@@ -17,6 +18,11 @@ function createApp() {
   return {
     ...createMinimalHonoApp({
       agent: {
+        getProfileAccess: (orgId: string, profileId: string) =>
+          new AgentService(null, null, databaseAdapter).getProfileAccess(
+            orgId,
+            profileId
+          ),
         updateProfile: (
           orgId: string,
           profileId: string,

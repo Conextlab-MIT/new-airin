@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core";
-import { USER_PROVIDER_NAMES } from "@nakama/core/provider-resolution";
+import { AirinApiError } from "@airin/core";
+import { USER_PROVIDER_NAMES } from "@airin/core/provider-resolution";
 import { serve } from "bun";
 import {
-  compatibleModelSupportsThinking,
   customModelEntryFromRemoteRecord,
+  fetchNetraModelLimits,
   fetchNetraModels,
   fetchRemoteOpenAIModels,
   getModelsForProviderInstance,
@@ -26,11 +26,10 @@ afterEach(() => {
 test("instance shortlists preserve only saved models and their owner", () => {
   for (const type of USER_PROVIDER_NAMES) {
     if (
-      type === "cloudflare" ||
-      (!getModelsForProvider(type).length &&
-        type !== "openrouter" &&
-        type !== "openai_compatible" &&
-        type !== "ollama")
+      !getModelsForProvider(type).length &&
+      type !== "openrouter" &&
+      type !== "openai_compatible" &&
+      type !== "ollama"
     ) {
       continue;
     }
@@ -48,6 +47,24 @@ test("instance shortlists preserve only saved models and their owner", () => {
     expect(models[0]?.providerId).toBe("instance-one");
     expect(models[0]?.providerLabel).toBe("Instance one");
   }
+});
+
+test("a saved entry's sizes override the catalog's in the picker", () => {
+  const catalogModel = getModelsForProvider("openai")[0]!;
+
+  const [model] = getModelsForProviderInstance({
+    apiKey: "test",
+    createdAt: "2026-06-07T10:00:00.000Z",
+    customModels: [
+      { contextWindow: 24_000, id: catalogModel.id, maxOutputTokens: 4096 },
+    ],
+    id: "instance-one",
+    label: "Instance one",
+    type: "openai",
+  });
+
+  expect(model?.contextWindow).toBe(24_000);
+  expect(model?.maxOutputTokens).toBe(4096);
 });
 
 test("instances without a shortlist expose their provider catalog", () => {
@@ -72,7 +89,135 @@ test("instances without a shortlist expose their provider catalog", () => {
   }
 });
 
-test("Netra discovery keeps only the documented tool-capable model", async () => {
+test("Netra model limits are read once and a failed read waits before a retry", async () => {
+  let calls = 0;
+  globalThis.fetch = asTestFetch(async () => {
+    calls += 1;
+
+    if (calls === 1) {
+      return new Response("busy", { status: 503 });
+    }
+
+    return Response.json({
+      data: [
+        {
+          context_length: 1_048_576,
+          id: "deepseek/deepseek-v4.1-flash",
+          top_provider: {
+            context_length: 1_048_576,
+            max_completion_tokens: 131_072,
+          },
+        },
+      ],
+    });
+  });
+
+  const read = (now?: number) =>
+    fetchNetraModelLimits("cache-key", "deepseek/deepseek-v4.1-flash", now);
+
+  const later = Date.now() + 11 * 60_000;
+  const limits = { contextWindow: 1_048_576, maxOutputTokens: 131_072 };
+
+  expect(await read()).toEqual({});
+  // Within 10 minutes of the failure: no new request, fallback right away.
+  expect(await read()).toEqual({});
+  expect(calls).toBe(1);
+  expect(await read(later)).toEqual(limits);
+  expect(await read(later)).toEqual(limits);
+  expect(await read()).toEqual(limits);
+  expect(calls).toBe(2);
+});
+
+test("concurrent Netra model limit reads share one request", async () => {
+  let calls = 0;
+  globalThis.fetch = asTestFetch(async () => {
+    calls += 1;
+
+    return Response.json({
+      data: [
+        {
+          id: "deepseek/deepseek-v4.1-flash",
+          top_provider: { max_completion_tokens: 131_072 },
+        },
+      ],
+    });
+  });
+
+  const reads = await Promise.all(
+    Array.from({ length: 5 }, () =>
+      fetchNetraModelLimits("shared-key", "deepseek/deepseek-v4.1-flash")
+    )
+  );
+
+  expect(reads).toEqual(Array(5).fill({ maxOutputTokens: 131_072 }));
+  expect(calls).toBe(1);
+});
+
+test("a Netra model list without the model is read again after the retry wait", async () => {
+  let calls = 0;
+  globalThis.fetch = asTestFetch(async () => {
+    calls += 1;
+
+    return Response.json({
+      data:
+        calls === 1
+          ? []
+          : [
+              {
+                context_length: 1_048_576,
+                id: "deepseek/deepseek-v4.1-flash",
+                top_provider: { max_completion_tokens: 131_072 },
+              },
+            ],
+    });
+  });
+
+  const read = (now?: number) =>
+    fetchNetraModelLimits("missing-key", "deepseek/deepseek-v4.1-flash", now);
+
+  expect(await read()).toEqual({});
+  expect(await read()).toEqual({});
+  expect(calls).toBe(1);
+  expect(await read(Date.now() + 11 * 60_000)).toEqual({
+    contextWindow: 1_048_576,
+    maxOutputTokens: 131_072,
+  });
+  expect(calls).toBe(2);
+});
+
+test("a Netra model limit lookup that times out falls back and is retried later", async () => {
+  let calls = 0;
+  globalThis.fetch = asTestFetch(
+    async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+
+      if (calls === 1) {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      }
+
+      return Response.json({
+        data: [
+          {
+            id: "deepseek/deepseek-v4.1-flash",
+            top_provider: { max_completion_tokens: 131_072 },
+          },
+        ],
+      });
+    }
+  );
+
+  const read = (now?: number) =>
+    fetchNetraModelLimits("timeout-key", "deepseek/deepseek-v4.1-flash", now);
+
+  expect(await read()).toEqual({});
+  expect(await read(Date.now() + 11 * 60_000)).toEqual({
+    maxOutputTokens: 131_072,
+  });
+  expect(calls).toBe(2);
+});
+
+test("Netra discovery keeps only the migration target", async () => {
   globalThis.fetch = asTestFetch(
     mock(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe("https://api.netraruntime.com/v1/models");
@@ -91,15 +236,15 @@ test("Netra discovery keeps only the documented tool-capable model", async () =>
 
   expect(await fetchNetraModels("test-key")).toEqual([
     {
-      id: "deepseek/deepseek-v4-flash-0731",
-      name: "DeepSeek V4 Flash 0731",
+      id: "deepseek/deepseek-v4.1-flash",
+      name: "DeepSeek V4.1 Flash",
       supportsThinking: true,
       supportsVision: false,
     },
   ]);
 });
 
-test("Netra agent catalog excludes models without a tool-turn check", () => {
+test("Netra catalog prefers the replacement over retired selections", () => {
   const models = getModelsForProviderInstance({
     apiKey: "test-key",
     createdAt: "2026-10-05T00:00:00.000Z",
@@ -113,7 +258,7 @@ test("Netra agent catalog excludes models without a tool-turn check", () => {
   });
 
   expect(models.map((model) => model.id)).toEqual([
-    "deepseek/deepseek-v4-flash-0731",
+    "deepseek/deepseek-v4.1-flash",
   ]);
 });
 
@@ -221,24 +366,6 @@ describe("getModelsForProviderInstance openai_compatible", () => {
   });
 });
 
-describe("compatibleModelSupportsThinking", () => {
-  test("returns true only for models explicitly opted into thinking", () => {
-    expect(
-      compatibleModelSupportsThinking("qwen3.6-35b", [
-        { id: "qwen3.6-35b", supportsThinking: true },
-        { id: "qwen3.6-7b" },
-      ])
-    ).toBe(true);
-
-    expect(
-      compatibleModelSupportsThinking("qwen3.6-7b", [
-        { id: "qwen3.6-35b", supportsThinking: true },
-        { id: "qwen3.6-7b" },
-      ])
-    ).toBe(false);
-  });
-});
-
 describe("inferRemoteModelVision", () => {
   test("reads explicit supports_vision flags", () => {
     expect(inferRemoteModelVision({ supports_vision: true })).toBe(true);
@@ -278,18 +405,39 @@ for (const status of [401, 403, 503] as const) {
       );
       expect.unreachable("expected discovery to fail");
     } catch (error) {
-      expect(error).toBeInstanceOf(NakamaApiError);
+      expect(error).toBeInstanceOf(AirinApiError);
       // SAFETY: The test reaches this branch with the named error type from the provider contract.
-      expect((error as NakamaApiError).status).toBe(status === 503 ? 502 : 400);
+      expect((error as AirinApiError).status).toBe(status === 503 ? 502 : 400);
       // SAFETY: The test reaches this branch with the named error type from the provider contract.
-      expect((error as NakamaApiError).message).not.toContain(upstreamBody);
+      expect((error as AirinApiError).message).not.toContain(upstreamBody);
 
       if (status !== 503) {
         // SAFETY: The test reaches this branch with the named error type from the provider contract.
-        expect((error as NakamaApiError).message).toContain("API key");
+        expect((error as AirinApiError).message).toContain("API key");
       }
     } finally {
       warn.mockRestore();
     }
   });
 }
+
+test("Netra upgrades a saved catalog without inheriting retired prices", () => {
+  const models = getModelsForProviderInstance({
+    apiKey: "test-key",
+    createdAt: "2026-10-19T00:00:00.000Z",
+    customModels: [
+      {
+        default: true,
+        id: "deepseek/deepseek-v4-flash-0731",
+        inputPerMillionUsd: 99,
+      },
+    ],
+    id: "netra-1",
+    label: "Netra Runtime",
+    type: "netra",
+  });
+
+  expect(models).toHaveLength(1);
+  expect(models[0]?.id).toBe("deepseek/deepseek-v4.1-flash");
+  expect(models[0]?.inputPerMillionUsd).toBeUndefined();
+});

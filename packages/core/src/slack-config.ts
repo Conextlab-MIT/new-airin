@@ -180,7 +180,7 @@ async function writeSlackConfigFile(
   config: SlackConfigFile
 ): Promise<void> {
   const lines = [
-    "# Nakama Slack bridge",
+    "# Airin Slack bridge",
     `bot_token=${config.botToken}`,
     `app_token=${config.appToken}`,
     `profile_id=${config.profileId}`,

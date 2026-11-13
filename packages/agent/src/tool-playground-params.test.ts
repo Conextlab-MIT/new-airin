@@ -37,11 +37,11 @@ describe("tool playground params", () => {
       {
         // SAFETY: This test double only calls generateText, and this is its complete implementation.
         provider: {
-          generateText: async () => '{"query":"nakama"}',
+          generateText: async () => '{"query":"airin"}',
         } as never,
       }
     );
 
-    expect(result).toEqual({ query: "nakama" });
+    expect(result).toEqual({ query: "airin" });
   });
 });

@@ -1,4 +1,17 @@
-import { type AgentBrowserStatusResponse, NakamaApiError } from "@nakama/core";
+import {
+  type AgentBrowserProvider,
+  type AgentBrowserStatusResponse,
+  AirinApiError,
+  getUserConfigPath,
+  maskTrailingSecret,
+  parseIniWithSections,
+  REDACTED_SECRET_VALUE,
+  readTextOrNull,
+  resolveManagedSecret,
+  type SessionBrowserResponse,
+  type UpdateAgentBrowserSettingsRequest,
+  writeParsedConfigIni,
+} from "@airin/core";
 import {
   ensureBunGlobalInstallDirs,
   ensureProcessPath,
@@ -12,10 +25,27 @@ import {
   runTimedInstallCommand,
   summarizeInstallOutput,
 } from "./cli-package-install";
+import {
+  deleteKernelBrowser,
+  getKernelBrowser,
+  userBrowserName,
+} from "./kernel-browser";
+import {
+  KERNEL_API_KEY_ENV,
+  KERNEL_BROWSER_SECRET,
+  type ManagedSecrets,
+} from "./managed-secrets";
 
 const AGENT_BROWSER_PACKAGE = "agent-browser";
 
 const AGENT_BROWSER_COMMAND = "agent-browser";
+
+const AGENT_BROWSER_SECTION = "agent_browser";
+
+interface AgentBrowserConfig {
+  apiKey: string;
+  provider: AgentBrowserProvider;
+}
 
 /**
  * The reviewed release. Bumping the pin is a code change, and the hash is what
@@ -62,15 +92,110 @@ async function getAgentBrowserRuntimeStatus(): Promise<
   };
 }
 
+async function loadAgentBrowserConfig(): Promise<AgentBrowserConfig | null> {
+  const raw = await readTextOrNull(getUserConfigPath());
+
+  if (raw === null) {
+    return null;
+  }
+
+  const section = parseIniWithSections(raw).sections[AGENT_BROWSER_SECTION];
+
+  if (section?.provider?.trim() !== "kernel") {
+    return null;
+  }
+
+  // config.ini keeps only the provider; the key is an encrypted Settings secret.
+  return {
+    apiKey: (await resolveManagedSecret("global", KERNEL_BROWSER_SECRET)) ?? "",
+    provider: "kernel",
+  };
+}
+
+/**
+ * Host env wins over the saved settings, so Docker and Kubernetes deployments
+ * can set Kernel up with `AIRIN_BROWSER_PROVIDER=kernel` and `KERNEL_API_KEY`.
+ * Not `AGENT_BROWSER_PROVIDER`: agent-browser reads that name itself, and a
+ * provider wins over the CDP URL that points it at the user's browser.
+ */
+export async function resolveAgentBrowserConfig(
+  env: Record<string, string | undefined> = process.env
+): Promise<AgentBrowserConfig | null> {
+  const saved = await loadAgentBrowserConfig();
+  const envProvider = env.AIRIN_BROWSER_PROVIDER?.trim().toLowerCase();
+
+  if (!(saved || envProvider === "kernel")) {
+    return null;
+  }
+
+  return {
+    apiKey: env[KERNEL_API_KEY_ENV]?.trim() || saved?.apiKey || "",
+    provider: "kernel",
+  };
+}
+
+export async function isCloudBrowserRuntime(): Promise<boolean> {
+  return Boolean((await resolveAgentBrowserConfig())?.apiKey);
+}
+
+export async function saveAgentBrowserConfig(
+  input: UpdateAgentBrowserSettingsRequest,
+  secrets: Pick<ManagedSecrets, "delete" | "save">,
+  env: Record<string, string | undefined> = process.env
+): Promise<void> {
+  const raw = await readTextOrNull(getUserConfigPath());
+
+  const parsed =
+    raw === null ? { global: {}, sections: {} } : parseIniWithSections(raw);
+
+  if (input.provider === null) {
+    delete parsed.sections[AGENT_BROWSER_SECTION];
+    await writeParsedConfigIni(parsed.global, parsed.sections);
+    await secrets.delete("global", KERNEL_BROWSER_SECRET);
+
+    return;
+  }
+
+  if (input.provider !== undefined && input.provider !== "kernel") {
+    throw new AirinApiError(
+      `Unsupported browser provider: ${String(input.provider)}.`,
+      400
+    );
+  }
+
+  const typed = input.apiKey?.trim() ?? "";
+  const newKey = typed && typed !== REDACTED_SECRET_VALUE ? typed : "";
+
+  if (
+    !(
+      newKey ||
+      env[KERNEL_API_KEY_ENV]?.trim() ||
+      (await resolveManagedSecret("global", KERNEL_BROWSER_SECRET))
+    )
+  ) {
+    throw new AirinApiError("A Kernel API key is required.", 400);
+  }
+
+  if (newKey) {
+    await secrets.save("global", KERNEL_BROWSER_SECRET, newKey);
+  }
+
+  parsed.sections[AGENT_BROWSER_SECTION] = { provider: "kernel" };
+  await writeParsedConfigIni(parsed.global, parsed.sections);
+}
+
 function toAgentBrowserStatusResponse(
-  runtime: Pick<AgentBrowserStatusResponse, "installed" | "version">
+  runtime: Pick<AgentBrowserStatusResponse, "installed" | "version">,
+  config: AgentBrowserConfig | null
 ): AgentBrowserStatusResponse {
   const ready = runtime.installed && runtime.version !== null;
 
   return {
+    apiKeyMasked: config ? maskTrailingSecret(config.apiKey) : null,
     installCommand: getAgentBrowserInstallCommand(),
     installed: runtime.installed,
     nextStep: ready ? null : "install",
+    provider: config?.provider ?? null,
     ready,
     statusMessage: ready
       ? null
@@ -80,9 +205,54 @@ function toAgentBrowserStatusResponse(
 }
 
 export async function getAgentBrowserStatus(): Promise<AgentBrowserStatusResponse> {
-  const runtime = await getAgentBrowserRuntimeStatus();
+  const [runtime, config] = await Promise.all([
+    getAgentBrowserRuntimeStatus(),
+    resolveAgentBrowserConfig(),
+  ]);
 
-  return toAgentBrowserStatusResponse(runtime);
+  return toAgentBrowserStatusResponse(runtime, config);
+}
+
+async function requireKernelApiKey(): Promise<string> {
+  const config = await resolveAgentBrowserConfig();
+
+  if (!config?.apiKey) {
+    throw new AirinApiError("Kernel browser runtime is not configured.", 400);
+  }
+
+  return config.apiKey;
+}
+
+function toSessionBrowserResponse(
+  browser: Awaited<ReturnType<typeof getKernelBrowser>>
+): SessionBrowserResponse {
+  return { liveViewUrl: browser?.browser_live_view_url ?? null };
+}
+
+export async function getUserBrowser(
+  orgId: string,
+  userId: string
+): Promise<SessionBrowserResponse> {
+  const config = await resolveAgentBrowserConfig();
+
+  if (!config?.apiKey) {
+    return toSessionBrowserResponse(null);
+  }
+
+  return toSessionBrowserResponse(
+    await getKernelBrowser(config.apiKey, userBrowserName(orgId, userId))
+  );
+}
+
+/** Deleting the Kernel browser is what saves its cookies to the profile. */
+export async function stopUserBrowser(
+  orgId: string,
+  userId: string
+): Promise<void> {
+  await deleteKernelBrowser(
+    await requireKernelApiKey(),
+    userBrowserName(orgId, userId)
+  );
 }
 
 export interface AgentBrowserInstallProgress {
@@ -131,14 +301,14 @@ export async function installAgentBrowser(
         .trim();
 
       if (cliResult.timedOut) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Install timed out while installing the agent-browser CLI.",
           502
         );
       }
 
       if (cliResult.exitCode !== 0) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           cliOutput
             ? `agent-browser CLI install failed: ${summarizeInstallOutput(cliOutput)}`
             : "agent-browser CLI install failed.",
@@ -149,11 +319,11 @@ export async function installAgentBrowser(
       await tarball.cleanup();
     }
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       throw error;
     }
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `agent-browser CLI install refused: ${
         error instanceof Error ? error.message : String(error)
       }`,
@@ -165,7 +335,7 @@ export async function installAgentBrowser(
   // gone is the case this guards. The abort is checked between the two commands
   // as well as inside each one.
   if (options.signal?.aborted) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Install cancelled before the agent-browser download started.",
       502
     );
@@ -190,14 +360,14 @@ export async function installAgentBrowser(
     .trim();
 
   if (browserResult.timedOut) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Install timed out while downloading Chrome for agent-browser.",
       502
     );
   }
 
   if (browserResult.exitCode !== 0) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       browserOutput
         ? `agent-browser browser install failed: ${summarizeInstallOutput(browserOutput)}`
         : "agent-browser browser install failed.",

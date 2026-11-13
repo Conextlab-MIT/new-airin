@@ -6,6 +6,8 @@ import {
   fetchChatgptCodexModels,
   parseChatgptCodexModelsPayload,
   readChatgptAccountIdFromAccessToken,
+  readChatgptPlanType,
+  refreshChatgptOAuthToken,
 } from "./oauth";
 
 function buildJwt(payload: ProviderJsonRecord): string {
@@ -181,6 +183,52 @@ describe("readChatgptAccountIdFromAccessToken", () => {
   test("returns null when claim is missing", () => {
     expect(readChatgptAccountIdFromAccessToken(buildJwt({}))).toBeNull();
   });
+
+  test.each([1, {}])(
+    "still reads the account id when the plan type is %p",
+    (planType) => {
+      const token = buildJwt({
+        [CHATGPT_JWT_CLAIM_PATH]: {
+          chatgpt_account_id: "acct_123",
+          chatgpt_plan_type: planType,
+        },
+      });
+
+      expect(readChatgptAccountIdFromAccessToken(token)).toBe("acct_123");
+      expect(readChatgptPlanType({ accessToken: token })).toBeUndefined();
+    }
+  );
+});
+
+describe("readChatgptPlanType", () => {
+  test.each(["free", "plus"])("reads plan type %s", (plan) => {
+    const token = buildJwt({
+      [CHATGPT_JWT_CLAIM_PATH]: { chatgpt_plan_type: plan },
+    });
+
+    expect(readChatgptPlanType({ accessToken: token })).toBe(plan);
+  });
+
+  test("returns nothing when the claim or the token is missing", () => {
+    expect(readChatgptPlanType({ accessToken: buildJwt({}) })).toBeUndefined();
+    expect(readChatgptPlanType(null)).toBeUndefined();
+  });
+
+  test("returns nothing for an empty plan type", () => {
+    const token = buildJwt({
+      [CHATGPT_JWT_CLAIM_PATH]: { chatgpt_plan_type: "" },
+    });
+
+    expect(readChatgptPlanType({ accessToken: token })).toBeUndefined();
+  });
+
+  test.each([
+    "not-a-jwt",
+    "a.%%%.c",
+    `a.${Buffer.from("{").toString("base64url")}.c`,
+  ])("returns nothing for a malformed token %s", (accessToken) => {
+    expect(readChatgptPlanType({ accessToken })).toBeUndefined();
+  });
 });
 
 describe("completeChatgptDeviceAuth", () => {
@@ -241,5 +289,40 @@ describe("completeChatgptDeviceAuth", () => {
     expect(result.accountId).toBe("acct_456");
     expect(result.refreshToken).toBe("refresh-token");
     expect(result.accessToken).toBe(token);
+  });
+});
+
+describe("refreshChatgptOAuthToken", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("redeems a refresh token once when calls race", async () => {
+    let refreshRequests = 0;
+    // SAFETY: The mock returns a native Response and accepts the standard fetch arguments used by this test.
+    globalThis.fetch = (async (_input: RequestInfo | URL) => {
+      refreshRequests++;
+
+      return Response.json({
+        access_token: buildJwt({
+          [CHATGPT_JWT_CLAIM_PATH]: { chatgpt_account_id: "acct_1" },
+        }),
+        expires_in: 3600,
+        refresh_token: `replacement-${refreshRequests}`,
+      });
+    }) as typeof fetch;
+
+    const [first, second] = await Promise.all([
+      refreshChatgptOAuthToken("shared"),
+      refreshChatgptOAuthToken("shared"),
+    ]);
+
+    expect(refreshRequests).toBe(1);
+    expect(second).toEqual(first);
+
+    await refreshChatgptOAuthToken("shared");
+    expect(refreshRequests).toBe(2);
   });
 });

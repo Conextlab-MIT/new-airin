@@ -1,10 +1,10 @@
 import {
+  AirinApiError,
   IMAGE_VISION_SYSTEM_PROMPT,
   type MessageContentPart,
-  NakamaApiError,
   type ProviderClient,
   type UserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import { modelSupportsVision } from "../providers/models";
 import {
   modelExistsOnInstance,
@@ -21,9 +21,9 @@ export function resolveVisionProviderSelection(
     userConfig?.visionModel,
     {
       invalid:
-        "Configured image parsing model is invalid. Update it in Settings.",
+        "Configured image parsing model is invalid. Update it in Settings → AI Providers (/settings/providers#image-parsing).",
       missingProvider:
-        "Configured image parsing provider is missing. Update it in Settings.",
+        "Configured image parsing provider is missing. Update it in Settings → AI Providers (/settings/providers#image-parsing).",
     }
   );
 
@@ -32,8 +32,8 @@ export function resolveVisionProviderSelection(
   }
 
   if (!modelExistsOnInstance(selected.instance, selected.modelId)) {
-    throw new NakamaApiError(
-      "Configured image parsing model is unavailable. Update it in Settings.",
+    throw new AirinApiError(
+      "Configured image parsing model is unavailable. Update it in Settings → AI Providers (/settings/providers#image-parsing).",
       400
     );
   }
@@ -45,8 +45,8 @@ export function resolveVisionProviderSelection(
   });
 
   if (!resolved) {
-    throw new NakamaApiError(
-      "Configured image parsing model is unavailable. Update it in Settings.",
+    throw new AirinApiError(
+      "Configured image parsing model is unavailable. Update it in Settings → AI Providers (/settings/providers#image-parsing).",
       400
     );
   }
@@ -58,7 +58,7 @@ export function resolveVisionProviderSelection(
   );
 
   if (supportsVision !== true) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Configured image parsing model "${resolved.model}" does not support vision.`,
       400
     );
@@ -107,4 +107,4 @@ export async function describeImagesWithVisionModel(
 }
 
 export const VISION_MODEL_REQUIRED_MESSAGE =
-  "This model cannot see images. Configure an image parsing model in Settings before sending images.";
+  "This model cannot see images. Configure an image parsing model in Settings → AI Providers (/settings/providers#image-parsing) before sending images.";

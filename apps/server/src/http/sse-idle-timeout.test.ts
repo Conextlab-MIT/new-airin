@@ -7,38 +7,18 @@ import {
 } from "./sse-idle-timeout";
 
 describe("isSseResponse", () => {
-  test("matches text/event-stream Content-Type", () => {
-    expect(
-      isSseResponse(
-        new Response(null, {
-          headers: { "Content-Type": "text/event-stream" },
-        })
-      )
-    ).toBe(true);
-  });
+  test("matches event streams only", () => {
+    const cases: Array<[string | null, boolean]> = [
+      ["text/event-stream", true],
+      ["text/event-stream; charset=utf-8", true],
+      ["application/json; charset=utf-8", false],
+      [null, false],
+    ];
 
-  test("matches text/event-stream with charset", () => {
-    expect(
-      isSseResponse(
-        new Response(null, {
-          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-        })
-      )
-    ).toBe(true);
-  });
-
-  test("does not match ordinary JSON", () => {
-    expect(
-      isSseResponse(
-        new Response(null, {
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-        })
-      )
-    ).toBe(false);
-  });
-
-  test("does not match missing Content-Type", () => {
-    expect(isSseResponse(new Response(null))).toBe(false);
+    for (const [contentType, expected] of cases) {
+      const headers = contentType ? { "Content-Type": contentType } : undefined;
+      expect(isSseResponse(new Response(null, { headers }))).toBe(expected);
+    }
   });
 });
 
@@ -160,6 +140,31 @@ describe("disableBunIdleTimeoutForLongHeldRequest", () => {
 
     expect(called).toBe(false);
   });
+});
+
+test("a regression case rerun stays open until the run ends", () => {
+  for (const [path, method, expected] of [
+    ["/v1/profiles/agent_1/regression-cases/regcase_1/runs", "POST", [0]],
+    [
+      "/v1/profiles/agent_1/regression-cases/regcase_1/runs/regrun_1",
+      "PATCH",
+      [],
+    ],
+    ["/v1/profiles/agent_1/regression-cases/regcase_1", "GET", []],
+  ] as const) {
+    const calls: number[] = [];
+
+    disableBunIdleTimeoutForLongHeldRequest(
+      new Request(`http://localhost${path}`, { method }),
+      {
+        timeout(_request, seconds) {
+          calls.push(seconds);
+        },
+      }
+    );
+
+    expect(calls).toEqual([...expected]);
+  }
 });
 
 test("plugin action and official install connections stay open until completion", () => {

@@ -1,29 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import type { ProviderInstance } from "@nakama/core";
+import type { ProviderInstance } from "@airin/core";
 import { createProviderForInstance } from "./create";
 import { type ProviderJsonRecord, parseJsonRecord } from "./shared";
 
 describe("createProviderForInstance routing", () => {
-  test("blocks Netra models without a verified tool turn", () => {
-    const instance: ProviderInstance = {
-      apiKey: "test-key",
-      createdAt: "2026-10-05T00:00:00.000Z",
-      customModels: [{ id: "deepseek/deepseek-v4.1-flash" }],
-      id: "netra-1",
-      label: "Netra Runtime",
-      type: "netra",
-    };
-
-    expect(() =>
-      createProviderForInstance(instance, "deepseek/deepseek-v4.1-flash")
-    ).toThrow();
-  });
-
-  test("routes xiaomi instances to the configured base URL with auth", async () => {
+  test("routes meta instances to the configured base URL with reasoning effort", async () => {
     let seenPath = "";
     let seenAuth = "";
     let seenModel = "";
-    let seenThinking: unknown;
+    let seenEffort: unknown;
 
     const mock = Bun.serve({
       fetch: async (request) => {
@@ -34,11 +19,11 @@ describe("createProviderForInstance routing", () => {
         // SAFETY: The provider serializes this request body and the test checks its known fixture shape.
         const body = (await request.json()) as {
           model?: string;
-          thinking?: unknown;
+          reasoning_effort?: unknown;
         };
 
         seenModel = body.model ?? "";
-        seenThinking = body.thinking;
+        seenEffort = body.reasoning_effort;
 
         return Response.json({
           choices: [
@@ -67,15 +52,14 @@ describe("createProviderForInstance routing", () => {
         apiKey: "test-key",
         baseUrl: `http://127.0.0.1:${mock.port}/v1`,
         createdAt: new Date().toISOString(),
-        id: "inst_xiaomi",
-        label: "Xiaomi MiMo",
-        type: "xiaomi",
+        id: "inst_meta",
+        label: "Meta Model API",
+        type: "meta",
       };
 
-      const client = createProviderForInstance(instance, "mimo-v2.5-pro");
+      const client = createProviderForInstance(instance, "muse-spark-1.3");
 
-      expect(client).not.toBeNull();
-      expect(client?.name).toBe("xiaomi");
+      expect(client?.name).toBe("meta");
 
       const result = await client!.generateChat({
         messages: [{ content: "ping", role: "user" }],
@@ -86,14 +70,14 @@ describe("createProviderForInstance routing", () => {
       expect(result.content).toBe("ok");
       expect(seenPath).toBe("/v1/chat/completions");
       expect(seenAuth).toBe("Bearer test-key");
-      expect(seenModel).toBe("mimo-v2.5-pro");
-      expect(seenThinking).toEqual({ type: "enabled" });
+      expect(seenModel).toBe("muse-spark-1.3");
+      expect(seenEffort).toBe("high");
 
       await client!.generateChat({
         messages: [{ content: "ping", role: "user" }],
         system: "",
       });
-      expect(seenThinking).toEqual({ type: "disabled" });
+      expect(seenEffort).toBe("minimal");
     } finally {
       mock.stop(true);
     }
@@ -115,7 +99,7 @@ describe("createProviderForInstance routing", () => {
     expect(client?.name).toBe("xai");
   });
 
-  test("routes together instances to the configured base URL with auth", async () => {
+  test("routes groq instances to the configured base URL with auth", async () => {
     let seenPath = "";
     let seenAuth = "";
     let seenModel = "";
@@ -125,8 +109,80 @@ describe("createProviderForInstance routing", () => {
         const url = new URL(request.url);
         seenPath = url.pathname;
         seenAuth = request.headers.get("authorization") ?? "";
+
         // SAFETY: The provider serializes this request body and the test checks its known fixture shape.
         const body = (await request.json()) as { model?: string };
+
+        seenModel = body.model ?? "";
+
+        return Response.json({
+          choices: [
+            {
+              finish_reason: "stop",
+              index: 0,
+              message: { content: "ok", role: "assistant" },
+            },
+          ],
+          created: 1,
+          id: "mock",
+          model: seenModel,
+          object: "chat.completion",
+          usage: {
+            completion_tokens: 1,
+            prompt_tokens: 1,
+            total_tokens: 2,
+          },
+        });
+      },
+      port: 0,
+    });
+
+    try {
+      const instance: ProviderInstance = {
+        apiKey: "test-key",
+        baseUrl: `http://127.0.0.1:${mock.port}/openai/v1`,
+        createdAt: new Date().toISOString(),
+        customModels: [{ default: true, id: "llama-3.3-70b-versatile" }],
+        id: "inst_groq",
+        label: "Groq",
+        type: "groq",
+      };
+
+      const client = createProviderForInstance(
+        instance,
+        "llama-3.3-70b-versatile"
+      );
+
+      expect(client?.name).toBe("groq");
+
+      const result = await client!.generateChat({
+        messages: [{ content: "ping", role: "user" }],
+        system: "",
+      });
+
+      expect(result.content).toBe("ok");
+      expect(seenPath).toBe("/openai/v1/chat/completions");
+      expect(seenAuth).toBe("Bearer test-key");
+      expect(seenModel).toBe("llama-3.3-70b-versatile");
+    } finally {
+      mock.stop(true);
+    }
+  });
+
+  test("routes standardcompute instances to the configured base URL with auth", async () => {
+    let seenPath = "";
+    let seenAuth = "";
+    let seenModel = "";
+
+    const mock = Bun.serve({
+      fetch: async (request) => {
+        const url = new URL(request.url);
+        seenPath = url.pathname;
+        seenAuth = request.headers.get("authorization") ?? "";
+
+        // SAFETY: The provider serializes this request body and the test checks its known fixture shape.
+        const body = (await request.json()) as { model?: string };
+
         seenModel = body.model ?? "";
 
         return Response.json({
@@ -156,15 +212,15 @@ describe("createProviderForInstance routing", () => {
         apiKey: "test-key",
         baseUrl: `http://127.0.0.1:${mock.port}/v1`,
         createdAt: new Date().toISOString(),
-        id: "inst_together",
-        label: "Together AI",
-        type: "together",
+        customModels: [{ default: true, id: "StandardCompute" }],
+        id: "inst_standardcompute",
+        label: "Standard Compute",
+        type: "standardcompute",
       };
 
-      const client = createProviderForInstance(instance, "openai/gpt-oss-120b");
+      const client = createProviderForInstance(instance, "StandardCompute");
 
-      expect(client).not.toBeNull();
-      expect(client?.name).toBe("together");
+      expect(client?.name).toBe("standardcompute");
 
       const result = await client!.generateChat({
         messages: [{ content: "ping", role: "user" }],
@@ -174,151 +230,7 @@ describe("createProviderForInstance routing", () => {
       expect(result.content).toBe("ok");
       expect(seenPath).toBe("/v1/chat/completions");
       expect(seenAuth).toBe("Bearer test-key");
-      expect(seenModel).toBe("openai/gpt-oss-120b");
-    } finally {
-      mock.stop(true);
-    }
-  });
-
-  test("routes vercel_ai_gateway instances to the configured base URL with auth", async () => {
-    let seenPath = "";
-    let seenAuth = "";
-    let seenModel = "";
-    let seenReasoning: unknown;
-
-    const mock = Bun.serve({
-      fetch: async (request) => {
-        const url = new URL(request.url);
-        seenPath = url.pathname;
-        seenAuth = request.headers.get("authorization") ?? "";
-
-        // SAFETY: The provider serializes this request body and the test checks its known fixture shape.
-        const body = (await request.json()) as {
-          model?: string;
-          reasoning?: unknown;
-        };
-
-        seenModel = body.model ?? "";
-        seenReasoning = body.reasoning;
-
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              index: 0,
-              message: {
-                content: "ok",
-                reasoning: "because",
-                role: "assistant",
-              },
-            },
-          ],
-          created: 1,
-          id: "mock",
-          model: seenModel,
-          object: "chat.completion",
-          usage: {
-            completion_tokens: 1,
-            prompt_tokens: 1,
-            total_tokens: 2,
-          },
-        });
-      },
-      port: 0,
-    });
-
-    try {
-      const instance: ProviderInstance = {
-        apiKey: "test-key",
-        baseUrl: `http://127.0.0.1:${mock.port}/v1`,
-        createdAt: new Date().toISOString(),
-        id: "inst_vercel_ai_gateway",
-        label: "Vercel AI Gateway",
-        type: "vercel_ai_gateway",
-      };
-
-      const client = createProviderForInstance(instance, "openai/gpt-4o-mini");
-
-      expect(client).not.toBeNull();
-      expect(client?.name).toBe("vercel_ai_gateway");
-
-      const result = await client!.generateChat({
-        messages: [{ content: "ping", role: "user" }],
-        providerOptions: { thinking: { effort: "medium", enabled: true } },
-        system: "",
-      });
-
-      expect(result.content).toBe("ok");
-      expect(result.assistantMessage.thinking).toBe("because");
-      expect(seenPath).toBe("/v1/chat/completions");
-      expect(seenAuth).toBe("Bearer test-key");
-      expect(seenModel).toBe("openai/gpt-4o-mini");
-      expect(seenReasoning).toEqual({ effort: "medium", enabled: true });
-    } finally {
-      mock.stop(true);
-    }
-  });
-
-  test("routes mistral instances to the configured base URL with auth", async () => {
-    let seenPath = "";
-    let seenAuth = "";
-    let seenModel = "";
-
-    const mock = Bun.serve({
-      fetch: async (request) => {
-        const url = new URL(request.url);
-        seenPath = url.pathname;
-        seenAuth = request.headers.get("authorization") ?? "";
-        // SAFETY: The provider serializes this request body and the test checks its known fixture shape.
-        const body = (await request.json()) as { model?: string };
-        seenModel = body.model ?? "";
-
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              index: 0,
-              message: { content: "ok", role: "assistant" },
-            },
-          ],
-          created: 1,
-          id: "mock",
-          model: seenModel,
-          object: "chat.completion",
-          usage: {
-            completion_tokens: 1,
-            prompt_tokens: 1,
-            total_tokens: 2,
-          },
-        });
-      },
-      port: 0,
-    });
-
-    try {
-      const instance: ProviderInstance = {
-        apiKey: "test-key",
-        baseUrl: `http://127.0.0.1:${mock.port}/v1`,
-        createdAt: new Date().toISOString(),
-        id: "inst_mistral",
-        label: "Mistral",
-        type: "mistral",
-      };
-
-      const client = createProviderForInstance(instance, "mistral-small-2603");
-
-      expect(client).not.toBeNull();
-      expect(client?.name).toBe("mistral");
-
-      const result = await client!.generateChat({
-        messages: [{ content: "ping", role: "user" }],
-        system: "",
-      });
-
-      expect(result.content).toBe("ok");
-      expect(seenPath).toBe("/v1/chat/completions");
-      expect(seenAuth).toBe("Bearer test-key");
-      expect(seenModel).toBe("mistral-small-2603");
+      expect(seenModel).toBe("StandardCompute");
     } finally {
       mock.stop(true);
     }

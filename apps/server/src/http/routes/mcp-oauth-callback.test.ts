@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { McpClientManager } from "../../services/mcp-client-manager";
 import { McpService } from "../../services/mcp-service";
 import { createMinimalHonoApp } from "../test-app-helpers";

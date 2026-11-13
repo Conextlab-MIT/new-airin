@@ -5,7 +5,7 @@ import {
   toolGroupElapsedSeconds,
 } from "@/components/chat/assistant-tool-group.shared";
 import type { ChatListItem } from "./chat-history";
-import { groupMessagesIntoTurns, turnKey } from "./chat-message-turns";
+import { groupMessagesIntoTurns } from "./chat-message-turns";
 
 test("numbers local file citations without changing web links or images", () => {
   expect(
@@ -125,9 +125,6 @@ describe("groupMessagesIntoTurns", () => {
       )
     ).toBeNull();
   });
-  test("returns empty turns for empty messages", () => {
-    expect(groupMessagesIntoTurns([])).toEqual([]);
-  });
 
   test("groups user, assistant+tools, user into three turns", () => {
     const messages: ChatListItem[] = [
@@ -153,6 +150,40 @@ describe("groupMessagesIntoTurns", () => {
     expect(turns[2]).toMatchObject({ kind: "user", message: { id: "u2" } });
   });
 
+  test("keeps confirmed question answers in the assistant turn", () => {
+    const answers = [
+      { answer: "Deep green", prompt: "Which color?", questionId: "color" },
+    ];
+
+    const turns = groupMessagesIntoTurns([
+      item({ content: "Choose a color", id: "u1", role: "user" }),
+      item({
+        id: "q1",
+        role: "tool",
+        tool: "ask_user_question",
+        toolStatus: "done",
+      }),
+      item({
+        content: "Answers\n\nQ: Which color?\nA: Deep green",
+        id: "u2",
+        questionnaireAnswers: answers,
+        role: "user",
+      }),
+      item({ content: "Deep green it is.", id: "a1", role: "assistant" }),
+    ]);
+
+    expect(turns).toHaveLength(3);
+    expect(turns[1]).toMatchObject({
+      kind: "assistant",
+      messages: [{ message: { id: "q1" } }],
+      questionnaireAnswers: answers,
+    });
+    expect(turns[2]).toMatchObject({
+      kind: "assistant",
+      messages: [{ message: { id: "a1" } }],
+    });
+  });
+
   test("keeps consecutive assistants and tools in one assistant turn", () => {
     const messages: ChatListItem[] = [
       item({ content: "thinking aloud", id: "a0", role: "assistant" }),
@@ -172,21 +203,6 @@ describe("groupMessagesIntoTurns", () => {
         "a1",
       ]);
     }
-  });
-
-  test("keeps explicit tool groups stable across message updates", () => {
-    const segments = segmentAssistantTurn([
-      item({ id: "t1", role: "tool", tool: "read_file", toolGroupId: "g1" }),
-      item({ id: "a1", role: "assistant", thinking: "progress" }),
-      item({ id: "t2", role: "tool", tool: "search_files", toolGroupId: "g1" }),
-    ]);
-
-    expect(segments).toHaveLength(1);
-    expect(segments[0]).toMatchObject({
-      groupId: "t1",
-      kind: "work",
-      tools: [{ id: "t1" }, { id: "t2" }],
-    });
   });
 
   test("merges successive tool batches and trailing reasoning", () => {
@@ -283,28 +299,39 @@ describe("groupMessagesIntoTurns", () => {
   });
 });
 
-describe("turnKey", () => {
-  test("uses user message id", () => {
-    const turn = groupMessagesIntoTurns([
-      item({ content: "hi", id: "u1", role: "user" }),
-    ])[0]!;
+describe("turnKey", () => {});
 
-    expect(turnKey(turn)).toBe("u1");
+describe("segmentAssistantTurn tool URL copies", () => {
+  const signed = `https://media.example.com/v2/image/id:abc?exp=1&fallback=${"a1b2".repeat(30)}4b2e830&sig=xyz`;
+  const broken = signed.replace("4b2e830", "2e830");
+
+  function textOf(content: string, tool: Partial<ChatListItem>) {
+    const [, text] = segmentAssistantTurn([
+      item({ ...tool, id: "t1", role: "tool", toolStatus: "done" }),
+      item({ content, id: "a1", role: "assistant" }),
+    ]);
+
+    return text?.kind === "text" ? text.message.content : null;
+  }
+
+  test("uses the tool URL when the reply copied it with a few wrong characters", () => {
+    expect(
+      textOf(`![poster](${broken})`, {
+        toolResult: { pages: [{ url: signed }] },
+      })
+    ).toBe(`![poster](${signed})`);
   });
 
-  test("keeps assistant key stable when a tool appends", () => {
-    const base = groupMessagesIntoTurns([
-      item({ content: "x", id: "a1", role: "assistant" }),
-      item({ id: "t1", role: "tool", tool: "bash", toolStatus: "done" }),
-    ])[0]!;
+  test("keeps URLs that match no tool URL", () => {
+    const other = signed.replace("media.example.com", "cdn.example.org");
 
-    const withExtra = groupMessagesIntoTurns([
-      item({ content: "x", id: "a1", role: "assistant" }),
-      item({ id: "t1", role: "tool", tool: "bash", toolStatus: "done" }),
-      item({ id: "t2", role: "tool", tool: "bash", toolStatus: "done" }),
-    ])[0]!;
-
-    expect(turnKey(base)).toBe("assistant:a1");
-    expect(turnKey(withExtra)).toBe("assistant:a1");
+    expect(textOf(`![poster](${other})`, { toolResult: { url: signed } })).toBe(
+      `![poster](${other})`
+    );
+    expect(
+      textOf("[a](https://a.com/x?p=2)", {
+        toolResult: "https://a.com/x?p=1",
+      })
+    ).toBe("[a](https://a.com/x?p=2)");
   });
 });

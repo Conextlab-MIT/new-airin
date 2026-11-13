@@ -7,8 +7,8 @@ import type {
   LlmToolDefinition,
   ProviderClient,
   StreamChatHandlers,
-} from "@nakama/core";
-import { estimateUserContentTokens } from "@nakama/core";
+} from "@airin/core";
+import { estimateUserContentTokens } from "@airin/core";
 import type {
   LlmUsageRecordOptions,
   LlmUsageTracker,

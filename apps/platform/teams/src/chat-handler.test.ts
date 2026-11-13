@@ -1,0 +1,482 @@
+import { describe, expect, test } from "bun:test";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { asTestFetch, withTempHome } from "@airin/core/channel-test-helpers";
+import {
+  getTeamsConfigDir,
+  loadTeamsConfigFile,
+  regenerateTeamsHandshake,
+  saveTeamsConfig,
+} from "@airin/core/teams-config";
+import {
+  ALLOWED,
+  activity,
+  CONFIG,
+  createHarness,
+  OWNER,
+  TENANT,
+} from "./test-helpers";
+
+describe("teams chat handler", () => {
+  async function pairingHarness(homeDir: string, allowedUserIds?: string) {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = asTestFetch(async () =>
+      Response.json({ access_token: "fixture", token_type: "Bearer" })
+    );
+
+    try {
+      await saveTeamsConfig(
+        {
+          allowedUserIds,
+          clientId: CONFIG.clientId,
+          clientSecret: CONFIG.clientSecret,
+          tenantId: TENANT,
+        },
+        OWNER
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    const generated = await regenerateTeamsHandshake(OWNER);
+
+    const harness = createHarness(homeDir, {
+      loadConfig: () => loadTeamsConfigFile(OWNER),
+    });
+
+    return { ...harness, code: generated.handshakeCode! };
+  }
+
+  test("a code in a personal chat links the sender and only the later message starts a turn", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, code, replies, turns, createdSessions } =
+        await pairingHarness(homeDir);
+
+      await handle(activity({ text: "before pairing" }));
+      expect(turns).toEqual([]);
+      await handle(activity({ text: code }));
+      expect(turns).toEqual([]);
+      expect(createdSessions).toEqual([]);
+      expect(replies).toHaveLength(1);
+      expect((await loadTeamsConfigFile(OWNER))?.pairedUserIds).toEqual([
+        ALLOWED,
+      ]);
+      await handle(activity({ text: "after pairing" }));
+      expect(turns.map((turn) => turn.message)).toEqual(["after pairing"]);
+
+      const restarted = createHarness(homeDir, {
+        loadConfig: () => loadTeamsConfigFile(OWNER),
+      });
+
+      await restarted.handle(activity({ text: "after restart" }));
+      expect(restarted.turns).toHaveLength(1);
+    });
+  });
+
+  for (const patch of [
+    { conversationType: "groupChat" },
+    { conversationType: "channel" },
+    { tenantId: CONFIG.clientId },
+    { senderId: "not-a-guid" },
+    { senderId: "" },
+    { isBot: true },
+    { channelId: "webchat" },
+  ]) {
+    test(`a code cannot pair an activity with ${JSON.stringify(patch)}`, async () => {
+      await withTempHome("airin-teams-handler-", async (homeDir) => {
+        const { handle, code, turns, createdSessions } =
+          await pairingHarness(homeDir);
+
+        await handle(activity({ text: code, ...patch }));
+        expect(turns).toEqual([]);
+        expect(createdSessions).toEqual([]);
+        expect((await loadTeamsConfigFile(OWNER))?.pairedUserIds).toEqual([]);
+        expect((await loadTeamsConfigFile(OWNER))?.handshakeCode).toBe(code);
+      });
+    });
+  }
+
+  const CODE_THREAD = "19:general@thread.tacv2;messageid=1001";
+
+  function channelPost(text: string, senderId = ALLOWED) {
+    return activity({
+      conversationId: CODE_THREAD,
+      conversationType: "channel",
+      mentionsBot: true,
+      senderId,
+      text,
+    });
+  }
+
+  for (const [name, allowed, post] of [
+    ["an unlinked sender's code", undefined, (code: string) => code],
+    ["an allowlisted sender's code", ALLOWED, (code: string) => code],
+    [
+      "a code inside a sentence",
+      undefined,
+      (code: string) => `my code is ${code.toLowerCase()} thanks`,
+    ],
+  ] as const) {
+    test(`${name} posted in a channel is spent and reaches no agent`, async () => {
+      await withTempHome("airin-teams-handler-", async (homeDir) => {
+        const { handle, code, replies, turns } = await pairingHarness(
+          homeDir,
+          allowed
+        );
+
+        await handle(channelPost(post(code)));
+
+        const config = await loadTeamsConfigFile(OWNER);
+
+        expect(turns).toEqual([]);
+        expect(config?.pairedUserIds).toEqual([]);
+        expect(config?.handshakeCode).toBeNull();
+        expect(replies.map((entry) => entry.conversationId)).toEqual([
+          CODE_THREAD,
+        ]);
+
+        // The posted code no longer pairs, even in a personal chat.
+        const stranger = "99999999-9999-4999-8999-999999999999";
+        await handle(activity({ senderId: stranger, text: code }));
+        expect((await loadTeamsConfigFile(OWNER))?.pairedUserIds).toEqual([]);
+      });
+    });
+  }
+
+  test("a code spent before the lock is not made live again", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { code } = await pairingHarness(homeDir);
+      const stale = await loadTeamsConfigFile(OWNER);
+
+      // A personal chat pairs with the code while the channel post waits.
+      await createHarness(homeDir, {
+        loadConfig: () => loadTeamsConfigFile(OWNER),
+      }).handle(activity({ senderId: ALLOWED, text: code }));
+
+      const late = createHarness(homeDir, {
+        loadConfig: async () => stale,
+      });
+
+      await late.handle(
+        channelPost(code, "99999999-9999-4999-8999-999999999999")
+      );
+
+      const config = await loadTeamsConfigFile(OWNER);
+
+      expect(config?.handshakeCode).toBeNull();
+      expect(config?.pairedUserIds).toEqual([ALLOWED]);
+    });
+  });
+
+  test("a code that cannot be spent still reaches no agent", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, code, replies, turns } = await pairingHarness(
+        homeDir,
+        ALLOWED
+      );
+
+      // Another writer holds the pairing lock, so the spend gives up.
+      await writeFile(
+        join(getTeamsConfigDir(OWNER), "pairing.lock"),
+        `${process.pid}\n`
+      );
+
+      await handle(channelPost(`my code is ${code}`));
+
+      expect(turns).toEqual([]);
+      expect(replies.map((entry) => entry.conversationId)).toEqual([
+        CODE_THREAD,
+      ]);
+      expect((await loadTeamsConfigFile(OWNER))?.handshakeCode).toBe(code);
+    });
+  }, 15_000);
+
+  test("an authorized sender's code-shaped message reaches the agent", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, replies, turns } = createHarness(homeDir);
+      const guid = "55555555-5555-4555-8555-555555555555";
+      await handle(activity({ text: "A".repeat(32) }));
+      await handle(activity({ text: guid }));
+
+      expect(turns.map((turn) => turn.message)).toEqual(["A".repeat(32), guid]);
+    });
+  });
+
+  test("wrong and consumed codes never start a turn or link a second sender", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, code, turns } = await pairingHarness(homeDir);
+      await handle(
+        activity({
+          text: code === "0".repeat(32) ? "1".repeat(32) : "0".repeat(32),
+        })
+      );
+      expect((await loadTeamsConfigFile(OWNER))?.pairedUserIds).toEqual([]);
+      await handle(activity({ text: code }));
+      await handle(activity({ senderId: CONFIG.clientId, text: code }));
+      expect((await loadTeamsConfigFile(OWNER))?.pairedUserIds).toEqual([
+        ALLOWED,
+      ]);
+      expect(turns).toEqual([]);
+    });
+  });
+
+  test("duplicate delivery consumes a code and replies once", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, code, replies, turns } = await pairingHarness(homeDir);
+      const message = activity({ text: code });
+      await Promise.all([handle(message), handle(message)]);
+      expect(replies).toHaveLength(1);
+      expect((await loadTeamsConfigFile(OWNER))?.pairedUserIds).toEqual([
+        ALLOWED,
+      ]);
+      expect(turns).toEqual([]);
+    });
+  });
+
+  test("an allowed user in a personal chat gets the agent's reply", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, replies, turns } = createHarness(homeDir);
+
+      await handle(activity({ text: "what is airin" }));
+
+      expect(turns).toEqual([
+        { message: "what is airin", sessionId: "session_1" },
+      ]);
+      expect(replies).toEqual([
+        { conversationId: "conv_1", text: "echo: what is airin" },
+      ]);
+    });
+  });
+
+  test("each personal chat keeps its own session", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { createdSessions, handle, turns } = createHarness(homeDir);
+
+      await handle(activity({ conversationId: "conv_a" }));
+      await handle(activity({ conversationId: "conv_b" }));
+      await handle(activity({ conversationId: "conv_a" }));
+
+      expect(createdSessions).toEqual(["session_1", "session_2"]);
+      expect(turns.map((turn) => turn.sessionId)).toEqual([
+        "session_1",
+        "session_2",
+        "session_1",
+      ]);
+    });
+  });
+
+  for (const [name, patch] of [
+    ["a bot", { isBot: true }],
+    ["another tenant", { tenantId: "44444444-4444-4444-8444-444444444444" }],
+    [
+      "a user outside the allowlist",
+      { senderId: "99999999-9999-4999-8999-999999999999" },
+    ],
+    ["a group conversation", { conversationType: "groupChat" }],
+    ["a channel message without a mention", { conversationType: "channel" }],
+    ["an empty message", { text: "   " }],
+    ["another Bot Framework channel", { channelId: "webchat" }],
+  ] as const) {
+    test(`${name} never reaches the agent`, async () => {
+      await withTempHome("airin-teams-handler-", async (homeDir) => {
+        const { handle, replies, turns } = createHarness(homeDir);
+
+        await handle(activity(patch));
+
+        expect(turns).toEqual([]);
+        expect(replies).toEqual([]);
+      });
+    });
+  }
+
+  test("no configuration means no agent call", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, turns } = createHarness(homeDir, { config: null });
+
+      await handle(activity());
+
+      expect(turns).toEqual([]);
+    });
+  });
+
+  test("access removed during a turn stops the next message", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      let allowed = true;
+
+      const { handle, turns } = createHarness(homeDir, {
+        loadConfig: async () =>
+          allowed ? CONFIG : { ...CONFIG, allowedUserIds: [] },
+        onSend: async (message) => {
+          // The first turn is still running when the admin revokes access.
+          allowed = false;
+
+          return `echo: ${message}`;
+        },
+      });
+
+      await handle(activity({ text: "first" }));
+      await handle(activity({ text: "second" }));
+
+      expect(turns.map((turn) => turn.message)).toEqual(["first"]);
+    });
+  });
+
+  // The second turn passes the first check, then waits for the lock. Access is
+  // removed while it waits, so only the re-read inside the lock can stop it.
+  test("access removed while a turn is queued stops it at the lock", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      let configReads = 0;
+      let releaseFirst = () => {};
+
+      const firstRunning = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+
+      const { handle, turns } = createHarness(homeDir, {
+        loadConfig: async () => {
+          configReads += 1;
+
+          // Both pre-lock reads and the first turn's re-read still allow it.
+          return configReads <= 3 ? CONFIG : { ...CONFIG, allowedUserIds: [] };
+        },
+        onSend: async (message) => {
+          if (message === "first") {
+            await firstRunning;
+          }
+
+          return `echo: ${message}`;
+        },
+      });
+
+      const first = handle(activity({ text: "first" }));
+      const second = handle(activity({ text: "second" }));
+
+      releaseFirst();
+      await Promise.all([first, second]);
+
+      expect(turns.map((turn) => turn.message)).toEqual(["first"]);
+    });
+  });
+
+  test("a turn turned away at the lock leaves nothing for !stop", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      let configReads = 0;
+
+      const { handle, replies, turns } = createHarness(homeDir, {
+        loadConfig: async () => {
+          configReads += 1;
+
+          // Only the turn's read inside the lock denies.
+          return configReads === 3 ? { ...CONFIG, allowedUserIds: [] } : CONFIG;
+        },
+      });
+
+      await handle(activity({ conversationId: "conv_fresh", text: "!stop" }));
+      await handle(activity({ text: "hello" }));
+      await handle(activity({ text: "!stop" }));
+
+      expect(turns).toEqual([]);
+      expect(replies).toHaveLength(2);
+      expect(replies[1]?.text).toBe(replies[0]?.text ?? "");
+    });
+  });
+
+  test("the same activity delivered twice runs one turn", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, turns } = createHarness(homeDir);
+      const duplicate = activity({ text: "only once" });
+
+      await Promise.all([handle(duplicate), handle(duplicate)]);
+
+      expect(turns).toHaveLength(1);
+    });
+  });
+
+  test("the same id in two chats, or no id at all, is not a duplicate", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, turns } = createHarness(homeDir);
+
+      await handle(activity({ conversationId: "conv_a", id: "act_same" }));
+      await handle(activity({ conversationId: "conv_b", id: "act_same" }));
+      await handle(activity({ conversationId: "conv_a", id: "" }));
+      await handle(activity({ conversationId: "conv_a", id: "" }));
+
+      expect(turns).toHaveLength(4);
+    });
+  });
+
+  test("tenant and user ids match regardless of letter case", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      // Ids with letters, so changing their case changes them.
+      const tenantId = "aaaabbbb-cccc-4ddd-8eee-ffff00001111";
+      const senderId = "bbbbcccc-dddd-4eee-8fff-aaaa00002222";
+
+      const { handle, turns } = createHarness(homeDir, {
+        config: { ...CONFIG, allowedUserIds: [senderId], tenantId },
+      });
+
+      await handle(
+        activity({
+          senderId: senderId.toUpperCase(),
+          tenantId: tenantId.toUpperCase(),
+        })
+      );
+
+      expect(turns).toHaveLength(1);
+    });
+  });
+
+  test("a failed turn tells the user instead of going silent", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const { handle, replies } = createHarness(homeDir, {
+        onSend: async () => {
+          throw new Error("No model provider is configured.");
+        },
+      });
+
+      await handle(activity());
+
+      expect(replies).toEqual([
+        { conversationId: "conv_1", text: "No model provider is configured." },
+      ]);
+    });
+  });
+
+  test("a long reply arrives as several messages Teams accepts", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const reply = Array.from(
+        { length: 4000 },
+        (_, index) => `word${index}`
+      ).join(" ");
+
+      const { handle, replies } = createHarness(homeDir, {
+        onSend: async () => reply,
+      });
+
+      await handle(activity());
+
+      expect(replies.length).toBeGreaterThan(1);
+      expect(replies.every((message) => message.text.length <= 6000)).toBe(
+        true
+      );
+      expect(replies.map((message) => message.text).join(" ")).toBe(reply);
+    });
+  });
+
+  test("a saved session is reused after a restart", async () => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
+      const first = createHarness(homeDir);
+
+      await first.handle(activity({ conversationId: "conv_restart" }));
+      await first.sessionStore.save();
+
+      const second = createHarness(homeDir);
+
+      await second.sessionStore.load();
+      await second.handle(activity({ conversationId: "conv_restart" }));
+
+      expect(second.createdSessions).toEqual([]);
+      expect(second.turns[0]?.sessionId).toBe("session_1");
+    });
+  });
+});

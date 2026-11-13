@@ -56,8 +56,8 @@ test("worker refuses inherited chat credentials without explicit extraction sett
       {
         env: {
           ...process.env,
-          NAKAMA_PLUGIN_DATA_DIR: directory,
-          NAKAMA_WORKER_DATA_DIR: directory,
+          AIRIN_PLUGIN_DATA_DIR: directory,
+          AIRIN_WORKER_DATA_DIR: directory,
         },
         stderr: "pipe",
         stdout: "pipe",

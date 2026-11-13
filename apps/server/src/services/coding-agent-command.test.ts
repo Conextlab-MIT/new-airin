@@ -185,7 +185,7 @@ describe("formatCodingAgentCommandContext", () => {
       )
     );
 
-    expect(context).toContain("Nakama provider passthrough");
+    expect(context).toContain("Airin provider passthrough");
     expect(context).not.toContain("sk-ant-test");
     expect(context).toContain('"***"');
   });
@@ -210,7 +210,7 @@ describe("formatCodingAgentCommandContext", () => {
 
     expect(context).toContain("host auth");
     expect(context).toContain("cwd");
-    expect(context).not.toContain("When Nakama provider passthrough is active");
+    expect(context).not.toContain("When Airin provider passthrough is active");
     expect(context).toContain("--yolo");
     expect(context).toContain("--output-format text");
   });

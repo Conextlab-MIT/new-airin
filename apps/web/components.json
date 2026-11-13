@@ -14,8 +14,8 @@
   "rtl": false,
   "aliases": {
     "components": "@/components",
-    "utils": "@nakama/ui/utils",
-    "ui": "@nakama/ui",
+    "utils": "@airin/ui/utils",
+    "ui": "@airin/ui",
     "lib": "@/lib",
     "hooks": "@/hooks"
   },

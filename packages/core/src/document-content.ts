@@ -1,4 +1,4 @@
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import type {
   DocumentAttachment,
   MessageContentPart,
@@ -73,7 +73,11 @@ const NATIVE_DOCUMENT_MEDIA_TYPES: Record<ProviderName, ReadonlySet<string>> = {
     "text/csv",
     DOCX_MEDIA_TYPE,
   ]),
+  cheaper_inference: new Set<string>(),
   cloudflare: new Set<string>(),
+  // Command Code accepts text and image parts only; documents go through the
+  // local text parser.
+  command_code: new Set<string>(),
   deepseek: new Set<string>(),
   doubao: new Set<string>(),
   fireworks: new Set<string>(),
@@ -83,6 +87,8 @@ const NATIVE_DOCUMENT_MEDIA_TYPES: Record<ProviderName, ReadonlySet<string>> = {
     "text/csv",
     DOCX_MEDIA_TYPE,
   ]),
+  groq: new Set<string>(),
+  meta: new Set<string>(),
   minimax: new Set<string>(),
   minimax_cn: new Set<string>(),
   mistral: new Set<string>(),
@@ -107,6 +113,7 @@ const NATIVE_DOCUMENT_MEDIA_TYPES: Record<ProviderName, ReadonlySet<string>> = {
   perplexity: new Set<string>(),
   qwen: new Set<string>(),
   qwen_cn: new Set<string>(),
+  standardcompute: new Set<string>(),
   together: new Set<string>(),
   vercel_ai_gateway: new Set<string>(),
   xai: new Set<string>(),
@@ -115,6 +122,14 @@ const NATIVE_DOCUMENT_MEDIA_TYPES: Record<ProviderName, ReadonlySet<string>> = {
   zhipu: new Set<string>(),
   zhipu_cn: new Set<string>(),
 };
+
+export function findDocumentTextParser(
+  mediaType: string
+): DocumentTextParser | undefined {
+  return Object.entries(BUILTIN_DOCUMENT_TEXT_PARSERS).find(
+    ([candidate]) => candidate === mediaType
+  )?.[1];
+}
 
 export function providerSupportsNativeDocument(
   provider: ProviderName,
@@ -131,9 +146,7 @@ export async function resolveDocumentPartForProvider(
     return part;
   }
 
-  const parser = Object.entries(BUILTIN_DOCUMENT_TEXT_PARSERS).find(
-    ([mediaType]) => mediaType === part.mediaType
-  )?.[1];
+  const parser = findDocumentTextParser(part.mediaType);
 
   if (parser) {
     const text = await parser({
@@ -148,7 +161,7 @@ export async function resolveDocumentPartForProvider(
     };
   }
 
-  throw new NakamaApiError(
+  throw new AirinApiError(
     `Provider "${provider}" does not support ${part.mediaType} documents natively.`,
     400
   );

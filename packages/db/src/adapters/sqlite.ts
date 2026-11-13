@@ -5,14 +5,17 @@ import type {
   AcpAgentConfig,
   AgentQuestionnaire,
   ChatMessage,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
+  decryptCredential,
   derivePluginToolName,
+  encryptCredential,
   getUserMessageText,
-  NakamaApiError,
   PRIVATE_FILE_MODE,
-} from "@nakama/core";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
+} from "@airin/core";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
+import { isThinkingEffort } from "@airin/core/thinking-effort";
 import { LLM_USAGE_STATS_ID, WORKSPACE_SETTINGS_ID } from "../constants";
 import { ensureDatabaseDirectory, resolveDatabasePath } from "../database-url";
 import { migrateDatabase } from "../migrate";
@@ -23,12 +26,14 @@ import type {
   OrgMemoryProposalStatus,
   PluginPublishResult,
   PublishOrgPluginReleaseInput,
+  StoredArtifactOwnerRecord,
   StoredArtifactShareRecord,
   StoredAttachmentRecord,
   StoredAuditEvent,
   StoredAutomationRecord,
   StoredAutomationRunRecord,
   StoredAutomationRunStepRecord,
+  StoredAutomationWebhookSecret,
   StoredBrowserSessionRecord,
   StoredComposioToolkitRecord,
   StoredComposioUserConnectionRecord,
@@ -36,6 +41,7 @@ import type {
   StoredLlmUsageDailyStatsRecord,
   StoredLlmUsageModelStatsRecord,
   StoredLlmUsageStatsRecord,
+  StoredManagedSecret,
   StoredMcpServerRecord,
   StoredNotificationDestinationRecord,
   StoredOrganizationRecord,
@@ -50,6 +56,8 @@ import type {
   StoredProfileChangeEvent,
   StoredProfileComposioToolkitRecord,
   StoredProfileRecord,
+  StoredRegressionCaseRecord,
+  StoredRegressionCaseRunRecord,
   StoredSessionMessageRecord,
   StoredSessionRecord,
   StoredSessionSummaryRecord,
@@ -117,6 +125,7 @@ interface AutomationRunRow {
   id: string;
   output: string | null;
   progress: string | null;
+  source: string | null;
   started_at: string;
   status: string;
 }
@@ -163,6 +172,7 @@ interface ProfileRow {
   acp_settings: string | null;
   automations_enabled: number;
   created_at: string;
+  groups_enabled: number;
   id: string;
   is_default: number;
   is_super: number;
@@ -196,12 +206,17 @@ interface ToolRow {
 interface SessionRow {
   agent_questionnaire: string | null;
   agent_todos: string;
+  branch_message_index: number | null;
   channel: string;
+  closed_at?: string | null;
+  coding_workspace_root?: string | null;
   created_at: string;
   id: string;
   model: string | null;
+  parent_session_id: string | null;
   pinned: number;
   profile_id: string;
+  thinking_effort?: string | null;
   title: string | null;
   updated_at?: string | null;
   user_id?: string | null;
@@ -231,14 +246,17 @@ interface AttachmentRow {
 }
 
 interface SessionSummaryRow {
+  branch_message_index: number | null;
   channel: string;
   created_at: string;
   first_user_payload: string | null;
   id: string;
   message_count: number;
+  parent_session_id: string | null;
   pinned: number;
   position: number;
   profile_id: string;
+  sort_position: number | null;
   title: string | null;
   updated_at: string;
 }
@@ -295,7 +313,6 @@ interface WorkspaceSettingsRow {
   id: string;
   image_model: string | null;
   selected_coding_agent_harness: string | null;
-  token_optimizer_enabled: number | null;
   transcription_model: string | null;
   updated_at: string;
   vision_model: string | null;
@@ -427,6 +444,7 @@ interface BrowserSessionRow {
   last_used_at: string | null;
   revoked_at: string | null;
   session_token_hash: string;
+  user_agent?: string | null;
   user_id: string;
 }
 
@@ -542,6 +560,17 @@ interface SkillSuggestionRow {
   warnings: string | null;
 }
 
+interface ArtifactOwnerRow {
+  channel: string | null;
+  created_at: string;
+  filename: string;
+  org_id: string;
+  profile_id: string;
+  session_id: string | null;
+  user_id: string | null;
+  user_name: string | null;
+}
+
 interface ArtifactShareRow {
   created_at: string;
   created_by_user_id: string;
@@ -557,9 +586,37 @@ interface ArtifactShareRow {
   token_hash: string;
 }
 
+interface RegressionCaseRunRow {
+  case_id: string;
+  created_at: string;
+  created_by_user_id: string | null;
+  error: string | null;
+  id: string;
+  org_id: string;
+  output: string | null;
+  status: string;
+  verdict: string | null;
+  verdict_at: string | null;
+  verdict_by_user_id: string | null;
+}
+
+interface RegressionCaseRow {
+  created_at: string;
+  created_by_user_id: string | null;
+  expected_result: string;
+  id: string;
+  input: string;
+  org_id: string;
+  private_to_user_id: string | null;
+  profile_id: string;
+  source_automation_id: string | null;
+  source_id: string;
+  source_type: string;
+}
+
 /**
  * The file holds plaintext MCP credentials and every transcript, so it carries
- * the same 0600 the rest of ~/.nakama already uses. bun:sqlite takes no mode, and
+ * the same 0600 the rest of ~/.airin already uses. bun:sqlite takes no mode, and
  * an existing loose file keeps its own, so chmod after open rather than at create.
  */
 export function openPrivateDatabase(databasePath: string): Database {
@@ -568,6 +625,12 @@ export function openPrivateDatabase(databasePath: string): Database {
 
   if (databasePath !== ":memory:") {
     chmodSync(databasePath, PRIVATE_FILE_MODE);
+    // WAL lets readers run beside the writer. FULL syncs the log on every commit,
+    // so an acknowledged write still survives power loss; EXTRA only added a
+    // directory sync for the DELETE journal, which WAL never unlinks.
+    db.exec(
+      "PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;"
+    );
   }
 
   return db;
@@ -676,6 +739,116 @@ export async function createSqliteDatabase(
 const NOTIFICATION_WEBHOOK_DELIVERY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
+  const getManagedSecretStmt = db.prepare(
+    "SELECT scope, name, source, encrypted_value, version FROM managed_secrets WHERE scope = ? AND name = ?"
+  );
+
+  const listManagedSecretsStmt = db.prepare(
+    "SELECT scope, name, source, encrypted_value, version FROM managed_secrets"
+  );
+
+  const putManagedSecretStmt = db.prepare(`
+    INSERT INTO managed_secrets (scope, name, source, encrypted_value)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(scope, name) DO UPDATE SET
+      source = excluded.source,
+      encrypted_value = excluded.encrypted_value,
+      version = managed_secrets.version + 1
+  `);
+
+  const deleteManagedSecretStmt = db.prepare(
+    "DELETE FROM managed_secrets WHERE scope = ? AND name = ?"
+  );
+
+  const webhookSecretColumns =
+    "automation_id AS automationId, encrypted_value AS encryptedValue, created_by_user_id AS createdByUserId, created_at AS createdAt";
+
+  const getAutomationWebhookSecretStmt = db.prepare<
+    StoredAutomationWebhookSecret,
+    SQLQueryBindings[]
+  >(
+    `SELECT ${webhookSecretColumns} FROM automation_webhook_secrets WHERE automation_id = ?`
+  );
+
+  const listAutomationWebhookSecretsStmt = db.prepare<
+    StoredAutomationWebhookSecret,
+    SQLQueryBindings[]
+  >(`SELECT ${webhookSecretColumns} FROM automation_webhook_secrets`);
+
+  const putAutomationWebhookSecretStmt = db.prepare(`
+    INSERT INTO automation_webhook_secrets (
+      automation_id,
+      encrypted_value,
+      created_by_user_id,
+      created_at
+    )
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(automation_id) DO UPDATE SET
+      encrypted_value = excluded.encrypted_value,
+      created_by_user_id = excluded.created_by_user_id,
+      created_at = excluded.created_at
+  `);
+
+  const deleteAutomationWebhookSecretStmt = db.prepare(
+    "DELETE FROM automation_webhook_secrets WHERE automation_id = ?"
+  );
+
+  const deleteUserAutomationWebhookSecretsStmt = db.prepare(
+    "DELETE FROM automation_webhook_secrets WHERE created_by_user_id = ?"
+  );
+
+  const deleteUserOrgAutomationWebhookSecretsStmt = db.prepare(`
+    DELETE FROM automation_webhook_secrets
+    WHERE created_by_user_id = ?
+      AND automation_id IN (SELECT id FROM automations WHERE org_id = ?)
+  `);
+
+  const replaceAutomationWebhookSecretStmt = db.prepare(
+    "UPDATE automation_webhook_secrets SET encrypted_value = ? WHERE automation_id = ? AND encrypted_value = ?"
+  );
+
+  const replaceManagedSecretStmt = db.prepare(
+    "UPDATE managed_secrets SET encrypted_value = ?, version = version + 1 WHERE scope = ? AND name = ?"
+  );
+
+  const replaceManagedSecretsTransaction = db.transaction(
+    (
+      secrets: Array<
+        Pick<StoredManagedSecret, "scope" | "name" | "encryptedValue">
+      >,
+      webhookSecrets: Array<
+        Pick<
+          StoredAutomationWebhookSecret,
+          "automationId" | "encryptedValue"
+        > & { previousEncryptedValue: string }
+      >
+    ) => {
+      for (const secret of secrets) {
+        if (
+          replaceManagedSecretStmt.run(
+            secret.encryptedValue,
+            secret.scope,
+            secret.name
+          ).changes !== 1
+        ) {
+          throw new Error("Managed secret changed during key rotation.");
+        }
+      }
+
+      for (const secret of webhookSecrets) {
+        if (
+          replaceAutomationWebhookSecretStmt.run(
+            secret.encryptedValue,
+            secret.automationId,
+            secret.previousEncryptedValue
+          ).changes !== 1
+        ) {
+          throw new Error("Webhook secret changed during key rotation.");
+        }
+      }
+    }
+  );
+
   const listAutomationsStmt = db.prepare<AutomationRow, SQLQueryBindings[]>(
     "SELECT * FROM automations"
   );
@@ -736,13 +909,14 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
   `);
 
   const insertAutomationRunStmt = db.prepare(`
-    INSERT INTO automation_runs (id, automation_id, status, started_at, completed_at, output, error, delivery_status, delivery_error, progress)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO automation_runs (id, automation_id, status, started_at, completed_at, output, error, delivery_status, delivery_error, progress, source, input)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const updateAutomationRunStmt = db.prepare(`
     UPDATE automation_runs
-    SET status = ?, completed_at = ?, output = ?, error = ?, delivery_status = ?, delivery_error = ?, progress = ?
+    SET status = ?, completed_at = ?, output = ?, error = ?, delivery_status = ?, delivery_error = ?, progress = ?,
+      input = CASE WHEN ? = 'running' THEN input ELSE NULL END
     WHERE id = ?
   `);
 
@@ -799,7 +973,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
 
   const failExhaustedAutomationRunsStmt = db.prepare(`
     UPDATE automation_runs
-    SET status = 'failed', completed_at = ?, error = ?
+    SET status = 'failed', completed_at = ?, error = ?, input = NULL
     WHERE status = 'running' AND resume_count >= ?
   `);
 
@@ -807,13 +981,14 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     {
       automation_id: string;
       id: string;
+      input: string | null;
     },
     SQLQueryBindings[]
   >(`
     UPDATE automation_runs
     SET resume_count = resume_count + 1
     WHERE status = 'running'
-    RETURNING id, automation_id
+    RETURNING id, automation_id, input
   `);
 
   const insertAutomationRunStepStmt = db.prepare(`
@@ -963,6 +1138,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       org_id,
       is_default,
       automations_enabled,
+      groups_enabled,
       skills_write_approval,
       skills_post_turn_review,
       skills_curator_consolidate_enabled,
@@ -973,7 +1149,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       created_at,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       system_prompt = excluded.system_prompt,
@@ -984,6 +1160,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       org_id = excluded.org_id,
       is_default = excluded.is_default,
       automations_enabled = excluded.automations_enabled,
+      groups_enabled = excluded.groups_enabled,
       skills_write_approval = excluded.skills_write_approval,
       skills_post_turn_review = excluded.skills_post_turn_review,
       skills_curator_consolidate_enabled = excluded.skills_curator_consolidate_enabled,
@@ -994,40 +1171,70 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       updated_at = excluded.updated_at
   `);
 
+  const insertProfileIfAbsentStmt = db.prepare(`
+    INSERT INTO profiles (
+      id,
+      name,
+      system_prompt,
+      model,
+      thinking_enabled,
+      thinking_effort,
+      is_super,
+      org_id,
+      is_default,
+      automations_enabled,
+      groups_enabled,
+      skills_write_approval,
+      skills_post_turn_review,
+      skills_curator_consolidate_enabled,
+      acp_agent,
+      acp_settings,
+      owner_user_id,
+      shared_with_team,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO NOTHING
+  `);
+
+  const profileInsertArgs = (record: StoredProfileRecord) => [
+    record.id,
+    record.name,
+    record.systemPrompt,
+    record.model,
+    record.thinkingEnabled == null ? null : record.thinkingEnabled ? 1 : 0,
+    record.thinkingEffort ?? null,
+    record.isSuper ? 1 : 0,
+    record.orgId ?? null,
+    record.isDefault ? 1 : 0,
+    record.automationsEnabled === false ? 0 : 1,
+    record.groupsEnabled === false ? 0 : 1,
+    record.skillsWriteApproval == null
+      ? null
+      : record.skillsWriteApproval
+        ? 1
+        : 0,
+    record.skillsPostTurnReview == null
+      ? null
+      : record.skillsPostTurnReview
+        ? 1
+        : 0,
+    record.skillsCuratorConsolidateEnabled == null
+      ? null
+      : record.skillsCuratorConsolidateEnabled
+        ? 1
+        : 0,
+    record.acpAgent ? JSON.stringify(record.acpAgent) : null,
+    record.acpSettings ? JSON.stringify(record.acpSettings) : null,
+    record.ownerUserId ?? null,
+    record.sharedWithTeam === false ? 0 : 1,
+    record.createdAt,
+    record.updatedAt ?? record.createdAt,
+  ];
+
   const runUpsertProfileStmt = (record: StoredProfileRecord) => {
-    upsertProfileStmt.run(
-      record.id,
-      record.name,
-      record.systemPrompt,
-      record.model,
-      record.thinkingEnabled == null ? null : record.thinkingEnabled ? 1 : 0,
-      record.thinkingEffort ?? null,
-      record.isSuper ? 1 : 0,
-      record.orgId ?? null,
-      record.isDefault ? 1 : 0,
-      record.automationsEnabled === false ? 0 : 1,
-      record.skillsWriteApproval == null
-        ? null
-        : record.skillsWriteApproval
-          ? 1
-          : 0,
-      record.skillsPostTurnReview == null
-        ? null
-        : record.skillsPostTurnReview
-          ? 1
-          : 0,
-      record.skillsCuratorConsolidateEnabled == null
-        ? null
-        : record.skillsCuratorConsolidateEnabled
-          ? 1
-          : 0,
-      record.acpAgent ? JSON.stringify(record.acpAgent) : null,
-      record.acpSettings ? JSON.stringify(record.acpSettings) : null,
-      record.ownerUserId ?? null,
-      record.sharedWithTeam === false ? 0 : 1,
-      record.createdAt,
-      record.updatedAt ?? record.createdAt
-    );
+    upsertProfileStmt.run(...profileInsertArgs(record));
   };
 
   const upsertDefaultProfileTransaction = db.transaction(
@@ -1048,15 +1255,15 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       const profile = getProfileForOrgStmt.get(profileId, sourceOrgId);
 
       if (!profile) {
-        throw new NakamaApiError("Profile not found.", 404);
+        throw new AirinApiError("Profile not found.", 404);
       }
 
       if (sourceOrgId === targetOrgId) {
-        throw new NakamaApiError("Choose another organization.", 400);
+        throw new AirinApiError("Choose another organization.", 400);
       }
 
       if (profile.is_super) {
-        throw new NakamaApiError("Super Bot cannot be moved.", 400);
+        throw new AirinApiError("Airin cannot be moved.", 400);
       }
 
       const target = db
@@ -1066,7 +1273,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         .get(targetOrgId);
 
       if (!target) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Destination organization is unavailable.",
           404
         );
@@ -1083,7 +1290,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
             )
             .get(profileId)
         ) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Wait for running automations and workflows to finish.",
             409
           );
@@ -1098,7 +1305,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
           .get(sourceOrgId, profileId);
 
         if (!successor) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Create another profile before moving the default profile.",
             409
           );
@@ -1118,7 +1325,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
           )
           .get(workspacePrefix, workspacePrefix, profileId)
       ) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Unassign this profile's local skills from other profiles before moving.",
           409
         );
@@ -1192,6 +1399,36 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
   );
 
   const deleteProfileStmt = db.prepare("DELETE FROM profiles WHERE id = ?");
+
+  const promoteProfileStmt = db.prepare(
+    "UPDATE profiles SET is_default = 1, updated_at = ? WHERE id = ? AND org_id = ?"
+  );
+
+  const deleteProfileAndPromoteDefaultTx = db.transaction(
+    (id: string, orgId: string, successorId?: string) => {
+      if (getProfileForOrgStmt.get(id, orgId)?.is_default && !successorId) {
+        throw new Error("Default profile changed during deletion.");
+      }
+
+      const deleted = deleteProfileForOrgStmt.run(id, orgId).changes > 0;
+
+      if (
+        deleted &&
+        successorId &&
+        !getDefaultProfileForOrgStmt.get(orgId) &&
+        promoteProfileStmt.run(new Date().toISOString(), successorId, orgId)
+          .changes !== 1
+      ) {
+        throw new Error("Successor profile not found.");
+      }
+
+      return deleted;
+    }
+  );
+
+  const deleteProfileForOrgStmt = db.prepare(
+    "DELETE FROM profiles WHERE id = ? AND org_id = ?"
+  );
 
   const listToolsStmt = db.prepare<ToolRow, SQLQueryBindings[]>(
     "SELECT * FROM tools"
@@ -1269,18 +1506,24 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     "SELECT * FROM sessions WHERE user_id = ? AND app_user_id IS NULL ORDER BY created_at ASC"
   );
 
+  const listChildSessionsStmt = db.prepare<SessionRow, SQLQueryBindings[]>(
+    "SELECT * FROM sessions WHERE parent_session_id = ? AND app_user_id IS NULL"
+  );
+
   const getSessionStmt = db.prepare<SessionRow, SQLQueryBindings[]>(
     "SELECT * FROM sessions WHERE id = ? AND app_user_id IS NULL"
   );
 
+  // org_id follows the profile's org. The profile move path keeps it in sync.
   const upsertSessionStmt = db.prepare(`
-    INSERT INTO sessions (id, profile_id, channel, created_at, updated_at, app_user_id, user_id, model, pinned)
-    VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+    INSERT INTO sessions (id, profile_id, channel, created_at, updated_at, app_user_id, user_id, model, org_id, pinned, parent_session_id, branch_message_index, thinking_effort, coding_workspace_root, title)
+    VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       profile_id = excluded.profile_id,
       channel = excluded.channel,
       user_id = COALESCE(excluded.user_id, sessions.user_id),
-      model = excluded.model
+      model = excluded.model,
+      org_id = excluded.org_id
     WHERE sessions.app_user_id IS NULL
   `);
 
@@ -1296,9 +1539,27 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     "UPDATE sessions SET model = ? WHERE id = ? AND app_user_id IS NULL"
   );
 
+  const updateSessionClosedAtStmt = db.prepare(
+    "UPDATE sessions SET closed_at = ? WHERE id = ? AND app_user_id IS NULL"
+  );
+
+  const updateSessionThinkingEffortStmt = db.prepare(
+    "UPDATE sessions SET thinking_effort = ? WHERE id = ? AND app_user_id IS NULL"
+  );
+
   const updateSessionPinnedStmt = db.prepare(
     "UPDATE sessions SET pinned = ? WHERE id = ? AND app_user_id IS NULL"
   );
+
+  const updateSessionParentStmt = db.prepare(
+    "UPDATE sessions SET parent_session_id = ? WHERE id = ? AND app_user_id IS NULL"
+  );
+
+  const setSessionOrderStmt = db.prepare(`
+    INSERT INTO session_user_order (session_id, user_id, sort_position)
+    VALUES (?, ?, ?)
+    ON CONFLICT(session_id, user_id) DO UPDATE SET sort_position = excluded.sort_position
+  `);
 
   const updateSessionTitleStmt = db.prepare(`
     UPDATE sessions SET title = ? WHERE id = ? AND app_user_id IS NULL AND title IS NULL
@@ -1467,17 +1728,36 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         s.created_at,
         s.title,
         s.pinned,
+        s.parent_session_id,
+        s.branch_message_index,
+        o.sort_position,
         COUNT(m.id) AS message_count,
         max(
           COALESCE(MAX(m.created_at), s.created_at),
           COALESCE(s.updated_at, s.created_at)
         ) AS updated_at
       FROM sessions s
+      LEFT JOIN session_user_order o ON o.session_id = s.id AND o.user_id = ?12
       LEFT JOIN session_messages m ON m.session_id = s.id
       WHERE s.profile_id = ?1
         AND s.channel IN (SELECT value FROM json_each(?2))
         AND (?8 IS NULL OR s.id = ?8)
+        AND (
+          ?10 IS NULL
+          OR s.user_id = ?10
+          OR s.channel IN (SELECT value FROM json_each(?11))
+          -- A sub_agent chat under a shared chat is a web chat, shared too.
+          OR EXISTS (
+            SELECT 1
+            FROM sessions parent
+            WHERE parent.id = s.parent_session_id
+              AND s.branch_message_index IS NULL
+              AND parent.channel IN (SELECT value FROM json_each(?11))
+          )
+        )
         AND s.app_user_id IS NULL
+        -- A closed chat leaves Recents but a search or a lookup by id still finds it.
+        AND (s.closed_at IS NULL OR ?8 IS NOT NULL OR ?9 IS NOT NULL)
         -- Only message text is searched: content is a string or an array of
         -- parts, and matching the raw JSON would let "role" hit every chat.
         -- LIKE ignores case for ASCII letters only, so "école" does not find
@@ -1755,8 +2035,8 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
   );
 
   const insertPluginReleaseStmt = db.prepare(`
-    INSERT INTO plugin_releases (plugin_id, version, manifest, digest, created_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO plugin_releases (plugin_id, version, manifest, digest, created_at, source)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   const fillEmptyPluginReleaseDigestStmt = db.prepare(`
@@ -1842,6 +2122,25 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
   >(`
     SELECT id, plugin_key FROM tools
     WHERE org_id = ? AND plugin_id = ?
+  `);
+
+  const listProfilesWithPluginAssignmentCountStmt = db.prepare<
+    { profile_id: string },
+    SQLQueryBindings[]
+  >(`
+    SELECT profile_id FROM (
+      SELECT profile_tools.profile_id AS profile_id
+      FROM profile_tools
+      INNER JOIN tools ON tools.id = profile_tools.tool_id
+      WHERE tools.org_id = ? AND tools.plugin_id = ?
+      UNION ALL
+      SELECT profile_skills.profile_id AS profile_id
+      FROM profile_skills
+      INNER JOIN skills ON skills.id = profile_skills.skill_id
+      WHERE skills.org_id = ? AND skills.plugin_id = ?
+    )
+    GROUP BY profile_id
+    HAVING COUNT(*) = ?
   `);
 
   const findToolNameCollisionStmt = db.prepare(`
@@ -1993,35 +2292,6 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       updated_at = excluded.updated_at
   `);
 
-  const incrementToolOutputSavingsStmt = db.prepare(`
-    INSERT INTO tool_output_savings (
-      org_id, bucket, optimizer, tool, calls, bytes_in, bytes_out, tracked_since, updated_at
-    )
-    VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)
-    ON CONFLICT(org_id, bucket, optimizer, tool) DO UPDATE SET
-      calls = tool_output_savings.calls + 1,
-      bytes_in = tool_output_savings.bytes_in + excluded.bytes_in,
-      bytes_out = tool_output_savings.bytes_out + excluded.bytes_out,
-      updated_at = excluded.updated_at
-  `);
-
-  const listToolOutputSavingsStmt = db.prepare<
-    {
-      bucket: string;
-      bytes_in: number;
-      bytes_out: number;
-      calls: number;
-      optimizer: string;
-      org_id: string;
-      tool: string;
-      tracked_since: string;
-      updated_at: string;
-    },
-    SQLQueryBindings[]
-  >(
-    "SELECT * FROM tool_output_savings WHERE org_id = ? ORDER BY bucket ASC, (bytes_in - bytes_out) DESC"
-  );
-
   const incrementLlmTurnUsageStmt = db.prepare(`
     INSERT INTO llm_turn_usage (
       org_id, bucket, arm, turns, input_tokens, output_tokens, estimated_turns, updated_at
@@ -2037,7 +2307,6 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
 
   const listLlmTurnUsageStmt = db.prepare<
     {
-      arm: string;
       bucket: string;
       estimated_turns: number;
       input_tokens: number;
@@ -2061,19 +2330,17 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       image_model,
       coding_agent_harnesses,
       selected_coding_agent_harness,
-      token_optimizer_enabled,
       coding_agent_provider_passthrough,
       automation_worker_poll_interval_ms,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       vision_model = excluded.vision_model,
       transcription_model = excluded.transcription_model,
       image_model = excluded.image_model,
       coding_agent_harnesses = excluded.coding_agent_harnesses,
       selected_coding_agent_harness = excluded.selected_coding_agent_harness,
-      token_optimizer_enabled = excluded.token_optimizer_enabled,
       coding_agent_provider_passthrough = excluded.coding_agent_provider_passthrough,
       automation_worker_poll_interval_ms = excluded.automation_worker_poll_interval_ms,
       updated_at = excluded.updated_at
@@ -2136,6 +2403,25 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
   const pruneNotificationWebhookDeliveriesStmt = db.prepare(`
     DELETE FROM notification_webhook_deliveries
     WHERE created_at < ?
+  `);
+
+  const claimAutomationWebhookDeliveryStmt = db.prepare(`
+    INSERT OR IGNORE INTO automation_webhook_deliveries (
+      automation_id,
+      delivery_id,
+      created_at
+    )
+    VALUES (?, ?, ?)
+  `);
+
+  const pruneAutomationWebhookDeliveriesStmt = db.prepare(`
+    DELETE FROM automation_webhook_deliveries
+    WHERE created_at < ?
+  `);
+
+  const releaseAutomationWebhookDeliveryStmt = db.prepare(`
+    DELETE FROM automation_webhook_deliveries
+    WHERE automation_id = ? AND delivery_id = ?
   `);
 
   const listComposioToolkitsForOrgStmt = db.prepare<
@@ -2507,10 +2793,31 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     WHERE id = ?
   `);
 
-  const disableUserStmt = db.prepare(`
+  // disableMember checks the last-admin rules before it writes, so a
+  // concurrent disable, remove or demote can pass the same check. One
+  // statement re-checks both install-wide rules: every live org the user
+  // administers keeps another usable admin, and a platform admin leaves
+  // another usable platform admin. The org filter matches listUserOrganizations.
+  const disableUserUnlessLastAdminStmt = db.prepare(`
     UPDATE users
     SET disabled_at = ?, updated_at = ?
     WHERE id = ?
+      AND NOT EXISTS (
+        SELECT 1 FROM org_members om
+        INNER JOIN organizations o ON o.id = om.org_id
+        WHERE om.user_id = users.id AND om.role = 'admin'
+          AND o.archived_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM org_team_creation_requests WHERE team_org_id = o.id AND completed_at IS NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM org_members other
+            JOIN users u ON u.id = other.user_id
+            WHERE other.org_id = om.org_id AND other.role = 'admin'
+              AND other.user_id != users.id AND u.disabled_at IS NULL))
+      AND (is_platform_admin = 0
+        OR EXISTS (
+          SELECT 1 FROM users u
+          WHERE u.is_platform_admin = 1 AND u.id != users.id
+            AND u.disabled_at IS NULL))
   `);
 
   const enableUserStmt = db.prepare(`
@@ -2585,6 +2892,18 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       passwordHash: string;
       updatedAt: string;
     }) => {
+      // Erasing drops admin rows and the platform flag, so it must pass the
+      // same last-admin rule as a disable before anything else is written.
+      if (
+        disableUserUnlessLastAdminStmt.run(
+          input.updatedAt,
+          input.updatedAt,
+          input.id
+        ).changes === 0
+      ) {
+        return 0;
+      }
+
       clearErasedUserSessionsStmt.run(input.id);
       clearErasedUserOrgMemoryProposalsStmt.run(
         input.id,
@@ -2607,6 +2926,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       deleteErasedUserBrowserSessionsStmt.run(input.id);
       deleteErasedUserPasswordResetsStmt.run(input.id);
       deleteErasedUserComposioConnectionsStmt.run(input.id);
+      deleteUserAutomationWebhookSecretsStmt.run(input.id);
 
       return anonymizeErasedUserStmt.run(
         input.email,
@@ -2681,9 +3001,10 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       expires_at,
       revoked_at,
       last_used_at,
-      active_org_id
+      active_org_id,
+      user_agent
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const getBrowserSessionByTokenHashStmt = db.prepare<
@@ -2730,7 +3051,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
 
   const updateBrowserSessionLastUsedAtStmt = db.prepare(`
     UPDATE browser_sessions
-    SET last_used_at = ?
+    SET last_used_at = ?, user_agent = COALESCE(user_agent, ?)
     WHERE id = ?
   `);
 
@@ -2767,14 +3088,15 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       const token = getUsablePasswordResetTokenStmt.get(tokenHash, consumedAt);
 
       if (!token) {
-        return false;
+        return null;
       }
 
       consumePasswordResetTokensForUserStmt.run(consumedAt, token.user_id);
       updateUserPasswordStmt.run(passwordHash, consumedAt, token.user_id);
       revokeBrowserSessionsForUserStmt.run(consumedAt, token.user_id);
+      deleteUserAutomationWebhookSecretsStmt.run(token.user_id);
 
-      return true;
+      return token.user_id;
     }
   );
 
@@ -2926,7 +3248,6 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         "llm_usage_model_stats",
         "mcp_servers",
         "skills",
-        "tool_output_savings",
         "tools",
         "workspace_settings",
       ]) {
@@ -3091,6 +3412,24 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     FROM org_invites
     WHERE org_id = ? AND email = ? AND accepted_at IS NULL AND revoked_at IS NULL
     LIMIT 1
+  `);
+
+  const listPendingOrgInvitesStmt = db.prepare<
+    OrgInviteRow,
+    SQLQueryBindings[]
+  >(`
+    SELECT
+      id, org_id, email, role, token_hash, invited_by_user_id,
+      expires_at, accepted_at, revoked_at, created_at
+    FROM org_invites
+    WHERE org_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+    ORDER BY created_at DESC
+  `);
+
+  const revokeOrgInviteStmt = db.prepare(`
+    UPDATE org_invites
+    SET revoked_at = ?
+    WHERE id = ? AND org_id = ? AND accepted_at IS NULL AND revoked_at IS NULL
   `);
 
   const markOrgInviteAcceptedStmt = db.prepare(`
@@ -3368,6 +3707,45 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     ORDER BY created_at DESC
   `);
 
+  const upsertArtifactRecordStmt = db.prepare(`
+    INSERT INTO artifacts (
+      org_id, profile_id, filename, session_id, user_id, channel, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (org_id, profile_id, filename) DO UPDATE SET
+      session_id = excluded.session_id,
+      user_id = excluded.user_id,
+      channel = excluded.channel,
+      created_at = excluded.created_at
+  `);
+
+  const listArtifactRecordsStmt = db.prepare<
+    ArtifactOwnerRow,
+    SQLQueryBindings[]
+  >(`
+    SELECT
+      a.org_id, a.profile_id, a.filename, a.session_id, a.user_id,
+      a.channel, a.created_at,
+      COALESCE(NULLIF(u.name, ''), u.email) AS user_name
+    FROM artifacts a
+    LEFT JOIN users u ON u.id = a.user_id
+    WHERE a.org_id = ? AND a.profile_id = ?
+  `);
+
+  const getArtifactRecordStmt = db.prepare<
+    ArtifactOwnerRow,
+    SQLQueryBindings[]
+  >(`
+    SELECT
+      org_id, profile_id, filename, session_id, user_id, channel, created_at,
+      NULL AS user_name
+    FROM artifacts
+    WHERE org_id = ? AND profile_id = ? AND filename = ?
+  `);
+
+  const deleteArtifactRecordStmt = db.prepare(`
+    DELETE FROM artifacts WHERE org_id = ? AND profile_id = ? AND filename = ?
+  `);
+
   const createArtifactShareStmt = db.prepare(`
     INSERT INTO artifact_shares (
       id, org_id, profile_id, source_path, filename, mime_type, size_bytes,
@@ -3432,6 +3810,58 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     UPDATE artifact_shares
     SET revoked_at = ?
     WHERE id = ? AND revoked_at IS NULL
+  `);
+
+  const createRegressionCaseStmt = db.prepare(`
+    INSERT INTO regression_cases (
+      id, org_id, profile_id, source_type, source_id, source_automation_id,
+      input, expected_result, created_by_user_id, private_to_user_id, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const getRegressionCaseStmt = db.prepare<
+    RegressionCaseRow,
+    SQLQueryBindings[]
+  >(`
+    SELECT * FROM regression_cases
+    WHERE org_id = ? AND profile_id = ? AND id = ?
+    LIMIT 1
+  `);
+
+  const listRegressionCasesForProfileStmt = db.prepare<
+    RegressionCaseRow,
+    SQLQueryBindings[]
+  >(`
+    SELECT * FROM regression_cases
+    WHERE org_id = ? AND profile_id = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT ? OFFSET ?
+  `);
+
+  const createRegressionCaseRunStmt = db.prepare(`
+    INSERT INTO regression_case_runs (
+      id, org_id, case_id, status, output, error, verdict, verdict_by_user_id,
+      verdict_at, created_by_user_id, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const getRegressionCaseRunStmt = db.prepare<
+    RegressionCaseRunRow,
+    SQLQueryBindings[]
+  >(`
+    SELECT * FROM regression_case_runs
+    WHERE org_id = ? AND case_id = ? AND id = ?
+    LIMIT 1
+  `);
+
+  const setRegressionCaseRunVerdictStmt = db.prepare<
+    RegressionCaseRunRow,
+    SQLQueryBindings[]
+  >(`
+    UPDATE regression_case_runs
+    SET verdict = ?, verdict_by_user_id = ?, verdict_at = ?
+    WHERE org_id = ? AND case_id = ? AND id = ?
+    RETURNING *
   `);
 
   const getOrgMemberStmt = db.prepare<
@@ -3867,9 +4297,14 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       o.name,
       o.slug,
       o.allowed_invite_domains,
+      o.monthly_llm_token_limit,
+      o.monthly_llm_turn_limit,
+      o.monthly_llm_warning_percent,
       o.skills_write_approval,
       o.skills_post_turn_review,
       o.skills_curator_enabled,
+      o.skills_curator_stale_after_days,
+      o.skills_curator_archive_after_days,
       o.skills_curator_consolidate_enabled,
       o.skills_curator_last_run_at,
       o.archived_at,
@@ -3887,20 +4322,26 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
 
   // The last-admin guard lives in the statement so two concurrent removals
   // cannot both pass a read-then-write check and leave the org with no admin.
+  // disabled_at lives on users and never touches org_members, so a disabled
+  // admin row must not count as usable coverage here.
   const deleteOrgMemberStmt = db.prepare(`
     DELETE FROM org_members
     WHERE org_id = ? AND user_id = ?
       AND (role != 'admin'
-        OR (SELECT COUNT(*) FROM org_members
-            WHERE org_id = ? AND role = 'admin') > 1)
+        OR (SELECT COUNT(*) FROM org_members m
+            JOIN users u ON u.id = m.user_id
+            WHERE m.org_id = ? AND m.role = 'admin'
+              AND u.disabled_at IS NULL) > 1)
   `);
 
   const updateOrgMemberRoleStmt = db.prepare(`
     UPDATE org_members SET role = ?
     WHERE org_id = ? AND user_id = ?
       AND (? = 'admin' OR role != 'admin'
-        OR (SELECT COUNT(*) FROM org_members
-            WHERE org_id = ? AND role = 'admin') > 1)
+        OR (SELECT COUNT(*) FROM org_members m
+            JOIN users u ON u.id = m.user_id
+            WHERE m.org_id = ? AND m.role = 'admin'
+              AND u.disabled_at IS NULL) > 1)
   `);
 
   const upsertPluginReleaseTx = db.transaction(
@@ -3934,7 +4375,8 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         record.version,
         JSON.stringify(record.manifest),
         record.digest,
-        record.createdAt
+        record.createdAt,
+        record.source ?? "legacy"
       );
 
       return { ok: true };
@@ -4011,14 +4453,34 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         );
       }
 
+      const ownedSkills = listOwnedSkillIdsStmt.all(
+        input.orgId,
+        input.pluginId
+      );
+
+      const ownedTools = listOwnedToolIdsStmt.all(input.orgId, input.pluginId);
+      const ownedCount = ownedSkills.length + ownedTools.length;
+
+      // Profiles that held every tool and skill of the previous release keep
+      // full access when the new release adds tools or skills.
+      const fullAccessProfileIds =
+        ownedCount === 0
+          ? []
+          : listProfilesWithPluginAssignmentCountStmt
+              .all(
+                input.orgId,
+                input.pluginId,
+                input.orgId,
+                input.pluginId,
+                ownedCount
+              )
+              .map((row) => row.profile_id);
+
       const incomingSkillKeys = new Set(
         input.contributions.skills.map((skill) => skill.pluginKey)
       );
 
-      for (const row of listOwnedSkillIdsStmt.all(
-        input.orgId,
-        input.pluginId
-      )) {
+      for (const row of ownedSkills) {
         if (!incomingSkillKeys.has(row.plugin_key)) {
           unassignSkillFromAllProfilesStmt.run(row.id);
           deleteSkillStmt.run(row.id);
@@ -4048,13 +4510,19 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
           skill.createdAt,
           skill.updatedAt
         );
+
+        if (!owned) {
+          for (const profileId of fullAccessProfileIds) {
+            assignSkillStmt.run(profileId, id);
+          }
+        }
       }
 
       const incomingToolKeys = new Set(
         input.contributions.tools.map((tool) => tool.pluginKey)
       );
 
-      for (const row of listOwnedToolIdsStmt.all(input.orgId, input.pluginId)) {
+      for (const row of ownedTools) {
         if (!incomingToolKeys.has(row.plugin_key)) {
           unassignToolFromAllProfilesStmt.run(row.id);
           deleteToolStmt.run(row.id);
@@ -4081,6 +4549,12 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
           tool.createdAt,
           tool.updatedAt
         );
+
+        if (!owned) {
+          for (const profileId of fullAccessProfileIds) {
+            assignToolStmt.run(profileId, id);
+          }
+        }
       }
 
       const published = getOrgPluginStmt.get(input.orgId, input.pluginId);
@@ -4220,10 +4694,34 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       statement.get();
     },
 
+    async claimAutomationWebhookDelivery(automationId, deliveryId, createdAt) {
+      const createdAtMs = Date.parse(createdAt);
+
+      if (Number.isFinite(createdAtMs)) {
+        pruneAutomationWebhookDeliveriesStmt.run(
+          new Date(
+            createdAtMs - NOTIFICATION_WEBHOOK_DELIVERY_RETENTION_MS
+          ).toISOString()
+        );
+      }
+
+      return (
+        claimAutomationWebhookDeliveryStmt.run(
+          automationId,
+          deliveryId,
+          createdAt
+        ).changes > 0
+      );
+    },
+
     async claimInterruptedAutomationRuns(maxResumes) {
       return claimInterruptedAutomationRunsTransaction
         .immediate(maxResumes, new Date().toISOString())
-        .map((row) => ({ automationId: row.automation_id, id: row.id }));
+        .map((row) => ({
+          automationId: row.automation_id,
+          id: row.id,
+          input: row.input ?? undefined,
+        }));
     },
 
     async claimNotificationWebhookDelivery(destinationId, eventId, createdAt) {
@@ -4377,7 +4875,8 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         record.expiresAt,
         record.revokedAt,
         record.lastUsedAt,
-        record.activeOrgId ?? null
+        record.activeOrgId ?? null,
+        capSessionUserAgent(record.userAgent)
       );
     },
     async createMfaBackupCode(record) {
@@ -4471,6 +4970,46 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       );
     },
 
+    async createProfileIfAbsent(record) {
+      const result = insertProfileIfAbsentStmt.run(
+        ...profileInsertArgs(record)
+      );
+
+      return result.changes > 0;
+    },
+
+    async createRegressionCase(record) {
+      createRegressionCaseStmt.run(
+        record.id,
+        record.orgId,
+        record.profileId,
+        record.sourceType,
+        record.sourceId,
+        record.sourceAutomationId,
+        record.input,
+        record.expectedResult,
+        record.createdByUserId,
+        record.privateToUserId,
+        record.createdAt
+      );
+    },
+
+    async createRegressionCaseRun(record) {
+      createRegressionCaseRunStmt.run(
+        record.id,
+        record.orgId,
+        record.caseId,
+        record.status,
+        record.output,
+        record.error,
+        record.verdict,
+        record.verdictByUserId,
+        record.verdictAt,
+        record.createdByUserId,
+        record.createdAt
+      );
+    },
+
     async createSharedAgentInstance(
       teamOrgId,
       publicationId,
@@ -4552,6 +5091,9 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     async createUser(record) {
       runCreateUserStmt(record);
     },
+    async deleteArtifactRecord(orgId, profileId, filename) {
+      deleteArtifactRecordStmt.run(orgId, profileId, filename);
+    },
 
     async deleteAttachment(id) {
       const result = deleteAttachmentStmt.run(id);
@@ -4564,6 +5106,16 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
 
       return result.changes > 0;
     },
+    async deleteAutomationWebhookSecret(automationId) {
+      deleteAutomationWebhookSecretStmt.run(automationId);
+    },
+    async deleteAutomationWebhookSecretsForUser(userId, orgId) {
+      if (orgId) {
+        deleteUserOrgAutomationWebhookSecretsStmt.run(userId, orgId);
+      } else {
+        deleteUserAutomationWebhookSecretsStmt.run(userId);
+      }
+    },
 
     async deleteComposioToolkit(id) {
       const result = deleteComposioToolkitStmt.run(id);
@@ -4574,6 +5126,9 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       const result = deleteComposioUserConnectionStmt.run(id);
 
       return result.changes > 0;
+    },
+    async deleteManagedSecret(scope, name) {
+      deleteManagedSecretStmt.run(scope, name);
     },
 
     async deleteMcpServer(id) {
@@ -4629,10 +5184,27 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       return result.changes > 0;
     },
 
-    async deleteSession(id) {
-      const result = deleteSessionStmt.run(id);
+    async deleteProfileAndPromoteDefault(id, orgId, successorId) {
+      return deleteProfileAndPromoteDefaultTx.immediate(id, orgId, successorId);
+    },
+
+    async deleteProfileForOrg(id, orgId) {
+      const result = deleteProfileForOrgStmt.run(id, orgId);
 
       return result.changes > 0;
+    },
+
+    async deleteSession(id) {
+      return db.transaction(() => {
+        db.prepare(
+          "UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id = ?"
+        ).run(id);
+        db.prepare("DELETE FROM session_user_order WHERE session_id = ?").run(
+          id
+        );
+
+        return deleteSessionStmt.run(id).changes > 0;
+      })();
     },
 
     async deleteSkill(id) {
@@ -4663,8 +5235,14 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       return result.changes > 0;
     },
 
-    async disableUser(id, disabledAt) {
-      disableUserStmt.run(disabledAt, disabledAt, id);
+    async disableUserUnlessLastAdmin(id, disabledAt) {
+      const result = disableUserUnlessLastAdminStmt.run(
+        disabledAt,
+        disabledAt,
+        id
+      );
+
+      return result.changes > 0;
     },
 
     async enableUser(id) {
@@ -4709,6 +5287,12 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       return row ? toAutomationRunRecord(row) : null;
     },
 
+    async getArtifactRecord(orgId, profileId, filename) {
+      const row = getArtifactRecordStmt.get(orgId, profileId, filename);
+
+      return row ? toArtifactOwnerRecord(row) : null;
+    },
+
     async getArtifactShareById(orgId, profileId, shareId) {
       const row = getArtifactShareByIdStmt.get(orgId, profileId, shareId);
 
@@ -4749,6 +5333,10 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       return row?.read_through_at ?? null;
     },
 
+    async getAutomationWebhookSecret(automationId) {
+      return getAutomationWebhookSecretStmt.get(automationId) ?? null;
+    },
+
     async getBrowserSessionBySessionTokenHash(sessionTokenHash) {
       const row = getBrowserSessionByTokenHashStmt.get(sessionTokenHash);
 
@@ -4784,23 +5372,43 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
 
       return row ? toProfileRecord(row) : null;
     },
-
     async getLlmUsageStats(orgId) {
       const row = getLlmUsageStatsStmt.get(orgId, LLM_USAGE_STATS_ID);
 
       return row ? toLlmUsageStatsRecord(row) : null;
     },
 
+    async getManagedSecret(scope, name) {
+      // SAFETY: managed_secrets columns and its source constraint match this row type.
+      const row = getManagedSecretStmt.get(scope, name) as {
+        scope: string;
+        name: string;
+        source: StoredManagedSecret["source"];
+        encrypted_value: string | null;
+        version: number;
+      } | null;
+
+      return row
+        ? {
+            encryptedValue: row.encrypted_value,
+            name: row.name,
+            scope: row.scope,
+            source: row.source,
+            version: row.version,
+          }
+        : null;
+    },
+
     async getMcpServer(id) {
       const row = getMcpServerStmt.get(id);
 
-      return row ? toMcpServerRecord(row) : null;
+      return row ? await toMcpServerRecord(row) : null;
     },
 
     async getMcpServerByName(name) {
       const row = getMcpServerByNameStmt.get(name);
 
-      return row ? toMcpServerRecord(row) : null;
+      return row ? await toMcpServerRecord(row) : null;
     },
 
     async getNotificationDestination(id) {
@@ -4947,6 +5555,18 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       const row = getProfileForOrgStmt.get(id, orgId);
 
       return row ? toProfileRecord(row) : null;
+    },
+
+    async getRegressionCase(orgId, profileId, caseId) {
+      const row = getRegressionCaseStmt.get(orgId, profileId, caseId);
+
+      return row ? toRegressionCaseRecord(row) : null;
+    },
+
+    async getRegressionCaseRun(orgId, caseId, runId) {
+      const row = getRegressionCaseRunStmt.get(orgId, caseId, runId);
+
+      return row ? toRegressionCaseRunRecord(row) : null;
     },
 
     async getSession(id) {
@@ -5102,7 +5722,8 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       incrementLlmTurnUsageStmt.run(
         orgId,
         updatedAt.slice(0, 10),
-        delta.optimized ? "omni" : "none",
+        // Legacy arm column, see migrateLlmTurnUsageTable.
+        "none",
         delta.inputTokens,
         delta.outputTokens,
         delta.estimated ? 1 : 0,
@@ -5184,20 +5805,6 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       );
     },
 
-    async incrementToolOutputSavings(orgId, delta, trackedSince) {
-      const updatedAt = new Date().toISOString();
-      incrementToolOutputSavingsStmt.run(
-        orgId,
-        updatedAt.slice(0, 10),
-        delta.optimizer,
-        delta.tool,
-        delta.bytesIn,
-        delta.bytesOut,
-        trackedSince,
-        updatedAt
-      );
-    },
-
     async insertAttachment(record) {
       if (record.sessionId) {
         requireWritableSession(record.sessionId);
@@ -5230,7 +5837,9 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         record.error,
         record.deliveryStatus ?? null,
         record.deliveryError ?? null,
-        record.progress ? JSON.stringify(record.progress) : null
+        record.progress ? JSON.stringify(record.progress) : null,
+        record.source ?? null,
+        record.input ?? null
       );
     },
 
@@ -5276,6 +5885,11 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         record.completedAt,
         record.position
       );
+    },
+    async listArtifactRecords(orgId, profileId) {
+      return listArtifactRecordsStmt
+        .all(orgId, profileId)
+        .map((row) => toArtifactOwnerRecord(row));
     },
 
     async listArtifactSharesForProfile(orgId, profileId) {
@@ -5336,11 +5950,20 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         .all(orgId)
         .map((row) => toAutomationRecord(row));
     },
+    async listAutomationWebhookSecrets() {
+      return listAutomationWebhookSecretsStmt.all();
+    },
 
     async listBrowserSessionsForUser(userId, now) {
       const rows = listBrowserSessionsForUserStmt.all(userId, now);
 
       return rows.map(toBrowserSessionRecord);
+    },
+
+    async listChildSessions(parentSessionId) {
+      return listChildSessionsStmt
+        .all(parentSessionId)
+        .map((row) => toSessionRecord(row));
     },
 
     async listComposioToolkitsForOrg(orgId) {
@@ -5372,7 +5995,6 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
 
     async listLlmTurnUsage(orgId) {
       return listLlmTurnUsageStmt.all(orgId).map((row) => ({
-        arm: row.arm,
         bucket: row.bucket,
         estimatedTurns: row.estimated_turns,
         inputTokens: row.input_tokens,
@@ -5400,6 +6022,25 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         .map((row) => toLlmUsageModelStatsRecord(row));
     },
 
+    async listManagedSecrets() {
+      // SAFETY: managed_secrets columns and its source constraint match this row type.
+      const rows = listManagedSecretsStmt.all() as Array<{
+        scope: string;
+        name: string;
+        source: StoredManagedSecret["source"];
+        encrypted_value: string | null;
+        version: number;
+      }>;
+
+      return rows.map((row) => ({
+        encryptedValue: row.encrypted_value,
+        name: row.name,
+        scope: row.scope,
+        source: row.source,
+        version: row.version,
+      }));
+    },
+
     async listMcpServerProfileCounts() {
       const counts: Record<string, number> = {};
 
@@ -5411,13 +6052,17 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     },
 
     async listMcpServers() {
-      return listMcpServersStmt.all().map((row) => toMcpServerRecord(row));
+      return Promise.all(
+        listMcpServersStmt.all().map((row) => toMcpServerRecord(row))
+      );
     },
 
     async listMcpServersForProfile(profileId) {
-      return listMcpServersForProfileStmt
-        .all(profileId)
-        .map((row) => toMcpServerRecord(row));
+      return Promise.all(
+        listMcpServersForProfileStmt
+          .all(profileId)
+          .map((row) => toMcpServerRecord(row))
+      );
     },
 
     async listMessagesForSession(sessionId) {
@@ -5481,6 +6126,10 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       return listPasskeysStmt.all(userId).map((row) => toPasskeyRecord(row));
     },
 
+    async listPendingOrgInvites(orgId, now) {
+      return listPendingOrgInvitesStmt.all(orgId, now).map(toOrgInviteRecord);
+    },
+
     async listPlatformAdminUsers() {
       const rows = listPlatformAdminUsersStmt.all();
 
@@ -5532,8 +6181,15 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         .map((row) => toProfileRecord(row));
     },
 
+    async listRegressionCasesForProfile(orgId, profileId, options = {}) {
+      return listRegressionCasesForProfileStmt
+        .all(orgId, profileId, options.limit ?? 50, options.offset ?? 0)
+        .map((row) => toRegressionCaseRecord(row));
+    },
+
     async listSessionSummaries(profileId, channels, options = {}) {
-      const { after, limit, query, sessionId } = options;
+      const { after, limit, query, sessionId, sharedChannels, userId } =
+        options;
 
       return listSessionSummariesStmt
         .all(
@@ -5546,7 +6202,10 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
           // SQLite reads a negative LIMIT as no limit.
           limit ?? -1,
           sessionId ?? null,
-          query ? likeContains(query) : null
+          query ? likeContains(query) : null,
+          userId ?? null,
+          JSON.stringify(sharedChannels ?? []),
+          userId ?? null
         )
         .map((row) => toSessionSummaryRecord(row));
     },
@@ -5629,20 +6288,6 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       return rows.map(toSkillVersionRecord);
     },
 
-    async listToolOutputSavings(orgId) {
-      return listToolOutputSavingsStmt.all(orgId).map((row) => ({
-        bucket: row.bucket,
-        bytesIn: row.bytes_in,
-        bytesOut: row.bytes_out,
-        calls: row.calls,
-        optimizer: row.optimizer,
-        orgId: row.org_id,
-        tool: row.tool,
-        trackedSince: row.tracked_since,
-        updatedAt: row.updated_at,
-      }));
-    },
-
     async listTools() {
       return listToolsStmt.all().map((row) => toToolRecord(row));
     },
@@ -5721,6 +6366,26 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     async publishOrgSharedResource(record) {
       return publishOrgSharedResourceTransaction(record);
     },
+    async putAutomationWebhookSecret(secret) {
+      putAutomationWebhookSecretStmt.run(
+        secret.automationId,
+        secret.encryptedValue,
+        secret.createdByUserId,
+        secret.createdAt
+      );
+    },
+    async putManagedSecret(secret) {
+      putManagedSecretStmt.run(
+        secret.scope,
+        secret.name,
+        secret.source,
+        secret.encryptedValue
+      );
+    },
+
+    async releaseAutomationWebhookDelivery(automationId, deliveryId) {
+      releaseAutomationWebhookDeliveryStmt.run(automationId, deliveryId);
+    },
 
     async releaseMonthlyLlmQuota(orgId, reservationId) {
       releaseMonthlyLlmQuotaStmt.run(reservationId, orgId);
@@ -5758,6 +6423,9 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       const result = renameSessionTitleStmt.run(title, sessionId);
 
       return result.changes > 0;
+    },
+    async replaceManagedSecrets(secrets, webhookSecrets) {
+      replaceManagedSecretsTransaction(secrets, webhookSecrets);
     },
 
     async replaceMessagesForSession(sessionId, messages) {
@@ -5805,6 +6473,10 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
 
       return result.changes;
     },
+
+    async revokeOrgInvite(orgId, id, revokedAt) {
+      return revokeOrgInviteStmt.run(revokedAt, id, orgId).changes > 0;
+    },
     async setFilePinned(orgId, userId, profileId, path, pinned) {
       if (pinned) {
         db.query(
@@ -5818,6 +6490,26 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     },
     async setPendingMfaSecret(id, pendingTotpSecretEnc, updatedAt) {
       setPendingMfaSecretStmt.run(pendingTotpSecretEnc, updatedAt, id);
+    },
+    async setRegressionCaseRunVerdict(orgId, caseId, runId, mark) {
+      const row = setRegressionCaseRunVerdictStmt.get(
+        mark.verdict,
+        mark.userId,
+        mark.at,
+        orgId,
+        caseId,
+        runId
+      );
+
+      return row ? toRegressionCaseRunRecord(row) : null;
+    },
+
+    async setSessionOrder(userId, sessionIds) {
+      db.transaction(() => {
+        for (const [index, sessionId] of sessionIds.entries()) {
+          setSessionOrderStmt.run(sessionId, userId, index);
+        }
+      })();
     },
 
     async setUserContext(orgId, userId, content, _updatedAt) {
@@ -5886,6 +6578,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         record.deliveryStatus ?? null,
         record.deliveryError ?? null,
         record.progress ? JSON.stringify(record.progress) : null,
+        record.status,
         record.id
       );
     },
@@ -5894,8 +6587,12 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       updateBrowserSessionActiveOrgIdStmt.run(activeOrgId, id);
     },
 
-    async updateBrowserSessionLastUsedAt(id, lastUsedAt) {
-      updateBrowserSessionLastUsedAtStmt.run(lastUsedAt, id);
+    async updateBrowserSessionLastUsedAt(id, lastUsedAt, userAgent) {
+      updateBrowserSessionLastUsedAtStmt.run(
+        lastUsedAt,
+        capSessionUserAgent(userAgent),
+        id
+      );
     },
 
     async updateOrgMemberRole(orgId, userId, role) {
@@ -5926,10 +6623,19 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       updatePasskeyCounterStmt.run(counter, userId, credentialId);
     },
 
+    async updateSessionClosedAt(sessionId, closedAt) {
+      return updateSessionClosedAtStmt.run(closedAt, sessionId).changes > 0;
+    },
+
     async updateSessionModel(sessionId, model) {
       const result = updateSessionModelStmt.run(model, sessionId);
 
       return result.changes > 0;
+    },
+    async updateSessionParent(sessionId, parentSessionId) {
+      return (
+        updateSessionParentStmt.run(parentSessionId, sessionId).changes > 0
+      );
     },
     async updateSessionPinned(sessionId, pinned) {
       const result = updateSessionPinnedStmt.run(pinned ? 1 : 0, sessionId);
@@ -5942,6 +6648,11 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         questionnaire ? JSON.stringify(questionnaire) : null,
         sessionId
       );
+    },
+    async updateSessionThinkingEffort(sessionId, effort) {
+      const result = updateSessionThinkingEffortStmt.run(effort, sessionId);
+
+      return result.changes > 0;
     },
 
     async updateSessionTitle(sessionId, title) {
@@ -6009,6 +6720,17 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         record.error,
         record.completedAt,
         record.id
+      );
+    },
+    async upsertArtifactRecord(record) {
+      upsertArtifactRecordStmt.run(
+        record.orgId,
+        record.profileId,
+        record.filename,
+        record.sessionId,
+        record.userId,
+        record.channel,
+        record.createdAt
       );
     },
 
@@ -6080,7 +6802,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         record.id,
         record.name,
         record.transport,
-        JSON.stringify(record.config ?? {}),
+        await encryptMcpConfig(record.id, record.config),
         record.enabled ? 1 : 0,
         record.status,
         record.lastError,
@@ -6126,6 +6848,11 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     },
     async upsertSession(record) {
       requireWritableSession(record.id);
+
+      // org_id comes from the session's current profile on every upsert;
+      // callers do not pass one, so it cannot drift from that profile.
+      const orgId = getProfileStmt.get(record.profileId)?.org_id ?? null;
+
       upsertSessionStmt.run(
         record.id,
         record.profileId,
@@ -6134,7 +6861,13 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         record.createdAt,
         record.userId ?? null,
         record.model,
-        record.pinned ? 1 : 0
+        orgId,
+        record.pinned ? 1 : 0,
+        record.parentSessionId ?? null,
+        record.branchMessageIndex ?? null,
+        record.thinkingEffort ?? null,
+        record.codingWorkspaceRoot ?? null,
+        record.title ?? null
       );
     },
     async upsertSkill(record) {
@@ -6194,10 +6927,6 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         record.imageModel,
         JSON.stringify(record.codingAgentHarnesses),
         record.selectedCodingAgentHarness,
-        record.tokenOptimizerEnabled === null ||
-          record.tokenOptimizerEnabled === undefined
-          ? null
-          : Number(record.tokenOptimizerEnabled),
         record.codingAgentProviderPassthrough === false ? 0 : 1,
         record.automationWorkerPollIntervalMs ?? 5 * 60 * 1000,
         record.updatedAt
@@ -6235,6 +6964,7 @@ function toAutomationRunRecord(
     progress: row.progress
       ? (parseJson(row.progress) as StoredAutomationRunRecord["progress"])
       : undefined,
+    source: row.source === "webhook" ? "webhook" : null,
     startedAt: row.started_at,
     // SAFETY: The adapter writes this row value through its typed contract.
     status: row.status as StoredAutomationRunRecord["status"],
@@ -6301,6 +7031,7 @@ function toProfileRecord(row: ProfileRow): StoredProfileRecord {
         : (JSON.parse(row.acp_settings) as Record<string, string>),
     automationsEnabled: row.automations_enabled !== 0,
     createdAt: row.created_at,
+    groupsEnabled: row.groups_enabled !== 0,
     id: row.id,
     isDefault: row.is_default !== 0,
     isSuper: row.is_super !== 0,
@@ -6375,13 +7106,48 @@ function normalizeSkillCreatedBy(
   return "bundled";
 }
 
-function toMcpServerRecord(row: McpServerRow): StoredMcpServerRecord {
+/**
+ * MCP config holds headers, env and OAuth tokens, so it is stored encrypted.
+ * Rows saved before encryption stay readable until the next save.
+ */
+const ENCRYPTED_MCP_CONFIG_PREFIX = "enc:";
+
+function mcpConfigScope(serverId: string): string {
+  return `mcp-server:${serverId}`;
+}
+
+async function encryptMcpConfig(
+  serverId: string,
+  config: StoredMcpServerRecord["config"]
+): Promise<string> {
+  return `${ENCRYPTED_MCP_CONFIG_PREFIX}${await encryptCredential(
+    mcpConfigScope(serverId),
+    JSON.stringify(config ?? {})
+  )}`;
+}
+
+async function decryptMcpConfig(row: McpServerRow): Promise<JsonValue> {
+  if (!row.config.startsWith(ENCRYPTED_MCP_CONFIG_PREFIX)) {
+    return parseJson(row.config);
+  }
+
+  return parseJson(
+    await decryptCredential(
+      mcpConfigScope(row.id),
+      row.config.slice(ENCRYPTED_MCP_CONFIG_PREFIX.length)
+    )
+  );
+}
+
+async function toMcpServerRecord(
+  row: McpServerRow
+): Promise<StoredMcpServerRecord> {
   return {
     // SAFETY: The adapter writes this row value through its typed contract.
     cachedTools: JSON.parse(
       row.cached_tools
     ) as StoredMcpServerRecord["cachedTools"],
-    config: parseJson(row.config),
+    config: await decryptMcpConfig(row),
     createdAt: row.created_at,
     enabled: row.enabled !== 0,
     id: row.id,
@@ -6415,6 +7181,7 @@ interface PluginReleaseRow {
   digest: string | null;
   manifest: string;
   plugin_id: string;
+  source: NonNullable<StoredPluginReleaseRecord["source"]>;
   version: string;
 }
 
@@ -6440,6 +7207,7 @@ function toPluginReleaseRecord(
     // SAFETY: The adapter writes this row value through its typed contract.
     manifest: JSON.parse(row.manifest) as StoredPluginReleaseRecord["manifest"],
     pluginId: row.plugin_id,
+    source: row.source ?? "legacy",
     version: row.version,
   };
 }
@@ -6595,16 +7363,25 @@ function parseAgentQuestionnaire(
   }
 }
 
+function parseThinkingEffort(value: string | null | undefined) {
+  return isThinkingEffort(value) ? value : null;
+}
+
 function toSessionRecord(row: SessionRow): StoredSessionRecord {
   return {
     agentQuestionnaire: parseAgentQuestionnaire(row.agent_questionnaire),
     agentTodos: parseAgentTodos(row.agent_todos),
+    branchMessageIndex: row.branch_message_index,
     channel: row.channel,
+    closedAt: row.closed_at ?? null,
+    codingWorkspaceRoot: row.coding_workspace_root ?? null,
     createdAt: row.created_at,
     id: row.id,
     model: row.model ?? null,
+    parentSessionId: row.parent_session_id,
     pinned: row.pinned === 1,
     profileId: row.profile_id,
+    thinkingEffort: parseThinkingEffort(row.thinking_effort),
     title: row.title ?? null,
     userId: row.user_id ?? null,
   };
@@ -6672,14 +7449,17 @@ function toSessionSummaryRecord(
   row: SessionSummaryRow
 ): StoredSessionSummaryRecord {
   return {
+    branchMessageIndex: row.branch_message_index,
     channel: row.channel,
     createdAt: row.created_at,
     id: row.id,
     messageCount: row.message_count,
+    parentSessionId: row.parent_session_id,
     pinned: row.pinned === 1,
     position: row.position,
     preview: previewFromFirstUserPayload(row.first_user_payload),
     profileId: row.profile_id,
+    sortPosition: row.sort_position,
     title: row.title ?? null,
     updatedAt: row.updated_at,
   };
@@ -6757,11 +7537,6 @@ function toWorkspaceSettingsRecord(
     imageModel: row.image_model?.trim() || null,
     selectedCodingAgentHarness:
       row.selected_coding_agent_harness?.trim() || null,
-    tokenOptimizerEnabled:
-      row.token_optimizer_enabled === null ||
-      row.token_optimizer_enabled === undefined
-        ? null
-        : row.token_optimizer_enabled === 1,
     transcriptionModel: row.transcription_model?.trim() || null,
     updatedAt: row.updated_at,
     visionModel: row.vision_model?.trim() || null,
@@ -7222,6 +7997,21 @@ function toSkillSuggestionRecord(
   };
 }
 
+function toArtifactOwnerRecord(
+  row: ArtifactOwnerRow
+): StoredArtifactOwnerRecord {
+  return {
+    channel: row.channel,
+    createdAt: row.created_at,
+    filename: row.filename,
+    orgId: row.org_id,
+    profileId: row.profile_id,
+    sessionId: row.session_id,
+    userId: row.user_id,
+    userName: row.user_name,
+  };
+}
+
 function toArtifactShareRecord(
   row: ArtifactShareRow
 ): StoredArtifactShareRecord {
@@ -7241,6 +8031,54 @@ function toArtifactShareRecord(
   };
 }
 
+const MAX_SESSION_USER_AGENT_LENGTH = 512;
+
+/** Capped so a client cannot grow the session row with a huge header. */
+function capSessionUserAgent(userAgent: string | null | undefined) {
+  const trimmed = userAgent?.trim();
+
+  return trimmed ? trimmed.slice(0, MAX_SESSION_USER_AGENT_LENGTH) : null;
+}
+
+function toRegressionCaseRecord(
+  row: RegressionCaseRow
+): StoredRegressionCaseRecord {
+  return {
+    createdAt: row.created_at,
+    createdByUserId: row.created_by_user_id,
+    expectedResult: row.expected_result,
+    id: row.id,
+    input: row.input,
+    orgId: row.org_id,
+    privateToUserId: row.private_to_user_id,
+    profileId: row.profile_id,
+    sourceAutomationId: row.source_automation_id,
+    sourceId: row.source_id,
+    // SAFETY: The table CHECK constrains this column to the union values.
+    sourceType: row.source_type as StoredRegressionCaseRecord["sourceType"],
+  };
+}
+
+function toRegressionCaseRunRecord(
+  row: RegressionCaseRunRow
+): StoredRegressionCaseRunRecord {
+  return {
+    caseId: row.case_id,
+    createdAt: row.created_at,
+    createdByUserId: row.created_by_user_id,
+    error: row.error,
+    id: row.id,
+    orgId: row.org_id,
+    output: row.output,
+    // SAFETY: The table CHECK constrains this column to the union values.
+    status: row.status as StoredRegressionCaseRunRecord["status"],
+    // SAFETY: The table CHECK constrains this column to the union values.
+    verdict: row.verdict as StoredRegressionCaseRunRecord["verdict"],
+    verdictAt: row.verdict_at,
+    verdictByUserId: row.verdict_by_user_id,
+  };
+}
+
 function toBrowserSessionRecord(
   row: BrowserSessionRow
 ): StoredBrowserSessionRecord {
@@ -7253,6 +8091,7 @@ function toBrowserSessionRecord(
     lastUsedAt: row.last_used_at,
     revokedAt: row.revoked_at,
     sessionTokenHash: row.session_token_hash,
+    userAgent: row.user_agent ?? null,
     userId: row.user_id,
   };
 }

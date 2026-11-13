@@ -1,17 +1,29 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
-  "ignore": ["tools/oxlint/anti-slop/**", "apps/desktop/dist/**"],
+  "ignore": [
+    "tools/oxlint/anti-slop/**",
+    // Bundled skill scripts run through the agent's bash tool, not imports.
+    "packages/core/src/skills/bundled/*/scripts/**",
+    // Repo agent skill scripts run from the shell, not imports.
+    ".agents/skills/*/scripts/**"
+  ],
   // First-run baseline: teach the graph, then ignore leftovers instead of deleting unused code.
   "workspaces": {
-    "packages/telegram-manager": {
-      // Generated JavaScript is shipped for Git installs; analyze its TypeScript source.
-      "ignore": ["dist/**"]
-    },
     "apps/desktop": {
       "entry": ["preload.cjs", "tests/smoke.mjs"],
+      // Build output of the desktop runtime bundle.
+      "ignore": ["dist/**"],
       // PowerShell 7 is supplied by the Windows build host.
       "ignoreBinaries": ["pwsh"],
       "project": ["*.mjs", "*.cjs", "tests/*.mjs", "scripts/*.mjs"]
+    },
+    "packages/plugins/data-view": {
+      "entry": [
+        "src/actions.ts",
+        "src/ui.tsx",
+        "actions/actions.js",
+        "ui/app.js"
+      ]
     },
     "packages/plugins/supermemory": {
       "entry": [

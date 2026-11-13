@@ -1,14 +1,33 @@
-import { Button } from "@nakama/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@airin/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
+import {
+  ArrowDown01Icon,
+  Csv02Icon,
+  Download04Icon,
   File01Icon,
+  Globe02Icon,
   Image01Icon,
+  LinkSquare02Icon,
   Video01Icon,
   ViewIcon,
+  Xls02Icon,
 } from "hugeicons-react";
+import { InlineArtifactImageFrame } from "@/components/chat/inline-artifact-image-frame";
 import { useArtifactAttachmentPreviewPanel } from "@/components/chat/use-artifact-attachment-preview-panel";
-import type { ChatArtifactRef } from "@/lib/chat-artifacts";
+import { isXlsxFile } from "@/lib/artifact-spreadsheet";
+import {
+  buildArtifactContentUrl,
+  type ChatArtifactRef,
+  isImageArtifactMimeType,
+} from "@/lib/chat-artifacts";
+import { client } from "@/lib/client";
 import { formatBytes } from "@/lib/knowledge-base-files";
 
 interface ArtifactAttachmentPreviewProps {
@@ -16,6 +35,8 @@ interface ArtifactAttachmentPreviewProps {
   className?: string;
   id: string;
   profileId: string;
+  /** Renders a lazy inline thumbnail above the file actions (chat turns). */
+  showInlineImagePreview?: boolean;
   /** `overlay` makes the containing file card the preview target. */
   variant?: "chip" | "icon" | "overlay";
 }
@@ -25,46 +46,18 @@ export function ArtifactAttachmentPreview({
   id,
   artifact,
   className,
+  showInlineImagePreview = false,
   variant = "chip",
 }: ArtifactAttachmentPreviewProps) {
-  const { imagePreviewUrl, isImage, isVideo, openPanel } =
-    useArtifactAttachmentPreviewPanel({
-      artifact,
-      id,
-      // Preview, download, share and save all go through this id.
-      profileId: artifact.ownerProfileId ?? profileId,
-    });
+  const effectiveProfileId = artifact.ownerProfileId ?? profileId;
 
-  return (
-    <ArtifactAttachmentPreviewTrigger
-      artifact={artifact}
-      className={className}
-      imagePreviewUrl={imagePreviewUrl}
-      isImage={isImage}
-      isVideo={isVideo}
-      onOpen={openPanel}
-      variant={variant}
-    />
-  );
-}
+  const { isImage, isVideo, openPanel } = useArtifactAttachmentPreviewPanel({
+    artifact,
+    id,
+    // Preview, download, share and save all go through this id.
+    profileId: effectiveProfileId,
+  });
 
-function ArtifactAttachmentPreviewTrigger({
-  artifact,
-  className,
-  imagePreviewUrl,
-  isImage,
-  isVideo,
-  onOpen,
-  variant,
-}: {
-  artifact: ChatArtifactRef;
-  className?: string;
-  imagePreviewUrl: string | null;
-  isImage: boolean;
-  isVideo: boolean;
-  onOpen: () => void;
-  variant: "chip" | "icon" | "overlay";
-}) {
   if (variant === "overlay") {
     return (
       <button
@@ -73,7 +66,7 @@ function ArtifactAttachmentPreviewTrigger({
           "absolute inset-0 cursor-pointer rounded-[inherit] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
           className
         )}
-        onClick={onOpen}
+        onClick={openPanel}
         type="button"
       />
     );
@@ -87,7 +80,7 @@ function ArtifactAttachmentPreviewTrigger({
             <Button
               aria-label="View"
               className={className}
-              onClick={onOpen}
+              onClick={openPanel}
               size="icon-sm"
               title="View"
               type="button"
@@ -104,69 +97,251 @@ function ArtifactAttachmentPreviewTrigger({
     );
   }
 
-  if (isImage) {
-    return (
-      <button
-        className={cn(
-          "relative flex w-1/2 max-w-full shrink-0 flex-col gap-2 overflow-hidden rounded-lg border border-border bg-muted p-2 text-left transition-colors hover:bg-muted/70",
-          className
-        )}
-        onClick={onOpen}
-        type="button"
-      >
-        {imagePreviewUrl ? (
-          <img
-            alt=""
-            className="h-auto w-full rounded-md border border-border outline outline-1 outline-black/10 dark:outline-white/10"
-            src={imagePreviewUrl}
-          />
-        ) : (
-          <div className="flex aspect-[4/3] w-full items-center justify-center rounded-md border border-border bg-background">
-            <Image01Icon aria-hidden className="size-6 text-muted-foreground" />
-          </div>
-        )}
-        <div className="min-w-0 px-0.5">
-          <p className="truncate font-medium text-foreground text-xs">
-            {artifact.filename}
-          </p>
-          <p className="text-2xs text-muted-foreground">
-            {artifact.sizeBytes > 0
-              ? `${formatBytes(artifact.sizeBytes)} · `
-              : null}
-            Artifact
-          </p>
-        </div>
-      </button>
-    );
+  const showInline =
+    showInlineImagePreview &&
+    (isImage || isImageArtifactMimeType(artifact.mimeType)) &&
+    !isVideo;
+
+  const fileCard = (
+    <FilePreviewCard
+      artifact={artifact}
+      className={className}
+      isImage={isImage}
+      isVideo={isVideo}
+      onDownload={() => {
+        const link = document.createElement("a");
+        link.href = `${client.baseUrl}${buildArtifactContentUrl(effectiveProfileId, artifact.path)}`;
+        link.download = artifact.filename;
+        document.body.append(link);
+        link.click();
+        link.remove();
+      }}
+      onOpen={openPanel}
+    />
+  );
+
+  if (!showInline) {
+    return fileCard;
   }
 
   return (
-    <button
+    <div
+      className={cn("flex w-full min-w-0 max-w-full flex-col gap-2", className)}
+    >
+      <InlineArtifactImageFrame
+        artifact={artifact}
+        onOpen={openPanel}
+        profileId={effectiveProfileId}
+      />
+      {fileCard}
+    </div>
+  );
+}
+
+/** The label, icon and icon color a file card shows for one file. */
+function fileCardKind(
+  artifact: ChatArtifactRef,
+  isImage: boolean,
+  isVideo: boolean
+) {
+  const excel = isXlsxFile(artifact.filename, artifact.mimeType);
+  const extension = artifact.filename.split(".").pop()?.toLowerCase() ?? "";
+
+  const fileTypes = new Map<string, string>([
+    ["csv", "CSV"],
+    ["doc", "Word"],
+    ["docx", "Word"],
+    ["htm", "Website"],
+    ["html", "Website"],
+    ["json", "JSON"],
+    ["markdown", "Markdown"],
+    ["md", "Markdown"],
+    ["pdf", "PDF"],
+    ["ppt", "PowerPoint"],
+    ["pptx", "PowerPoint"],
+    ["tsv", "TSV"],
+    ["txt", "Text"],
+    ["zip", "Archive"],
+  ]);
+
+  const label = excel
+    ? "Excel"
+    : isImage
+      ? "Image"
+      : isVideo
+        ? "Video"
+        : (fileTypes.get(extension) ??
+          (extension === artifact.filename.toLowerCase()
+            ? "File"
+            : extension.toUpperCase()));
+
+  const Icon =
+    new Map([
+      ["Image", Image01Icon],
+      ["Video", Video01Icon],
+      ["Website", Globe02Icon],
+    ]).get(label) ?? File01Icon;
+
+  const iconColor =
+    new Map([
+      ["Excel", "text-emerald-600 dark:text-emerald-400"],
+      ["Website", "text-sky-500"],
+    ]).get(label) ?? "text-muted-foreground";
+
+  return { excel, extension, Icon, iconColor, label };
+}
+
+export function FilePreviewCard({
+  artifact,
+  className,
+  isImage,
+  isVideo,
+  onOpen,
+  onDownload,
+}: {
+  artifact: ChatArtifactRef;
+  className?: string;
+  isImage: boolean;
+  isVideo: boolean;
+  onOpen: () => void;
+  onDownload: () => void;
+}) {
+  const { Icon, iconColor, label } = fileCardKind(artifact, isImage, isVideo);
+
+  return (
+    <div
       className={cn(
-        "relative inline-flex max-w-full shrink-0 items-center gap-2 rounded-lg border border-border bg-muted px-2 py-2 text-left transition-colors hover:bg-muted/70",
+        "flex w-full min-w-0 max-w-full items-center gap-3 rounded-xl border border-border bg-muted/50 p-3 transition-colors hover:bg-muted/70 sm:gap-4 sm:p-4",
         className
       )}
-      onClick={onOpen}
-      type="button"
     >
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-background">
-        {isVideo ? (
-          <Video01Icon aria-hidden className="size-4 text-muted-foreground" />
-        ) : (
-          <File01Icon aria-hidden className="size-4 text-muted-foreground" />
-        )}
-      </div>
-      <div className="min-w-0 max-w-[12rem]">
-        <p className="truncate font-medium text-foreground text-xs">
-          {artifact.filename}
-        </p>
-        <p className="text-2xs text-muted-foreground">
-          {artifact.sizeBytes > 0
-            ? `${formatBytes(artifact.sizeBytes)} · `
-            : null}
-          Artifact
-        </p>
-      </div>
-    </button>
+      <button
+        aria-label={`Preview ${artifact.filename}`}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-4"
+        onClick={onOpen}
+        type="button"
+      >
+        <span
+          className={cn(
+            "flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-background",
+            iconColor
+          )}
+        >
+          <Icon aria-hidden className="size-6" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span
+            className="block truncate font-medium text-foreground text-sm"
+            title={artifact.filename}
+          >
+            {artifact.filename}
+          </span>
+          <span className="mt-1 block text-muted-foreground text-xs">
+            {label}
+            {artifact.sizeBytes > 0
+              ? ` · ${formatBytes(artifact.sizeBytes)}`
+              : ""}
+          </span>
+        </span>
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              aria-label={`Open in: ${artifact.filename}`}
+              className="min-h-11 shrink-0 gap-1.5 sm:gap-2"
+              size="sm"
+              variant="outline"
+            />
+          }
+        >
+          Open in <ArrowDown01Icon aria-hidden className="size-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onOpen}>
+            <ViewIcon aria-hidden className="size-4" />
+            Preview
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onDownload}>
+            <Download04Icon aria-hidden className="size-4" />
+            Download
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+/** A small card with one open button, for files the user sent. */
+export function CompactFileCard({
+  artifact,
+  className,
+  isImage,
+  isVideo,
+  onOpen,
+}: {
+  artifact: ChatArtifactRef;
+  className?: string;
+  isImage: boolean;
+  isVideo: boolean;
+  onOpen: () => void;
+}) {
+  const { excel, extension, Icon, iconColor, label } = fileCardKind(
+    artifact,
+    isImage,
+    isVideo
+  );
+
+  const sheet = excel || label === "CSV" || label === "TSV";
+  const FileIcon = label === "CSV" ? Csv02Icon : sheet ? Xls02Icon : Icon;
+  const { filename } = artifact;
+
+  return (
+    <div
+      className={cn(
+        "flex w-full min-w-0 max-w-full items-center gap-3 rounded-2xl border border-border bg-background py-2 pr-1 pl-2 dark:bg-secondary",
+        className
+      )}
+    >
+      <button
+        aria-label={`Preview ${filename}`}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={onOpen}
+        type="button"
+      >
+        <span
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+            sheet
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+              : cn("bg-muted", iconColor)
+          )}
+        >
+          <FileIcon aria-hidden className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span
+            className="block truncate font-medium text-foreground text-sm"
+            title={filename}
+          >
+            {filename}
+          </span>
+          <span className="block text-muted-foreground text-xs">
+            {sheet && extension
+              ? `Spreadsheet · ${extension.toUpperCase()}`
+              : label}
+          </span>
+        </span>
+      </button>
+      <Button
+        aria-label={`Open ${filename}`}
+        className="size-11 shrink-0 text-muted-foreground"
+        onClick={onOpen}
+        size="icon"
+        variant="ghost"
+      >
+        <LinkSquare02Icon aria-hidden className="size-4.5" />
+      </Button>
+    </div>
   );
 }

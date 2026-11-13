@@ -1,5 +1,5 @@
-import type { ChatMessage, ProviderClient } from "@nakama/core";
-import { getUserMessageText } from "@nakama/core";
+import type { ChatMessage, ProviderClient } from "@airin/core";
+import { getUserMessageText } from "@airin/core";
 
 const SNIPPET_MAX_LENGTH = 500;
 
@@ -13,7 +13,7 @@ const SESSION_TITLE_SYSTEM = [
   "- Return only the title text",
   "- No quotes, markdown, punctuation at the ends, or JSON",
   "- Use title case when natural",
-  "- Do not mention Nakama or that this is a chat title",
+  "- Do not mention Airin or that this is a chat title",
 ].join("\n");
 
 function truncateSnippet(

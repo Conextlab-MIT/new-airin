@@ -6,19 +6,19 @@ import path from "node:path";
 import {
   getProfileArtifactsDir,
   WHATSAPP_ARTIFACT_DOCUMENT_MAX_BYTES,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   sendDiscordArtifactTool,
   sendWhatsAppArtifactTool,
 } from "./send-discord-artifact-tool";
 
-const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 afterEach(() => {
   if (previousConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+    process.env.AIRIN_CONFIG_DIR = previousConfigDir;
   }
 });
 
@@ -36,35 +36,35 @@ describe("sendDiscordArtifactTool", () => {
   });
 
   test("accepts an existing attachable artifact on discord", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "nakama-discord-tool-"));
-    process.env.NAKAMA_CONFIG_DIR = home;
+    const home = await mkdtemp(path.join(tmpdir(), "airin-discord-tool-"));
+    process.env.AIRIN_CONFIG_DIR = home;
     const orgId = "org_test";
     const profileId = "profile_test";
     const artifactsDir = getProfileArtifactsDir(orgId, profileId);
     await mkdir(artifactsDir, { recursive: true });
     await writeFile(
-      path.join(artifactsDir, "nakama-pitch-deck.pdf"),
+      path.join(artifactsDir, "airin-pitch-deck.pdf"),
       "%PDF-1.4"
     );
 
     const result = await sendDiscordArtifactTool.run(
-      { path: "artifacts/nakama-pitch-deck.pdf" },
+      { path: "artifacts/airin-pitch-deck.pdf" },
       { channel: "discord", orgId, profileId }
     );
 
     expect(result).toEqual({
-      filename: "nakama-pitch-deck.pdf",
+      filename: "airin-pitch-deck.pdf",
       mimeType: "application/pdf",
       ok: true,
-      path: "nakama-pitch-deck.pdf",
+      path: "airin-pitch-deck.pdf",
       sizeBytes: 8,
     });
   });
 });
 
 test("WhatsApp preparation validates scope and pins bounded file contents", async () => {
-  const home = await mkdtemp(path.join(tmpdir(), "nakama-whatsapp-tool-"));
-  process.env.NAKAMA_CONFIG_DIR = home;
+  const home = await mkdtemp(path.join(tmpdir(), "airin-whatsapp-tool-"));
+  process.env.AIRIN_CONFIG_DIR = home;
 
   try {
     const context = {

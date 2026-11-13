@@ -1,13 +1,13 @@
 import {
   inferArtifactMimeType,
   normalizeMimeType,
-} from "@nakama/core/artifact-mime";
-import type { ImageAttachment } from "@nakama/core/contract";
+} from "@airin/core/artifact-mime";
+import type { ImageAttachment } from "@airin/core/contract";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_IMAGE_BYTES,
   validateImageAttachments,
-} from "@nakama/core/message-content";
+} from "@airin/core/message-content";
 import type { Attachment, Message } from "discord.js";
 
 const ALLOWED_IMAGE_MEDIA_TYPES = new Set([

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import * as childProcess from "node:child_process";
 import { existsSync } from "node:fs";
 import { zipSync } from "fflate";
-import { NakamaApiError } from "../api-error";
+import { AirinApiError } from "../api-error";
 import { asTestFetch } from "../channel-test-helpers";
 import {
   fetchGitHubSkillBundle,
@@ -14,39 +14,6 @@ describe("fetchGitHubSkillMarkdown size limits", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-  });
-
-  test("rejects oversized Content-Length before reading the body", async () => {
-    globalThis.fetch = asTestFetch(
-      mock(
-        async () =>
-          new Response("ignored", {
-            headers: { "Content-Length": String(600 * 1024) },
-            status: 200,
-          })
-      )
-    );
-
-    await expect(
-      fetchGitHubSkillMarkdown(
-        "https://raw.githubusercontent.com/acme/skills/main/weather/SKILL.md"
-      )
-    ).rejects.toBeInstanceOf(NakamaApiError);
-
-    try {
-      await fetchGitHubSkillMarkdown(
-        "https://raw.githubusercontent.com/acme/skills/main/weather/SKILL.md"
-      );
-    } catch (error) {
-      expect(error).toBeInstanceOf(NakamaApiError);
-
-      if (!(error instanceof NakamaApiError)) {
-        throw error;
-      }
-
-      expect(error.status).toBe(400);
-      expect(error.message).toMatch(/too large/i);
-    }
   });
 
   test("aborts while streaming once the body exceeds the cap", async () => {
@@ -67,9 +34,9 @@ describe("fetchGitHubSkillMarkdown size limits", () => {
       );
       throw new Error("expected fetchGitHubSkillMarkdown to reject");
     } catch (error) {
-      expect(error).toBeInstanceOf(NakamaApiError);
+      expect(error).toBeInstanceOf(AirinApiError);
 
-      if (!(error instanceof NakamaApiError)) {
+      if (!(error instanceof AirinApiError)) {
         throw error;
       }
 

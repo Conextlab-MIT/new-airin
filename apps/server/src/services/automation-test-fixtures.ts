@@ -1,4 +1,4 @@
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 
 export const ORG_ID = "org_test";
 

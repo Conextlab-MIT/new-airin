@@ -1,35 +1,38 @@
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import type {
   AutomationDelivery,
   AutomationRunRecord,
   AutomationRunStatus,
+  AutomationToolLimit,
+  AutomationTrigger,
   ProfileSummary,
   StoredAutomation,
-} from "@nakama/core/contract";
-import { MAX_SESSION_SEARCH_LENGTH } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Command, CommandItem, CommandList } from "@nakama/ui/command";
-import { DialogOverlay, DialogTitle } from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
+} from "@airin/core/contract";
+import { MAX_SESSION_SEARCH_LENGTH } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Checkbox } from "@airin/ui/checkbox";
+import { Command, CommandItem, CommandList } from "@airin/ui/command";
+import { DialogOverlay, DialogTitle } from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTrigger,
-} from "@nakama/ui/popover";
+} from "@airin/ui/popover";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Spinner } from "@nakama/ui/spinner";
-import { Textarea } from "@nakama/ui/textarea";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/select";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { Textarea } from "@airin/ui/textarea";
+import { cn } from "@airin/ui/utils";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import {
   ArrowDown01Icon,
-  ArrowRight01Icon,
   Cancel01Icon,
   CancelCircleIcon,
   CheckmarkCircle01Icon,
@@ -37,20 +40,29 @@ import {
   Delete02Icon,
   Loading03Icon,
   Search01Icon,
+  TestTube01Icon,
 } from "hugeicons-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useContext, useMemo, useState } from "react";
 import { ChatMessageList } from "@/components/chat/chat-message-list";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { SaveRegressionCaseDialog } from "@/components/regression-cases";
 import { TimezoneSelect } from "@/components/TimezoneSelect";
+import { AuthContext } from "@/context/auth-context-shared";
+import { ChatAttachmentPanelProvider } from "@/context/chat-attachment-panel-context";
+import { useChatAttachmentPanel } from "@/context/use-chat-attachment-panel";
+import { useAutomationRunTranscriptQuery } from "@/hooks/use-automations";
 import { useUserTimezone } from "@/hooks/use-timezones";
 import {
   formatFutureRelativeTime,
   formatSessionRelativeTime,
   formatSessionTimestamp,
 } from "@/lib/chat-history";
+import { formatError } from "@/lib/client";
+import { canAccessIntegrationsPage } from "@/lib/navigation";
 import {
   automationRunMessages,
   formatRunDuration,
+  HOURLY_INTERVALS,
   previewAutomationSchedule,
   readSchedulePreset,
   runPreviewText,
@@ -221,6 +233,10 @@ const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
   };
 });
 
+function hoursLabel(hours: string) {
+  return hours === "1" ? "1 hour" : `${hours} hours`;
+}
+
 const WEEKDAYS = [
   "Sunday",
   "Monday",
@@ -231,16 +247,25 @@ const WEEKDAYS = [
   "Saturday",
 ];
 
+/** What the chosen agent has, by the ids a tool limit stores. */
+export type AutomationToolOptions = {
+  [Key in keyof AutomationToolLimit]: Array<{ id: string; label: string }>;
+};
+
 export function AutomationEditorForm({
   automation,
   busy,
   onChange,
   profiles,
+  savedTrigger,
+  toolOptions,
 }: {
   automation: StoredAutomation;
   busy: boolean;
   onChange: (patch: Partial<StoredAutomation>) => void;
   profiles: ProfileSummary[];
+  savedTrigger?: AutomationTrigger;
+  toolOptions?: AutomationToolOptions;
 }) {
   const scheduleTrigger =
     automation.trigger.type === "schedule" ? automation.trigger : null;
@@ -301,12 +326,21 @@ export function AutomationEditorForm({
         automation={automation}
         busy={busy}
         onChange={onChange}
+        savedTrigger={savedTrigger}
       />
       <DeliverySettingsFields
         busy={busy}
         delivery={automation.delivery}
         onChange={(delivery) => onChange({ delivery })}
       />
+      {toolOptions ? (
+        <ToolLimitFields
+          busy={busy}
+          limit={automation.toolLimit}
+          onChange={(toolLimit) => onChange({ toolLimit })}
+          options={toolOptions}
+        />
+      ) : null}
       <details className="group border-border border-t pt-3">
         <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 font-semibold sm:min-h-10 [&::-webkit-details-marker]:hidden">
           More options
@@ -405,10 +439,12 @@ function AutomationScheduleFields({
   automation,
   busy,
   onChange,
+  savedTrigger,
 }: {
   automation: StoredAutomation;
   busy: boolean;
   onChange: (patch: Partial<StoredAutomation>) => void;
+  savedTrigger?: AutomationTrigger;
 }) {
   const scheduleTrigger =
     automation.trigger.type === "schedule" ? automation.trigger : null;
@@ -416,27 +452,30 @@ function AutomationScheduleFields({
   const preset = readSchedulePreset(automation.trigger);
 
   const frequency =
-    automation.trigger.type === "manual"
-      ? "manual"
+    automation.trigger.type === "manual" ||
+    automation.trigger.type === "webhook"
+      ? automation.trigger.type
       : (preset?.frequency ?? "custom");
 
   return (
     <>
-      <fieldset className="min-w-0 space-y-3">
+      <fieldset className="min-w-0 space-y-2">
         <legend className="mb-2 font-semibold text-sm">How often?</legend>
         <div className="flex flex-wrap gap-2">
           {(
             [
               ["manual", "Only when I ask"],
+              ["hourly", "Hourly"],
               ["daily", "Every day"],
               ["weekdays", "Weekdays"],
               ["weekly", "Weekly"],
               ["monthly", "Monthly"],
+              ["webhook", "On webhook"],
             ] as const
           ).map(([value, label]) => (
             <Button
               aria-pressed={frequency === value}
-              className="h-auto min-h-11 rounded-full px-3 py-2 aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:ring-primary sm:min-h-10"
+              className="h-auto min-h-9 rounded-full px-3 py-1 aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:ring-primary sm:min-h-8"
               disabled={busy}
               key={value}
               onClick={() =>
@@ -478,6 +517,60 @@ function AutomationScheduleFields({
             </Select>
           </Field>
         ) : null}
+        {preset?.frequency === "hourly" && scheduleTrigger ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Every">
+              <Select
+                disabled={busy}
+                onValueChange={(value) =>
+                  onChange({
+                    trigger: {
+                      ...scheduleTrigger,
+                      cron: `${preset.minute} ${value === "1" ? "*" : `*/${value}`} * * *`,
+                    },
+                  })
+                }
+                value={preset.everyHours}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>{hoursLabel(preset.everyHours)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {HOURLY_INTERVALS.map((hours) => (
+                    <SelectItem key={hours} value={hours}>
+                      {hoursLabel(hours)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="At minute">
+              <Select
+                disabled={busy}
+                onValueChange={(value) =>
+                  onChange({
+                    trigger: {
+                      ...scheduleTrigger,
+                      cron: `${value} ${preset.hour} * * *`,
+                    },
+                  })
+                }
+                value={preset.minute}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>:{preset.minute.padStart(2, "0")}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 60 }, (_, index) => (
+                    <SelectItem key={index} value={String(index)}>
+                      :{String(index).padStart(2, "0")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+        ) : null}
         {preset?.frequency === "monthly" && scheduleTrigger ? (
           <Field label="Day of the month">
             <Select
@@ -505,6 +598,15 @@ function AutomationScheduleFields({
             </Select>
           </Field>
         ) : null}
+        {savedTrigger?.type === "webhook" &&
+        automation.trigger.type !== "webhook" ? (
+          <p
+            className="text-pretty text-amber-700 text-xs dark:text-amber-400"
+            role="alert"
+          >
+            Saving deletes the webhook secret. Webhook calls stop working.
+          </p>
+        ) : null}
         {frequency === "custom" ? (
           <p className="text-muted-foreground text-sm">
             {automation.trigger.type === "runAt"
@@ -526,7 +628,10 @@ function AutomationScheduleFields({
 function AutomationNextRun({ automation }: { automation: StoredAutomation }) {
   const { data: userTimezone, isError } = useUserTimezone();
 
-  if (automation.trigger.type === "manual") {
+  if (
+    automation.trigger.type === "manual" ||
+    automation.trigger.type === "webhook"
+  ) {
     return null;
   }
 
@@ -546,7 +651,7 @@ function AutomationNextRun({ automation }: { automation: StoredAutomation }) {
   return (
     <p
       aria-live="polite"
-      className="rounded-xl bg-muted/40 px-3 py-3 text-muted-foreground text-sm"
+      className="rounded-lg bg-muted/40 px-3 py-2 text-muted-foreground text-sm"
     >
       Next run: <span className="font-semibold text-foreground">{label}</span>
     </p>
@@ -592,10 +697,10 @@ function AutomationTimeFields({
 
   return (
     <>
-      {preset ? (
+      {preset && preset.frequency !== "hourly" ? (
         <fieldset className="min-w-0">
           <legend className="mb-2 font-semibold text-sm">What time?</legend>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(
               [
                 ["07:00", "Morning", "7:00 AM"],
@@ -606,7 +711,7 @@ function AutomationTimeFields({
               <Button
                 aria-label={label}
                 aria-pressed={!customTime && timeValue === value}
-                className="h-auto min-h-14 flex-col items-start gap-0 rounded-xl px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:ring-primary"
+                className="h-auto min-h-11 flex-col items-start gap-0 rounded-lg px-3 py-1.5 text-left aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:ring-primary"
                 disabled={busy}
                 key={value}
                 onClick={() => {
@@ -617,7 +722,7 @@ function AutomationTimeFields({
                 variant="outline"
               >
                 <span>{label}</span>
-                <span className="font-normal text-muted-foreground">
+                <span className="font-normal text-muted-foreground text-xs">
                   {time}
                 </span>
               </Button>
@@ -628,7 +733,7 @@ function AutomationTimeFields({
                   <Button
                     aria-label="Pick a time"
                     aria-pressed={Boolean(customTime)}
-                    className="h-auto min-h-14 flex-col items-start gap-0 rounded-xl border-dashed px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:ring-1 aria-pressed:ring-primary"
+                    className="h-auto min-h-11 flex-col items-start gap-0 rounded-lg border-dashed px-3 py-1.5 text-left aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:ring-1 aria-pressed:ring-primary"
                     disabled={busy}
                     type="button"
                     variant="outline"
@@ -636,7 +741,7 @@ function AutomationTimeFields({
                 }
               >
                 <span>Pick a time</span>
-                <span className="font-normal text-muted-foreground">
+                <span className="font-normal text-muted-foreground text-xs">
                   {customTime ? timeValue : "Any time of day"}
                 </span>
               </PopoverTrigger>
@@ -730,165 +835,64 @@ export function AutomationDetailSkeleton() {
   );
 }
 
-const AUTOMATION_EXAMPLES = [
-  {
-    getLines: [
-      "Three emails need a reply today",
-      "Design review moved to 14:00",
-      "One invoice is waiting for approval",
-    ],
-    getTime: "Weekdays 8:30",
-    getTitle: "Today at a glance",
-    name: "Morning briefing",
-    prompt:
-      "Read my unread email and today's calendar. Tell me what needs a reply first.",
-    when: "Weekdays at 8:30",
-  },
-  {
-    getLines: [
-      "Merged: the new billing page and two fixes",
-      "Closed: the older login issues",
-      "Still open: the slow export",
-    ],
-    getTime: "Friday 16:00",
-    getTitle: "Report for this week",
-    name: "Weekly team report",
-    prompt:
-      "List the pull requests we merged and the issues we closed this week. Write a short report for the team.",
-    when: "Fridays at 16:00",
-  },
-  {
-    getLines: [
-      "Competitor A changed its pricing page",
-      "Competitor B announced a new integration",
-      "No news from Competitor C",
-    ],
-    getTime: "Monday 9:00",
-    getTitle: "What changed this week",
-    name: "Competitor watch",
-    prompt:
-      "Search the web for news about our main competitors. Send me only the changes that matter.",
-    when: "Mondays at 9:00",
-  },
-  {
-    getLines: [
-      "Two emails need a reply now",
-      "Five can wait until later",
-      "Eight are safe to ignore",
-    ],
-    getTime: "Every hour",
-    getTitle: "New email, sorted",
-    name: "Inbox triage",
-    prompt:
-      "Sort new email into reply, read later and ignore. Draft a reply for the urgent ones.",
-    when: "Every hour",
-  },
-  {
-    getLines: [
-      "Changelog is ready",
-      "Docs page is not updated yet",
-      "Tests pass on main",
-    ],
-    getTime: "When you run it",
-    getTitle: "Before you ship",
-    name: "Release checklist",
-    prompt:
-      "Go through the release checklist. Tell me what is missing before we ship.",
-    when: "Manual",
-  },
+const AUTOMATION_IDEAS = [
+  "Every weekday at 8:30, read my email and calendar. Tell me what is important today.",
+  "Every hour, check my new email. Show me only the emails I need to answer.",
+  "Every Friday at 16:00, write a short report of what my team did this week.",
+  "Every Monday at 9:00, search the web for news about our competitors. Tell me what changed.",
 ];
 
 export function AutomationExample({
   onUse,
-  onStartFromScratch,
 }: {
   onUse: (draft: string) => void;
-  onStartFromScratch: () => void;
 }) {
-  const [index, setIndex] = useState(0);
-  const example = AUTOMATION_EXAMPLES[index];
+  const [text, setText] = useState("");
+  const task = text.trim();
 
   return (
-    <div className="flex w-full flex-col items-center gap-6">
-      <h2 className="font-semibold text-3xl text-foreground">
-        What could your agent do for you?
-      </h2>
-      <div className="flex flex-wrap justify-center gap-2">
-        {AUTOMATION_EXAMPLES.map((item, i) => (
+    <form
+      className="flex w-full max-w-3xl flex-col gap-5 text-left"
+      onSubmit={(event) => {
+        event.preventDefault();
+
+        if (task) {
+          onUse(`Create an automation. ${task}`);
+        }
+      }}
+    >
+      <label
+        className="text-center font-semibold text-2xl text-foreground"
+        htmlFor="automation-idea"
+      >
+        What do you need help with?
+      </label>
+      <Textarea
+        className="min-h-28 px-4 py-3 text-base"
+        id="automation-idea"
+        onChange={(event) => setText(event.target.value)}
+        placeholder="For example: Every morning, tell me which emails I need to answer."
+        value={text}
+      />
+      <div className="flex flex-col gap-2">
+        <p className="font-medium text-muted-foreground text-sm">
+          Or tap an idea:
+        </p>
+        {AUTOMATION_IDEAS.map((idea) => (
           <button
-            aria-pressed={i === index}
-            className={cn(
-              "rounded-full border px-3 py-1.5 text-sm transition-colors",
-              i === index
-                ? "border-foreground bg-foreground text-background"
-                : "border-border text-foreground/80 hover:bg-muted"
-            )}
-            key={item.name}
-            onClick={() => setIndex(i)}
+            className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-left text-foreground text-sm transition-colors hover:bg-muted"
+            key={idea}
+            onClick={() => setText(idea)}
             type="button"
           >
-            {item.name}
+            {idea}
           </button>
         ))}
       </div>
-      <div className="flex w-full max-w-3xl flex-col items-stretch gap-3 lg:flex-row">
-        <div className="flex min-w-0 flex-1 basis-0 flex-col gap-3 rounded-xl border border-border bg-muted/30 p-5 text-left">
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-              You set
-            </span>
-            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground/80 text-xs">
-              {example.when}
-            </span>
-          </div>
-          <p className="font-semibold text-base text-foreground">
-            {example.name}
-          </p>
-          <p className="text-foreground/80 text-sm leading-relaxed">
-            {example.prompt}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center justify-center">
-          <ArrowRight01Icon
-            aria-hidden
-            className="size-5 text-primary max-lg:rotate-90"
-          />
-        </div>
-        <div className="flex min-w-0 flex-1 basis-0 flex-col gap-3 rounded-xl border border-border bg-background p-5 text-left">
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-medium text-primary text-xs uppercase tracking-wide">
-              You get
-            </span>
-            <span className="text-muted-foreground text-xs">
-              {example.getTime}
-            </span>
-          </div>
-          <p className="font-semibold text-base text-foreground">
-            {example.getTitle}
-          </p>
-          <ul className="list-disc space-y-2 pl-5 text-foreground/80 text-sm leading-relaxed marker:text-primary">
-            {example.getLines.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      <div className="flex gap-3">
-        <Button
-          onClick={() =>
-            onUse(
-              `Create an automation. Run it: ${example.when}. ${example.prompt}`
-            )
-          }
-          type="button"
-        >
-          Use this example
-        </Button>
-        <Button onClick={onStartFromScratch} type="button" variant="outline">
-          Start from scratch
-        </Button>
-      </div>
-    </div>
+      <Button disabled={!task} size="lg" type="submit">
+        Continue
+      </Button>
+    </form>
   );
 }
 
@@ -930,6 +934,11 @@ function RunHistoryRow({
             aria-label="Unread"
             className="size-1.5 shrink-0 rounded-full bg-primary"
           />
+        ) : null}
+        {run.source === "webhook" ? (
+          <span className="shrink-0 rounded bg-muted px-1.5 text-muted-foreground text-xs">
+            Webhook
+          </span>
         ) : null}
         <span
           className={cn(
@@ -1012,10 +1021,19 @@ function RunDetailPopup({
   profileId: string;
   onRerun: () => void;
 }) {
-  const [copiedRunId, setCopiedRunId] = useState<string | null>(null);
+  // Tied to the run it came from, so switching runs closes it
+  const [caseRunId, setCaseRunId] = useState<string | null>(null);
+
+  // Read without useAuth: the drawer also renders where no auth provider is mounted.
+  const orgRole = useContext(AuthContext)?.activeOrg?.role;
+
+  const canSaveCase =
+    canAccessIntegrationsPage(orgRole) &&
+    selectedRun?.status === "completed" &&
+    Boolean(selectedRun.output?.trim());
 
   return (
-    <DialogPrimitive.Popup className="fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl translate-x-0 flex-col border-border border-l bg-background shadow-xl outline-none transition-transform duration-200 ease-out data-[ending-style]:translate-x-full data-[starting-style]:translate-x-full motion-reduce:transition-none">
+    <DialogPrimitive.Popup className="fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl translate-x-0 flex-col border-border border-l bg-background shadow-xl outline-none transition-transform duration-200 ease-out has-[[data-slot=attachment-detail-panel]]:max-w-full data-[ending-style]:translate-x-full data-[starting-style]:translate-x-full motion-reduce:transition-none md:has-[[data-slot=attachment-detail-panel]:not([data-fullscreen])]:w-fit">
       <div className="flex shrink-0 items-center gap-3 border-border border-b px-4 py-3">
         {selectedRun ? <RunStatusIcon status={selectedRun.status} /> : null}
         <DialogTitle className="min-w-0 flex-1 truncate text-sm">
@@ -1024,27 +1042,18 @@ function RunDetailPopup({
             : "Run conversation"}
         </DialogTitle>
         {selectedRun ? (
+          <CopyRunIdButton key={selectedRun.id} runId={selectedRun.id} />
+        ) : null}
+        {canSaveCase ? (
           <Button
-            aria-label={
-              copiedRunId === selectedRun.id ? "Copied run ID" : "Copy run ID"
-            }
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(selectedRun.id);
-                setCopiedRunId(selectedRun.id);
-              } catch {
-                // Clipboard may be unavailable outside a secure context.
-              }
-            }}
+            aria-label="Save as test case"
+            onClick={() => setCaseRunId(selectedRun?.id ?? null)}
             size="icon-sm"
+            title="Save as test case"
             type="button"
             variant="ghost"
           >
-            {copiedRunId === selectedRun.id ? (
-              <CheckmarkCircle01Icon aria-hidden className="size-4" />
-            ) : (
-              <Copy01Icon aria-hidden className="size-4" />
-            )}
+            <TestTube01Icon aria-hidden className="size-4" />
           </Button>
         ) : null}
         {selectedRun?.status === "failed" ? (
@@ -1069,29 +1078,147 @@ function RunDetailPopup({
           <Cancel01Icon aria-hidden className="size-4" />
         </DialogPrimitive.Close>
       </div>
-      {selectedRun?.deliveryError ? (
-        <p className="px-4 py-2 text-destructive text-sm" role="alert">
-          {selectedRun.deliveryError}
-        </p>
-      ) : null}
       {selectedRun ? (
-        <ChatMessageList
-          actionsDisabled
-          className="min-h-0 flex-1"
-          emptyMessage={
-            selectedRun.status === "running"
-              ? "Waiting for output…"
-              : "No output returned."
-          }
-          key={selectedRun.id}
-          messages={automationRunMessages(selectedRun)}
+        <RunDetailBody profileId={profileId} run={selectedRun} />
+      ) : null}
+      {canSaveCase && selectedRun ? (
+        <SaveRegressionCaseDialog
+          expectedResult={selectedRun.output ?? ""}
+          onOpenChange={(open) => setCaseRunId(open ? selectedRun.id : null)}
+          open={caseRunId === selectedRun.id}
           profileId={profileId}
-          readOnly
-          streamActive={selectedRun.status === "running"}
-          turnStartedAt={selectedRun.startedAt}
+          source={{
+            automationId: selectedRun.automationId,
+            sourceId: selectedRun.id,
+            sourceType: "automation_run",
+          }}
         />
       ) : null}
     </DialogPrimitive.Popup>
+  );
+}
+
+function CopyRunIdButton({ runId }: { runId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <Button
+      aria-label={copied ? "Copied run ID" : "Copy run ID"}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(runId);
+          setCopied(true);
+        } catch {
+          // Clipboard may be unavailable outside a secure context.
+        }
+      }}
+      size="icon-sm"
+      type="button"
+      variant="ghost"
+    >
+      {copied ? (
+        <CheckmarkCircle01Icon aria-hidden className="size-4" />
+      ) : (
+        <Copy01Icon aria-hidden className="size-4" />
+      )}
+    </Button>
+  );
+}
+
+function RunDetailBody({
+  run,
+  profileId,
+}: {
+  run: AutomationRunRecord;
+  profileId: string;
+}) {
+  // The run list leaves out a finished run's transcript.
+  const needsTranscript = run.status !== "running" && !run.progress?.length;
+
+  const transcript = useAutomationRunTranscriptQuery(
+    run.automationId,
+    run.id,
+    needsTranscript
+  );
+
+  return (
+    <>
+      {run.deliveryError ? (
+        <p className="px-4 py-2 text-destructive text-sm" role="alert">
+          {run.deliveryError}
+        </p>
+      ) : null}
+      {needsTranscript && transcript.error ? (
+        <p className="px-4 py-2 text-destructive text-sm" role="alert">
+          {formatError(transcript.error)}
+        </p>
+      ) : null}
+      <ChatAttachmentPanelProvider key={run.id}>
+        <RunConversation
+          loading={needsTranscript && transcript.isPending}
+          profileId={profileId}
+          run={run}
+          saved={needsTranscript ? transcript.data : undefined}
+        />
+      </ChatAttachmentPanelProvider>
+    </>
+  );
+}
+
+/**
+ * An open file panel sits beside a 24rem conversation, the room the panel
+ * column leaves for it, and the drawer grows to fit both.
+ */
+function RunConversation({
+  run,
+  saved,
+  loading,
+  profileId,
+}: {
+  run: AutomationRunRecord;
+  /** The saved run with its transcript, once loaded. */
+  saved: AutomationRunRecord | undefined;
+  loading: boolean;
+  profileId: string;
+}) {
+  const { isFullscreen, isOpen } = useChatAttachmentPanel();
+  // A run that finishes while open keeps its streamed transcript on screen.
+  const [streamed, setStreamed] = useState(run.progress);
+
+  if (run.progress?.length && run.progress !== streamed) {
+    setStreamed(run.progress);
+  }
+
+  // Until the saved transcript loads, or if it fails, show what is in hand.
+  const shownRun =
+    saved ?? (run.progress?.length ? run : { ...run, progress: streamed });
+
+  return (
+    <ChatMessageList
+      actionsDisabled
+      className={cn(
+        "min-h-0",
+        isFullscreen
+          ? "pointer-events-none w-0 flex-none overflow-hidden opacity-0"
+          : isOpen
+            ? "w-96 flex-none"
+            : "flex-1",
+        isOpen &&
+          "max-md:pointer-events-none max-md:w-0 max-md:flex-none max-md:overflow-hidden max-md:opacity-0"
+      )}
+      emptyMessage={
+        run.status === "running"
+          ? "Waiting for output…"
+          : loading
+            ? "Loading…"
+            : "No output returned."
+      }
+      messages={automationRunMessages(shownRun)}
+      profileId={profileId}
+      readOnly
+      streamActive={run.status === "running"}
+      turnStartedAt={run.startedAt}
+    />
   );
 }
 
@@ -1281,6 +1408,88 @@ function RunStatusIcon({ status }: { status: AutomationRunStatus }) {
   );
 }
 
+const TOOL_LIMIT_GROUPS: Array<{
+  key: keyof AutomationToolLimit;
+  label: string;
+}> = [
+  { key: "toolIds", label: "Tools" },
+  { key: "mcpServerIds", label: "MCP servers" },
+  { key: "composioToolkits", label: "Connectors" },
+];
+
+function ToolLimitFields({
+  busy,
+  limit,
+  onChange,
+  options,
+}: {
+  busy: boolean;
+  limit?: AutomationToolLimit;
+  onChange: (limit: AutomationToolLimit | undefined) => void;
+  options: AutomationToolOptions;
+}) {
+  return (
+    <fieldset className="grid min-w-0 gap-3">
+      <legend className="mb-2 font-semibold text-sm">Tools it may use</legend>
+      <label className="flex min-h-10 items-center gap-2 text-sm">
+        <Switch
+          aria-label="Use all of the agent's tools"
+          checked={!limit}
+          disabled={busy}
+          onCheckedChange={(all) =>
+            // Start a new limit with everything picked, so the user unticks.
+            onChange(
+              all
+                ? undefined
+                : {
+                    composioToolkits: options.composioToolkits.map(
+                      (item) => item.id
+                    ),
+                    mcpServerIds: options.mcpServerIds.map((item) => item.id),
+                    toolIds: options.toolIds.map((item) => item.id),
+                  }
+            )
+          }
+        />
+        All of the agent's tools
+      </label>
+      {limit
+        ? TOOL_LIMIT_GROUPS.map(({ key, label }) =>
+            options[key].length > 0 ? (
+              <div className="grid gap-1.5" key={key}>
+                <span className="font-medium text-muted-foreground text-xs">
+                  {label}
+                </span>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {options[key].map((item) => (
+                    <label
+                      className="flex min-h-9 items-center gap-2 text-sm"
+                      key={item.id}
+                    >
+                      <Checkbox
+                        checked={limit[key].includes(item.id)}
+                        disabled={busy}
+                        onCheckedChange={(checked) =>
+                          onChange({
+                            ...limit,
+                            [key]: checked
+                              ? [...limit[key], item.id]
+                              : limit[key].filter((id) => id !== item.id),
+                          })
+                        }
+                      />
+                      {item.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null
+          )
+        : null}
+    </fieldset>
+  );
+}
+
 function DeliverySettingsFields({
   delivery,
   busy,
@@ -1297,12 +1506,12 @@ function DeliverySettingsFields({
       <legend className="mb-2 font-semibold text-sm">
         Send me the result on
       </legend>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="flex flex-wrap gap-2">
         {(["none", "telegram", "whatsapp", "email", "discord"] as const).map(
           (value) => (
             <Button
               aria-pressed={channel === value}
-              className="min-h-11 rounded-xl aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:ring-primary sm:min-h-10"
+              className="h-auto min-h-9 rounded-full px-3 py-1 aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:ring-primary sm:min-h-8"
               disabled={busy}
               key={value}
               onClick={() => {
@@ -1348,7 +1557,7 @@ function DeliverySettingsFields({
           )
         )}
       </div>
-      <p className="text-muted-foreground text-sm">
+      <p className="text-muted-foreground text-xs">
         Results always stay in the run history.
       </p>
 

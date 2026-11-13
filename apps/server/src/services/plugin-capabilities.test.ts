@@ -18,11 +18,11 @@ import {
   loadSkillTool,
   PLUGIN_MANIFEST_API_VERSION,
   runReadFile,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   seedOrgDefaultProfile,
-} from "@nakama/db";
+} from "@airin/db";
 import {
   closePluginPackageRegistry,
   pluginPackage,
@@ -64,7 +64,7 @@ Store notes in the plugin database.
 
 const SKILL_TOOL_JS = `
 import { writeFileSync } from "node:fs";
-writeFileSync("/tmp/nakama-plugin-skill-imported", "imported");
+writeFileSync("/tmp/airin-plugin-skill-imported", "imported");
 export async function run() { return { leaked: true }; }
 `;
 
@@ -83,7 +83,7 @@ type TestManifest = {
   description: string;
   id: string;
   license: string;
-  minNakamaVersion: string;
+  minAirinVersion: string;
   name: string;
   skills: Array<{ directory: string; key: string }>;
   version: string;
@@ -106,11 +106,11 @@ function manifest(
       },
     ],
     apiVersion: PLUGIN_MANIFEST_API_VERSION,
-    author: "Nakama",
+    author: "Airin",
     description: "Notes plugin",
     id: "notes",
     license: "MIT",
-    minNakamaVersion: "0.1.0",
+    minAirinVersion: "0.1.0",
     name: "Notes",
     skills: [{ directory: "skills/notes", key: "notes" }],
     version,
@@ -121,7 +121,7 @@ function manifest(
 function v1Bundle(): ReturnType<typeof pluginPackage> {
   return pluginPackage({
     "actions/write.js": ACTION_JS,
-    "nakama.plugin.json": JSON.stringify(manifest("1.0.0")),
+    "airin.plugin.json": JSON.stringify(manifest("1.0.0")),
     "skills/notes/references/usage.md": "Reference instructions",
     "skills/notes/SKILL.md": SKILL_MD,
     "skills/notes/tool.js": SKILL_TOOL_JS,
@@ -131,7 +131,7 @@ function v1Bundle(): ReturnType<typeof pluginPackage> {
 function v2BundleWithoutWrite(): ReturnType<typeof pluginPackage> {
   return pluginPackage({
     "actions/write.js": ACTION_JS,
-    "nakama.plugin.json": JSON.stringify(
+    "airin.plugin.json": JSON.stringify(
       manifest("1.1.0", {
         actions: [
           {
@@ -154,18 +154,18 @@ function v2BundleWithoutWrite(): ReturnType<typeof pluginPackage> {
 
 describe("plugin capabilities", () => {
   let configDir = "";
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-plugin-u5-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-plugin-u5-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     await rm(configDir, { force: true, recursive: true });
@@ -204,15 +204,31 @@ describe("plugin capabilities", () => {
     await db.assignSkillToProfile(profile.id, skill!.id);
     await db.assignToolToProfile(profile.id, tool!.id);
 
+    // Older hosts named copies by the full source hash; the next sync drops them.
+    const legacyCopy = join(
+      getProfileSoulDir(ORG_ID, profile.id),
+      "skills",
+      ".plugins",
+      "a".repeat(64)
+    );
+
+    await mkdir(legacyCopy, { recursive: true });
+    await writeFile(join(legacyCopy, "SKILL.md"), SKILL_MD);
+
     const catalog = await skills.composeCatalogForProfile(ORG_ID, profile.id);
     expect(catalog).toContain("notes");
     expect(catalog).toContain("**notes**");
 
     const workspaceRoot = getProfileSoulDir(ORG_ID, profile.id);
     const copyRoot = join(workspaceRoot, "skills", ".plugins");
-    const [copy] = await readdir(copyRoot);
+    const [copy, ...rest] = await readdir(copyRoot);
+    expect(rest).toEqual([]);
+    expect(copy).toMatch(/^notes\.notes\.[a-f0-9]{12}$/);
     const instructionPath = join(copyRoot, copy!, "SKILL.md");
-    expect(catalog).toContain(JSON.stringify(instructionPath));
+    expect(
+      (await skills.loadSkillForModel(ORG_ID, profile.id, "notes"))
+        ?.skillFilePath
+    ).toBe(instructionPath);
     const context = { orgId: ORG_ID, profileId: profile.id, workspaceRoot };
     expect(
       (await runReadFile({ path: instructionPath }, context)).content
@@ -243,13 +259,13 @@ describe("plugin capabilities", () => {
       skills.composeCatalogForProfile("other_org", profile.id)
     ).rejects.toMatchObject({ status: 404 });
 
-    const matched = await skills.formatMatchedSkillsForPrompt(
+    const matched = await skills.findExplicitSkillForMessage(
       ORG_ID,
       profile.id,
       "/skill notes"
     );
 
-    expect(matched).toContain("notes");
+    expect(matched?.name).toBe("notes");
 
     const resolved = await resolveProfileStoredTools(
       await db.listToolsForProfile(profile.id),
@@ -370,7 +386,7 @@ describe("plugin capabilities", () => {
     await plugins.installPluginPackage(
       pluginPackage({
         "actions/write.js": ACTION_JS,
-        "nakama.plugin.json": JSON.stringify(
+        "airin.plugin.json": JSON.stringify(
           manifest("1.0.0", {
             actions: [
               {
@@ -547,9 +563,10 @@ describe("plugin capabilities", () => {
     await db.assignSkillToProfile(profile.id, skill!.id);
     await db.assignToolToProfile(profile.id, tool!.id);
 
-    const oldCatalog = await skills.composeCatalogForProfile(
+    const oldSkill = await skills.loadSkillForModel(
       ORG_ID,
-      profile.id
+      profile.id,
+      "notes"
     );
 
     const copyRoot = join(
@@ -610,13 +627,14 @@ describe("plugin capabilities", () => {
     const afterUpdate = await db.getOrgPlugin(ORG_ID, "notes");
     await plugins.enableOrgPlugin(ORG_ID, "notes", afterUpdate!.revision);
 
-    const newCatalog = await skills.composeCatalogForProfile(
+    const newSkill = await skills.loadSkillForModel(
       ORG_ID,
-      profile.id
+      profile.id,
+      "notes"
     );
 
-    expect(newCatalog).not.toBe(oldCatalog);
-    expect(newCatalog).not.toContain(join(copyRoot, oldCopy!));
+    expect(newSkill?.skillFilePath).not.toBe(oldSkill?.skillFilePath);
+    expect(newSkill?.skillFilePath).not.toContain(join(copyRoot, oldCopy!));
 
     const newCopy = (await readdir(copyRoot)).find(
       (entry) => entry !== oldCopy
@@ -787,13 +805,13 @@ Standalone body.
     expect(catalog).toContain("**notes**");
     expect(catalog).toContain("Standalone notes shadow attempt");
 
-    const matched = await skills.formatMatchedSkillsForPrompt(
+    const matched = await skills.findExplicitSkillForMessage(
       ORG_ID,
       profile.id,
       "/skill notes"
     );
 
-    expect(matched).toContain("Store notes in the plugin database");
+    expect(matched?.body).toContain("Store notes in the plugin database");
 
     const pluginDir = await plugins.resolveEnabledSkillDirectory(
       ORG_ID,
@@ -809,7 +827,6 @@ Standalone body.
       directory: pluginDir!,
       disableModelInvocation: false,
       hasTool: true,
-      includeBodyOnMatch: false,
       name: "notes",
       scriptIssues: [],
       scriptTools: [],
@@ -821,10 +838,10 @@ Standalone body.
     expect(loadedResult).toEqual({
       error: "Plugin skill entrypoints cannot be loaded in-process.",
     });
-    expect(existsSync("/tmp/nakama-plugin-skill-imported")).toBe(false);
+    expect(existsSync("/tmp/airin-plugin-skill-imported")).toBe(false);
   });
 
-  test("tool invoke uses trusted context actor and org, never Super Bot platform elevation", async () => {
+  test("tool invoke uses trusted context actor and org, never Airin platform elevation", async () => {
     const db = createInMemoryDatabaseAdapter();
     const profile = await seedOrgDefaultProfile(db, ORG_ID);
     await db.upsertProfile({ ...profile, isSuper: true });

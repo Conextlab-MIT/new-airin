@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { z } from "zod";
+import { isSecretEnvKey } from "../secret-mask";
 
 const JsonValueSchema = z.json();
 
@@ -17,6 +18,9 @@ export const MAX_RESULTS_LIMIT = 200;
 export const DEFAULT_TIMEOUT_MS = 15_000;
 
 export const MAX_OUTPUT_CHARS = 32_000;
+
+/** One ripgrep JSON record, which carries the whole matching line. */
+const MAX_RECORD_CHARS = 1_000_000;
 
 export interface RipgrepMatch {
   file: string;
@@ -39,7 +43,7 @@ interface MatchParseResult {
 export function buildRipgrepArgs(options: {
   query: string;
   searchRoot: string;
-  glob: string | null;
+  glob: string | string[] | null;
   regex: boolean;
   maxResults: number;
 }): string[] {
@@ -56,8 +60,10 @@ export function buildRipgrepArgs(options: {
     args.push("--fixed-strings");
   }
 
-  if (options.glob) {
-    args.push("--glob", options.glob);
+  for (const glob of [options.glob ?? []].flat()) {
+    if (glob) {
+      args.push("--glob", glob);
+    }
   }
 
   args.push("--", options.query, options.searchRoot);
@@ -84,8 +90,16 @@ export async function runRipgrep(
   const command = await resolveRipgrepCommand();
 
   return await new Promise((resolve, reject) => {
+    const env = { ...process.env };
+
+    for (const key of Object.keys(env)) {
+      if (isSecretEnvKey(key)) {
+        delete env[key];
+      }
+    }
+
     const child = spawn(command, args, {
-      env: process.env,
+      env,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
@@ -109,9 +123,23 @@ export async function runRipgrep(
     };
 
     child.stdout.on("data", (chunk: Buffer | string) => {
+      if (truncated) {
+        return;
+      }
+
       stdoutBuffer += String(chunk);
       const lines = stdoutBuffer.split("\n");
       stdoutBuffer = lines.pop() ?? "";
+
+      // A match on one huge line (minified code) arrives as one JSON record.
+      // Stop before buffering it whole instead of after.
+      if (stdoutBuffer.length > MAX_RECORD_CHARS) {
+        stdoutBuffer = "";
+        truncated = true;
+        maybeStopForLimits();
+
+        return;
+      }
 
       for (const line of lines) {
         if (!line.trim()) {
@@ -128,9 +156,16 @@ export async function runRipgrep(
           continue;
         }
 
-        if (matches.length < options.maxResults) {
+        if (
+          matches.length < options.maxResults &&
+          collectedChars + parsed.chars <= MAX_OUTPUT_CHARS
+        ) {
           matches.push(parsed.match);
           collectedChars += parsed.chars;
+        } else {
+          truncated = true;
+          maybeStopForLimits();
+          break;
         }
 
         if (

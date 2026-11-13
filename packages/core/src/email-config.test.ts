@@ -28,7 +28,8 @@ describe("email config", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
+    delete process.env.AIRIN_EMAIL_PASSWORD;
   });
 
   test("formats from header with optional display name", () => {
@@ -50,8 +51,9 @@ describe("email config", () => {
   });
 
   test("round-trips email settings without exposing password publicly", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-email-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-email-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    process.env.AIRIN_EMAIL_PASSWORD = "super-secret-password";
 
     const saved = await saveEmailConfig({
       from: "user@example.com",
@@ -59,7 +61,6 @@ describe("email config", () => {
       imapHost: "imap.example.com",
       imapPort: 993,
       imapSecure: true,
-      password: "super-secret-password",
       smtpHost: "smtp.example.com",
       smtpPort: 587,
       smtpSecure: false,
@@ -81,13 +82,13 @@ describe("email config", () => {
   });
 
   test("keeps existing password when update omits it", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-email-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-email-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    process.env.AIRIN_EMAIL_PASSWORD = "keep-me";
 
     await saveEmailConfig({
       from: "user@example.com",
       imapHost: "imap.example.com",
-      password: "keep-me",
       smtpHost: "smtp.example.com",
       username: "user@example.com",
     });
@@ -102,13 +103,13 @@ describe("email config", () => {
   });
 
   test("keeps existing password when update sends redacted placeholder", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-email-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-email-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    process.env.AIRIN_EMAIL_PASSWORD = "keep-me-too";
 
     await saveEmailConfig({
       from: "user@example.com",
       imapHost: "imap.example.com",
-      password: "keep-me-too",
       smtpHost: "smtp.example.com",
       username: "user@example.com",
     });
@@ -141,13 +142,13 @@ describe("email config", () => {
   });
 
   test("saveUserConfig preserves email section", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-email-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-email-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    process.env.AIRIN_EMAIL_PASSWORD = "secret";
 
     await saveEmailConfig({
       from: "user@example.com",
       imapHost: "imap.example.com",
-      password: "secret",
       smtpHost: "smtp.example.com",
       username: "user@example.com",
     });
@@ -171,6 +172,6 @@ describe("email config", () => {
     expect(raw).toContain("imap_host=imap.example.com");
 
     const parsed = parseIniWithSections(raw ?? "");
-    expect(parsed.sections[EMAIL_SECTION]?.password).toBe("secret");
+    expect(parsed.sections[EMAIL_SECTION]?.password).toBeUndefined();
   });
 });

@@ -4,8 +4,10 @@
  *
  * Prompt text picks the behavior:
  *   - "tool"  sends a tool_call and a completed tool_call_update first
- *   - "mcp"   reports how many MCP servers the session was created with
+ *   - "mcp-tools" asks the Airin MCP endpoint for its tools and reports them
+ *   - "mcp"   reports how many MCP servers the session was created with, and its _meta
  *   - "thought" sends a thought chunk before the reply
+ *   - "env"   lists which secret-shaped env vars the agent process can see
  *   - anything else echoes the prompt back
  */
 import { Readable, Writable } from "node:stream";
@@ -39,12 +41,20 @@ function initialConfigOptions(): acp.SessionConfigOption[] {
   ];
 }
 
-class FakeAgent implements acp.Agent {
+const ENV_PROBE = [
+  "AIRIN_SECRETS_KEY",
+  "AIRIN_PROVIDER_API_KEY_OPENAI",
+  "ANTHROPIC_API_KEY",
+];
+
+class FakeAgent {
   private mcpServerCount = 0;
+  private sessionMeta = "";
+  private mcpUrl = "";
   private configOptions = initialConfigOptions();
   private readonly sessionIds: string[] = [];
 
-  constructor(private readonly connection: acp.AgentSideConnection) {}
+  constructor(private readonly connection: acp.AgentContext) {}
 
   async initialize(): Promise<acp.InitializeResponse> {
     return {
@@ -58,14 +68,15 @@ class FakeAgent implements acp.Agent {
     params: acp.NewSessionRequest
   ): Promise<acp.NewSessionResponse> {
     this.mcpServerCount = params.mcpServers.length;
+    this.sessionMeta = JSON.stringify(params._meta ?? null);
+    this.mcpUrl =
+      params.mcpServers
+        .flatMap((server) => ("env" in server ? server.env : []))
+        .find((variable) => variable.name === "AIRIN_ACP_MCP_URL")?.value ?? "";
     const sessionId = `session-${this.sessionIds.length + 1}`;
     this.sessionIds.push(sessionId);
 
     return { configOptions: this.configOptions, sessionId };
-  }
-
-  async authenticate(): Promise<acp.AuthenticateResponse> {
-    return {};
   }
 
   async setSessionConfigOption(
@@ -84,6 +95,26 @@ class FakeAgent implements acp.Agent {
     const model = this.configOptions.find((option) => option.id === "model");
 
     return model?.type === "select" ? String(model.currentValue) : "";
+  }
+
+  /** What a real agent sees: the tool list its MCP endpoint serves. */
+  private async listMcpTools(): Promise<string> {
+    const response = await fetch(this.mcpUrl, {
+      body: JSON.stringify({ id: 1, jsonrpc: "2.0", method: "tools/list" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      return `mcp error: ${response.status}`;
+    }
+
+    // SAFETY: A 2xx tools/list reply is { result: { tools } }.
+    const body = (await response.json()) as {
+      result: { tools: { name: string }[] };
+    };
+
+    return `mcp tools: ${body.result.tools.map((tool) => tool.name).join(",")}`;
   }
 
   async prompt(params: acp.PromptRequest): Promise<acp.PromptResponse> {
@@ -116,9 +147,13 @@ class FakeAgent implements acp.Agent {
 
     const modelTag = this.currentModel() === "fake-smart" ? "[smart] " : "";
 
-    const reply = text.includes("mcp")
-      ? `mcp servers: ${this.mcpServerCount}`
-      : `${modelTag}fake: ${text}`;
+    const reply = text.includes("env")
+      ? `env: ${ENV_PROBE.filter((key) => process.env[key]).join(",")}`
+      : text.includes("mcp-tools")
+        ? await this.listMcpTools()
+        : text.includes("mcp")
+          ? `mcp servers: ${this.mcpServerCount} meta: ${this.sessionMeta}`
+          : `${modelTag}fake: ${text}`;
 
     await this.send(params.sessionId, {
       content: { text: reply, type: "text" },
@@ -128,15 +163,14 @@ class FakeAgent implements acp.Agent {
     return { stopReason: "end_turn" };
   }
 
-  async cancel(): Promise<void> {
-    // Nothing to stop: the fake agent answers each prompt before returning.
-  }
-
   private async send(
     sessionId: string,
     update: acp.SessionUpdate
   ): Promise<void> {
-    await this.connection.sessionUpdate({ sessionId, update });
+    await this.connection.notify(acp.methods.client.session.update, {
+      sessionId,
+      update,
+    });
   }
 }
 
@@ -148,4 +182,18 @@ const stdin = Readable.toWeb(process.stdin) as ReturnType<
 
 const stream = acp.ndJsonStream(Writable.toWeb(process.stdout), stdin);
 
-new acp.AgentSideConnection((connection) => new FakeAgent(connection), stream);
+// Nothing handles session/cancel: the fake agent answers each prompt before returning.
+const app = acp
+  .agent()
+  .onRequest(acp.methods.agent.initialize, () => fake.initialize())
+  .onRequest(acp.methods.agent.session.new, ({ params }) =>
+    fake.newSession(params)
+  )
+  .onRequest(acp.methods.agent.session.setConfigOption, ({ params }) =>
+    fake.setSessionConfigOption(params)
+  )
+  .onRequest(acp.methods.agent.session.prompt, ({ params }) =>
+    fake.prompt(params)
+  );
+
+const fake = new FakeAgent(app.connect(stream).client);

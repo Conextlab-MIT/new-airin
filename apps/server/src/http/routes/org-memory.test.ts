@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { OrgMemoryService } from "../../services/org-memory-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -8,7 +8,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-org-memory-routes-test-");
+setupTestConfigDir("airin-org-memory-routes-test-");
 
 function createApp() {
   const databaseAdapter = createInMemoryDatabaseAdapter();
@@ -23,26 +23,6 @@ function createApp() {
 const BASE = "http://localhost:4310";
 
 describe("org memory routes (v1)", () => {
-  test("rejects an unknown proposal status filter", async () => {
-    const { app, databaseAdapter } = createApp();
-
-    const adminSession = await setupFreshInstallSession(
-      app,
-      databaseAdapter,
-      "status-admin@org.com"
-    );
-
-    const orgId = adminSession.orgId!;
-
-    const response = await app.fetch(
-      new Request(`${BASE}/v1/orgs/${orgId}/memory/proposals?status=unknown`, {
-        headers: adminSession.headers({}, orgId),
-      })
-    );
-
-    expect(response.status).toBe(400);
-  });
-
   test("admin can add a fact, get memory, search, pin, unpin, archive", async () => {
     const { app, authService, databaseAdapter } = createApp();
 

@@ -56,19 +56,19 @@ test("scrubText removes email addresses", () => {
 });
 
 test("scrubText replaces the home directory with a tilde", () => {
-  const scrubbed = scrubText(`ENOENT at ${homedir()}/.nakama/config.ini`);
+  const scrubbed = scrubText(`ENOENT at ${homedir()}/.airin/config.ini`);
 
   expect(scrubbed).not.toContain(homedir());
-  expect(scrubbed).toContain("~/.nakama/config.ini");
+  expect(scrubbed).toContain("~/.airin/config.ini");
 });
 
 test("scrubText replaces home paths belonging to another user", () => {
   const scrubbed = scrubText(
-    "read failed: /Users/someoneelse/.nakama/orgs/a.db"
+    "read failed: /Users/someoneelse/.airin/orgs/a.db"
   );
 
   expect(scrubbed).not.toContain("someoneelse");
-  expect(scrubbed).toContain("~/.nakama/orgs/a.db");
+  expect(scrubbed).toContain("~/.airin/orgs/a.db");
 });
 
 test("scrubText keeps the diagnostic parts of a stack frame", () => {

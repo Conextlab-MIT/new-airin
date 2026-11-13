@@ -1,6 +1,7 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
   type AgentBrowserStatusResponse,
+  AirinApiError,
+  type CheckProviderResponse,
   type ComposioSettingsResponse,
   type ConfigureProviderResponse,
   type CreateProviderResponse,
@@ -11,10 +12,11 @@ import {
   formatServerError,
   type GenerateImageResponse,
   type ImageGenerationSettingsResponse,
+  type LanguageSettingsResponse,
   type ListProvidersResponse,
   type ListTimezonesResponse,
   type ModelsResponse,
-  NakamaApiError,
+  type ProviderInstanceSummary,
   reportError,
   resetWhatsAppSessionForReconnect,
   type SendEmailTestRequest,
@@ -32,10 +34,13 @@ import {
   type UpdateProviderResponse,
   type UpdateSlackSettingsRequest,
   type VisionSettingsResponse,
+  WEB_SEARCH_PROVIDERS,
+  type WebSearchProvider,
   type WebSearchSettingsResponse,
   type WhatsAppSettingsResponse,
-} from "@nakama/core";
-import { USER_PROVIDER_NAMES } from "@nakama/core/provider-resolution";
+} from "@airin/core";
+import { ChannelConfigBusyError } from "@airin/core/channel-config-shared";
+import { USER_PROVIDER_NAMES } from "@airin/core/provider-resolution";
 import {
   checkSlackTokensMatch,
   checkSlackWorkspaceAccess,
@@ -44,7 +49,9 @@ import {
   regenerateSlackHandshake,
   saveSlackConfig,
   validateSlackTokens,
-} from "@nakama/core/slack-config";
+} from "@airin/core/slack-config";
+import { THINKING_EFFORTS } from "@airin/core/thinking-effort";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Context, MiddlewareHandler } from "hono";
 import {
   completeChatgptOAuthDeviceSession,
@@ -62,6 +69,7 @@ import {
   isExternalModelCatalogId,
 } from "../../services/external-model-catalog-service";
 import { getTimezoneCatalog } from "../../services/timezone-catalog-service";
+import { resolveChannelOwner } from "../channel-owner";
 import { streamAgentBrowserInstall } from "../coding-harness-install-stream";
 import type { ServerOptions } from "../context";
 import {
@@ -70,7 +78,6 @@ import {
   requireOrgAdminOrPlatformAdminFromContext,
   requireOrgMemberFromContext,
   requirePlatformAdminFromContext,
-  requireProfileManageFromContext,
 } from "../org-guards";
 import {
   errorResponse,
@@ -80,6 +87,16 @@ import {
   readOptionalJson,
 } from "../shared";
 import type { AppEnv, HonoApp } from "../types";
+
+function providerIdentity(provider: ProviderInstanceSummary) {
+  return {
+    createdAt: provider.createdAt,
+    id: provider.id,
+    label: provider.label,
+    modelCount: provider.modelCount,
+    type: provider.type,
+  };
+}
 
 export function registerModelRoutes(
   app: HonoApp,
@@ -206,6 +223,10 @@ export function registerModelRoutes(
   const timezoneSettingsSchema = z
     .object({ timezone: z.string() })
     .openapi("TimezoneSettingsResponse");
+
+  const languageSettingsSchema = z
+    .object({ language: z.enum(["id", "en"]) })
+    .openapi("LanguageSettingsResponse");
 
   const thinkingSettingsSchema = z
     .object({})
@@ -368,7 +389,9 @@ export function registerModelRoutes(
     .object({
       apiKey: z.string().optional(),
       endpoint: z.string().optional(),
-      provider: z.enum(["exa", "firecrawl"]).nullable().optional(),
+      // Derived from the vendor list so a back-end the tool supports cannot be
+      // refused here.
+      provider: z.enum(WEB_SEARCH_PROVIDERS).nullable().optional(),
     })
     .openapi("UpdateWebSearchSettingsRequest");
 
@@ -376,6 +399,13 @@ export function registerModelRoutes(
     .object({})
     .passthrough()
     .openapi("AgentBrowserStatusResponse");
+
+  const updateAgentBrowserRequestSchema = z
+    .object({
+      apiKey: z.string().optional(),
+      provider: z.enum(["kernel"]).nullable().optional(),
+    })
+    .openapi("UpdateAgentBrowserSettingsRequest");
 
   const agentBrowserInstallEventSchema = z
     .object({})
@@ -404,6 +434,16 @@ export function registerModelRoutes(
     .object({
       apiKey: z.string().optional(),
       baseUrl: z.string().optional(),
+      hostMode: z.enum(["local", "cloud"]).optional(),
+      provider: z
+        .enum([
+          "ollama",
+          "openai_compatible",
+          "fireworks",
+          "netra",
+          "cloudflare",
+        ])
+        .optional(),
       providerId: z.string().optional(),
     })
     .openapi("DiscoverModelsRequest");
@@ -415,6 +455,14 @@ export function registerModelRoutes(
     })
     .passthrough()
     .openapi("CreateProviderRequest");
+
+  const checkProviderKeyRequestSchema = z
+    .object({
+      apiKey: z.string().max(4096),
+      baseUrl: z.string().max(2048).optional(),
+      type: z.enum(USER_PROVIDER_NAMES),
+    })
+    .openapi("CheckProviderKeyRequest");
 
   const updateProviderRequestSchema = z
     .object({})
@@ -433,10 +481,14 @@ export function registerModelRoutes(
     .object({ timezone: z.string() })
     .openapi("UpdateTimezoneRequest");
 
+  const updateLanguageRequestSchema = z
+    .object({ language: z.enum(["id", "en"]) })
+    .openapi("UpdateLanguageRequest");
+
   const updateThinkingRequestSchema = z
     .object({
       enabled: z.boolean(),
-      effort: z.enum(["low", "medium", "high"]).optional(),
+      effort: z.enum(THINKING_EFFORTS).optional(),
     })
     .passthrough()
     .openapi("UpdateThinkingRequest");
@@ -494,6 +546,10 @@ export function registerModelRoutes(
         400: {
           content: { "application/json": { schema: errorSchema } },
           description: "Error",
+        },
+        410: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Removed catalog",
         },
         502: {
           content: { "application/json": { schema: errorSchema } },
@@ -619,6 +675,81 @@ export function registerModelRoutes(
   );
   app.openAPIRegistry.registerPath(
     createRoute({
+      method: "post",
+      operationId: "checkProviderKey",
+      path: "/v1/providers/check-key",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: checkProviderKeyRequestSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": {
+              schema: z.object({ status: z.string() }),
+            },
+          },
+          description: "What a live check of the typed key found",
+        },
+      },
+      summary: "Check a key before saving it",
+      tags: ["Models"],
+    })
+  );
+  app.openAPIRegistry.registerPath(
+    createRoute({
+      method: "post",
+      operationId: "setDefaultProvider",
+      path: "/v1/providers/{providerId}/default",
+      request: { params: providerIdParam },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: deleteProviderResponseSchema },
+          },
+          description: "The new default provider",
+        },
+      },
+      summary: "Make a provider the default",
+      tags: ["Models"],
+    })
+  );
+  app.openAPIRegistry.registerPath(
+    createRoute({
+      method: "post",
+      operationId: "checkProvider",
+      path: "/v1/providers/{providerId}/check",
+      request: { params: providerIdParam },
+      responses: {
+        200: {
+          content: {
+            "application/json": {
+              schema: z
+                .object({
+                  status: z.enum([
+                    "ok",
+                    "rejected",
+                    "needs-key",
+                    "unreachable",
+                    "unchecked",
+                  ]),
+                })
+                .openapi("CheckProviderResponse"),
+            },
+          },
+          description: "What a live check of the saved key found",
+        },
+      },
+      summary: "Check a provider's saved key",
+      tags: ["Models"],
+    })
+  );
+  app.openAPIRegistry.registerPath(
+    createRoute({
       method: "delete",
       operationId: "deleteProvider",
       path: "/v1/providers/{providerId}",
@@ -639,6 +770,56 @@ export function registerModelRoutes(
       tags: ["Models"],
     })
   );
+  app.openAPIRegistry.registerPath(
+    createRoute({
+      method: "put",
+      operationId: "setProviderSecret",
+      path: "/v1/providers/{providerId}/secret",
+      request: {
+        params: providerIdParam,
+        body: {
+          content: {
+            "application/json": { schema: z.object({ apiKey: z.string() }) },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: updateProviderResponseSchema },
+          },
+          description: "Provider key saved",
+        },
+      },
+      summary: "Save a provider API key",
+      tags: ["Models"],
+    })
+  );
+
+  for (const [method, suffix, operationId] of [
+    ["delete", "", "clearProviderSecret"],
+    ["post", "/use-stored", "useStoredProviderSecret"],
+  ] as const) {
+    app.openAPIRegistry.registerPath(
+      createRoute({
+        method,
+        operationId,
+        path: `/v1/providers/{providerId}/secret${suffix}`,
+        request: { params: providerIdParam },
+        responses: {
+          200: {
+            content: {
+              "application/json": { schema: updateProviderResponseSchema },
+            },
+            description: "Provider key status",
+          },
+        },
+        tags: ["Models"],
+      })
+    );
+  }
+
   app.openAPIRegistry.registerPath(
     createRoute({
       method: "put",
@@ -730,6 +911,52 @@ export function registerModelRoutes(
         },
       },
       summary: "Update the user timezone",
+      tags: ["Models"],
+    })
+  );
+  app.openAPIRegistry.registerPath(
+    createRoute({
+      method: "get",
+      operationId: "getLanguage",
+      path: "/v1/settings/language",
+      responses: {
+        200: {
+          content: { "application/json": { schema: languageSettingsSchema } },
+          description: "Language settings",
+        },
+        500: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Error",
+        },
+      },
+      summary: "Get the UI and default AI reply language",
+      tags: ["Models"],
+    })
+  );
+  app.openAPIRegistry.registerPath(
+    createRoute({
+      method: "put",
+      operationId: "setLanguage",
+      path: "/v1/settings/language",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: updateLanguageRequestSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: {
+          content: { "application/json": { schema: languageSettingsSchema } },
+          description: "Language settings",
+        },
+        500: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Error",
+        },
+      },
+      summary: "Update the UI and default AI reply language",
       tags: ["Models"],
     })
   );
@@ -1365,6 +1592,38 @@ export function registerModelRoutes(
       tags: ["Models"],
     })
   );
+
+  for (const [kind, requestSchema, responseSchema] of [
+    ["email", z.object({ password: z.string() }), emailSettingsSchema],
+    [
+      "web-search",
+      z.object({ provider: z.enum(WEB_SEARCH_PROVIDERS), apiKey: z.string() }),
+      webSearchSettingsSchema,
+    ],
+    ["composio", z.object({ apiKey: z.string() }), composioSettingsSchema],
+  ] as const) {
+    app.openAPIRegistry.registerPath(
+      createRoute({
+        method: "put",
+        operationId: `set${kind.replace("-", "")}Secret`,
+        path: `/v1/settings/${kind}/secret`,
+        request: {
+          body: {
+            content: { "application/json": { schema: requestSchema } },
+            required: true,
+          },
+        },
+        responses: {
+          200: {
+            content: { "application/json": { schema: responseSchema } },
+            description: "Secret status",
+          },
+        },
+        tags: ["Models"],
+      })
+    );
+  }
+
   app.openAPIRegistry.registerPath(
     createRoute({
       method: "get",
@@ -1517,6 +1776,37 @@ export function registerModelRoutes(
   );
   app.openAPIRegistry.registerPath(
     createRoute({
+      method: "put",
+      operationId: "setAgentBrowserSettings",
+      path: "/v1/settings/agent-browser",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: updateAgentBrowserRequestSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: {
+          content: { "application/json": { schema: agentBrowserStatusSchema } },
+          description: "Agent-browser status",
+        },
+        400: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Error",
+        },
+        403: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Forbidden",
+        },
+      },
+      summary: "Set the agent-browser runtime",
+      tags: ["Models"],
+    })
+  );
+  app.openAPIRegistry.registerPath(
+    createRoute({
       method: "post",
       operationId: "installAgentBrowser",
       path: "/v1/settings/agent-browser/install",
@@ -1629,6 +1919,14 @@ export function registerModelRoutes(
     getRequestAuth(c);
     const catalogId = decodeURIComponent(c.req.param("catalogId"));
 
+    // A web page opened before the upgrade can still ask for this one.
+    if (catalogId === "models-dev") {
+      return errorResponse(
+        "This model catalog was removed. Reload the page.",
+        410
+      );
+    }
+
     if (!isExternalModelCatalogId(catalogId)) {
       return errorResponse("Unknown model catalog.", 400);
     }
@@ -1643,29 +1941,61 @@ export function registerModelRoutes(
   });
 
   app.get("/v1/models", async (c) => {
-    getRequestAuth(c);
+    const auth = getRequestAuth(c);
     const source = c.req.query("source");
 
     const modelsSource =
       source === "remote" ? ("remote" as const) : ("catalog" as const);
 
-    return json<ModelsResponse>(
-      await agent.getModels({ source: modelsSource })
-    );
+    const result = await agent.getModels({ source: modelsSource });
+
+    if (auth.isPlatformAdmin) {
+      return json<ModelsResponse>(result);
+    }
+
+    // Same redaction as GET /v1/providers: the model picker only needs the
+    // identifying fields, not the endpoint, key status or custom inventory.
+    const { baseUrl: _baseUrl, customModels: _customModels, ...rest } = result;
+
+    return json<ModelsResponse>({
+      ...rest,
+      providers: result.providers.map(providerIdentity),
+    });
   });
 
   app.post("/v1/models/discover", async (c) => {
-    requireOrgAdminOrPlatformAdminFromContext(c);
+    const auth = requireOrgAdminOrPlatformAdminFromContext(c);
     const body = await readJson(c.req.raw, discoverModelsRequestSchema);
+
+    // Saving a provider is platform-admin-only, and a caller-chosen base URL is
+    // the same outbound authority. Org admins keep providerId discovery, which
+    // fetches a stored URL.
+    if (body.baseUrl?.trim() && !auth.isPlatformAdmin) {
+      throw new AirinApiError("Forbidden", 403);
+    }
+
     const result = await agent.discoverModels(body);
 
     return json<ModelsResponse>(result);
   });
 
   app.get("/v1/providers", async (c) => {
-    getRequestAuth(c);
+    const auth = getRequestAuth(c);
 
-    return json<ListProvidersResponse>(await agent.listProviders());
+    const result = await agent.listProviders();
+
+    // The sibling provider endpoints are platform-admin-only. Non-admin
+    // callers still see the provider list in the UI, so they get the
+    // identifying fields only — no baseUrl, key status, custom model
+    // inventory, or routing details.
+    const providers = auth.isPlatformAdmin
+      ? result.providers
+      : result.providers.map(providerIdentity);
+
+    return json<ListProvidersResponse>({
+      defaultProviderId: result.defaultProviderId,
+      providers,
+    });
   });
 
   app.post("/v1/providers", async (c) => {
@@ -1675,7 +2005,7 @@ export function registerModelRoutes(
     try {
       return json<CreateProviderResponse>(await agent.createProvider(body));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1697,13 +2027,54 @@ export function registerModelRoutes(
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
       const message = error instanceof Error ? error.message : String(error);
 
       return errorResponse(message, 400);
+    }
+  });
+
+  app.post("/v1/providers/check-key", async (c) => {
+    requirePlatformAdminFromContext(c);
+    const body = await readJson(c.req.raw, checkProviderKeyRequestSchema);
+
+    return json<CheckProviderResponse>(await agent.checkProviderKey(body));
+  });
+
+  app.post("/v1/providers/:providerId/default", async (c) => {
+    requirePlatformAdminFromContext(c);
+
+    try {
+      return json<DeleteProviderResponse>(
+        await agent.setDefaultProvider(
+          decodeURIComponent(c.req.param("providerId"))
+        )
+      );
+    } catch (error) {
+      if (error instanceof AirinApiError) {
+        return errorResponse(error.message, error.status);
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/v1/providers/:providerId/check", async (c) => {
+    requirePlatformAdminFromContext(c);
+
+    try {
+      return json<CheckProviderResponse>(
+        await agent.checkProvider(decodeURIComponent(c.req.param("providerId")))
+      );
+    } catch (error) {
+      if (error instanceof AirinApiError) {
+        return errorResponse(error.message, error.status);
+      }
+
+      throw error;
     }
   });
 
@@ -1715,6 +2086,42 @@ export function registerModelRoutes(
     );
   });
 
+  app.put("/v1/providers/:providerId/secret", async (c) => {
+    requirePlatformAdminFromContext(c);
+    const body = await readJson<{ apiKey: string }>(c.req.raw);
+
+    try {
+      return json<UpdateProviderResponse>(
+        await agent.setProviderSecret(
+          decodeURIComponent(c.req.param("providerId")),
+          body.apiKey
+        )
+      );
+    } catch (error) {
+      if (error instanceof AirinApiError) {
+        return errorResponse(error.message, error.status);
+      }
+
+      return errorResponse(
+        error instanceof Error ? error.message : String(error),
+        400
+      );
+    }
+  });
+
+  for (const [method, suffix, action] of [
+    ["delete", "", "clear"],
+    ["post", "/use-stored", "use-stored"],
+  ] as const) {
+    app[method](`/v1/providers/:providerId/secret${suffix}`, async (c) => {
+      requirePlatformAdminFromContext(c);
+
+      return json<UpdateProviderResponse>(
+        await agent.manageProviderSecret(c.req.param("providerId"), action)
+      );
+    });
+  }
+
   app.post("/v1/xai-oauth/device/start", async (c) => {
     const auth = requirePlatformAdminFromContext(c);
     const owner = JSON.stringify([auth.user.id, auth.activeOrgId]);
@@ -1722,7 +2129,7 @@ export function registerModelRoutes(
     try {
       return json(await startXaiOAuthDeviceSession(owner));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1762,7 +2169,7 @@ export function registerModelRoutes(
         new Headers({ "Cache-Control": "no-store" })
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1778,7 +2185,7 @@ export function registerModelRoutes(
     try {
       return json(await startChatgptOAuthDeviceSession());
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1811,7 +2218,7 @@ export function registerModelRoutes(
 
       return json({ chatgptOAuth, models });
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1830,7 +2237,7 @@ export function registerModelRoutes(
         await agent.configureProvider(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1862,6 +2269,23 @@ export function registerModelRoutes(
     return json<TimezoneSettingsResponse>({ timezone });
   });
 
+  app.get("/v1/settings/language", async (c) => {
+    getRequestAuth(c);
+
+    return json<LanguageSettingsResponse>({
+      language: await agent.getUserLanguage(),
+    });
+  });
+
+  app.put("/v1/settings/language", async (c) => {
+    // Install-wide UI + default agent reply language — any signed-in member.
+    getRequestAuth(c);
+    const body = await readJson(c.req.raw, updateLanguageRequestSchema);
+    const language = await agent.setUserLanguage(body.language);
+
+    return json<LanguageSettingsResponse>({ language });
+  });
+
   app.get("/v1/settings/thinking", async (c) => {
     getRequestAuth(c);
 
@@ -1890,7 +2314,7 @@ export function registerModelRoutes(
     try {
       return json<VisionSettingsResponse>(await agent.setVisionSettings(body));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1917,7 +2341,7 @@ export function registerModelRoutes(
         await agent.setTranscriptionSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1934,7 +2358,7 @@ export function registerModelRoutes(
     try {
       return json<TranscribeAudioResponse>(await agent.transcribeAudio(body));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         if (error.status >= 500) {
           void reportError(error, { kind: "http", source: "server" });
         }
@@ -1965,7 +2389,7 @@ export function registerModelRoutes(
         await agent.setImageGenerationSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1986,7 +2410,7 @@ export function registerModelRoutes(
         await agent.generateImage(body, auth.activeOrgId ?? null, auth.user.id)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         if (error.status >= 500) {
           void reportError(error, { kind: "http", source: "server" });
         }
@@ -2013,13 +2437,33 @@ export function registerModelRoutes(
     try {
       return json<EmailSettingsResponse>(await agent.setEmailSettings(body));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
       const message = error instanceof Error ? error.message : String(error);
 
       return errorResponse(message, 400);
+    }
+  });
+
+  app.put("/v1/settings/email/secret", async (c) => {
+    requirePlatformAdminFromContext(c);
+    const body = await readJson<{ password: string }>(c.req.raw);
+
+    try {
+      return json<EmailSettingsResponse>(
+        await agent.setEmailSecret(body.password)
+      );
+    } catch (error) {
+      if (error instanceof AirinApiError) {
+        return errorResponse(error.message, error.status);
+      }
+
+      return errorResponse(
+        error instanceof Error ? error.message : String(error),
+        400
+      );
     }
   });
 
@@ -2032,7 +2476,7 @@ export function registerModelRoutes(
         await agent.sendEmailTest(body.to?.trim() || auth.user.email)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2057,7 +2501,7 @@ export function registerModelRoutes(
         await agent.setWebSearchSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2067,12 +2511,53 @@ export function registerModelRoutes(
     }
   });
 
+  app.put("/v1/settings/web-search/secret", async (c) => {
+    requirePlatformAdminFromContext(c);
+
+    const body = await readJson<{
+      provider: WebSearchProvider;
+      apiKey: string;
+    }>(c.req.raw);
+
+    try {
+      return json<WebSearchSettingsResponse>(
+        await agent.setWebSearchSecret(body.provider, body.apiKey)
+      );
+    } catch (error) {
+      if (error instanceof AirinApiError) {
+        return errorResponse(error.message, error.status);
+      }
+
+      return errorResponse(
+        error instanceof Error ? error.message : String(error),
+        400
+      );
+    }
+  });
+
   app.get("/v1/settings/agent-browser", async (c) => {
     requireOrgAdminFromContext(c);
 
     return json<AgentBrowserStatusResponse>(
       await agent.getAgentBrowserStatus()
     );
+  });
+
+  app.put("/v1/settings/agent-browser", async (c) => {
+    requirePlatformAdminFromContext(c);
+    const body = await readJson(c.req.raw, updateAgentBrowserRequestSchema);
+
+    try {
+      return json<AgentBrowserStatusResponse>(
+        await agent.saveAgentBrowserSettings(body)
+      );
+    } catch (error) {
+      if (error instanceof AirinApiError) {
+        return errorResponse(error.message, error.status);
+      }
+
+      throw error;
+    }
   });
 
   app.post("/v1/settings/agent-browser/install", async (c) => {
@@ -2179,7 +2664,7 @@ export function registerModelRoutes(
     );
 
     if (!["telegram", "discord", "whatsapp"].includes(body.platform)) {
-      throw new NakamaApiError("Unknown channel", 400);
+      throw new AirinApiError("Unknown channel", 400);
     }
 
     if (body.global) {
@@ -2187,7 +2672,7 @@ export function registerModelRoutes(
     }
 
     if (!options.databaseAdapter) {
-      throw new NakamaApiError("Database unavailable", 503);
+      throw new AirinApiError("Database unavailable", 503);
     }
 
     await workerManager.claimLegacyChannel(
@@ -2201,39 +2686,7 @@ export function registerModelRoutes(
     return json({ ok: true });
   });
 
-  async function channelOwner(c: Context<AppEnv>) {
-    const orgId = requireActiveOrgIdFromContext(c);
-    const profileId = c.req.query("profileId")?.trim();
-
-    if (!profileId) {
-      // Without an agent there is nothing a member could own.
-      requireOrgAdminOrPlatformAdminFromContext(c);
-
-      throw new NakamaApiError(
-        "Choose an agent to manage this connection.",
-        400
-      );
-    }
-
-    // Admins manage any agent's connections. Members manage their own agent's.
-    await requireProfileManageFromContext(c, agent, {
-      allowOrgAdmin: true,
-      profileId,
-    });
-
-    const { profile } = await agent.getProfile(orgId, profileId);
-
-    // A channel worker talks to the server as the local client, and the server
-    // refuses that client for Super Bot, so such a bridge can never answer.
-    if (profile.isSuper) {
-      throw new NakamaApiError(
-        "Super Bot cannot be connected to a channel. Choose another agent.",
-        400
-      );
-    }
-
-    return { orgId, profileId };
-  }
+  const channelOwner = (c: Context<AppEnv>) => resolveChannelOwner(c, agent);
 
   // Check access before any handler reads a body or catches errors into a 400.
   for (const channel of ["telegram", "discord", "whatsapp", "slack"]) {
@@ -2261,7 +2714,7 @@ export function registerModelRoutes(
         await agent.setTelegramSettings(orgId, body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2408,7 +2861,7 @@ export function registerModelRoutes(
         await agent.setDiscordSettings(body, await channelOwner(c))
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2510,7 +2963,7 @@ export function registerModelRoutes(
         await agent.setComposioSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2519,6 +2972,48 @@ export function registerModelRoutes(
       return errorResponse(message, 400);
     }
   });
+  app.put("/v1/settings/composio/secret", async (c) => {
+    requirePlatformAdminFromContext(c);
+    const body = await readJson<{ apiKey: string }>(c.req.raw);
+
+    try {
+      return json<ComposioSettingsResponse>(
+        await agent.setComposioSecret(body.apiKey)
+      );
+    } catch (error) {
+      if (error instanceof AirinApiError) {
+        return errorResponse(error.message, error.status);
+      }
+
+      return errorResponse(
+        error instanceof Error ? error.message : String(error),
+        400
+      );
+    }
+  });
+
+  for (const kind of ["email", "web-search", "composio"] as const) {
+    for (const [method, suffix, action] of [
+      ["delete", "", "clear"],
+      ["post", "/use-stored", "use-stored"],
+    ] as const) {
+      app.openAPIRegistry.registerPath(
+        createRoute({
+          method,
+          operationId: `${action === "clear" ? "clear" : "useStored"}${kind.replace("-", "")}Secret`,
+          path: `/v1/settings/${kind}/secret${suffix}`,
+          responses: { 200: { description: "Secret status" } },
+          tags: ["Settings"],
+        })
+      );
+      app[method](`/v1/settings/${kind}/secret${suffix}`, async (c) => {
+        requirePlatformAdminFromContext(c);
+
+        return json(await agent.manageSettingSecret(kind, action));
+      });
+    }
+  }
+
   app.get("/v1/settings/error-tracking", async (c) => {
     getRequestAuth(c);
 
@@ -2538,7 +3033,7 @@ export function registerModelRoutes(
         await agent.setErrorTrackingSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2556,7 +3051,7 @@ export function registerModelRoutes(
         await agent.sendErrorTrackingTest()
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2582,7 +3077,11 @@ export function registerModelRoutes(
         await agent.setWhatsAppSettings(await channelOwner(c), body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof ChannelConfigBusyError) {
+        return errorResponse("WhatsApp settings are busy. Try again.", 503);
+      }
+
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2598,6 +3097,10 @@ export function registerModelRoutes(
         await agent.regenerateWhatsAppPairingCode(await channelOwner(c))
       );
     } catch (error) {
+      if (error instanceof ChannelConfigBusyError) {
+        return errorResponse("WhatsApp settings are busy. Try again.", 503);
+      }
+
       const message = error instanceof Error ? error.message : String(error);
 
       return errorResponse(message, 400);
@@ -2617,6 +3120,10 @@ export function registerModelRoutes(
 
       return json<WhatsAppSettingsResponse>(settings);
     } catch (error) {
+      if (error instanceof ChannelConfigBusyError) {
+        return errorResponse("WhatsApp settings are busy. Try again.", 503);
+      }
+
       const message = error instanceof Error ? error.message : String(error);
 
       return errorResponse(message, 400);

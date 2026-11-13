@@ -3,6 +3,10 @@
  * serves artifact bytes) and the web app (which decides how to preview them).
  */
 
+import { AirinApiError } from "./api-error";
+
+export const MAX_HTML_ARTIFACT_BYTES = 16_000_000;
+
 const UNKNOWN_MIME_TYPE = "application/octet-stream";
 
 export const DOCX_MEDIA_TYPE =
@@ -81,7 +85,7 @@ function fileExtension(filename: string): string {
   return basename.slice(dotIndex + 1).toLowerCase();
 }
 
-/** Best-effort MIME type for an artifact that has no `.nakama-meta.json` sidecar. */
+/** Best-effort MIME type for an artifact that has no `.airin-meta.json` sidecar. */
 export function inferArtifactMimeType(filename: string): string {
   return (
     Object.entries(MIME_TYPE_BY_EXTENSION).find(
@@ -116,6 +120,23 @@ export function isHtmlArtifactMimeType(mimeType: string): boolean {
   const normalized = normalizeMimeType(mimeType);
 
   return normalized === "text/html" || normalized === "application/xhtml+xml";
+}
+
+export function assertHtmlArtifactSize(
+  filename: string,
+  sizeBytes: number,
+  mimeType = ""
+): void {
+  if (
+    sizeBytes > MAX_HTML_ARTIFACT_BYTES &&
+    (isHtmlArtifactMimeType(mimeType) ||
+      isHtmlArtifactMimeType(inferArtifactMimeType(filename)))
+  ) {
+    throw new AirinApiError(
+      `HTML artifacts cannot exceed ${MAX_HTML_ARTIFACT_BYTES} bytes.`,
+      413
+    );
+  }
 }
 
 export function isMarkdownArtifactMimeType(mimeType: string): boolean {

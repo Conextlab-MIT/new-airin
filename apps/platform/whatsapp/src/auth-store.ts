@@ -1,11 +1,11 @@
-import type { ChannelConfigScope } from "@nakama/core/channel-config-shared";
-import type { WhatsAppConfigFile } from "@nakama/core/whatsapp-config";
+import type { ChannelConfigScope } from "@airin/core/channel-config-shared";
+import type { WhatsAppConfigFile } from "@airin/core/whatsapp-config";
 import {
   isWhatsAppUserAuthorized,
   loadWhatsAppConfigFile,
   rememberWhatsAppPairedIdentities,
   verifyAndPairWhatsAppUser,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 
 export class WhatsAppAuthStore {
   private config: WhatsAppConfigFile | null = null;

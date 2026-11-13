@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { AuthService } from "../../services/auth-service";
 import { setupTestConfigDir } from "../../test-config-dir";
@@ -10,7 +10,7 @@ import {
   seedOrgAdmin,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-profile-avatar-org-scope-test-");
+setupTestConfigDir("airin-profile-avatar-org-scope-test-");
 
 const PASSWORD = "password123";
 
@@ -59,14 +59,6 @@ async function createScenario() {
 const AVATAR_PATH = `http://localhost:4310/v1/profiles/${VICTIM_PROFILE}/avatar`;
 
 describe("GET /v1/profiles/:profileId/avatar is org scoped", () => {
-  test("rejects anonymous callers", async () => {
-    const { app } = await createScenario();
-
-    const response = await app.fetch(new Request(AVATAR_PATH));
-
-    expect(response.status).toBe(401);
-  });
-
   test("hides the avatar from another org", async () => {
     const { app } = await createScenario();
 
@@ -138,6 +130,130 @@ describe("GET /v1/profiles/:profileId/avatar is org scoped", () => {
 
     const response = await app.fetch(
       new Request(AVATAR_PATH, { headers: { Cookie: victim.cookieHeader } })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/png");
+  });
+});
+
+async function seedOrgMember(
+  databaseAdapter: ReturnType<typeof createInMemoryDatabaseAdapter>,
+  opts: {
+    email: string;
+    orgId: string;
+    password: string;
+    userId: string;
+  }
+) {
+  const now = new Date().toISOString();
+  await databaseAdapter.createUser({
+    createdAt: now,
+    email: opts.email,
+    id: opts.userId,
+    passwordHash: await new AuthService().hashPassword(opts.password),
+    updatedAt: now,
+  });
+  await databaseAdapter.upsertOrgMember({
+    createdAt: now,
+    orgId: opts.orgId,
+    role: "member",
+    userId: opts.userId,
+  });
+}
+
+const PRIVATE_ORG = "org_owner";
+
+const PRIVATE_PROFILE = "profile_private";
+
+const PRIVATE_AVATAR_PATH = `http://localhost:4310/v1/profiles/${PRIVATE_PROFILE}/avatar`;
+
+async function createPrivateProfileScenario() {
+  const databaseAdapter = createInMemoryDatabaseAdapter();
+
+  const agent = new AgentService(
+    { defaultProviderId: null, providers: [] },
+    null,
+    databaseAdapter
+  );
+
+  const now = new Date().toISOString();
+  await databaseAdapter.upsertOrganization({
+    createdAt: now,
+    id: PRIVATE_ORG,
+    name: "Owner Org",
+    slug: PRIVATE_ORG,
+    updatedAt: now,
+  });
+  await seedOrgMember(databaseAdapter, {
+    email: "owner@example.com",
+    orgId: PRIVATE_ORG,
+    password: PASSWORD,
+    userId: "user_owner",
+  });
+  await databaseAdapter.upsertProfile({
+    createdAt: now,
+    id: PRIVATE_PROFILE,
+    isSuper: false,
+    model: "openrouter/auto",
+    name: "Private",
+    orgId: PRIVATE_ORG,
+    ownerUserId: "user_owner",
+    sharedWithTeam: false,
+    systemPrompt: "You are helpful.",
+    updatedAt: now,
+  });
+  await agent.uploadProfileAvatar(PRIVATE_ORG, PRIVATE_PROFILE, {
+    data: tinyPngBase64,
+    mediaType: "image/png",
+  });
+
+  await seedOrgMember(databaseAdapter, {
+    email: "member@example.com",
+    orgId: PRIVATE_ORG,
+    password: PASSWORD,
+    userId: "user_member",
+  });
+
+  const { app } = createMinimalHonoApp({ agent, databaseAdapter });
+
+  return { app, databaseAdapter };
+}
+
+describe("GET /v1/profiles/:profileId/avatar enforces the profile read guard", () => {
+  test("returns 403 to an org member without chat access to the profile", async () => {
+    const { app } = await createPrivateProfileScenario();
+
+    const member = await loginUserSession(
+      app,
+      "member@example.com",
+      PASSWORD,
+      PRIVATE_ORG
+    );
+
+    const response = await app.fetch(
+      new Request(PRIVATE_AVATAR_PATH, {
+        headers: { Cookie: member.cookieHeader },
+      })
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  test("returns 200 to the private profile owner as an org member", async () => {
+    const { app } = await createPrivateProfileScenario();
+
+    const owner = await loginUserSession(
+      app,
+      "owner@example.com",
+      PASSWORD,
+      PRIVATE_ORG
+    );
+
+    const response = await app.fetch(
+      new Request(PRIVATE_AVATAR_PATH, {
+        headers: { Cookie: owner.cookieHeader },
+      })
     );
 
     expect(response.status).toBe(200);

@@ -1,4 +1,4 @@
-import type { JsonSchema } from "@nakama/core/contract";
+import type { JsonSchema } from "@airin/core/contract";
 
 type ExampleValue =
   | string
@@ -36,7 +36,7 @@ function exampleValueForSchema(field: JsonSchema): ExampleValue {
   }
 }
 
-export function exampleParametersFromSchema(
+function exampleParametersFromSchema(
   schema: JsonSchema | undefined
   // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- This dictionary holds external JSON keys until the boundary parser validates each value.
 ): { [key: string]: ExampleValue } {

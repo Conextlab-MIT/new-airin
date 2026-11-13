@@ -4,7 +4,16 @@ import type {
   StreamChatHandlers,
   ThinkingEffort,
   ToolCall,
-} from "@nakama/core";
+} from "@airin/core";
+import {
+  AirinApiError,
+  MODEL_CONNECTION_CLOSED_MESSAGE,
+  ProviderStreamInterruptedError,
+} from "@airin/core";
+import {
+  clampThinkingEffort,
+  isThinkingEffort,
+} from "@airin/core/thinking-effort";
 import { z } from "zod";
 
 export type ProviderJsonValue =
@@ -139,6 +148,7 @@ export function buildChatCompletionResult(options: {
   providerContent?: unknown[];
   toolCalls: ToolCall[];
   thinking?: string | null | undefined;
+  truncated?: boolean;
   usage?: ChatCompletionResult["usage"];
 }): ChatCompletionResult {
   const content = options.content?.trim() ?? "";
@@ -166,6 +176,10 @@ export function buildChatCompletionResult(options: {
     content,
     toolCalls: options.toolCalls,
   };
+
+  if (options.truncated) {
+    result.truncated = true;
+  }
 
   if (options.usage) {
     result.usage = options.usage;
@@ -232,7 +246,7 @@ export async function readSseEvents(
   let sawDone = false;
 
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readStreamChunk(reader);
 
     if (value) {
       buffer += decoder.decode(value, { stream: true });
@@ -264,6 +278,28 @@ export async function readSseEvents(
   }
 
   return sawDone;
+}
+
+// A socket that drops mid-stream (ECONNRESET) becomes an interruption, so the
+// chat loop retries once. Cancels and deadlines keep their own errors.
+async function readStreamChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>
+): ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]> {
+  try {
+    return await reader.read();
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === "AbortError" || error.name === "TimeoutError")
+    ) {
+      throw error;
+    }
+
+    throw Object.assign(
+      new ProviderStreamInterruptedError(MODEL_CONNECTION_CLOSED_MESSAGE),
+      { cause: error }
+    );
+  }
 }
 
 async function emitSseEvent(
@@ -416,14 +452,15 @@ export function readRecord<Value>(value: Value): ProviderJsonRecord {
   return value as ProviderJsonRecord;
 }
 
+/** Defaults a missing effort to medium and lowers it to what the host and model accept. */
 export function normalizeThinkingEffort(
-  effort: ThinkingEffort | undefined
+  effort: ThinkingEffort | undefined,
+  model: string,
+  provider: string
 ): ThinkingEffort {
-  if (effort === "low" || effort === "medium" || effort === "high") {
-    return effort;
-  }
-
-  return "medium";
+  return isThinkingEffort(effort)
+    ? clampThinkingEffort(effort, model, provider)
+    : "medium";
 }
 
 export function formatHttpErrorBody(
@@ -463,4 +500,46 @@ export function formatHttpErrorBody(
   }
 
   return `${label} request failed (${status}): ${trimmed.slice(0, 500)}`;
+}
+
+/** A provider answered but the answer is unusable. The user sees the message. */
+export function buildProviderResponseError(message: string): AirinApiError {
+  return new AirinApiError(message, 502);
+}
+
+// Account refusals that some providers send without a 401/402/403: OpenAI
+// sends an empty quota as a 429, Anthropic an empty balance as a 400.
+const ACCOUNT_ERROR_KINDS = new Set(["billing_error", "insufficient_quota"]);
+
+const LOW_CREDIT_MESSAGE = /credit balance is too low/i;
+
+/**
+ * A rejected API key or an exhausted credit balance is the caller's account to
+ * fix, not an Airin bug: 400 so the global error handler's `status >= 500`
+ * check never reports it and the chat loop does not retry it. Anything else
+ * from the provider (rate limits, 5xx, timeouts) stays worth seeing.
+ */
+export function buildProviderHttpError(
+  label: string,
+  status: number,
+  body: string
+): AirinApiError {
+  const parsed = parseJsonRecord(body);
+  // Raw bodies nest the error under `error`; OpenAI SDK errors arrive flat.
+  const error = { ...parsed, ...readRecord(parsed.error) };
+
+  const accountRefused =
+    status === 401 ||
+    status === 402 ||
+    status === 403 ||
+    ACCOUNT_ERROR_KINDS.has(readProviderString(error.type) ?? "") ||
+    ACCOUNT_ERROR_KINDS.has(readProviderString(error.code) ?? "") ||
+    LOW_CREDIT_MESSAGE.test(readProviderString(error.message) ?? "");
+
+  const clientStatus = accountRefused ? 400 : 502;
+
+  return new AirinApiError(
+    formatHttpErrorBody(label, status, body),
+    clientStatus
+  );
 }

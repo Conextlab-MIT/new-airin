@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../services/agent-service";
 import { AuthService } from "../services/auth-service";
 import { OrgService } from "../services/org-service";
@@ -7,7 +7,7 @@ import { setupTestConfigDir } from "../test-config-dir";
 import { createHonoApp } from "./app";
 import { setupFreshInstallSession } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-user-context-test-");
+setupTestConfigDir("airin-user-context-test-");
 
 describe("user context routes", () => {
   test("stores USER.md per authenticated member", async () => {

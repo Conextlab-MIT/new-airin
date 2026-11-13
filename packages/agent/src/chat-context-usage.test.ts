@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ChatCompletionResult, ProviderClient } from "@nakama/core";
+import type { ChatCompletionResult, ProviderClient } from "@airin/core";
 import { createAgentChatSession } from "./index";
 
 const REASONING = "r".repeat(400);

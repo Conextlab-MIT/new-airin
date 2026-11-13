@@ -2,7 +2,7 @@ import {
   getLocalAuthTokenPath,
   LocalAuthTokenManagedExternallyError,
   rotateLocalAuthToken,
-} from "@nakama/core/local-auth";
+} from "@airin/core/local-auth";
 
 export function isRotateTokenCommand(argv = process.argv.slice(2)): boolean {
   return argv[0] === "rotate-token";

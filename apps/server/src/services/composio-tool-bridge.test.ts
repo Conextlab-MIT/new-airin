@@ -2,11 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveComposioCallbackBaseUrl } from "./composio-callback-url";
+import { AirinApiError, COMPOSIO_CUSTOM_AUTH_REQUIRED } from "@airin/core";
 import {
   buildComposioConnectTools,
   buildComposioToolDefinitions,
-  composioConnectionKey,
 } from "./composio-tool-bridge";
 import { McpClientManager } from "./mcp-client-manager";
 
@@ -17,9 +16,9 @@ interface EmailActionArguments {
 
 describe("composio-tool-bridge", () => {
   const previous = {
-    configDir: process.env.NAKAMA_CONFIG_DIR,
-    publicUrl: process.env.NAKAMA_PUBLIC_URL,
-    webPublicUrl: process.env.NAKAMA_WEB_PUBLIC_URL,
+    configDir: process.env.AIRIN_CONFIG_DIR,
+    publicUrl: process.env.AIRIN_PUBLIC_URL,
+    webPublicUrl: process.env.AIRIN_WEB_PUBLIC_URL,
   };
 
   let isolatedConfigDir = "";
@@ -27,40 +26,92 @@ describe("composio-tool-bridge", () => {
   beforeEach(() => {
     isolatedConfigDir = join(
       tmpdir(),
-      `nakama-composio-bridge-${crypto.randomUUID()}`
+      `airin-composio-bridge-${crypto.randomUUID()}`
     );
     mkdirSync(isolatedConfigDir, { recursive: true });
-    process.env.NAKAMA_CONFIG_DIR = isolatedConfigDir;
-    delete process.env.NAKAMA_PUBLIC_URL;
-    delete process.env.NAKAMA_WEB_PUBLIC_URL;
+    process.env.AIRIN_CONFIG_DIR = isolatedConfigDir;
+    delete process.env.AIRIN_PUBLIC_URL;
+    delete process.env.AIRIN_WEB_PUBLIC_URL;
   });
 
   afterEach(() => {
     rmSync(isolatedConfigDir, { force: true, recursive: true });
 
     if (previous.configDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous.configDir;
+      process.env.AIRIN_CONFIG_DIR = previous.configDir;
     }
 
     if (previous.publicUrl === undefined) {
-      delete process.env.NAKAMA_PUBLIC_URL;
+      delete process.env.AIRIN_PUBLIC_URL;
     } else {
-      process.env.NAKAMA_PUBLIC_URL = previous.publicUrl;
+      process.env.AIRIN_PUBLIC_URL = previous.publicUrl;
     }
 
     if (previous.webPublicUrl === undefined) {
-      delete process.env.NAKAMA_WEB_PUBLIC_URL;
+      delete process.env.AIRIN_WEB_PUBLIC_URL;
     } else {
-      process.env.NAKAMA_WEB_PUBLIC_URL = previous.webPublicUrl;
+      process.env.AIRIN_WEB_PUBLIC_URL = previous.webPublicUrl;
     }
   });
 
-  test("connection key includes user id", () => {
-    expect(composioConnectionKey("org_1", "usr_a", "profile_1")).toBe(
-      "composio:org_1:usr_a:profile_1"
-    );
+  test("runs the turn without Composio tools when the session cannot open", async () => {
+    const composioService: Parameters<typeof buildComposioToolDefinitions>[3] =
+      {
+        async getAssignedToolkitRecords() {
+          return [
+            {
+              allowedActions: null,
+              orgToolkit: {
+                cachedTools: [
+                  {
+                    description: "Send an email",
+                    inputSchema: { properties: {}, type: "object" },
+                    name: "Send Email",
+                    slug: "GMAIL_SEND_EMAIL",
+                  },
+                ],
+                createdAt: "2026-01-01T00:00:00.000Z",
+                displayName: "Gmail",
+                id: "ctk_1",
+                lastError: null,
+                orgId: "org_1",
+                status: "enabled",
+                toolkitSlug: "gmail",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+              },
+              userConnection: {
+                connectedAccountId: "ca_1",
+                createdAt: "2026-01-01T00:00:00.000Z",
+                id: "cuc_1",
+                lastError: null,
+                oauthStateHash: null,
+                orgId: "org_1",
+                sessionIdEnc: null,
+                status: "connected",
+                toolkitId: "ctk_1",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+                userId: "usr_1",
+              },
+            },
+          ];
+        },
+        async getProfileSessionEndpoint() {
+          throw new Error("Composio is down");
+        },
+        isAvailable: async () => true,
+      };
+
+    expect(
+      await buildComposioToolDefinitions(
+        "org_1",
+        "usr_1",
+        "profile_1",
+        composioService,
+        new McpClientManager()
+      )
+    ).toEqual([]);
   });
 
   test("exposes search + invoke meta-tools for connected assignments", async () => {
@@ -706,7 +757,7 @@ describe("composio-tool-bridge", () => {
 
     const result = await tools[0]?.run(
       { toolkit_slug: "gmail" },
-      { clientOrigin: "https://nakama.example.com" }
+      { clientOrigin: "https://airin.example.com" }
     );
 
     expect(result).toMatchObject({
@@ -714,6 +765,173 @@ describe("composio-tool-bridge", () => {
       redirectUrl: "https://oauth.example.com/authorize",
       toolkitSlug: "gmail",
     });
+  });
+
+  /** Runs the channel connect tool for Gmail while connect throws `error`. */
+  async function runConnectToolWhenConnectFails(error: Error) {
+    const composioService: Parameters<typeof buildComposioConnectTools>[3] = {
+      async connectToolkit() {
+        throw error;
+      },
+      async getAssignedToolkitRecords() {
+        return [
+          {
+            allowedActions: null,
+            orgToolkit: {
+              cachedTools: [
+                {
+                  description: "Send",
+                  inputSchema: { properties: {}, type: "object" },
+                  name: "Send Email",
+                  slug: "GMAIL_SEND_EMAIL",
+                },
+              ],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              displayName: "Gmail",
+              id: "ctk_1",
+              lastError: null,
+              orgId: "org_1",
+              status: "enabled",
+              toolkitSlug: "gmail",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+            userConnection: null,
+          },
+        ];
+      },
+      isAvailable: async () => true,
+    };
+
+    const tools = await buildComposioConnectTools(
+      "org_1",
+      "usr_1",
+      "profile_1",
+      composioService
+    );
+
+    return await tools[0]?.run(
+      { toolkit_slug: "gmail" },
+      { clientOrigin: "https://airin.example.com" }
+    );
+  }
+
+  test("connect tool reports a missing auth config as its own code", async () => {
+    const result = await runConnectToolWhenConnectFails(
+      new AirinApiError("No managed auth.", 422, undefined, undefined, {
+        code: COMPOSIO_CUSTOM_AUTH_REQUIRED,
+      })
+    );
+
+    expect(result).toMatchObject({
+      code: COMPOSIO_CUSTOM_AUTH_REQUIRED,
+      toolkitSlug: "gmail",
+    });
+  });
+
+  test("connect tool keeps raw Composio errors out of the reply", async () => {
+    const result = await runConnectToolWhenConnectFails(
+      new Error('400 {"error":{"slug":"Some_Other_Error"}}')
+    );
+
+    expect(result).toMatchObject({
+      code: "COMPOSIO_TRANSIENT",
+      toolkitSlug: "gmail",
+    });
+    expect(JSON.stringify(result)).not.toContain("Some_Other_Error");
+  });
+
+  test("web chat offers a connect button for any app without starting OAuth", async () => {
+    const composioService: Parameters<typeof buildComposioConnectTools>[3] = {
+      async connectToolkit() {
+        throw new Error("Web chat must not start OAuth on the server");
+      },
+      async getAssignedToolkitRecords() {
+        return [];
+      },
+      isAvailable: async () => true,
+    };
+
+    const tools = await buildComposioConnectTools(
+      "org_1",
+      "usr_1",
+      "profile_1",
+      composioService,
+      { channel: "web" }
+    );
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "composio__connect_account",
+    ]);
+
+    await expect(
+      tools[0]?.run(
+        { toolkit_slug: "GoogleCalendar" },
+        { clientOrigin: "http://localhost:3003" }
+      )
+    ).resolves.toEqual(
+      expect.objectContaining({
+        onAgent: false,
+        toolkitSlug: "googlecalendar",
+        type: "composio_connect",
+      })
+    );
+
+    await expect(
+      tools[0]?.run({ toolkit_slug: "google calendar" }, {})
+    ).resolves.toMatchObject({ code: "COMPOSIO_POLICY" });
+  });
+
+  test("web chat reports an app that is already connected", async () => {
+    const composioService: Parameters<typeof buildComposioConnectTools>[3] = {
+      async connectToolkit() {
+        throw new Error("should not be called");
+      },
+      async getAssignedToolkitRecords() {
+        return [
+          {
+            allowedActions: null,
+            orgToolkit: {
+              cachedTools: [],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              displayName: "Gmail",
+              id: "ctk_1",
+              lastError: null,
+              orgId: "org_1",
+              status: "enabled",
+              toolkitSlug: "gmail",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+            userConnection: {
+              connectedAccountId: "ca_1",
+              createdAt: "2026-01-01T00:00:00.000Z",
+              id: "cuc_1",
+              lastError: null,
+              oauthStateHash: null,
+              orgId: "org_1",
+              sessionIdEnc: null,
+              status: "connected",
+              toolkitId: "ctk_1",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+              userId: "usr_1",
+            },
+          },
+        ];
+      },
+      isAvailable: async () => true,
+    };
+
+    const tools = await buildComposioConnectTools(
+      "org_1",
+      "usr_1",
+      "profile_1",
+      composioService,
+      { channel: "web" }
+    );
+
+    const result = await tools[0]?.run({ toolkit_slug: "gmail" }, {});
+
+    expect(result).toMatchObject({ connected: true, toolkitSlug: "gmail" });
+    expect(result).not.toHaveProperty("type");
   });
 
   test("connect tool rejects loopback callback URLs", async () => {
@@ -761,26 +979,5 @@ describe("composio-tool-bridge", () => {
     });
     // SAFETY: The test fixture matches the contract used by this test.
     expect(String((result as { error?: string }).error)).toContain("localhost");
-  });
-
-  test("resolveComposioCallbackBaseUrl prefers clientOrigin from browser", () => {
-    expect(
-      resolveComposioCallbackBaseUrl({
-        clientOrigin: "https://app.example.com/",
-      })
-    ).toBe("https://app.example.com");
-  });
-
-  test("resolveComposioCallbackBaseUrl reads Origin header from request", () => {
-    const request = new Request(
-      "http://127.0.0.1:4310/v1/sessions/s1/messages",
-      {
-        headers: { Origin: "http://localhost:3003" },
-      }
-    );
-
-    expect(resolveComposioCallbackBaseUrl({ request })).toBe(
-      "http://localhost:3003"
-    );
   });
 });

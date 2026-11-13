@@ -6,11 +6,15 @@ import type {
   ChatMessage,
   ChatUsage,
   CompactionResponse,
+  ImageAttachment,
   SendMessageInput,
   SendMessageRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
-export interface NakamaClientOptions {
+/** `total` is 0 when the size is unknown. */
+export type TransferProgress = (loaded: number, total: number) => void;
+
+export interface AirinClientOptions {
   authToken?: string;
   baseUrl?: string;
   /** Browser-style origin for OAuth callbacks when this client has no window (e.g. Telegram bridge). */
@@ -34,7 +38,7 @@ export interface StreamHandlers {
   onChunk: StreamHandler;
   onContextUsage?: (usage: ChatContextUsage) => void;
   /** Only called when the server sends its terminal done event. */
-  onDone?: () => void;
+  onDone?: (reply: string) => void;
   onQuestionnaireUpdated?: (questionnaire: AgentQuestionnaire | null) => void;
   onSubAgentActivity?: (event: {
     parentToolCallId: string;
@@ -47,6 +51,7 @@ export interface StreamHandlers {
     toolCallId: string;
     tool: string;
     result: unknown;
+    images?: ImageAttachment[];
   }) => void;
   onToolInputDelta?: (event: {
     toolCallId: string;

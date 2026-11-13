@@ -7,16 +7,9 @@ export const isShortlistBrowseProvider = isShortlistCapabilityProvider;
 
 export const SHORTLIST_BROWSE_COPY: Record<
   ShortlistBrowseProvider,
-  { browseLabel: string; footerHint: string }
+  { browseLabel: string }
 > = {
-  cerebras: {
-    browseLabel: "Browse Cerebras",
-    footerHint:
-      "Add models by ID or browse Cerebras. Reasoning-capable models enable thinking by default. Pricing from browse is saved for usage cost on the Status page.",
-  },
-  fireworks: {
-    browseLabel: "Browse Fireworks",
-    footerHint:
-      "Add models by ID or browse Fireworks serverless models. Reasoning-capable models enable thinking by default. Pricing from browse is saved for usage cost on the Status page.",
-  },
+  cerebras: { browseLabel: "Browse models" },
+  cloudflare: { browseLabel: "Browse models" },
+  fireworks: { browseLabel: "Browse models" },
 };

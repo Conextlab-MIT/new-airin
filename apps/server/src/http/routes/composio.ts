@@ -6,13 +6,15 @@ import type {
   ListComposioToolkitsResponse,
   ListProfileComposioToolkitsResponse,
   UpdateProfileComposioToolkitsRequest,
-} from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
+} from "@airin/core";
+import { AirinApiError } from "@airin/core";
 import { resolveComposioCallbackBaseUrl } from "../../services/composio-callback-url";
+import { isSameSiteReturnPath } from "../../services/composio-service";
 import type { ServerOptions } from "../context";
 import {
   requireOrgAdminFromContext,
   requireOrgMemberFromContext,
+  requireProfileManageFromContext,
 } from "../org-guards";
 import {
   errorResponse,
@@ -22,6 +24,31 @@ import {
   readOptionalJson,
 } from "../shared";
 import type { HonoApp } from "../types";
+
+/**
+ * Error response for a Composio route that members can call. Raw Composio
+ * errors are for org admins only. Members get a plain message.
+ */
+function memberSafeErrorResponse(
+  error: Error,
+  isOrgAdmin: boolean,
+  action: string
+): Response {
+  if (error instanceof AirinApiError) {
+    return errorResponse(error.message, error.status, { code: error.code });
+  }
+
+  if (isOrgAdmin) {
+    return errorResponse(error.message, 400);
+  }
+
+  console.error(`[composio] ${action} failed`, { error: error.message });
+
+  return errorResponse(
+    `Composio could not ${action}. Ask an org admin to check the Composio setup.`,
+    400
+  );
+}
 
 export function registerComposioOAuthRoutes(
   app: HonoApp,
@@ -43,6 +70,11 @@ export function registerComposioOAuthRoutes(
     try {
       const connectedAccountId = c.req.query("connected_account_id");
       const result = await service.completeOAuth(state, { connectedAccountId });
+
+      if (result.returnTo) {
+        return c.redirect(result.returnTo);
+      }
+
       const accept = c.req.header("accept") ?? "";
 
       const wantsHtml =
@@ -63,7 +95,7 @@ export function registerComposioOAuthRoutes(
         `/integrations?section=composio&connected=${encodeURIComponent(result.toolkitSlug)}`
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -103,7 +135,7 @@ export function registerComposioRoutes(
         } satisfies EnableComposioToolkitRequest)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -125,13 +157,42 @@ export function registerComposioRoutes(
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
       return errorResponse(
         error instanceof Error ? error.message : String(error),
         400
+      );
+    }
+  });
+
+  app.post("/v1/composio/meet/:toolkitSlug/connect", async (c) => {
+    const auth = requireOrgMemberFromContext(c);
+
+    try {
+      const body = await readOptionalJson<ComposioConnectRequest>(
+        c.req.raw,
+        {}
+      );
+
+      return json<ComposioConnectResponse>(
+        await service.connectMeetRecordingSource(
+          auth.activeOrgId!,
+          auth.user.id,
+          c.req.param("toolkitSlug"),
+          resolveComposioCallbackBaseUrl({
+            clientOrigin: body.callbackOrigin,
+            request: c.req.raw,
+          })
+        )
+      );
+    } catch (error) {
+      return memberSafeErrorResponse(
+        error instanceof Error ? error : new Error(String(error)),
+        auth.orgRole === "admin",
+        "start sign-in"
       );
     }
   });
@@ -153,17 +214,20 @@ export function registerComposioRoutes(
           resolveComposioCallbackBaseUrl({
             clientOrigin: body.callbackOrigin,
             request: c.req.raw,
-          })
+          }),
+          {
+            returnTo:
+              body.returnTo && isSameSiteReturnPath(body.returnTo)
+                ? body.returnTo
+                : "/integrations?section=composio",
+          }
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
-        return errorResponse(error.message, error.status);
-      }
-
-      return errorResponse(
-        error instanceof Error ? error.message : String(error),
-        400
+      return memberSafeErrorResponse(
+        error instanceof Error ? error : new Error(String(error)),
+        auth.orgRole === "admin",
+        "start sign-in"
       );
     }
   });
@@ -180,13 +244,10 @@ export function registerComposioRoutes(
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
-        return errorResponse(error.message, error.status);
-      }
-
-      return errorResponse(
-        error instanceof Error ? error.message : String(error),
-        400
+      return memberSafeErrorResponse(
+        error instanceof Error ? error : new Error(String(error)),
+        auth.orgRole === "admin",
+        "disconnect the app"
       );
     }
   });
@@ -203,19 +264,19 @@ export function registerComposioRoutes(
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
-        return errorResponse(error.message, error.status);
-      }
-
-      return errorResponse(
-        error instanceof Error ? error.message : String(error),
-        400
+      return memberSafeErrorResponse(
+        error instanceof Error ? error : new Error(String(error)),
+        auth.orgRole === "admin",
+        "sync the app"
       );
     }
   });
 
+  // Members manage the toolkits of the agents they created, like other tools.
   app.get("/v1/profiles/:profileId/composio-toolkits", async (c) => {
-    const auth = requireOrgAdminFromContext(c);
+    const auth = await requireProfileManageFromContext(c, options.agent, {
+      allowOrgAdmin: true,
+    });
 
     const profile = await options.databaseAdapter?.getProfile(
       c.req.param("profileId")
@@ -231,7 +292,9 @@ export function registerComposioRoutes(
   });
 
   app.put("/v1/profiles/:profileId/composio-toolkits", async (c) => {
-    const auth = requireOrgAdminFromContext(c);
+    const auth = await requireProfileManageFromContext(c, options.agent, {
+      allowOrgAdmin: true,
+    });
 
     const profile = await options.databaseAdapter?.getProfile(
       c.req.param("profileId")
@@ -250,7 +313,7 @@ export function registerComposioRoutes(
         await service.updateProfileAssignments(auth.activeOrgId!, profile, body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 

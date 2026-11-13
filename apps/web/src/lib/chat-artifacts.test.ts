@@ -3,12 +3,10 @@ import type { ChatListItem } from "@/lib/chat-history";
 import {
   extractArtifactPathsFromText,
   extractTurnArtifacts,
-  inferArtifactMimeType,
-  toArtifactsRelativePath,
 } from "./chat-artifacts";
 
 const ARTIFACTS_ROOT =
-  "/Users/test/.nakama/orgs/org_1/profiles/profile_1/artifacts";
+  "/Users/test/.airin/orgs/org_1/profiles/profile_1/artifacts";
 
 function writeFileTool(
   id: string,
@@ -37,7 +35,7 @@ const metaJson = JSON.stringify({
 describe("extractTurnArtifacts", () => {
   test("pairs content and sidecar writes into one artifact ref", () => {
     const contentPath = `${ARTIFACTS_ROOT}/report.md`;
-    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.nakama-meta.json`;
+    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.airin-meta.json`;
 
     const messages: ChatListItem[] = [
       writeFileTool(
@@ -50,7 +48,7 @@ describe("extractTurnArtifacts", () => {
       ),
       writeFileTool(
         "2",
-        { content: metaJson, path: "artifacts/report.md.nakama-meta.json" },
+        { content: metaJson, path: "artifacts/report.md.airin-meta.json" },
         {
           bytesWritten: metaJson.length,
           path: sidecarPath,
@@ -71,7 +69,7 @@ describe("extractTurnArtifacts", () => {
 
   test("supports nested artifact paths", () => {
     const contentPath = `${ARTIFACTS_ROOT}/weekly/report.md`;
-    const sidecarPath = `${ARTIFACTS_ROOT}/weekly/report.md.nakama-meta.json`;
+    const sidecarPath = `${ARTIFACTS_ROOT}/weekly/report.md.airin-meta.json`;
 
     const messages: ChatListItem[] = [
       writeFileTool(
@@ -86,7 +84,7 @@ describe("extractTurnArtifacts", () => {
         "2",
         {
           content: metaJson,
-          path: "artifacts/weekly/report.md.nakama-meta.json",
+          path: "artifacts/weekly/report.md.airin-meta.json",
         },
         {
           bytesWritten: metaJson.length,
@@ -132,13 +130,13 @@ describe("extractTurnArtifacts", () => {
   });
 
   test("returns empty when only sidecar is written", () => {
-    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.nakama-meta.json`;
+    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.airin-meta.json`;
 
     expect(
       extractTurnArtifacts([
         writeFileTool(
           "1",
-          { content: metaJson, path: "artifacts/report.md.nakama-meta.json" },
+          { content: metaJson, path: "artifacts/report.md.airin-meta.json" },
           {
             bytesWritten: metaJson.length,
             path: sidecarPath,
@@ -163,7 +161,7 @@ describe("extractTurnArtifacts", () => {
         ),
         writeFileTool(
           "2",
-          { content: metaJson, path: "artifacts/report.md.nakama-meta.json" },
+          { content: metaJson, path: "artifacts/report.md.airin-meta.json" },
           {
             error: "write failed",
           }
@@ -203,7 +201,7 @@ describe("extractTurnArtifacts", () => {
 
   test("prefers sidecar metadata over text mentions of the same path", () => {
     const contentPath = `${ARTIFACTS_ROOT}/report.md`;
-    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.nakama-meta.json`;
+    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.airin-meta.json`;
 
     expect(
       extractTurnArtifacts([
@@ -217,7 +215,7 @@ describe("extractTurnArtifacts", () => {
         ),
         writeFileTool(
           "2",
-          { content: metaJson, path: "artifacts/report.md.nakama-meta.json" },
+          { content: metaJson, path: "artifacts/report.md.airin-meta.json" },
           {
             bytesWritten: metaJson.length,
             path: sidecarPath,
@@ -242,7 +240,7 @@ describe("extractTurnArtifacts", () => {
 
   test("falls back to content write when sidecar JSON is invalid", () => {
     const contentPath = `${ARTIFACTS_ROOT}/report.md`;
-    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.nakama-meta.json`;
+    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.airin-meta.json`;
 
     expect(
       extractTurnArtifacts([
@@ -256,7 +254,7 @@ describe("extractTurnArtifacts", () => {
         ),
         writeFileTool(
           "2",
-          { content: "{bad", path: "artifacts/report.md.nakama-meta.json" },
+          { content: "{bad", path: "artifacts/report.md.airin-meta.json" },
           {
             bytesWritten: 4,
             path: sidecarPath,
@@ -276,13 +274,13 @@ describe("extractTurnArtifacts", () => {
 
   test("ignores meta files written outside artifacts", () => {
     const outsidePath =
-      "/Users/test/.nakama/orgs/org_1/profiles/profile_1/notes.nakama-meta.json";
+      "/Users/test/.airin/orgs/org_1/profiles/profile_1/notes.airin-meta.json";
 
     expect(
       extractTurnArtifacts([
         writeFileTool(
           "1",
-          { content: metaJson, path: "notes.nakama-meta.json" },
+          { content: metaJson, path: "notes.airin-meta.json" },
           {
             bytesWritten: metaJson.length,
             path: outsidePath,
@@ -304,10 +302,10 @@ describe("extractTurnArtifacts", () => {
       ),
       writeFileTool(
         "2",
-        { content: metaJson, path: "artifacts/a.md.nakama-meta.json" },
+        { content: metaJson, path: "artifacts/a.md.airin-meta.json" },
         {
           bytesWritten: metaJson.length,
-          path: `${ARTIFACTS_ROOT}/a.md.nakama-meta.json`,
+          path: `${ARTIFACTS_ROOT}/a.md.airin-meta.json`,
         }
       ),
       writeFileTool(
@@ -320,10 +318,10 @@ describe("extractTurnArtifacts", () => {
       ),
       writeFileTool(
         "4",
-        { content: metaJson, path: "artifacts/b.md.nakama-meta.json" },
+        { content: metaJson, path: "artifacts/b.md.airin-meta.json" },
         {
           bytesWritten: metaJson.length,
-          path: `${ARTIFACTS_ROOT}/b.md.nakama-meta.json`,
+          path: `${ARTIFACTS_ROOT}/b.md.airin-meta.json`,
         }
       ),
     ];
@@ -347,11 +345,11 @@ describe("extractTurnArtifacts", () => {
         "2",
         {
           content: metaJson,
-          path: "artifacts/weekly/report.md.nakama-meta.json",
+          path: "artifacts/weekly/report.md.airin-meta.json",
         },
         {
           bytesWritten: metaJson.length,
-          path: `${ARTIFACTS_ROOT}/weekly/report.md.nakama-meta.json`,
+          path: `${ARTIFACTS_ROOT}/weekly/report.md.airin-meta.json`,
         }
       ),
     ]);
@@ -428,6 +426,33 @@ describe("extractTurnArtifacts", () => {
     ).toEqual([]);
   });
 
+  test("extracts laundry-style tool results with artifactPath", () => {
+    expect(
+      extractTurnArtifacts([
+        {
+          content: "",
+          id: "tool-laundry-img",
+          role: "tool",
+          tool: "laundry_openrouter_image",
+          toolCallId: "img_laundry",
+          toolInput: { prompt: "promo" },
+          toolResult: {
+            artifactPath: "artifacts/laundry-social-123.png",
+            mediaType: "image/png",
+            ok: true,
+          },
+          toolStatus: "done",
+        },
+      ])
+    ).toEqual([
+      expect.objectContaining({
+        filename: "laundry-social-123.png",
+        mimeType: "image/png",
+        path: "laundry-social-123.png",
+      }),
+    ]);
+  });
+
   test("extracts write_file pairs and generate_image together in one turn", () => {
     const messages: ChatListItem[] = [
       writeFileTool(
@@ -440,10 +465,10 @@ describe("extractTurnArtifacts", () => {
       ),
       writeFileTool(
         "2",
-        { content: metaJson, path: "artifacts/a.md.nakama-meta.json" },
+        { content: metaJson, path: "artifacts/a.md.airin-meta.json" },
         {
           bytesWritten: metaJson.length,
-          path: `${ARTIFACTS_ROOT}/a.md.nakama-meta.json`,
+          path: `${ARTIFACTS_ROOT}/a.md.airin-meta.json`,
         }
       ),
       {
@@ -472,20 +497,6 @@ describe("extractTurnArtifacts", () => {
   });
 });
 
-describe("toArtifactsRelativePath", () => {
-  test("strips the artifacts directory prefix", () => {
-    expect(toArtifactsRelativePath(`${ARTIFACTS_ROOT}/weekly/report.md`)).toBe(
-      "weekly/report.md"
-    );
-  });
-
-  test("supports relative artifacts paths", () => {
-    expect(toArtifactsRelativePath("artifacts/weekly/report.md")).toBe(
-      "weekly/report.md"
-    );
-  });
-});
-
 describe("extractArtifactPathsFromText", () => {
   test("finds bare and owner-qualified artifact paths", () => {
     expect(
@@ -500,7 +511,7 @@ describe("extractArtifactPathsFromText", () => {
 
   test("ignores meta sidecars", () => {
     expect(
-      extractArtifactPathsFromText("artifacts/report.md.nakama-meta.json")
+      extractArtifactPathsFromText("artifacts/report.md.airin-meta.json")
     ).toEqual([]);
   });
 
@@ -518,13 +529,5 @@ describe("extractArtifactPathsFromText", () => {
       [undefined, "report.md"],
       ["video-producer", "report.md"],
     ]);
-  });
-});
-
-describe("inferArtifactMimeType", () => {
-  test("maps common extensions", () => {
-    expect(inferArtifactMimeType("slides.html")).toBe("text/html");
-    expect(inferArtifactMimeType("notes.md")).toBe("text/markdown");
-    expect(inferArtifactMimeType("data.json")).toBe("application/json");
   });
 });

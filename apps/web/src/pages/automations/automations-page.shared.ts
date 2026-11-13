@@ -2,7 +2,7 @@ import type {
   AutomationRunRecord,
   AutomationTrigger,
   StoredAutomation,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { Cron } from "croner";
 import { type ChatListItem, chatMessagesToListItems } from "@/lib/chat-history";
 
@@ -82,6 +82,19 @@ export function describeTrigger(
     return { label: `Once, ${trigger.at}`, note: trigger.timezone };
   }
 
+  if (trigger.type === "webhook") {
+    return { label: "On webhook" };
+  }
+
+  const preset = readSchedulePreset(trigger);
+
+  if (preset?.frequency === "hourly") {
+    return {
+      label: `${preset.everyHours === "1" ? "Every hour" : `Every ${preset.everyHours} hours`} at :${preset.minute.padStart(2, "0")}`,
+      note: trigger.timezone,
+    };
+  }
+
   const daily = DAILY_CRON.exec(trigger.cron.trim());
 
   if (daily) {
@@ -108,6 +121,10 @@ export function summarizeAutomationListMeta(
 
   if (automation.trigger.type === "runAt") {
     return "One-time run";
+  }
+
+  if (automation.trigger.type === "webhook") {
+    return "Webhook automation";
   }
 
   return "Scheduled automation";
@@ -191,13 +208,16 @@ export function formatRunDuration(
   return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
 
+// Steps that divide 24, so the gap across midnight matches the others.
+export const HOURLY_INTERVALS = ["1", "2", "3", "4", "6", "8", "12"];
+
 export function readSchedulePreset(trigger: AutomationTrigger) {
   if (trigger.type !== "schedule") {
     return null;
   }
 
   const match =
-    /^(\d|[0-5]\d) (\d|1\d|2[0-3]) (\*|[1-9]|[12]\d|3[01]) \* (\*|1-5|[0-6])$/.exec(
+    /^(\d|[0-5]\d) (\*(?:\/\d{1,2})?|\d|1\d|2[0-3]) (\*|[1-9]|[12]\d|3[01]) \* (\*|1-5|[0-6])$/.exec(
       trigger.cron.trim()
     );
 
@@ -207,16 +227,29 @@ export function readSchedulePreset(trigger: AutomationTrigger) {
 
   const [, minute, hour, day, weekday] = match;
 
-  if (day !== "*" && weekday !== "*") {
+  const hourly = hour.startsWith("*");
+
+  const everyHours = hour === "*" ? "1" : hour.slice(2);
+
+  if (
+    (day !== "*" && weekday !== "*") ||
+    (hourly &&
+      (day !== "*" ||
+        weekday !== "*" ||
+        !HOURLY_INTERVALS.includes(everyHours)))
+  ) {
     return null;
   }
 
   return {
     day,
+    everyHours,
     frequency:
       day === "*"
         ? weekday === "*"
-          ? "daily"
+          ? hourly
+            ? "hourly"
+            : "daily"
           : weekday === "1-5"
             ? "weekdays"
             : "weekly"
@@ -233,6 +266,10 @@ export function schedulePresetTrigger(
 ): AutomationTrigger {
   if (frequency === "manual") {
     return { type: "manual" };
+  }
+
+  if (frequency === "webhook") {
+    return { type: "webhook" };
   }
 
   const preset = readSchedulePreset(trigger);
@@ -253,9 +290,18 @@ export function schedulePresetTrigger(
           : "1"
         : "*";
 
+  const hour =
+    frequency === "hourly"
+      ? preset?.frequency === "hourly"
+        ? preset.hour
+        : "*"
+      : preset && preset.frequency !== "hourly"
+        ? preset.hour
+        : "7";
+
   return {
-    cron: `${preset?.minute ?? "0"} ${preset?.hour ?? "7"} ${day} * ${weekday}`,
-    timezone: trigger.type === "manual" ? undefined : trigger.timezone,
+    cron: `${preset?.minute ?? "0"} ${hour} ${day} * ${weekday}`,
+    timezone: "timezone" in trigger ? trigger.timezone : undefined,
     type: "schedule",
   };
 }
@@ -265,7 +311,7 @@ export function previewAutomationSchedule(
   timezone: string,
   now = new Date()
 ): string | null {
-  if (trigger.type === "manual") {
+  if (trigger.type === "manual" || trigger.type === "webhook") {
     return null;
   }
 

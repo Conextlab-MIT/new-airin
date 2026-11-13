@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ListBrowserSessionsResponse } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { ListBrowserSessionsResponse } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { AuthService } from "../../services/auth-service";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -19,8 +19,8 @@ import {
 const PASSWORD = "password123";
 
 async function createApp() {
-  process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
-    join(tmpdir(), "nakama-auth-sessions-route-")
+  process.env.AIRIN_CONFIG_DIR = await mkdtemp(
+    join(tmpdir(), "airin-auth-sessions-route-")
   );
 
   const databaseAdapter = createInMemoryDatabaseAdapter();
@@ -181,6 +181,32 @@ describe("browser session governance", () => {
     void first;
   });
 
+  test("a session keeps the first User-Agent it is seen with", async () => {
+    const { app, databaseAdapter } = await createApp();
+    const session = await setupFreshInstallSession(app, databaseAdapter);
+    const firstAgent = `Mozilla/5.0 (Macintosh) Chrome/130.0 ${"x".repeat(600)}`;
+
+    const seen = await app.fetch(
+      new Request("http://localhost:4310/v1/auth/sessions", {
+        headers: session.headers({ "User-Agent": firstAgent }),
+      })
+    );
+
+    expect(seen.status).toBe(200);
+
+    const listed = await app.fetch(
+      new Request("http://localhost:4310/v1/auth/sessions", {
+        headers: session.headers({ "User-Agent": "Firefox/131.0" }),
+      })
+    );
+
+    // SAFETY: This test controls the fixture shape at this boundary.
+    const body = (await listed.json()) as ListBrowserSessionsResponse;
+    const current = body.sessions.find((entry) => entry.current);
+
+    expect(current?.userAgent).toBe(firstAgent.slice(0, 512));
+  });
+
   test("a user revokes another of their sessions and its cookie stops working", async () => {
     const { app, databaseAdapter } = await createApp();
     await setupFreshInstallSession(app, databaseAdapter);
@@ -245,6 +271,12 @@ describe("browser session governance", () => {
     await loginUserSession(app, "admin@example.com", PASSWORD);
     const victim = await databaseAdapter.getUserByEmail("admin@example.com");
     expect(victim).not.toBeNull();
+    await databaseAdapter.putAutomationWebhookSecret({
+      automationId: "auto_webhook",
+      createdAt: new Date().toISOString(),
+      createdByUserId: victim?.id ?? "",
+      encryptedValue: "enc",
+    });
 
     const response = await app.fetch(
       new Request(
@@ -260,11 +292,18 @@ describe("browser session governance", () => {
     // SAFETY: This test controls the fixture shape at this boundary.
     const body = (await response.json()) as { revoked: number };
     expect(body.revoked).toBeGreaterThanOrEqual(2);
+    expect(await databaseAdapter.listAutomationWebhookSecrets()).toEqual([]);
   });
   test("an org admin who is not a platform admin cannot force-revoke anyone", async () => {
     const { app, databaseAdapter } = await createApp();
     const owner = await setupFreshInstallSession(app, databaseAdapter);
     const victim = await databaseAdapter.getUserByEmail("admin@example.com");
+    await databaseAdapter.putAutomationWebhookSecret({
+      automationId: "auto_webhook",
+      createdAt: new Date().toISOString(),
+      createdByUserId: victim?.id ?? "",
+      encryptedValue: "enc",
+    });
 
     await seedOrgAdmin(databaseAdapter, {
       email: "orgadmin@example.com",
@@ -290,6 +329,9 @@ describe("browser session governance", () => {
 
     expect(response.status).toBe(403);
     // Refused, not partially applied: the owner is still signed in.
+    expect(await databaseAdapter.listAutomationWebhookSecrets()).toHaveLength(
+      1
+    );
     const stillLive = await listSessions(app, owner);
     expect(stillLive.sessions.length).toBeGreaterThan(0);
   });

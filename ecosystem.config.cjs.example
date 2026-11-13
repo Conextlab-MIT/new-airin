@@ -1,0 +1,17 @@
+module.exports = {
+  apps: [
+    {
+      name: "airin",
+      cwd: "/path/to/airin",
+      script: "/path/to/.bun/bin/bun",
+      args: "run start",
+      interpreter: "none",
+      env: {
+        NODE_ENV: "production",
+        AIRIN_PORT: "4310",
+        AIRIN_SECRETS_KEY: "paste the output of: openssl rand -base64 32",
+        AIRIN_WEB_PUBLIC_URL: "https://airin.example.com",
+      },
+    },
+  ],
+};

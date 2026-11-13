@@ -5,12 +5,15 @@ import {
   mkdir,
   readFile,
   rm,
+  stat,
   unlink,
   writeFile,
 } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
+import { AirinApiError } from "./api-error";
+import { getManagedSecretWriter, resolveManagedSecret } from "./config";
 import {
   parseIni,
   readDirectoryOrEmpty,
@@ -31,6 +34,7 @@ import { maskTrailingSecret } from "./secret-mask";
 import { getOrgConfigDir, getUserConfigDir } from "./user-config";
 
 export {
+  containsPairingCode,
   createPairingCodeSecret,
   generatePairingCode,
   isPairingCodeActive,
@@ -38,7 +42,12 @@ export {
   PAIRING_CODE_TTL_MS,
 } from "./pairing-code";
 
-export type ChannelPlatform = "telegram" | "discord" | "whatsapp" | "slack";
+export type ChannelPlatform =
+  | "telegram"
+  | "discord"
+  | "whatsapp"
+  | "slack"
+  | "teams";
 
 export interface ChannelOwner {
   orgId: string;
@@ -59,6 +68,8 @@ export function isChannelOwner(
   return ChannelOwnerSchema.safeParse(scope).success;
 }
 
+const PROFILE_ID_PATTERN = /^[A-Za-z0-9][\w.-]{0,127}$/;
+
 export function getChannelConfigDir(
   platform: ChannelPlatform,
   scope: ChannelConfigScope
@@ -70,7 +81,7 @@ export function getChannelConfigDir(
     );
   }
 
-  if (!/^[A-Za-z0-9][\w.-]{0,127}$/.test(scope.profileId)) {
+  if (!PROFILE_ID_PATTERN.test(scope.profileId)) {
     throw new Error("Invalid profile id");
   }
 
@@ -125,6 +136,11 @@ export async function listChannelOwners(
     for (const profileId of await readDirectoryOrEmpty(
       join(getOrgConfigDir(orgId), "channels")
     )) {
+      // A stray file such as .DS_Store is not an agent.
+      if (!PROFILE_ID_PATTERN.test(profileId)) {
+        continue;
+      }
+
       const owner = { orgId, profileId };
       const path = join(getChannelConfigDir(platform, owner), "config.ini");
       assertChannelPath(path);
@@ -137,6 +153,43 @@ export async function listChannelOwners(
 
   return owners;
 }
+
+/** Thrown when another agent already holds the channel account. */
+export class ChannelIdentityInUseError extends Error {
+  readonly owner: ChannelOwner | null;
+
+  constructor(owner: ChannelOwner | null, claimant?: ChannelOwner) {
+    // Tells the user where to look; naming the agent would need the database.
+    super(
+      `This channel account is already in use by another agent${
+        owner && claimant
+          ? owner.orgId === claimant.orgId
+            ? " in this organization"
+            : " in another organization"
+          : ""
+      }.`
+    );
+    this.name = "ChannelIdentityInUseError";
+    this.owner = owner;
+  }
+}
+
+const claimOwnerSchema = z.tuple([z.string(), z.string()]);
+
+function parseClaimOwner(value: string): ChannelOwner | null {
+  try {
+    const parsed = claimOwnerSchema.safeParse(JSON.parse(value));
+
+    return parsed.success
+      ? { orgId: parsed.data[0], profileId: parsed.data[1] }
+      : null;
+  } catch {
+    // An unreadable claim still blocks the account; the owner is unknown.
+    return null;
+  }
+}
+
+const STALE_CLAIM_MS = 60_000;
 
 /** Exclusive creation makes duplicate account claims atomic across server processes. */
 export async function claimChannelIdentity(
@@ -170,13 +223,27 @@ export async function claimChannelIdentity(
       throw error;
     }
 
-    if ((await readFile(path, "utf8")) !== value) {
-      throw new Error(
-        "This channel account is already in use by another agent."
-      );
+    const existing = await readFile(path, "utf8");
+
+    if (existing === value) {
+      return async () => {};
     }
 
-    return async () => {};
+    const holder = parseClaimOwner(existing);
+
+    // A claim with no connection behind it was left over, so it must not block.
+    // A young one may be a save in flight that has not written its config yet.
+    if (
+      !holder ||
+      Date.now() - (await stat(path)).mtimeMs < STALE_CLAIM_MS ||
+      (await readTextOrNull(
+        join(getChannelConfigDir(platform, holder), "config.ini")
+      ))
+    ) {
+      throw new ChannelIdentityInUseError(holder, owner);
+    }
+
+    await writeFile(path, value, { mode: 0o600 });
   }
 
   return async () => {
@@ -192,6 +259,12 @@ export async function removeChannelConnection(
     force: true,
     recursive: true,
   });
+
+  if (platform === "telegram" || platform === "discord") {
+    const secret = botTokenSecretRef(platform, owner);
+    await getManagedSecretWriter()?.delete(secret.scope, secret.name);
+  }
+
   await releaseChannelClaims(platform, owner);
 }
 
@@ -303,6 +376,8 @@ export type HandshakeSecret = {
 export type BotChannelConfigFile<TId extends string | number> = {
   allowedUserIds: TId[];
   botToken: string;
+  /** config.ini holds `bot_token_ref=managed`: the server keeps the token encrypted. */
+  botTokenManaged?: boolean;
   handshakeCode: string | null;
   handshakeExpiresAt: string | null;
   pairedUserIds: TId[];
@@ -363,12 +438,162 @@ export function resolveHandshakeOnSave<TId extends string | number>(
   return toHandshakeSecret(createPairingCodeSecret());
 }
 
+export type BotTokenSecretRef = { name: string; scope: string };
+
+/** Where a bot token lives in managed secrets once AIRIN_SECRETS_KEY is set. */
+export function botTokenSecretRef(
+  platform: "telegram" | "discord",
+  scope: ChannelConfigScope
+): BotTokenSecretRef {
+  if (isChannelOwner(scope)) {
+    return { name: `${platform}-bot:${scope.profileId}`, scope: scope.orgId };
+  }
+
+  return { name: `${platform}-bot`, scope: scope ?? "global" };
+}
+
+const MANAGED_BOT_TOKEN_LINE = "bot_token_ref=managed";
+
+/**
+ * Moves one agent's plaintext bot_token into managed secrets and leaves the
+ * managed marker in its place. The file stays: it marks the connection.
+ */
+export async function moveBotTokenToSecrets(
+  platform: "telegram" | "discord",
+  owner: ChannelOwner
+): Promise<void> {
+  const secrets = getManagedSecretWriter();
+
+  if (!secrets) {
+    return;
+  }
+
+  const configDir = getChannelConfigDir(platform, owner);
+  const path = join(configDir, "config.ini");
+
+  // A worker pairing a user rewrites this file; hold its lock so that pairing survives.
+  await withPairingConfigLock(configDir, async () => {
+    const raw = await readTextOrNull(path);
+    const token = raw ? parseIni(raw).bot_token?.trim() : "";
+
+    if (!(raw && token)) {
+      return;
+    }
+
+    const secret = botTokenSecretRef(platform, owner);
+    await secrets.migrate(secret.scope, secret.name, token);
+
+    // migrate keeps a row that already exists, so drop the file copy only when they agree.
+    if ((await resolveManagedSecret(secret.scope, secret.name)) !== token) {
+      throw new Error("A different bot token is already saved for this agent.");
+    }
+
+    await writeTextFile(
+      path,
+      raw.replace(/^\s*bot_token\s*=.*$/m, MANAGED_BOT_TOKEN_LINE)
+    );
+  });
+}
+
+/**
+ * Runs at start-up and after a restore. Legacy org-level files are left alone:
+ * claiming one moves its token then. One bad entry only skips that entry.
+ */
+export async function migrateChannelBotTokens(): Promise<void> {
+  if (!getManagedSecretWriter()) {
+    return;
+  }
+
+  for (const platform of ["telegram", "discord"] as const) {
+    let owners: ChannelOwner[];
+
+    try {
+      owners = await listChannelOwners(platform);
+    } catch (error) {
+      console.warn(`Could not list ${platform} connections to encrypt`, error);
+      continue;
+    }
+
+    for (const owner of owners) {
+      try {
+        await moveBotTokenToSecrets(platform, owner);
+      } catch (error) {
+        console.warn(
+          `The ${platform} bot token of ${owner.orgId}/${owner.profileId} stays in config.ini`,
+          error
+        );
+      }
+    }
+  }
+}
+
+const readBotTokenInProcess = (secret: BotTokenSecretRef) =>
+  resolveManagedSecret(secret.scope, secret.name);
+
+let readBotToken = readBotTokenInProcess;
+
+/**
+ * Worker side of the bot token: ask the server, which holds the key. Each
+ * token is read once, since a token change restarts the worker. Waits with
+ * backoff while the server starts or rate limits. Pass null to read in
+ * process again.
+ */
+export function readBotTokensFromServer(
+  fetchToken: ((secret: BotTokenSecretRef) => Promise<string | null>) | null,
+  wait: (ms: number) => Promise<void> = sleep
+): void {
+  if (!fetchToken) {
+    readBotToken = readBotTokenInProcess;
+
+    return;
+  }
+
+  const tokens = new Map<string, string>();
+
+  readBotToken = async (secret) => {
+    const key = `${secret.scope}/${secret.name}`;
+    const cached = tokens.get(key);
+
+    if (cached) {
+      return cached;
+    }
+
+    // 0.5s doubling to 10s, ten pauses: about 65s before giving up.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        const token = await fetchToken(secret);
+
+        if (token) {
+          tokens.set(key, token);
+        }
+
+        return token;
+      } catch (error) {
+        // No answer or 429/503 can heal; any other status will not.
+        const status = error instanceof AirinApiError ? error.status : null;
+
+        if (
+          attempt === 10 ||
+          (status !== null && status !== 429 && status !== 503)
+        ) {
+          throw new Error("Could not read the bot token from the server.", {
+            cause: error,
+          });
+        }
+      }
+
+      await wait(Math.min(500 * 2 ** attempt, 10_000));
+    }
+  };
+}
+
 export async function loadBotChannelIniConfig<
   TId extends string | number,
 >(options: {
   configPath: string;
   defaultProfileId: string;
   parseUserIds: (raw: string) => TId[];
+  secret?: BotTokenSecretRef;
 }): Promise<BotChannelConfigFile<TId> | null> {
   const raw = await readTextOrNull(options.configPath);
 
@@ -377,7 +602,14 @@ export async function loadBotChannelIniConfig<
   }
 
   const values = parseIni(raw);
-  const botToken = values.bot_token?.trim() ?? "";
+  const botTokenManaged = values.bot_token_ref?.trim() === "managed";
+
+  const botToken =
+    values.bot_token?.trim() ||
+    (botTokenManaged && options.secret
+      ? ((await readBotToken(options.secret)) ?? "")
+      : "");
+
   const profileId = values.profile_id?.trim() || options.defaultProfileId;
   const handshakeCode = values.handshake_code?.trim() || null;
   const handshakeExpiresAt = values.handshake_expires_at?.trim() || null;
@@ -391,6 +623,7 @@ export async function loadBotChannelIniConfig<
   return {
     allowedUserIds: allowlistRaw ? options.parseUserIds(allowlistRaw) : [],
     botToken,
+    botTokenManaged,
     handshakeCode,
     handshakeExpiresAt,
     pairedUserIds: pairedRaw ? options.parseUserIds(pairedRaw) : [],
@@ -405,12 +638,16 @@ export async function writeBotChannelIniConfig<
   configDir: string;
   configPath: string;
   label: string;
+  secret?: BotTokenSecretRef;
 }): Promise<void> {
-  const { config } = options;
+  const { config, secret } = options;
+  const secrets = secret ? getManagedSecretWriter() : null;
+  // A worker has no key: it keeps the marker of a file the server made token-less.
+  const managed = Boolean(secrets || (secret && config.botTokenManaged));
 
   const lines = [
-    `# Nakama ${options.label} bridge`,
-    `bot_token=${config.botToken}`,
+    `# Airin ${options.label} bridge`,
+    managed ? MANAGED_BOT_TOKEN_LINE : `bot_token=${config.botToken}`,
     `profile_id=${config.profileId}`,
     ...(config.handshakeCode
       ? [
@@ -432,6 +669,16 @@ export async function writeBotChannelIniConfig<
   await writeTextFile(options.configPath, lines.join("\n"), {
     ensureDir: options.configDir,
   });
+
+  // After the file: a failed write must not pair a new bot with the old file.
+  // An unchanged token is not re-encrypted, which would bump the fingerprint.
+  if (
+    secrets &&
+    secret &&
+    (await resolveManagedSecret(secret.scope, secret.name)) !== config.botToken
+  ) {
+    await secrets.save(secret.scope, secret.name, config.botToken);
+  }
 }
 
 /**
@@ -441,7 +688,10 @@ export async function writeBotChannelIniConfig<
  */
 export async function verifyAndPairBotChannelUser<
   TId extends string | number,
-  TConfig extends BotChannelConfigFile<TId> = BotChannelConfigFile<TId>,
+  TConfig extends Pick<
+    BotChannelConfigFile<TId>,
+    "allowedUserIds" | "pairedUserIds" | "handshakeCode" | "handshakeExpiresAt"
+  > = BotChannelConfigFile<TId>,
 >(options: {
   /** Channel config directory: the pairing lock and attempt budget both key off it. */
   configDir: string;
@@ -451,6 +701,8 @@ export async function verifyAndPairBotChannelUser<
     config: Pick<BotChannelConfigFile<TId>, "pairedUserIds" | "allowedUserIds">
   ) => boolean;
   label: string;
+  /** Each sender gets their own guesses; one sender's misses never retire the code. */
+  budgetPerSender?: boolean;
   load: () => Promise<TConfig | null>;
   userId: TId;
   write: (config: TConfig) => Promise<void>;
@@ -482,16 +734,22 @@ export async function verifyAndPairBotChannelUser<
         return failure;
       }
 
-      const budget = getPairingAttemptBudget(options.configDir, expected);
+      const budget = getPairingAttemptBudget(
+        options.budgetPerSender
+          ? `${options.configDir}:${options.userId}`
+          : options.configDir,
+        expected
+      );
 
       if (isPairingAttemptBlocked(budget)) {
         return failure;
       }
 
       if (!pairingCodesMatch(options.handshakeInput, expected)) {
-        // Exhausting the per-code budget retires the code, so a guessing run
-        // cannot keep at the same secret.
-        if (recordPairingFailure(budget)) {
+        // Exhausting a shared budget retires the code, so a guessing run
+        // cannot keep at the same secret. A per-sender budget only blocks
+        // that sender.
+        if (recordPairingFailure(budget) && !options.budgetPerSender) {
           await options.write({ ...config, ...SPENT_HANDSHAKE });
         }
 
@@ -505,7 +763,7 @@ export async function verifyAndPairBotChannelUser<
       await options.write({ ...config, ...SPENT_HANDSHAKE, pairedUserIds });
 
       return {
-        message: "Linked successfully. You can chat with Nakama now.",
+        message: "Linked successfully. You can chat with Airin now.",
         ok: true,
       };
     });
@@ -530,8 +788,8 @@ function toHandshakeSecret(secret: PairingCodeSecret): HandshakeSecret {
 export function channelOwnerFromEnv(
   env: Record<string, string | undefined> = process.env
 ): ChannelOwner {
-  const orgId = env.NAKAMA_CHANNEL_ORG_ID?.trim();
-  const profileId = env.NAKAMA_CHANNEL_PROFILE_ID?.trim();
+  const orgId = env.AIRIN_CHANNEL_ORG_ID?.trim();
+  const profileId = env.AIRIN_CHANNEL_PROFILE_ID?.trim();
 
   if (!(orgId && profileId)) {
     throw new Error("Channel workers require an organization and agent scope.");

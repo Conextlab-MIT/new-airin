@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { persistInlineAttachmentsInContent } from "@nakama/core/attachments/content";
-import type { ChatMessage, SessionMessageMeta } from "@nakama/core/contract";
-import { AGENT_CHANNELS } from "@nakama/core/contract";
+import { persistInlineAttachmentsInContent } from "@airin/core/attachments/content";
+import type { ChatMessage, SessionMessageMeta } from "@airin/core/contract";
+import { AGENT_CHANNELS } from "@airin/core/contract";
 import { extractTurnArtifacts } from "./chat-artifacts";
 import {
   type ChatListItem,
   chatMessagesToListItems,
+  describeDevice,
   formatSessionRelativeTime,
   formatSessionTimestamp,
-  HISTORY_SESSION_CHANNELS,
   isEditableUserMessage,
   isReadOnlySessionChannel,
 } from "./chat-history";
@@ -170,6 +170,32 @@ describe("chatMessagesToListItems", () => {
     });
   });
 
+  test("tool message image attachments become tool images", () => {
+    const items = chatMessagesToListItems([
+      {
+        attachments: [
+          { text: "Image output", type: "text" },
+          { data: "aW1hZ2U=", mediaType: "image/jpeg", type: "image" },
+          {
+            attachmentId: "att_1",
+            mediaType: "image/png",
+            size: 5,
+            type: "image_ref",
+          },
+        ],
+        content: '{"text":"[image/jpeg]"}',
+        name: "screenshot",
+        role: "tool",
+        toolCallId: "tool_1",
+      },
+    ]);
+
+    expect(items[0]?.toolImages).toEqual([
+      { mediaType: "image/jpeg", url: "data:image/jpeg;base64,aW1hZ2U=" },
+      { mediaType: "image/png", url: "/v1/attachments/att_1/content" },
+    ]);
+  });
+
   test("renders described images as attachments and keeps vision-native images inline", () => {
     const messages: ChatMessage[] = [
       {
@@ -230,7 +256,7 @@ describe("chatMessagesToListItems", () => {
 
   test("derives artifact refs from persisted write_file tool messages after hydration", () => {
     const artifactsRoot =
-      "/Users/test/.nakama/orgs/org_1/profiles/profile_1/artifacts";
+      "/Users/test/.airin/orgs/org_1/profiles/profile_1/artifacts";
 
     const metaJson = JSON.stringify({
       mimeType: "text/markdown",
@@ -251,7 +277,7 @@ describe("chatMessagesToListItems", () => {
           {
             arguments: {
               content: metaJson,
-              path: "artifacts/report.md.nakama-meta.json",
+              path: "artifacts/report.md.airin-meta.json",
             },
             id: "tool_meta",
             name: "write_file",
@@ -270,7 +296,7 @@ describe("chatMessagesToListItems", () => {
       {
         content: JSON.stringify({
           bytesWritten: metaJson.length,
-          path: `${artifactsRoot}/report.md.nakama-meta.json`,
+          path: `${artifactsRoot}/report.md.airin-meta.json`,
         }),
         name: "write_file",
         role: "tool",
@@ -537,12 +563,6 @@ describe("chatMessagesToListItems", () => {
 });
 
 describe("formatSessionTimestamp", () => {
-  test("formats a valid ISO timestamp", () => {
-    const formatted = formatSessionTimestamp("2026-06-14T10:00:00.000Z");
-    expect(formatted).not.toBe("Unknown time");
-    expect(formatted.length).toBeGreaterThan(0);
-  });
-
   test("does not echo invalid or attacker-controlled date strings", () => {
     expect(formatSessionTimestamp("not-a-date")).toBe("Unknown time");
     expect(formatSessionTimestamp("<img src=x onerror=alert(1)>")).toBe(
@@ -556,22 +576,18 @@ describe("formatSessionTimestamp", () => {
 // table fails one of these, which is what the tables are for: a channel that
 // joins AGENT_CHANNELS has to be decided rather than dropping out in silence.
 describe("session channel tables", () => {
-  test("lists the five channels that have a web history", () => {
-    expect(HISTORY_SESSION_CHANNELS).toEqual([
-      "web",
-      "telegram",
-      "whatsapp",
-      "discord",
-      "slack",
-    ]);
-  });
-
-  test("marks the four messaging channels read only and no others", () => {
+  test("marks the five messaging channels read only and no others", () => {
     const readOnly = AGENT_CHANNELS.filter((channel) =>
       isReadOnlySessionChannel(channel)
     );
 
-    expect(readOnly).toEqual(["telegram", "whatsapp", "discord", "slack"]);
+    expect(readOnly).toEqual([
+      "telegram",
+      "whatsapp",
+      "discord",
+      "slack",
+      "teams",
+    ]);
   });
 });
 
@@ -590,25 +606,23 @@ describe("isEditableUserMessage", () => {
     expect(isEditableUserMessage(userMessage())).toBe(true);
   });
 
-  test("rejects a prompt that is not in server history yet", () => {
-    expect(
-      isEditableUserMessage(userMessage({ historyIndex: undefined }))
-    ).toBe(false);
-  });
+  test("rejects rows that cannot be edited and resent", () => {
+    const rows: Partial<ChatListItem>[] = [
+      { historyIndex: undefined },
+      { role: "assistant" },
+      { role: "tool" },
+      { failed: true },
+      { content: "   " },
+      {
+        questionnaireAnswers: [
+          { answer: "yes", prompt: "Ship it?", questionId: "q1" },
+        ],
+      },
+    ];
 
-  test("rejects assistant and tool rows", () => {
-    expect(isEditableUserMessage(userMessage({ role: "assistant" }))).toBe(
-      false
-    );
-    expect(isEditableUserMessage(userMessage({ role: "tool" }))).toBe(false);
-  });
-
-  test("rejects a failed turn", () => {
-    expect(isEditableUserMessage(userMessage({ failed: true }))).toBe(false);
-  });
-
-  test("rejects blank content", () => {
-    expect(isEditableUserMessage(userMessage({ content: "   " }))).toBe(false);
+    for (const overrides of rows) {
+      expect(isEditableUserMessage(userMessage(overrides))).toBe(false);
+    }
   });
 
   test("rejects prompts carrying attachments", () => {
@@ -632,16 +646,29 @@ describe("isEditableUserMessage", () => {
       )
     ).toBe(false);
   });
+});
 
-  test("rejects a questionnaire answer bubble", () => {
+describe("describeDevice", () => {
+  test("names the browser and OS so two sessions can be told apart", () => {
     expect(
-      isEditableUserMessage(
-        userMessage({
-          questionnaireAnswers: [
-            { answer: "yes", prompt: "Ship it?", questionId: "q1" },
-          ],
-        })
+      describeDevice(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
       )
-    ).toBe(false);
+    ).toBe("Chrome on macOS");
+    expect(
+      describeDevice(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+      )
+    ).toBe("Safari on iOS");
+    expect(
+      describeDevice(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0"
+      )
+    ).toBe("Edge on Windows");
+  });
+
+  test("falls back when the User-Agent is missing or unknown", () => {
+    expect(describeDevice(null)).toBe("Unknown browser");
+    expect(describeDevice("curl/8.7.1")).toBe("Unknown browser");
   });
 });

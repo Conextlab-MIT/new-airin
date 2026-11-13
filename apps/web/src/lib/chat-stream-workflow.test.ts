@@ -1,250 +1,61 @@
-import { describe, expect, test } from "bun:test";
-import type { WorkflowRunRecord, WorkflowStep } from "@nakama/core/contract";
+import { expect, test } from "bun:test";
+import type { WorkflowRunRecord } from "@airin/core";
 import {
-  activeWorkflowStepIndex,
   buildWorkflowRunCard,
-  buildWorkflowStepViews,
-  isListWorkflowsTool,
-  isRunWorkflowTool,
-  parseListWorkflowsResult,
   parseRunWorkflowResult,
-  parseWorkflowId,
 } from "./chat-stream-workflow";
 
-const steps: WorkflowStep[] = [
-  {
-    id: "prep_work",
-    input: { url: "https://books.example" },
-    kind: "tool",
-    tool: "web_fetch",
-  },
-  { expected: 0, id: "cash", kind: "assert", path: "steps.prep.diff" },
-  { id: "summary", kind: "summarize", prompt: "Write the close package." },
-];
-
-describe("chat-stream-workflow", () => {
-  test.each([undefined, null])(
-    "workflow cards tolerate absent tool input: %p",
-    (input) => {
-      const persistedStep: unknown =
-        input === undefined
-          ? { id: "fetch", kind: "tool", tool: "web_fetch" }
-          : { id: "fetch", input, kind: "tool", tool: "web_fetch" };
-
-      const card = buildWorkflowRunCard({
-        isRunning: false,
-        parsed: null,
-        runs: [],
-        workflow: {
-          enabled: true,
-          name: "Morning Brief",
-          // SAFETY: Persisted workflow input may omit or null this field, and the card must still render it.
-          steps: [persistedStep as WorkflowStep],
-        },
-      });
-
-      expect(card.views).toHaveLength(1);
-      expect(card.views[0]).toMatchObject({
-        id: "fetch",
-        tag: null,
-        tool: "web_fetch",
-      });
-    }
-  );
-
-  test("isRunWorkflowTool matches name", () => {
-    expect(isRunWorkflowTool("run_workflow")).toBe(true);
-    expect(isRunWorkflowTool("plugin_workflows__run_workflow")).toBe(true);
-    expect(isListWorkflowsTool("plugin_workflows__list_workflows")).toBe(true);
-    expect(isRunWorkflowTool("create_workflow")).toBe(false);
-    expect(isListWorkflowsTool("list_workflows")).toBe(true);
-  });
-
-  test("parseListWorkflowsResult reads summaries", () => {
-    const listed = parseListWorkflowsResult([
-      {
-        description: "Fetches BBC News and writes a brief.",
-        enabled: true,
-        id: "workflow_1",
-        lastRunAt: "2026-09-05T01:00:00.000Z",
-        name: "Morning Brief",
-        stepCount: 4,
-      },
-    ]);
-
-    expect(listed).toEqual([
-      {
-        description: "Fetches BBC News and writes a brief.",
-        enabled: true,
-        id: "workflow_1",
-        lastRunAt: "2026-09-05T01:00:00.000Z",
-        name: "Morning Brief",
-        stepCount: 4,
-      },
-    ]);
-  });
-
-  test("parseWorkflowId reads input", () => {
-    expect(parseWorkflowId({ workflowId: " workflow_1 " })).toBe("workflow_1");
-    expect(parseWorkflowId({})).toBeNull();
-  });
-
-  test("parseRunWorkflowResult reads run payload", () => {
-    const parsed = parseRunWorkflowResult({
-      error: null,
-      name: "Month-End Close",
-      output: "Done",
-      run: {
-        id: "wfrun_1",
-        startedAt: "2026-09-05T00:00:00.000Z",
-        status: "completed",
-        workflowId: "workflow_1",
-      },
-      status: "completed",
-      workflowId: "workflow_1",
-    });
-
-    expect(parsed?.name).toBe("Month-End Close");
-    expect(parsed?.run?.id).toBe("wfrun_1");
-    expect(parsed?.status).toBe("completed");
-  });
-
-  test("buildWorkflowStepViews maps receipts", () => {
-    const views = buildWorkflowStepViews(steps, {
-      ...runRecord("live", "running", "2026-09-05T01:00:00.000Z"),
-      steps: [
-        {
-          completedAt: "2026-09-05T01:00:01.000Z",
-          error: null,
-          id: "s1",
-          input: null,
-          kind: "tool",
-          output: { output: "1,284 GL" },
-          runId: "live",
-          startedAt: "2026-09-05T01:00:00.000Z",
-          status: "completed",
-          stepId: "prep_work",
-        },
-        {
-          completedAt: null,
-          error: null,
-          id: "s2",
-          input: null,
-          kind: "assert",
-          output: null,
-          runId: "live",
-          startedAt: "2026-09-05T01:00:02.000Z",
-          status: "running",
-          stepId: "cash",
-        },
-      ],
-    });
-
-    expect(views.map((step) => step.status)).toEqual([
-      "completed",
-      "running",
-      "pending",
-    ]);
-    expect(views[0]?.meta).toBe("1,284 GL");
-    expect(views[0]?.tag).toBe("books.example");
-    expect(views[0]?.kind).toBe("tool");
-    expect(views[0]?.tool).toBe("web_fetch");
-    expect(views[2]?.kind).toBe("summarize");
-    expect(activeWorkflowStepIndex(views)).toBe(1);
-  });
-
-  test("buildWorkflowStepViews marks the next pending step running on a live run", () => {
-    const views = buildWorkflowStepViews(steps, {
-      ...runRecord("live", "running", "2026-09-05T01:00:00.000Z"),
-      steps: [
-        {
-          completedAt: "2026-09-05T01:00:01.000Z",
-          error: null,
-          id: "s1",
-          input: null,
-          kind: "tool",
-          output: { output: "ok" },
-          runId: "live",
-          startedAt: "2026-09-05T01:00:00.000Z",
-          status: "completed",
-          stepId: "prep_work",
-        },
-      ],
-    });
-
-    expect(views.map((step) => step.status)).toEqual([
-      "completed",
-      "running",
-      "pending",
-    ]);
-  });
-
-  test("fetch receipts show word count instead of body", () => {
-    const views = buildWorkflowStepViews(steps, {
-      ...runRecord("done", "completed", "2026-09-05T01:00:00.000Z"),
-      steps: [
-        {
-          completedAt: "2026-09-05T01:00:01.000Z",
-          error: null,
-          id: "s1",
-          input: null,
-          kind: "tool",
-          output: {
-            bytes: 378_119,
-            content: "[Skip to content](#bbc-main)\n\nBritish Broadcasting…",
-          },
-          runId: "done",
-          startedAt: "2026-09-05T01:00:00.000Z",
-          status: "completed",
-          stepId: "prep_work",
-        },
-        {
-          completedAt: "2026-09-05T01:00:03.000Z",
-          error: null,
-          id: "s3",
-          input: null,
-          kind: "summarize",
-          output:
-            "# Morning Brief — 5 September 2026\n\n## Key developments\n1. **US strikes**",
-          runId: "done",
-          startedAt: "2026-09-05T01:00:02.000Z",
-          status: "completed",
-          stepId: "summary",
-        },
-      ],
-    });
-
-    expect(views[0]?.meta).toBe("5 words");
-    expect(views[2]?.meta).toBe("Morning Brief — 5 September 2026");
-  });
-
-  test("buildWorkflowRunCard prefers workflow name and off status", () => {
-    const card = buildWorkflowRunCard({
-      isRunning: false,
-      parsed: { name: "From result", run: null, status: null },
-      runs: [],
-      workflow: { enabled: false, name: "Morning Brief", steps },
-    });
-
-    expect(card.title).toBe("Morning Brief");
-    expect(card.statusLabel).toBe("Off");
-    expect(card.views).toHaveLength(3);
-  });
-});
-
-function runRecord(
-  id: string,
-  status: WorkflowRunRecord["status"],
-  startedAt: string
-): WorkflowRunRecord {
-  return {
-    completedAt: null,
+test("a run a filter step skipped reads as skipped, not done", () => {
+  const run: WorkflowRunRecord = {
+    completedAt: "2026-01-01T00:00:01.000Z",
     error: null,
-    id,
-    input: null,
+    id: "run_1",
+    input: { from: "billing@stripe.com" },
     output: null,
-    startedAt,
-    status,
+    startedAt: "2026-01-01T00:00:00.000Z",
+    status: "skipped",
+    steps: [
+      {
+        completedAt: "2026-01-01T00:00:01.000Z",
+        error: null,
+        id: "receipt_1",
+        input: { left: "billing@stripe.com", op: "contains", right: "github" },
+        kind: "compare",
+        output: { left: "billing@stripe.com", ok: false, right: "github" },
+        runId: "run_1",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        status: "skipped",
+        stepId: "from_github",
+      },
+    ],
     workflowId: "workflow_1",
   };
-}
+
+  const parsed = parseRunWorkflowResult({ run, status: "skipped" });
+
+  const card = buildWorkflowRunCard({
+    isRunning: false,
+    parsed,
+    runs: [run],
+    workflow: {
+      enabled: true,
+      name: "GitHub mail",
+      steps: [
+        {
+          id: "from_github",
+          kind: "compare",
+          left: "{{input.from}}",
+          onFail: "skip",
+          op: "contains",
+          right: "github",
+        },
+        { id: "summary", kind: "summarize", prompt: "Summarize" },
+      ],
+    },
+  });
+
+  expect(parsed?.status).toBe("skipped");
+  expect(card.views.map((view) => view.status)).toEqual(["skipped", "pending"]);
+  expect(card.views[0]?.meta).not.toBe("Done");
+  expect(card.statusLabel).not.toMatch(/^(Done|Failed)/);
+});

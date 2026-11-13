@@ -1,5 +1,6 @@
 import type { ArtifactPreviewMode } from "@/components/chat/artifact-preview-mode-toggle";
 import { clampAttachmentPanelWidth } from "@/components/chat/attachment-panel-width";
+import { isXlsxFile } from "@/lib/artifact-spreadsheet";
 import {
   artifactCodeLanguage,
   isDelimitedSpreadsheetFile,
@@ -12,7 +13,8 @@ import {
 } from "@/lib/chat-artifacts";
 import { formatBytes } from "@/lib/knowledge-base-files";
 
-const WIDE_ARTIFACT_PANEL_WIDTH = 768;
+/** HTML artifacts and plugin pages are full layouts; give them room. */
+export const WIDE_ARTIFACT_PANEL_WIDTH = 768;
 
 const NARROW_ARTIFACT_PANEL_WIDTH = 448;
 
@@ -31,7 +33,11 @@ export function artifactPanelDefaultWidth(
     isDocxFile(filename, mimeType) || isLegacyDocFile(filename, mimeType);
 
   const isMarkdown = isMarkdownArtifactMimeType(mimeType) || isWordDocument;
-  const isSpreadsheet = isDelimitedSpreadsheetFile(filename, mimeType);
+
+  const isSpreadsheet =
+    isDelimitedSpreadsheetFile(filename, mimeType) ||
+    isXlsxFile(filename, mimeType);
+
   const language = artifactCodeLanguage(filename);
 
   const baseWidth = isVideo
@@ -55,7 +61,7 @@ export function artifactCanTogglePreviewSource({
   return isHtml || isMarkdown || isSpreadsheet;
 }
 
-export function artifactPanelHeadingName(filename: string): string {
+function artifactPanelHeadingName(filename: string): string {
   const slash = filename.lastIndexOf("/");
   const base = slash >= 0 ? filename.slice(slash + 1) : filename;
   const dot = base.lastIndexOf(".");
@@ -67,7 +73,7 @@ export function artifactPanelHeadingName(filename: string): string {
   return base.slice(0, dot);
 }
 
-export function artifactPanelTypeLabel({
+function artifactPanelTypeLabel({
   filename,
   mimeType,
 }: {

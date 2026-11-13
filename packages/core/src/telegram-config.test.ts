@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, symlink } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, symlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { normalizePairingCode } from "./pairing-code";
+import { withTempHome } from "./channel-test-helpers";
 import {
-  claimLegacyTelegramConfig,
-  generatePairingCode,
   getTelegramConfigDir,
   isTelegramUserAuthorized,
   listTelegramAccessRequests,
@@ -23,6 +22,7 @@ import {
   describeSharedChannelConfigTests,
   withTempHomedir,
 } from "./testing/channel-config-fixtures";
+import { getUserConfigDir } from "./user-config";
 
 describe("parseAllowedUserIds", () => {
   test("parses comma-separated ids", () => {
@@ -53,12 +53,10 @@ describeSharedChannelConfigTests({
     allowlistValue: "42, 43",
     botTokenKey: "TELEGRAM_BOT_TOKEN",
   },
-  generatePairingCode,
   isUserAuthorized: isTelegramUserAuthorized,
   loadConfigFile: () => loadTelegramConfigFile(null),
   mask: maskBotToken,
   name: "telegram",
-  normalize: normalizePairingCode,
   regenerate: () => regenerateTelegramHandshake(null),
   resolveConfigFromSources: resolveTelegramConfigFromSources,
   resolveFile: {
@@ -73,7 +71,7 @@ describeSharedChannelConfigTests({
 
 describe("per-org telegram config", () => {
   test("claims a bot once even with concurrent rotated tokens", async () => {
-    await withTempHomedir("nakama-telegram-claim-race-", async () => {
+    await withTempHomedir("airin-telegram-claim-race-", async () => {
       const results = await Promise.allSettled([
         saveTelegramConfig(
           { orgId: "org_a", profileId: "a" },
@@ -92,7 +90,7 @@ describe("per-org telegram config", () => {
   });
 
   test("refuses symlinked credential directories", async () => {
-    await withTempHomedir("nakama-telegram-symlink-", async (home) => {
+    await withTempHomedir("airin-telegram-symlink-", async (home) => {
       const owner = { orgId: "org_a", profileId: "a" };
       const directory = getTelegramConfigDir(owner);
       await mkdir(join(directory, ".."), { recursive: true });
@@ -104,7 +102,7 @@ describe("per-org telegram config", () => {
   });
 
   test("isolates agent credentials and pairing within an organization", async () => {
-    await withTempHomedir("nakama-telegram-profile-", async () => {
+    await withTempHomedir("airin-telegram-profile-", async () => {
       const first = { orgId: "org_a", profileId: "agent_a" };
       const second = { orgId: "org_a", profileId: "agent_b" };
       const saved = await saveTelegramConfig(first, { botToken: "111:AAA" });
@@ -126,7 +124,7 @@ describe("per-org telegram config", () => {
   });
 
   test("keeps each org's credentials out of the other scopes", async () => {
-    await withTempHomedir("nakama-telegram-org-", async () => {
+    await withTempHomedir("airin-telegram-org-", async () => {
       await saveTelegramConfig("org_a", { botToken: "111:AAA" });
 
       expect(await loadTelegramConfigFile("org_b")).toBeNull();
@@ -137,23 +135,12 @@ describe("per-org telegram config", () => {
   });
 
   test("refuses a bot token another scope already runs", async () => {
-    await withTempHomedir("nakama-telegram-dup-", async () => {
+    await withTempHomedir("airin-telegram-dup-", async () => {
       await saveTelegramConfig(null, { botToken: "111:AAA" });
 
       await expect(
         saveTelegramConfig("org_b", { botToken: "111:AAA" })
       ).rejects.toThrow("already in use by another organization");
-    });
-  });
-
-  test("claims the install-wide config for a sole org, once", async () => {
-    await withTempHomedir("nakama-telegram-claim-", async () => {
-      await saveTelegramConfig(null, { botToken: "111:AAA" });
-
-      expect(await claimLegacyTelegramConfig("org_a")).toBe(true);
-      expect((await loadTelegramConfigFile("org_a"))?.botToken).toBe("111:AAA");
-      expect(await loadTelegramConfigFile(null)).toBeNull();
-      expect(await claimLegacyTelegramConfig("org_a")).toBe(false);
     });
   });
 
@@ -166,7 +153,7 @@ describe("per-org telegram config", () => {
 
 describe("telegram access requests", () => {
   test("records each sender once and removes on resolve", async () => {
-    await withTempHomedir("nakama-telegram-requests-", async () => {
+    await withTempHomedir("airin-telegram-requests-", async () => {
       await recordTelegramAccessRequest(null, { userId: 7, username: "jane" });
       await recordTelegramAccessRequest(null, { userId: 7, username: "other" });
       await recordTelegramAccessRequest(null, { userId: 8 });
@@ -183,7 +170,7 @@ describe("telegram access requests", () => {
   });
 
   test("drops new senders once the list is full", async () => {
-    await withTempHomedir("nakama-telegram-requests-cap-", async () => {
+    await withTempHomedir("airin-telegram-requests-cap-", async () => {
       for (let userId = 1; userId <= 20; userId += 1) {
         await recordTelegramAccessRequest(null, { userId });
       }
@@ -193,6 +180,65 @@ describe("telegram access requests", () => {
       );
 
       expect(await listTelegramAccessRequests(null)).toHaveLength(20);
+    });
+  });
+});
+
+describe("telegram bot claims", () => {
+  const token = "123456789:AAEexampletoken";
+
+  test("a claim with no connection behind it is taken over", async () => {
+    await withTempHome("airin-telegram-stale-claim-", async () => {
+      const dir = join(getUserConfigDir(), "channel-claims", "telegram");
+
+      const claim = join(
+        dir,
+        createHash("sha256").update("123456789").digest("hex")
+      );
+
+      await mkdir(dir, { recursive: true });
+
+      await writeFile(claim, JSON.stringify(["org_a", "gone"]));
+
+      const hourAgo = new Date(Date.now() - 3_600_000);
+
+      await utimes(claim, hourAgo, hourAgo);
+
+      await saveTelegramConfig(
+        { orgId: "org_a", profileId: "fresh" },
+        { botToken: token }
+      );
+
+      expect(JSON.parse(await readFile(claim, "utf8"))).toEqual([
+        "org_a",
+        "fresh",
+      ]);
+    });
+  });
+
+  test("a live connection still blocks, and says which org holds it", async () => {
+    await withTempHome("airin-telegram-live-claim-", async () => {
+      await saveTelegramConfig(
+        { orgId: "org_a", profileId: "alpha" },
+        { botToken: token }
+      );
+
+      // A revoked and reissued token keeps the bot id the claim is keyed on.
+      const reissued = "123456789:AAEreissuedtoken";
+
+      await expect(
+        saveTelegramConfig(
+          { orgId: "org_a", profileId: "beta" },
+          { botToken: reissued }
+        )
+      ).rejects.toThrow(/in this organization/);
+
+      await expect(
+        saveTelegramConfig(
+          { orgId: "org_b", profileId: "gamma" },
+          { botToken: reissued }
+        )
+      ).rejects.toThrow(/in another organization/);
     });
   });
 });

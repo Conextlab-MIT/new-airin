@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { JsonSchema, ToolContext, ToolDefinition } from "@nakama/core";
+import type { JsonSchema, ToolContext, ToolDefinition } from "@airin/core";
 import { ACP_MCP_BRIDGE_SOURCE } from "./acp-mcp-bridge";
 import {
   acpMcpRequestSchema,
@@ -202,7 +202,7 @@ describe("ACP MCP tools", () => {
     endpoint.host = `127.0.0.1:${server.port}`;
 
     const bridge = Bun.spawn([process.execPath, "-e", ACP_MCP_BRIDGE_SOURCE], {
-      env: { ...process.env, NAKAMA_ACP_MCP_URL: endpoint.toString() },
+      env: { ...process.env, AIRIN_ACP_MCP_URL: endpoint.toString() },
       stdin: "pipe",
       stdout: "pipe",
     });
@@ -228,6 +228,39 @@ describe("ACP MCP tools", () => {
         ],
       },
     });
+  });
+
+  test("the stdio bridge turns an endpoint error into a JSON-RPC error", async () => {
+    const server = Bun.serve({
+      fetch: () =>
+        Response.json({ error: "Unknown ACP session." }, { status: 404 }),
+      port: 0,
+    });
+
+    servers.push(server);
+
+    const bridge = Bun.spawn([process.execPath, "-e", ACP_MCP_BRIDGE_SOURCE], {
+      env: {
+        ...process.env,
+        AIRIN_ACP_MCP_URL: `http://127.0.0.1:${server.port}/v1/acp-mcp/x`,
+      },
+      stdin: "pipe",
+      stdout: "pipe",
+    });
+
+    bridge.stdin.write(
+      `${JSON.stringify({ id: 3, jsonrpc: "2.0", method: "initialize" })}\n`
+    );
+    bridge.stdin.flush();
+
+    const line = await readFirstLine(bridge.stdout);
+    bridge.kill();
+
+    // The agent matches replies by id, so an error it can read must carry one.
+    const reply = JSON.parse(line);
+
+    expect(reply.id).toBe(3);
+    expect(reply.error.code).toBe(-32_603);
   });
 });
 

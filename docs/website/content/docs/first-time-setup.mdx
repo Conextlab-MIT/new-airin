@@ -1,6 +1,6 @@
 ---
 title: "First-time setup"
-description: "Complete Nakama setup wizard: admin account, organization, provider, and profiles."
+description: "Complete Airin setup wizard: admin account, organization, provider, and profiles."
 ---
 
 ## Open the dashboard
@@ -9,13 +9,13 @@ Where you open the dashboard depends on how you deployed:
 
 | Deployment | URL |
 |---|---|
-| [Managed hosting](https://getnakama.cloud/) | Your instance URL (for example `acme.getnakama.cloud`) |
+| [Managed hosting](https://getairin.cloud/) | Your instance URL (for example `acme.getairin.cloud`) |
 | [Docker](/docker) | `http://localhost:4310` |
 | Local development | `http://localhost:3003` (web dev server proxies to the API) |
 
-On a fresh install, Nakama redirects you to the setup wizard automatically.
+On a fresh install, Airin redirects you to the setup wizard automatically.
 
-Managed or Docker installs can skip the wizard by setting `NAKAMA_SEED_ADMIN_EMAIL`, `NAKAMA_SEED_ADMIN_NAME`, and `NAKAMA_SEED_ADMIN_PASSWORD` before first boot. See [Docker → First-boot seed](/docker#first-boot-seed-optional).
+Managed or Docker installs can skip the wizard by setting `AIRIN_SEED_ADMIN_EMAIL`, `AIRIN_SEED_ADMIN_NAME`, and `AIRIN_SEED_ADMIN_PASSWORD` before first boot. See [Docker → First-boot seed](/docker#first-boot-seed-optional).
 
 ## Step 1: Admin account
 
@@ -27,15 +27,15 @@ Fill in your name, email, and password, then click **Continue**.
 
 ### Restore from backup instead
 
-If you are moving to a new machine or reinstalling, you can skip creating a new admin account and restore a previous Nakama export ZIP on this step.
+If you are moving to a new machine or reinstalling, you can skip creating a new admin account and restore a previous Airin export ZIP on this step.
 
 1. Click **Upload backup ZIP**
 2. Choose your `.zip` backup and review the preview
 3. Click **Restore ZIP** to replace the local data root
-4. Restart Nakama so it picks up the restored database
+4. Restart Airin so it picks up the restored database
 5. Sign in with the account from your backup
 
-If provider setup was already complete in the backup, Nakama opens chat after sign-in. Otherwise the setup wizard continues from the provider step.
+If provider setup was already complete in the backup, Airin opens chat after sign-in. Otherwise the setup wizard continues from the provider step.
 
 See [Backup and restore](/backup-restore) for what is included in export ZIPs and when to use dashboard import after setup is complete.
 
@@ -49,7 +49,7 @@ The slug must use lowercase letters, numbers, and hyphens only. Click **Create O
 
 ## Step 3: Provider
 
-Add your first LLM provider and pick a default model. You can add more providers later in **Control center → Agent tools → AI Providers**.
+Add your first LLM provider and pick a default model. You can add more providers later in **Settings → Agent tools → AI Providers**.
 
 ![Configure your LLM provider](/screenshots/setup-step-provider.png)
 
@@ -62,17 +62,17 @@ Four short screens, one question each, instead of a form:
 1. **What do you do?** Your name (pre-filled from the account you just created), then a grid of roles (engineer, designer, product manager, founder, data, DevOps, marketing, sales, support, student, writer, or your own words). The role sets how deep and how technical replies get.
 2. **What are you working on?** Current projects and your stack. The examples and one-tap quick picks follow the role you chose, so a designer sees Figma and Framer while an SRE sees Kubernetes and Terraform.
 3. **How should replies sound?** Pick a reply language (your browser language is suggested), a length (concise or detailed) and a tone (casual or formal), each shown with a sample sentence, plus one **Always** and one **Never** rule. The language is stored as an Always rule, so it applies on every channel.
-4. **What Nakama will remember.** The exact Markdown that gets saved as `USER.md`, editable by hand. Your timezone is set here too.
+4. **What Airin will remember.** The exact Markdown that gets saved as `USER.md`, editable by hand. Your timezone is set here too.
 
 Answers and the resulting `USER.md` are saved for the authenticated user within this organization, then added to that user's conversations. They are not shared with every member of the organization. See [How agent prompts work](/agent-prompt) for where they land in the prompt.
 
-Every field is optional and **Set up later** skips the whole step. Anything you had typed is kept as a draft in this browser and shows up again in **Control center → Workspace → Settings**. Press Enter in any field to move to the next screen. You can fill this in or change it at any time from **Control center → Workspace → Settings**, or from the account menu in the sidebar. That is also where to start if your install skipped the wizard through the [first-boot seed](/docker#first-boot-seed-optional).
+Every field is optional and **Set up later** skips the whole step. Anything you had typed is kept as a draft in this browser and shows up again in **Settings → Workspace → Preferences**. Press Enter in any field to move to the next screen. You can fill this in or change it at any time from **Settings → Workspace → Preferences**, or from the account menu in the sidebar. That is also where to start if your install skipped the wizard through the [first-boot seed](/docker#first-boot-seed-optional).
 
 ## Send your first message
 
-After the provider step, Nakama opens chat with the default profile. Send a test message — you should get a reply within a few seconds.
+After the provider step, Airin opens chat with the default profile. Send a test message — you should get a reply within a few seconds.
 
-If chat fails, reopen **Control center → Agent tools → AI Providers** and confirm the API key and per-agent model selection.
+If chat fails, reopen **Settings → Agent tools → AI Providers** and confirm the API key and per-agent model selection.
 
 ## What to configure next
 

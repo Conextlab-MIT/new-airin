@@ -8,12 +8,13 @@ import type {
   UpdateEmailSettingsRequest,
   UpdateErrorTrackingSettingsRequest,
   UpdateSlackSettingsRequest,
+  UpdateTeamsSettingsRequest,
   UpdateTelegramSettingsRequest,
   UpdateThinkingRequest,
   UpdateWebSearchSettingsRequest,
   UpdateWhatsAppSettingsRequest,
   WebPublicUrlSettingsResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   type QueryClient,
   type QueryKey,
@@ -26,6 +27,7 @@ import { createContext, useCallback, useContext, useEffect } from "react";
 import { useAuth } from "@/context/use-auth";
 import { prefetchTimezoneData } from "@/hooks/use-timezones";
 import { client } from "@/lib/client";
+import { needsMfaEnrollment } from "@/lib/mfa";
 import { invalidateQueries } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -109,8 +111,22 @@ function createSettingsHooks<TData, TRequest>(config: {
 }
 
 const webSearchSettings = createSettingsHooks({
-  mutationFn: (request: UpdateWebSearchSettingsRequest) =>
-    client.setWebSearchSettings(request),
+  mutationFn: async (request: UpdateWebSearchSettingsRequest) => {
+    const { apiKey, ...settings } = request;
+
+    if (apiKey?.trim()) {
+      const provider =
+        settings.provider ?? (await client.getWebSearchSettings()).provider;
+
+      if (!provider) {
+        throw new Error("Select a web search provider.");
+      }
+
+      await client.setWebSearchSecret(provider, apiKey);
+    }
+
+    return client.setWebSearchSettings(settings);
+  },
   queryFn: () => client.getWebSearchSettings(),
   queryKey: queryKeys.webSearchSettings,
 });
@@ -359,9 +375,50 @@ export function useRegenerateSlackHandshake() {
   );
 }
 
+function useTeamsSettingsHooks() {
+  const profileId = useChannelProfileId();
+  const { activeOrg } = useAuth();
+  const api = client.forOrg(activeOrg?.id ?? null);
+
+  return createSettingsHooks({
+    mutationFn: (request: UpdateTeamsSettingsRequest) =>
+      api.setTeamsSettings(request, profileId),
+    queryFn: () => api.getTeamsSettings(profileId),
+    queryKey: [...queryKeys.teams.settings, activeOrg?.id, profileId],
+  });
+}
+
+export function useTeamsSettings() {
+  return useQuery({
+    ...useTeamsSettingsHooks().queryOptions,
+    refetchInterval: (query) =>
+      query.state.data?.handshakeCode ? 5000 : false,
+  });
+}
+
+export function useSaveTeamsSettings() {
+  return useTeamsSettingsHooks().useSave();
+}
+
+export function useRegenerateTeamsHandshake() {
+  const profileId = useChannelProfileId();
+  const { activeOrg } = useAuth();
+  const api = client.forOrg(activeOrg?.id ?? null);
+
+  return useTeamsSettingsHooks().useSetQueryDataMutation(() =>
+    api.regenerateTeamsHandshake(profileId)
+  );
+}
+
 const emailSettings = createSettingsHooks({
-  mutationFn: (request: UpdateEmailSettingsRequest) =>
-    client.setEmailSettings(request),
+  mutationFn: async (request: UpdateEmailSettingsRequest) => {
+    const { password, ...settings } = request;
+    await client.setEmailSettings(settings);
+
+    return password?.trim()
+      ? client.setEmailSecret(password)
+      : client.getEmailSettings();
+  },
   queryFn: () => client.getEmailSettings(),
   queryKey: queryKeys.email.settings,
 });
@@ -461,7 +518,13 @@ const webPublicUrlSettings = createSettingsHooks<
 
     return { envOverride: null, webPublicUrl: saved.webPublicUrl };
   },
-  onSaveSuccess: (queryClient) => {
+  onSaveSuccess: (queryClient, saved) => {
+    // Keep envOverride from the server; the save response does not carry it.
+    queryClient.setQueryData<WebPublicUrlSettingsResponse>(
+      queryKeys.webPublicUrl,
+      (current) =>
+        current ? { ...current, webPublicUrl: saved.webPublicUrl } : saved
+    );
     void invalidateQueries(queryClient, queryKeys.webPublicUrl);
   },
   queryFn: () => client.getWebPublicUrl(),
@@ -579,6 +642,39 @@ export function AppQueryPrefetch() {
   return null;
 }
 
+export function useAirinVersionQuery(enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryFn: () => client.getAirinVersion(),
+    queryKey: queryKeys.airinVersion,
+    retry: false,
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+/** Polls while the updater runs, and keeps polling through the restart. */
+export function useAirinUpgradeQuery(enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryFn: () => client.getAirinUpgrade(),
+    queryKey: queryKeys.airinUpgrade,
+    refetchInterval: (query) =>
+      query.state.data?.available || query.state.error ? 3000 : false,
+    retry: false,
+  });
+}
+
+export function useStartAirinUpgrade() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: { rollback?: boolean; version: string }) =>
+      client.startAirinUpgrade(request.version, request.rollback),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.airinUpgrade }),
+  });
+}
+
 export function useHealthQuery() {
   return useQuery(healthQueryOptions);
 }
@@ -591,8 +687,11 @@ export function useModelsQuery(options?: { enabled?: boolean }) {
 }
 
 export function useProfilesQuery(orgId?: string | null) {
+  const { user } = useAuth();
+  const mfaPending = needsMfaEnrollment(user);
+
   return useQuery({
-    enabled: orgId === undefined || Boolean(orgId),
+    enabled: !mfaPending && (orgId === undefined || Boolean(orgId)),
     queryFn: async () => (await client.listProfiles()).profiles,
     // One key for every caller, so the sidebar and the chat page share a
     // request. The cache is cleared when the active org changes.
@@ -670,10 +769,14 @@ export function mcpServerDetailQueryOptions(serverId: string) {
   });
 }
 
-export function useMcpServerDetailQuery(serverId: string | null) {
+export function useMcpServerDetailQuery(
+  serverId: string | null,
+  { refetchInterval }: { refetchInterval?: number } = {}
+) {
   return useQuery({
     ...mcpServerDetailQueryOptions(serverId ?? ""),
     enabled: Boolean(serverId),
+    refetchInterval,
   });
 }
 
@@ -721,8 +824,30 @@ export function useCreateProviderMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (request: Parameters<typeof client.createProvider>[0]) =>
-      client.createProvider(request),
+    mutationFn: async (
+      request: Parameters<typeof client.createProvider>[0]
+    ) => {
+      const { apiKey, ...settings } = request;
+      const created = await client.createProvider(settings);
+
+      if (!apiKey?.trim()) {
+        return created;
+      }
+
+      try {
+        const updated = await client.setProviderSecret(
+          created.provider.id,
+          apiKey
+        );
+
+        return { ...created, provider: updated.provider };
+      } catch (error) {
+        // A keyless row can stay the default and keep chat offline, even after
+        // the retry adds a working provider.
+        await client.deleteProvider(created.provider.id).catch(() => undefined);
+        throw error;
+      }
+    },
     onSuccess: async () => {
       await invalidateProviderQueries(queryClient);
     },
@@ -739,7 +864,22 @@ export function useUpdateProviderMutation() {
     }: {
       providerId: string;
       request: Parameters<typeof client.updateProvider>[1];
-    }) => client.updateProvider(providerId, request),
+    }) => {
+      const { apiKey, ...settings } = request;
+      const hasSettings = Object.keys(settings).length > 0;
+
+      return hasSettings
+        ? client
+            .updateProvider(providerId, settings)
+            .then(async (updated) =>
+              apiKey?.trim()
+                ? client.setProviderSecret(providerId, apiKey)
+                : updated
+            )
+        : apiKey?.trim()
+          ? client.setProviderSecret(providerId, apiKey)
+          : client.updateProvider(providerId, settings);
+    },
     onSuccess: async () => {
       await invalidateProviderQueries(queryClient);
     },

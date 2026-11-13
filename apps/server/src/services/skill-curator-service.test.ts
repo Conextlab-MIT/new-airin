@@ -6,12 +6,12 @@ import {
   getOrgCuratorLogDir,
   pathExists,
   SKILL_ARCHIVE_DIR_NAME,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   type DatabaseAdapter,
   seedOrgDefaultProfile,
-} from "@nakama/db";
+} from "@airin/db";
 import {
   type SkillCuratorGenerateMarkdown,
   SkillCuratorService,
@@ -33,8 +33,8 @@ describe("SkillCuratorService", () => {
   let curator: SkillCuratorService;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-curator-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-curator-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     db = createInMemoryDatabaseAdapter();
     const profile = await seedOrgDefaultProfile(db, ORG_ID);
     profileId = profile.id;
@@ -43,7 +43,7 @@ describe("SkillCuratorService", () => {
   });
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     await rm(configDir, { force: true, recursive: true });
   });
 

@@ -1,4 +1,3 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   AcpAgentPresetsResponse,
   AcpSessionSettingsResponse,
@@ -18,28 +17,36 @@ import type {
   UpdateArtifactResponse,
   UpdateProfileRequest,
   UploadKnowledgeBaseResponse,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   attachSharedKnowledgeBaseDocument,
   detachSharedKnowledgeBaseDocument,
   getProfileSharedDocumentIds,
   getWorkspaceEntry,
   KnowledgeBaseDocumentInUseError,
   listWorkspaceFiles,
-  NakamaApiError,
   readOrganizationKnowledgeBaseDocumentContent,
   readWorkspaceFile,
   renameWorkspaceEntry,
-} from "@nakama/core";
-import { filterProfilesForChatAccess } from "@nakama/core/profiles";
+} from "@airin/core";
+import {
+  canChatWithProfile,
+  filterProfilesForChatAccess,
+} from "@airin/core/profiles";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { listAcpAgentPresets } from "../../providers/acp/acp-agent-presets";
+import { AgentMarketplaceService } from "../../services/agent-marketplace-service";
 import { ArtifactShareService } from "../../services/artifact-share-service";
 import type { ServerOptions } from "../context";
 import {
+  artifactCreatorScopeFromContext,
+  profileResponseFor,
   requireActiveOrgIdFromContext,
   requireOrgAdmin,
   requireOrgAdminOrPlatformAdminFromContext,
+  requireOrgMember,
   requireOrgMemberFromContext,
   requirePlatformAdminFromContext,
   requireProfileManageFromContext,
@@ -49,6 +56,7 @@ import type { AppEnv, HonoApp } from "../types";
 
 const ORG_ADMIN_PROFILE_SETTING_KEYS = new Set([
   "automationsEnabled",
+  "groupsEnabled",
   "skillsWriteApproval",
   "skillsPostTurnReview",
 ]);
@@ -76,15 +84,47 @@ export function registerProfileRoutes(
   const requireProfileManage = (c: Context<AppEnv>) =>
     requireProfileManageFromContext(c, agent);
 
-  const requireProfileReadAccess = async (c: Context<AppEnv>) => {
+  /**
+   * Admins read every agent. A member reads the agents their chat list shows
+   * (shared, the org default, their own). `owner` is true for admins and the
+   * agent's owner, who also see change history and the system prompt. Unknown
+   * ids and hidden agents answer the same 403 after the same row lookup, so
+   * members cannot probe which ids exist.
+   */
+  const requireProfileRead = async (
+    c: Context<AppEnv>
+  ): Promise<{ owner: boolean }> => {
     const auth = getRequestAuth(c);
 
     if (auth.isPlatformAdmin || auth.orgRole === "admin") {
-      return auth;
+      return { owner: true };
     }
 
-    return requireProfileManage(c);
+    requireOrgMember(auth);
+
+    const access = await agent.getProfileAccess(
+      requireActiveOrgIdFromContext(c),
+      decodeURIComponent(c.req.param("profileId") ?? "")
+    );
+
+    if (
+      !(
+        access &&
+        canChatWithProfile(access, {
+          isPlatformAdmin: auth.isPlatformAdmin,
+          orgRole: auth.orgRole,
+          userId: auth.user.id,
+        })
+      )
+    ) {
+      throw new AirinApiError("Forbidden", 403);
+    }
+
+    return { owner: !access.isSuper && access.ownerUserId === auth.user.id };
   };
+
+  const artifactCreatorScope = (c: Context<AppEnv>) =>
+    artifactCreatorScopeFromContext(c, agent);
 
   const artifactShares =
     options.databaseAdapter && options.authService
@@ -1318,6 +1358,17 @@ export function registerProfileRoutes(
   app.get("/v1/profiles", async (c) => {
     const auth = getRequestAuth(c);
     const orgId = requireActiveOrgIdFromContext(c);
+
+    // Best-effort: older marketplace installs used role titles. Never block
+    // the roster if rename fails (MFA, shared lock, etc.).
+    try {
+      await new AgentMarketplaceService(
+        agent.profiles
+      ).renameLegacyMarketplaceProfiles(orgId);
+    } catch {
+      // Roster still loads with the previous names.
+    }
+
     const response = await agent.listProfiles(orgId);
 
     return json<ListProfilesResponse>({
@@ -1347,7 +1398,7 @@ export function registerProfileRoutes(
     );
   });
 
-  app.post("/v1/profiles/with-super-bot", async (c) => {
+  app.post("/v1/profiles/with-super-airin", async (c) => {
     const auth = requireOrgMemberFromContext(c);
     const orgId = requireActiveOrgIdFromContext(c);
 
@@ -1359,7 +1410,7 @@ export function registerProfileRoutes(
       })
     );
 
-    // Super Bot has host tools, so members never route their text through it.
+    // Airin has host tools, so members never route their text through it.
     // Their description becomes the agent's prompt and the agent stays private.
     if (!auth.isPlatformAdmin) {
       return json<ProfileResponse>(
@@ -1378,7 +1429,7 @@ export function registerProfileRoutes(
     }
 
     return json<ProfileResponse>(
-      await agent.createProfileWithSuperBot(orgId, body),
+      await agent.createProfileWithSuperAirin(orgId, body),
       201
     );
   });
@@ -1438,7 +1489,7 @@ export function registerProfileRoutes(
     await agent.getProfile(orgId, profileId);
 
     if (!options.databaseAdapter) {
-      throw new NakamaApiError("Database unavailable", 503);
+      throw new AirinApiError("Database unavailable", 503);
     }
 
     const paths = await options.databaseAdapter.listFilePins(
@@ -1458,7 +1509,7 @@ export function registerProfileRoutes(
         // Missing files and paths that no longer pass workspace guards stay hidden.
         if (
           !(
-            error instanceof NakamaApiError &&
+            error instanceof AirinApiError &&
             (error.status === 404 || error.status === 400)
           )
         ) {
@@ -1481,13 +1532,13 @@ export function registerProfileRoutes(
     );
 
     if (!parsed.success) {
-      throw new NakamaApiError("Invalid rename request", 400);
+      throw new AirinApiError("Invalid rename request", 400);
     }
 
     const database = options.databaseAdapter;
 
     if (!database) {
-      throw new NakamaApiError("Database unavailable", 503);
+      throw new AirinApiError("Database unavailable", 503);
     }
 
     return json(
@@ -1526,11 +1577,11 @@ export function registerProfileRoutes(
       .safeParse(await readJson(c.req.raw, z.unknown()));
 
     if (!parsed.success) {
-      throw new NakamaApiError("Invalid file pin", 400);
+      throw new AirinApiError("Invalid file pin", 400);
     }
 
     if (!options.databaseAdapter) {
-      throw new NakamaApiError("Database unavailable", 503);
+      throw new AirinApiError("Database unavailable", 503);
     }
 
     if (parsed.data.pinned) {
@@ -1593,7 +1644,7 @@ export function registerProfileRoutes(
   });
 
   app.get("/v1/profiles/:profileId/artifacts", async (c) => {
-    await requireProfileManage(c);
+    const createdByUserId = await artifactCreatorScope(c);
     const orgId = requireActiveOrgIdFromContext(c);
     const profileId = decodeURIComponent(c.req.param("profileId"));
     const limitRaw = c.req.query("limit");
@@ -1621,15 +1672,17 @@ export function registerProfileRoutes(
     }
 
     return json<ListArtifactsResponse>(
-      await agent.listProfileArtifacts(orgId, profileId, {
-        folder: c.req.query("folder"),
-        limit,
-        offset,
-      })
+      await agent.listProfileArtifacts(
+        orgId,
+        profileId,
+        { folder: c.req.query("folder"), limit, offset },
+        createdByUserId ?? undefined
+      )
     );
   });
 
   app.get("/v1/profiles/:profileId/artifacts/content", async (c) => {
+    const createdByUserId = await artifactCreatorScope(c);
     const orgId = requireActiveOrgIdFromContext(c);
     const profileId = decodeURIComponent(c.req.param("profileId"));
     const artifactPath = c.req.query("path");
@@ -1648,7 +1701,8 @@ export function registerProfileRoutes(
       {
         headOnly: c.req.method === "HEAD" || undefined,
         render,
-      }
+      },
+      createdByUserId ?? undefined
     );
 
     const downloadName = artifactPath.split("/").pop() ?? "artifact";
@@ -1663,7 +1717,7 @@ export function registerProfileRoutes(
   });
 
   app.put("/v1/profiles/:profileId/artifacts/content", async (c) => {
-    requireOrgMemberFromContext(c);
+    const createdByUserId = await artifactCreatorScope(c);
     const orgId = requireActiveOrgIdFromContext(c);
     const profileId = decodeURIComponent(c.req.param("profileId"));
     const artifactPath = c.req.query("path");
@@ -1681,7 +1735,8 @@ export function registerProfileRoutes(
       orgId,
       profileId,
       artifactPath,
-      body.content
+      body.content,
+      createdByUserId ?? undefined
     );
 
     await artifactShares?.refreshArtifactShareSnapshot({
@@ -1694,7 +1749,7 @@ export function registerProfileRoutes(
   });
 
   app.delete("/v1/profiles/:profileId/artifacts", async (c) => {
-    await requireProfileManage(c);
+    const createdByUserId = await artifactCreatorScope(c);
     const orgId = requireActiveOrgIdFromContext(c);
     const profileId = decodeURIComponent(c.req.param("profileId"));
     const artifactPath = c.req.query("path");
@@ -1704,7 +1759,12 @@ export function registerProfileRoutes(
     }
 
     return json<DeleteArtifactResponse>(
-      await agent.deleteProfileArtifact(orgId, profileId, artifactPath)
+      await agent.deleteProfileArtifact(
+        orgId,
+        profileId,
+        artifactPath,
+        createdByUserId ?? undefined
+      )
     );
   });
 
@@ -1817,7 +1877,7 @@ export function registerProfileRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
 
     if (orgId !== decodeURIComponent(c.req.param("orgId"))) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     return json(await agent.listOrganizationKnowledgeBase(orgId));
@@ -1828,7 +1888,7 @@ export function registerProfileRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
 
     if (orgId !== decodeURIComponent(c.req.param("orgId"))) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const body = await readJson(c.req.raw, uploadKnowledgeBaseSchema);
@@ -1847,7 +1907,7 @@ export function registerProfileRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
 
     if (orgId !== decodeURIComponent(c.req.param("orgId"))) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const documentId = decodeURIComponent(c.req.param("documentId"));
@@ -1877,7 +1937,7 @@ export function registerProfileRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
 
     if (orgId !== decodeURIComponent(c.req.param("orgId"))) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const document = await agent.readOrganizationKnowledgeBaseDocument(
@@ -1901,7 +1961,20 @@ export function registerProfileRoutes(
       const orgId = decodeURIComponent(c.req.param("orgId"));
 
       if (auth.activeOrgId !== orgId) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
+      }
+
+      // A root org's published set is admin-only, same as its direct reads and
+      // the published-skill sibling route (`skills.ts`).
+      const organization =
+        await options.databaseAdapter?.getOrganizationById(orgId);
+
+      if (
+        !organization?.parentOrgId &&
+        auth.orgRole !== "admin" &&
+        !auth.isPlatformAdmin
+      ) {
+        throw new AirinApiError("Not found", 404);
       }
 
       const document = await agent.readPublishedKnowledgeBaseDocument(
@@ -1935,7 +2008,7 @@ export function registerProfileRoutes(
           error instanceof Error &&
           error.message === "Shared knowledge base document not found."
         ) {
-          throw new NakamaApiError(error.message, 404);
+          throw new AirinApiError(error.message, 404);
         }
 
         throw error;
@@ -1961,7 +2034,7 @@ export function registerProfileRoutes(
       );
 
       if (!detached) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Shared knowledge base document is not attached to this profile.",
           404
         );
@@ -1972,6 +2045,7 @@ export function registerProfileRoutes(
   );
 
   app.get("/v1/profiles/:profileId/avatar", async (c) => {
+    await requireProfileRead(c);
     const orgId = requireActiveOrgIdFromContext(c);
     const profileId = decodeURIComponent(c.req.param("profileId"));
     const avatar = await agent.getProfileAvatar(orgId, profileId);
@@ -1988,7 +2062,10 @@ export function registerProfileRoutes(
     const body = await readJson(c.req.raw, imageAttachmentSchema);
 
     return json<ProfileResponse>(
-      await agent.uploadProfileAvatar(orgId, profileId, body)
+      profileResponseFor(
+        c,
+        await agent.uploadProfileAvatar(orgId, profileId, body)
+      )
     );
   });
 
@@ -2002,15 +2079,26 @@ export function registerProfileRoutes(
   });
 
   app.get("/v1/profiles/:profileId", async (c) => {
-    await requireProfileReadAccess(c);
+    const { owner } = await requireProfileRead(c);
     const orgId = requireActiveOrgIdFromContext(c);
     const profileId = decodeURIComponent(c.req.param("profileId"));
 
-    return json<ProfileResponse>(await agent.getProfile(orgId, profileId));
+    return json<ProfileResponse>(
+      profileResponseFor(c, await agent.getProfile(orgId, profileId), {
+        ownsProfile: owner,
+      })
+    );
   });
 
   app.get("/v1/profiles/:profileId/history", async (c) => {
-    await requireProfileReadAccess(c);
+    // History holds full soul file snapshots (MEMORY.md too). Only the owner
+    // and admins get them, the same as the soul routes and pack export.
+    const { owner } = await requireProfileRead(c);
+
+    if (!owner) {
+      throw new AirinApiError("Forbidden", 403);
+    }
+
     const orgId = requireActiveOrgIdFromContext(c);
     const profileId = decodeURIComponent(c.req.param("profileId"));
     const limitRaw = c.req.query("limit");
@@ -2038,7 +2126,7 @@ export function registerProfileRoutes(
     );
   });
 
-  // The agents Nakama ships with, for the profile's chat agent setting.
+  // The agents Airin ships with, for the profile's chat agent setting.
   app.get("/v1/acp-agent-presets", () =>
     json<AcpAgentPresetsResponse>({
       presets: listAcpAgentPresets(),
@@ -2082,36 +2170,47 @@ export function registerProfileRoutes(
       const { profile } = await agent.getProfile(orgId, profileId);
 
       if (profile.ownerUserId !== auth.user.id) {
-        throw new NakamaApiError("Forbidden", 403);
+        throw new AirinApiError("Forbidden", 403);
       }
     }
 
     if (!auth.isPlatformAdmin) {
       // Owners edit their own agent, except settings that run code on the host.
-      const isOwner = await requireProfileManage(c).then(
-        () => true,
-        () => false
-      );
+      // Only a 403 means "not the owner". A failed lookup stays an error.
+      let isOwner = true;
+
+      try {
+        await requireProfileManage(c);
+      } catch (error) {
+        if (!(error instanceof AirinApiError && error.status === 403)) {
+          throw error;
+        }
+
+        isOwner = false;
+      }
 
       if (isOwner) {
         // Host-run agents are an admin control.
         if (body.acpAgent !== undefined) {
-          throw new NakamaApiError("Forbidden", 403);
+          throw new AirinApiError("Forbidden", 403);
         }
       } else {
         requireOrgAdmin(auth);
 
         if (!isOrgAdminAllowedProfileSettingsUpdate(body)) {
-          throw new NakamaApiError("Forbidden", 403);
+          throw new AirinApiError("Forbidden", 403);
         }
       }
     }
 
     return json<ProfileResponse>(
-      await agent.updateProfile(orgId, profileId, body, {
-        actorUserId: auth.user.id,
-        source: "dashboard",
-      })
+      profileResponseFor(
+        c,
+        await agent.updateProfile(orgId, profileId, body, {
+          actorUserId: auth.user.id,
+          source: "dashboard",
+        })
+      )
     );
   });
 
@@ -2156,7 +2255,7 @@ export function registerProfileRoutes(
     const body = await readOptionalJson<CloneProfileRequest>(c.req.raw, {});
 
     return json<ProfileResponse>(
-      await agent.cloneProfile(orgId, profileId, body),
+      profileResponseFor(c, await agent.cloneProfile(orgId, profileId, body)),
       201
     );
   });

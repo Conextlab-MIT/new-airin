@@ -1,6 +1,10 @@
+export * from "./agent-marketplace";
+
 export * from "./agent-questionnaire";
 
 export * from "./agent-todo";
+
+export { getAirinVersion } from "./airin-version";
 
 export * from "./api-error";
 
@@ -57,8 +61,8 @@ export * from "./contract";
 // Explicit Discord exports — omit helpers that collide with telegram-* names
 // (maskBotToken, generateHandshakeCode, normalizeHandshakeInput, parseAllowedUserIds,
 // isHeartbeatAlive, isProcessAlive). Shared implementations live in
-// channel-config-shared.ts; import Discord variants from @nakama/core/discord-config
-// or @nakama/core/discord-worker when required.
+// channel-config-shared.ts; import Discord variants from @airin/core/discord-config
+// or @airin/core/discord-worker when required.
 export {
   getDiscordConfigDir,
   getDiscordConfigPath,
@@ -101,15 +105,9 @@ export { createSmtpSender } from "./mail/smtp-sender";
 
 export * from "./message-content";
 
-export { getNakamaVersion } from "./nakama-version";
-
 export * from "./notification-destinations";
 
 export * from "./ollama-provider-config";
-
-export * from "./omni";
-
-export * from "./omni-install";
 
 export * from "./openrouter-model-slug";
 
@@ -125,9 +123,15 @@ export * from "./provider-setup-prompt";
 
 export * from "./runtime";
 
+export * from "./secret-mask";
+
 export * from "./skills";
 
 export * from "./soul";
+
+export * from "./teams-config";
+
+export * from "./teams-worker";
 
 export * from "./telegram-config";
 

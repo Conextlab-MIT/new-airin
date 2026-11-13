@@ -1,5 +1,5 @@
 {
-  "name": "@nakama/agent",
+  "name": "@airin/agent",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,7 +10,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@nakama/core": "workspace:*",
+    "@airin/core": "workspace:*",
     "zod": "^4.6.5"
   }
 }

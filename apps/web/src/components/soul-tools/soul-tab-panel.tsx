@@ -2,18 +2,18 @@ import type {
   ProfileSummary,
   SoulFileStatus,
   SoulStackFiles,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
-import { ArrowRight01Icon, CircleIcon, RefreshIcon } from "hugeicons-react";
+} from "@airin/ui/select";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
+import { ArrowRight01Icon, RefreshIcon } from "hugeicons-react";
 import type { ReactNode } from "react";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { SOUL_FILES } from "@/components/soul-tools/soul-files";
@@ -33,22 +33,18 @@ export function SoulTabPanel({
 }) {
   return (
     <div className={embedded ? undefined : "min-w-0 p-4 sm:p-5"}>
-      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          {embedded ? null : (
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="type-section-title">
-                {selectedProfile?.name ?? "Profile prompt"}
-              </h2>
-              {selectedProfile?.soulActive ? (
-                <span className="scope-badge scope-badge-active">active</span>
-              ) : null}
-            </div>
-          )}
-          <p className="font-normal text-muted-foreground/55 text-sm">
-            Agent prompt
-          </p>
-          {status && !embedded ? (
+      {embedded ? null : (
+        <div className="mb-5 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="type-section-title">
+              {selectedProfile?.name ?? "Profile prompt"}
+            </h2>
+            {selectedProfile?.soulActive ? (
+              <span className="scope-badge scope-badge-active">active</span>
+            ) : null}
+          </div>
+          <p className="font-medium text-foreground/80 text-sm">Agent prompt</p>
+          {status ? (
             <p
               className="type-code mt-2 truncate text-muted-foreground"
               title={status.directory}
@@ -57,16 +53,18 @@ export function SoulTabPanel({
             </p>
           ) : null}
         </div>
-      </div>
+      )}
 
-      <p className="mb-4 text-muted-foreground text-xs lg:hidden">
-        Tap a file to view or edit
-      </p>
+      {embedded ? null : (
+        <p className="mb-4 text-muted-foreground text-xs lg:hidden">
+          Tap a file to view or edit
+        </p>
+      )}
 
       <ul
         className={
           embedded
-            ? "grid gap-3 sm:grid-cols-2 [&>li]:overflow-hidden [&>li]:rounded-xl [&>li]:border [&>li]:border-border [&>li]:bg-card"
+            ? "grid gap-2.5 sm:grid-cols-2 [&>li]:overflow-hidden [&>li]:rounded-xl [&>li]:bg-muted/60"
             : "divide-y divide-border overflow-hidden rounded-xl border border-border bg-card"
         }
       >
@@ -163,7 +161,7 @@ export function SoulTabShell({
           <div className="mb-4">
             <h2 className="type-section-title">Profiles</h2>
             <p className="type-body mt-1 text-xs">
-              Each profile has its own soul stack under ~/.nakama/profiles/.
+              Each profile has its own soul stack under ~/.airin/profiles/.
             </p>
           </div>
 
@@ -259,15 +257,16 @@ function FileStatusListItem({
         type="button"
       >
         <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-foreground text-sm">{label}</p>
+          <p className="truncate font-medium text-foreground text-sm">
+            {label}
+          </p>
           <p className="mt-0.5 truncate text-muted-foreground text-xs">
             {description}
           </p>
         </div>
 
         {!present && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground text-xs">
-            <CircleIcon aria-hidden className="size-3.5" />
+          <span className="inline-flex shrink-0 items-center rounded-full bg-background px-2.5 py-0.5 font-medium text-muted-foreground text-xs">
             Missing
           </span>
         )}

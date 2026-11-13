@@ -1,4 +1,4 @@
-import { Spinner } from "@nakama/ui/spinner";
+import { Spinner } from "@airin/ui/spinner";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/context/use-auth";
 import { canAccessSystemPage } from "@/lib/navigation";

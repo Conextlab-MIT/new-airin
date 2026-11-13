@@ -9,7 +9,7 @@ import {
   saveAttachmentBytes,
 } from "./store";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 let tempConfigDir = "";
 
@@ -20,15 +20,15 @@ afterEach(() => {
   }
 
   if (originalConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+    process.env.AIRIN_CONFIG_DIR = originalConfigDir;
   }
 });
 
 function useTempConfigDir(): void {
-  tempConfigDir = mkdtempSync(join(tmpdir(), "nakama-attachments-"));
-  process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+  tempConfigDir = mkdtempSync(join(tmpdir(), "airin-attachments-"));
+  process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 }
 
 describe("attachment store", () => {

@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   type DeliverableChannelArtifact,
   deliverTurnArtifactShares,
-  formatArtifactShareFooter,
   isAttachIntent,
   isAttachOnlyCommand,
   mintDeliverableArtifacts,
@@ -20,7 +19,7 @@ describe("isAttachIntent", () => {
     expect(isAttachIntent("send the pdf")).toBe(true);
     expect(isAttachIntent("send me the csv")).toBe(true);
     expect(isAttachIntent("attach the image")).toBe(true);
-    expect(isAttachIntent("send nakama-pitch-deck.pdf")).toBe(true);
+    expect(isAttachIntent("send airin-pitch-deck.pdf")).toBe(true);
     expect(isAttachIntent("tolong kirim csv file kesini please")).toBe(true);
     expect(
       isAttachIntent(
@@ -76,7 +75,7 @@ describe("resolveArtifactForAttach", () => {
     const artifact = resolveArtifactForAttach({
       listed: [
         {
-          filename: "nakama-pitch-deck.pdf",
+          filename: "airin-pitch-deck.pdf",
           mimeType: "application/pdf",
           sizeBytes: 272_153,
           updatedAt: "2026-08-08T12:51:00.000Z",
@@ -91,8 +90,8 @@ describe("resolveArtifactForAttach", () => {
       registry: [],
     });
 
-    expect(artifact?.filename).toBe("nakama-pitch-deck.pdf");
-    expect(artifact?.path).toBe("nakama-pitch-deck.pdf");
+    expect(artifact?.filename).toBe("airin-pitch-deck.pdf");
+    expect(artifact?.path).toBe("airin-pitch-deck.pdf");
   });
 });
 
@@ -132,32 +131,6 @@ describe("resolveShareUrlForPublish", () => {
     );
 
     expect(resolved.shareUrl).toBe("https://app.example/s/tok_1");
-  });
-});
-
-describe("formatArtifactShareFooter", () => {
-  test("formats absolute links", () => {
-    expect(
-      formatArtifactShareFooter(
-        [
-          {
-            filename: "report.md",
-            sharePath: "/s/tok_1",
-            shareUrl: "https://app.example/s/tok_1",
-          },
-        ],
-        { webPublicUrlConfigured: true }
-      )
-    ).toBe("report.md: https://app.example/s/tok_1");
-  });
-
-  test("adds hint when public URL is not configured", () => {
-    expect(
-      formatArtifactShareFooter(
-        [{ filename: "report.md", sharePath: "/s/tok_1", shareUrl: null }],
-        { webPublicUrlConfigured: false }
-      )
-    ).toContain("Set Web Public URL");
   });
 });
 
@@ -217,7 +190,7 @@ describe("pushDeliverableArtifact", () => {
 describe("deliverTurnArtifactShares", () => {
   test("mints shares, updates session store, and sends footer", async () => {
     const artifactsRoot =
-      "/Users/test/.nakama/orgs/org_1/profiles/profile_1/artifacts";
+      "/Users/test/.airin/orgs/org_1/profiles/profile_1/artifacts";
 
     const metaJson = JSON.stringify({
       mimeType: "text/markdown",
@@ -245,7 +218,7 @@ describe("deliverTurnArtifactShares", () => {
           {
             arguments: {
               content: metaJson,
-              path: "artifacts/report.md.nakama-meta.json",
+              path: "artifacts/report.md.airin-meta.json",
             },
             id: "tool_2",
             name: "write_file",
@@ -258,7 +231,7 @@ describe("deliverTurnArtifactShares", () => {
           {
             arguments: {
               content: scratchMeta,
-              path: "artifacts/_scratch-debug.json.nakama-meta.json",
+              path: "artifacts/_scratch-debug.json.airin-meta.json",
             },
             id: "tool_4",
             name: "write_file",
@@ -277,7 +250,7 @@ describe("deliverTurnArtifactShares", () => {
       {
         content: JSON.stringify({
           bytesWritten: metaJson.length,
-          path: `${artifactsRoot}/report.md.nakama-meta.json`,
+          path: `${artifactsRoot}/report.md.airin-meta.json`,
         }),
         name: "write_file",
         role: "tool",
@@ -295,7 +268,7 @@ describe("deliverTurnArtifactShares", () => {
       {
         content: JSON.stringify({
           bytesWritten: scratchMeta.length,
-          path: `${artifactsRoot}/_scratch-debug.json.nakama-meta.json`,
+          path: `${artifactsRoot}/_scratch-debug.json.airin-meta.json`,
         }),
         name: "write_file",
         role: "tool",

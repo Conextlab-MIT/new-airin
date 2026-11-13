@@ -1,5 +1,5 @@
-import { Button } from "@nakama/ui/button";
-import { Card } from "@nakama/ui/card";
+import { Button } from "@airin/ui/button";
+import { Card } from "@airin/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -7,8 +7,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 import { useState } from "react";
 import { useAuth } from "@/context/use-auth";
 import { formatError } from "@/lib/client";
@@ -43,8 +43,8 @@ export function OrgArchiveCard() {
 
   return (
     <Card className="gap-0 py-0 shadow-none">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
-        <h2 className="font-medium text-sm">Delete organization</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <h2 className="text-foreground text-sm">Delete organization</h2>
         <Button
           onClick={() => {
             setFormError(null);
@@ -69,7 +69,7 @@ export function OrgArchiveCard() {
             <DialogTitle>Delete organization?</DialogTitle>
             <DialogDescription>
               {orgName} will disappear from the switcher and chat. Members,
-              profiles, and files stay on disk. Nakama cannot restore it.
+              profiles, and files stay on disk. Airin cannot restore it.
             </DialogDescription>
           </DialogHeader>
           {formError ? (

@@ -4,12 +4,13 @@ import { readTextOrNull, writeTextFile } from "./fs";
 import { nanoid } from "./ids";
 import {
   getUserConfigDir,
+  getUserConfigPath,
   loadUserConfig,
-  saveUserConfig,
-  type UserConfig,
+  parseIniWithSections,
+  writeParsedConfigIni,
 } from "./user-config";
 
-export const LOCAL_CLIENT_EMAIL = "local-client@nakama.internal";
+export const LOCAL_CLIENT_EMAIL = "local-client@airin.internal";
 
 export const LOCAL_CLIENT_USER_ID = "user_local_client";
 
@@ -20,7 +21,7 @@ const LOCAL_AUTH_TOKEN_FILENAME = "local-auth-token";
 export class LocalAuthTokenManagedExternallyError extends Error {
   constructor() {
     super(
-      "Local auth token is managed by NAKAMA_LOCAL_AUTH_TOKEN and cannot be rotated on disk."
+      "Local auth token is managed by AIRIN_LOCAL_AUTH_TOKEN and cannot be rotated on disk."
     );
     this.name = "LocalAuthTokenManagedExternallyError";
   }
@@ -38,35 +39,15 @@ export function getLocalAuthTokenPath(): string {
   return join(getUserConfigDir(), LOCAL_AUTH_TOKEN_FILENAME);
 }
 
-function toPersistedUserConfig(
-  config: Awaited<ReturnType<typeof loadUserConfig>>
-): UserConfig {
-  const persisted: UserConfig = {
-    defaultProviderId: config?.defaultProviderId ?? null,
-    providers: config?.providers ?? [],
-  };
+async function persistLocalAuthTokenHash(token: string): Promise<void> {
+  const raw = await readTextOrNull(getUserConfigPath());
 
-  if (config?.timezone) {
-    persisted.timezone = config.timezone;
-  }
+  const parsed =
+    raw === null ? { global: {}, sections: {} } : parseIniWithSections(raw);
 
-  if (config?.thinkingEnabled !== undefined) {
-    persisted.thinkingEnabled = config.thinkingEnabled;
-  }
-
-  if (config?.thinkingEffort) {
-    persisted.thinkingEffort = config.thinkingEffort;
-  }
-
-  if (config?.localAuthTokenHash) {
-    persisted.localAuthTokenHash = config.localAuthTokenHash;
-  }
-
-  if (config?.localAuthToken) {
-    persisted.localAuthToken = config.localAuthToken;
-  }
-
-  return persisted;
+  await writeParsedConfigIni(parsed.global, parsed.sections, {
+    local_auth_token_hash: hashLocalAuthToken(token),
+  });
 }
 
 async function loadStoredLocalAuthToken(): Promise<string | null> {
@@ -82,6 +63,7 @@ async function persistLocalAuthToken(token: string): Promise<void> {
 }
 
 function compareTokenHash(token: string, expectedHashHex: string): boolean {
+  // A random local auth token, not a password, so a fast hash is right.
   const actualHash = createHash("sha256").update(token).digest();
   const expectedHash = Buffer.from(expectedHashHex, "hex");
 
@@ -92,7 +74,7 @@ function compareTokenHash(token: string, expectedHashHex: string): boolean {
 }
 
 export async function resolveLocalAuthToken(): Promise<string> {
-  const envToken = process.env.NAKAMA_LOCAL_AUTH_TOKEN?.trim();
+  const envToken = process.env.AIRIN_LOCAL_AUTH_TOKEN?.trim();
 
   if (envToken) {
     return envToken;
@@ -113,21 +95,14 @@ export async function resolveLocalAuthToken(): Promise<string> {
 
   if (legacyToken) {
     await persistLocalAuthToken(legacyToken);
-    await saveUserConfig({
-      ...toPersistedUserConfig(config),
-      localAuthTokenHash: hashLocalAuthToken(legacyToken),
-    });
+    await persistLocalAuthTokenHash(legacyToken);
 
     return legacyToken;
   }
 
   const generated = generateLocalAuthToken();
-  const newConfig = toPersistedUserConfig(config);
   await persistLocalAuthToken(generated);
-  await saveUserConfig({
-    ...newConfig,
-    localAuthTokenHash: hashLocalAuthToken(generated),
-  });
+  await persistLocalAuthTokenHash(generated);
 
   return generated;
 }
@@ -139,18 +114,14 @@ export async function loadLocalAuthToken(
 }
 
 export async function rotateLocalAuthToken(): Promise<string> {
-  if (process.env.NAKAMA_LOCAL_AUTH_TOKEN?.trim()) {
+  if (process.env.AIRIN_LOCAL_AUTH_TOKEN?.trim()) {
     throw new LocalAuthTokenManagedExternallyError();
   }
 
-  const config = await loadUserConfig();
   const token = generateLocalAuthToken();
 
   await persistLocalAuthToken(token);
-  await saveUserConfig({
-    ...toPersistedUserConfig(config),
-    localAuthTokenHash: hashLocalAuthToken(token),
-  });
+  await persistLocalAuthTokenHash(token);
 
   return token;
 }
@@ -162,7 +133,7 @@ export async function verifyLocalAuthToken(
     return null;
   }
 
-  const envToken = process.env.NAKAMA_LOCAL_AUTH_TOKEN?.trim();
+  const envToken = process.env.AIRIN_LOCAL_AUTH_TOKEN?.trim();
 
   if (envToken) {
     return compareTokenHash(token, hashLocalAuthToken(envToken))

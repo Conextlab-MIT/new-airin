@@ -48,17 +48,22 @@ const PROVIDER_CHOICES: Array<{ id: UserProviderName; label: string }> = [
   { id: "doubao", label: "Doubao (Volcengine)" },
   { id: "together", label: "Together AI" },
   { id: "xiaomi", label: "Xiaomi MiMo" },
+  { id: "meta", label: "Meta Model API" },
   { id: "vercel_ai_gateway", label: "Vercel AI Gateway" },
   { id: "mistral", label: "Mistral" },
   { id: "qwen", label: "Qwen (DashScope)" },
   { id: "qwen_cn", label: "Qwen (DashScope CN)" },
   { id: "perplexity", label: "Perplexity Sonar" },
   { id: "xai", label: "xAI Grok" },
+  { id: "groq", label: "Groq" },
+  { id: "cheaper_inference", label: "Cheaper Inference" },
+  { id: "standardcompute", label: "Standard Compute" },
   { id: "cerebras", label: "Cerebras" },
   { id: "cloudflare", label: "Cloudflare Worker AI" },
   { id: "fireworks", label: "Fireworks" },
   { id: "ollama", label: "Ollama" },
   { id: "opencode_go", label: "OpenCode Go" },
+  { id: "command_code", label: "Command Code" },
   { id: "minimax", label: "MiniMax" },
   { id: "minimax_cn", label: "MiniMax (CN)" },
   { id: "moonshot", label: "Moonshot Kimi" },
@@ -270,6 +275,7 @@ function resolveProviderChoice(input: string): UserProviderName | null {
     normalized === "ollama" ||
     normalized === "openai_compatible" ||
     normalized === "opencode_go" ||
+    normalized === "command_code" ||
     normalized === "minimax" ||
     normalized === "minimax_cn" ||
     normalized === "moonshot" ||
@@ -277,8 +283,12 @@ function resolveProviderChoice(input: string): UserProviderName | null {
     normalized === "zhipu" ||
     normalized === "zhipu_cn" ||
     normalized === "xai" ||
+    normalized === "groq" ||
+    normalized === "cheaper_inference" ||
+    normalized === "standardcompute" ||
     normalized === "together" ||
     normalized === "xiaomi" ||
+    normalized === "meta" ||
     normalized === "qwen" ||
     normalized === "qwen_cn" ||
     normalized === "vercel_ai_gateway"

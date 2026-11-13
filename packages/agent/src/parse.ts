@@ -6,7 +6,7 @@ import {
   createId,
   normalizeAutomationDelivery,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 
 const GeneratedTriggerSchema = z.discriminatedUnion("type", [
@@ -185,5 +185,8 @@ function deriveName(text: string): string {
     return "New automation";
   }
 
-  return line.replace(/[.?!].*$/, "").slice(0, 60) || "New automation";
+  const sentenceEnd = line.search(/[.?!]/);
+  const firstSentence = sentenceEnd === -1 ? line : line.slice(0, sentenceEnd);
+
+  return firstSentence.slice(0, 60) || "New automation";
 }

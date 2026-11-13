@@ -1,9 +1,9 @@
-import type { ProfileSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { ConfirmDialog } from "@nakama/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@nakama/ui/popover";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import type { ProfileSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@airin/ui/popover";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import {
   Add01Icon,
   Camera01Icon,
@@ -13,13 +13,16 @@ import {
   Upload04Icon,
   UserGroup02Icon,
 } from "hugeicons-react";
-import { type ReactNode, useState } from "react";
-import { moodstoneIndexes, moodstoneSvg } from "@/components/moodstone";
+import { type ReactNode, useMemo, useState } from "react";
 import {
-  moodstoneAvatars,
-  moodstoneColors,
-} from "@/components/moodstone-avatars";
+  isMoodstoneAvatar,
+  MOODSTONE_COLORS,
+  MOODSTONE_CUTS,
+  moodstoneIndexes,
+  moodstoneSvg,
+} from "@/components/moodstone";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import {
   type ProfileSaveStatus,
   profilesTagline,
@@ -75,16 +78,23 @@ export function ProfileSaveIndicator({
 }
 
 function ProfileAvatarOverlay({
+  round,
   size,
   uploading,
 }: {
+  round: boolean;
   size: "xs" | "sm" | "md" | "ml" | "lg";
   uploading: boolean;
 }) {
   const overlayIconClass = size === "lg" ? "size-5" : "size-4";
 
   return (
-    <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/50 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-visible:opacity-100">
+    <span
+      className={cn(
+        "absolute inset-0 flex items-center justify-center bg-foreground/50 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-visible:opacity-100",
+        round && "rounded-full"
+      )}
+    >
       {uploading ? (
         <Spinner className={cn(overlayIconClass, "text-primary-foreground")} />
       ) : (
@@ -118,6 +128,7 @@ export function EditableProfileAvatar({
 }) {
   const [open, setOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
+  const square = isMoodstoneAvatar(profile);
 
   const [colorIndex, setColorIndex] = useState(
     () => moodstoneIndexes(profile.id || profile.name || "?").colorIndex
@@ -125,6 +136,29 @@ export function EditableProfileAvatar({
 
   const [previewAvatarIndex, setPreviewAvatarIndex] = useState<number | null>(
     null
+  );
+
+  const reducedMotion = useReducedMotion();
+
+  const cutPreviews = useMemo(
+    () =>
+      MOODSTONE_CUTS.map(
+        (_, cutIndex) =>
+          `data:image/svg+xml,${encodeURIComponent(
+            moodstoneSvg(cutIndex, colorIndex)
+          )}`
+      ),
+    [colorIndex]
+  );
+
+  const previewSrc = useMemo(
+    () =>
+      previewAvatarIndex === null
+        ? null
+        : `data:image/svg+xml,${encodeURIComponent(
+            moodstoneSvg(previewAvatarIndex, colorIndex, !reducedMotion)
+          )}`,
+    [previewAvatarIndex, colorIndex, reducedMotion]
   );
 
   return (
@@ -138,15 +172,23 @@ export function EditableProfileAvatar({
       >
         <PopoverTrigger
           aria-label="Change profile image"
-          className="group relative shrink-0 rounded-full transition-transform duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:not-disabled:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(
+            "group relative shrink-0 transition-transform duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:not-disabled:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50",
+            square ? "rounded-none" : "rounded-full"
+          )}
           disabled={disabled}
         >
           <ProfileAvatar
             className={avatarClassName}
             profile={profile}
             size={size}
+            squareMoodstone
           />
-          <ProfileAvatarOverlay size={size} uploading={uploading} />
+          <ProfileAvatarOverlay
+            round={!square}
+            size={size}
+            uploading={uploading}
+          />
         </PopoverTrigger>
         <PopoverContent
           align="center"
@@ -154,9 +196,9 @@ export function EditableProfileAvatar({
         >
           <div
             className="relative mb-1 flex h-33 items-center justify-center rounded-lg transition-colors duration-150 ease-out"
-            style={{ backgroundColor: `${moodstoneColors[colorIndex].lit}4d` }}
+            style={{ backgroundColor: `${MOODSTONE_COLORS[colorIndex].lit}4d` }}
           >
-            {previewAvatarIndex === null ? (
+            {previewSrc === null ? (
               <ProfileAvatar
                 active
                 className="size-20 rounded-none outline-none"
@@ -168,18 +210,11 @@ export function EditableProfileAvatar({
                 alt="Avatar preview"
                 className="size-20"
                 height={80}
-                src={`data:image/svg+xml,${encodeURIComponent(
-                  moodstoneSvg(
-                    previewAvatarIndex,
-                    colorIndex,
-                    !window.matchMedia("(prefers-reduced-motion: reduce)")
-                      .matches
-                  )
-                )}`}
+                src={previewSrc}
                 width={80}
               />
             )}
-            {previewAvatarIndex === null ? null : (
+            {previewSrc === null ? null : (
               <Button
                 aria-label="Undo"
                 className="absolute top-2 left-2 bg-background/85 shadow-xs"
@@ -195,10 +230,10 @@ export function EditableProfileAvatar({
               className="absolute top-2 right-2 bg-background/85 shadow-xs"
               onClick={() => {
                 setPreviewAvatarIndex(
-                  Math.floor(Math.random() * moodstoneAvatars.length)
+                  Math.floor(Math.random() * MOODSTONE_CUTS.length)
                 );
                 setColorIndex(
-                  Math.floor(Math.random() * moodstoneColors.length)
+                  Math.floor(Math.random() * MOODSTONE_COLORS.length)
                 );
               }}
               size="icon"
@@ -208,16 +243,16 @@ export function EditableProfileAvatar({
             </Button>
           </div>
           <div className="grid grid-cols-7 gap-0.5 px-1.5 pt-0.5 pb-1">
-            {moodstoneAvatars.map((avatar, avatarIndex) => (
+            {MOODSTONE_CUTS.map((cut, avatarIndex) => (
               <button
-                aria-label={`Preview ${avatar.cut} avatar`}
+                aria-label={`Preview ${cut} avatar`}
                 aria-pressed={avatarIndex === previewAvatarIndex}
                 className={cn(
                   "flex h-9 cursor-pointer items-center justify-center rounded-lg transition-colors duration-150 ease-out hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                   avatarIndex === previewAvatarIndex &&
                     "bg-muted ring-[1.5px] ring-foreground ring-inset"
                 )}
-                key={avatar.cut}
+                key={cut}
                 onClick={() => setPreviewAvatarIndex(avatarIndex)}
                 type="button"
               >
@@ -225,16 +260,14 @@ export function EditableProfileAvatar({
                   alt=""
                   className="size-7"
                   height={28}
-                  src={`data:image/svg+xml,${encodeURIComponent(
-                    moodstoneSvg(avatarIndex, colorIndex)
-                  )}`}
+                  src={cutPreviews[avatarIndex]}
                   width={28}
                 />
               </button>
             ))}
           </div>
           <div className="grid grid-cols-12 justify-items-center gap-0.5 px-2 pt-1 pb-2">
-            {moodstoneColors.map((color, index) => (
+            {MOODSTONE_COLORS.map((color, index) => (
               <button
                 aria-label={`${color.name} color`}
                 aria-pressed={index === colorIndex}
@@ -327,14 +360,14 @@ export function ProfilesEmptyState({
   canImport = false,
   onCreate,
   onImport,
-  onAskSuperBot,
+  onAskSuperAirin,
 }: {
   disabled?: boolean;
   canCreate?: boolean;
   canImport?: boolean;
   onCreate: () => void;
   onImport?: () => void;
-  onAskSuperBot?: () => void;
+  onAskSuperAirin?: () => void;
 }) {
   const importIsPrimary = canImport && !canCreate;
 
@@ -378,15 +411,15 @@ export function ProfilesEmptyState({
             Import profile
           </Button>
         ) : null}
-        {onAskSuperBot ? (
+        {onAskSuperAirin ? (
           <Button
             disabled={disabled}
-            onClick={onAskSuperBot}
+            onClick={onAskSuperAirin}
             size="sm"
             type="button"
             variant="ghost"
           >
-            Ask Super Bot
+            Ask Airin
           </Button>
         ) : null}
       </div>

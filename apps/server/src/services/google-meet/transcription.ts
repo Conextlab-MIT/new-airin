@@ -6,23 +6,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { TranscriptSegment } from "@nakama/core/google-meet";
+import type { TranscriptSegment } from "@airin/core/google-meet";
 import { z } from "zod";
 
 export interface TranscriptionSession {
   close(): void | Promise<void>;
   finish(): Promise<void>;
   push(audio: Uint8Array): void;
-}
-
-const transcriptionConfigSchema = z
-  .object({ apiKey: z.string().trim().min(1).max(4096) })
-  .strict();
-
-export function transcriptionConfig(
-  value: z.input<typeof transcriptionConfigSchema>
-) {
-  return transcriptionConfigSchema.parse(value);
 }
 
 const BYTES_PER_SECOND = 48_000;

@@ -1,5 +1,7 @@
-import { createCipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, hkdfSync, randomBytes } from "node:crypto";
 import {
+  AirinApiError,
+  COMPOSIO_CUSTOM_AUTH_REQUIRED,
   type ComposioCatalogToolkitSummary,
   type ComposioConnectResponse,
   type ComposioToolkitSummary,
@@ -11,31 +13,37 @@ import {
   type ListComposioToolkitsResponse,
   type ListProfileComposioToolkitsResponse,
   loadComposioConfigFile,
-  NakamaApiError,
   nanoid,
   normalizeEnableComposioToolkitRequest,
   normalizeUpdateProfileComposioToolkitsRequest,
   type ProfileComposioToolkitAssignment,
   resolveComposioApiKey,
   type UpdateProfileComposioToolkitsRequest,
-} from "@nakama/core";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
+} from "@airin/core";
+import type { MeetActionResults } from "@airin/core/google-meet";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
 import type {
   DatabaseAdapter,
   StoredComposioToolkitRecord,
   StoredComposioUserConnectionRecord,
   StoredProfileComposioToolkitRecord,
   StoredProfileRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { z } from "zod";
 import type { AuthService } from "./auth-service";
 import {
   ComposioApiClient,
   type ComposioSessionMcpEndpoint,
+  findRejectedConnectedAccountIds,
+  isComposioDefaultAuthConfigMissing,
+  isComposioNoAuthApp,
 } from "./composio-api-client";
+import { withClaimedOAuthState } from "./oauth-callback-claim";
 
+// HKDF, not a bare hash, to turn the API key into an AES key. Nothing reads
+// `sessionIdEnc` back, so rows written with the old key need no migration.
 function deriveKey(secret: string): Buffer {
-  return createHash("sha256").update(`nakama-composio:${secret}`).digest();
+  return Buffer.from(hkdfSync("sha256", secret, "", "airin-composio", 32));
 }
 
 function encryptComposioSecret(plaintext: string, secret: string): string {
@@ -57,8 +65,67 @@ interface ComposioOAuthStatePayload {
   connectionId: string;
   nonce: string;
   orgId: string;
+  returnTo?: string;
   toolkitId: string;
   userId: string;
+}
+
+const STALE_CONNECTION_ERROR =
+  "Composio no longer has this account. Connect the app again.";
+
+const MEET_RECORDING_TOOLKITS = new Set(["gmail", "googledrive"]);
+
+const MEET_RETURN_PATH = "/google-meet?import=recording";
+
+const COMPOSIO_KEY_REJECTED =
+  "Composio rejected the project API key. Check the key in Composio, then save it again.";
+
+function httpStatusOf(error: Error): number | undefined {
+  if (!("status" in error)) {
+    return undefined;
+  }
+
+  const { status } = error;
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- The Composio SDK puts an untyped HTTP status on the cause; there is no schema to parse it with.
+  return typeof status === "number" ? status : undefined;
+}
+
+/**
+ * The SDK wraps every toolkit-list failure as "Failed to fetch toolkits", so
+ * the HTTP status on the cause is the only way to tell a rejected key from a
+ * network problem.
+ */
+function isComposioAuthFailure(error: Error): boolean {
+  let current: Error | undefined = error;
+
+  while (current) {
+    const status = httpStatusOf(current);
+
+    if (status === 401 || status === 403) {
+      return true;
+    }
+
+    current = current.cause instanceof Error ? current.cause : undefined;
+  }
+
+  return false;
+}
+
+/**
+ * A path on this site, never another origin: the OAuth callback redirects to
+ * it, so `//evil.example` or `/\\evil.example` would be an open redirect.
+ */
+export function isSameSiteReturnPath(path: string): boolean {
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\")) {
+    return false;
+  }
+
+  try {
+    return new URL(path, "http://airin.local").origin === "http://airin.local";
+  } catch {
+    return false;
+  }
 }
 
 function toOrgToolkitSummary(
@@ -109,16 +176,272 @@ export class ComposioService {
     string,
     { fingerprint: string; endpoint: ComposioSessionMcpEndpoint }
   >();
+  /** Why the last profile session failed to open, by session cache key. */
+  private readonly profileSessionErrors = new Map<string, string>();
+
+  /** Goes up when the Composio configuration changes, for every org. */
+  private configRevision = 0;
+  /** Goes up on a toolkit, connection, or assignment change in one org. */
+  private readonly orgRevisions = new Map<string, number>();
 
   constructor(
     private readonly databaseAdapter: DatabaseAdapter,
     private readonly authService: AuthService
   ) {}
 
+  private async googleAccounts(orgId: string, userId: string) {
+    const actingUserId = await this.resolveComposioActingUserId(orgId, userId);
+
+    const toolkits =
+      await this.databaseAdapter.listComposioToolkitsForOrg(orgId);
+
+    const connections =
+      await this.databaseAdapter.listComposioUserConnectionsForUser(
+        orgId,
+        actingUserId
+      );
+
+    const account = (slug: string) => {
+      const toolkit = toolkits.find(
+        (item) => item.toolkitSlug === slug && item.status === "enabled"
+      );
+
+      const connection = connections.find(
+        (item) => item.toolkitId === toolkit?.id && item.status === "connected"
+      );
+
+      return connection?.connectedAccountId ?? null;
+    };
+
+    return {
+      actingUserId: composioUserId(actingUserId),
+      drive: account("googledrive"),
+      gmail: account("gmail"),
+      sheets: account("googlesheets"),
+    };
+  }
+
+  /** Runs one Google Sheets tool on the caller's own connected account. */
+  async executeGoogleSheetsTool(
+    orgId: string,
+    userId: string,
+    slug: string,
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Composio tool payloads are untyped JSON objects.
+    args: Record<string, unknown>
+    // oxlint-disable-next-line anti-slop/no-unknown-returns -- Composio tool payloads are untyped JSON passed through to the caller.
+  ): Promise<unknown> {
+    const client = await this.getApiClient();
+    const accounts = await this.googleAccounts(orgId, userId);
+
+    if (!(client && accounts.sheets)) {
+      throw new Error("Connect Google Sheets in Composio first.");
+    }
+
+    return unwrapMeetToolResult(
+      await client.executeTool(
+        slug,
+        accounts.actingUserId,
+        accounts.sheets,
+        args
+      )
+    );
+  }
+
+  async listMeetRecordings(orgId: string, userId: string) {
+    const client = await this.getApiClient();
+
+    if (!client) {
+      return {
+        composioConfigured: false,
+        driveConnected: false,
+        gmailConnected: false,
+        recordings: [],
+      };
+    }
+
+    const accounts = await this.googleAccounts(orgId, userId);
+
+    if (!(accounts.gmail && accounts.drive)) {
+      return {
+        composioConfigured: true,
+        driveConnected: !!accounts.drive,
+        gmailConnected: !!accounts.gmail,
+        recordings: [],
+      };
+    }
+
+    const result = unwrapMeetToolResult(
+      await client.executeTool(
+        "GMAIL_FETCH_EMAILS",
+        accounts.actingUserId,
+        accounts.gmail,
+        {
+          include_payload: true,
+          max_results: 10,
+          query:
+            'subject:("Meeting records" OR "Meeting recording" OR "Meet Recording")',
+          verbose: true,
+        }
+      )
+    );
+
+    const messages = findMeetMessages(result).slice(0, 10);
+    const recordings: MeetActionResults["recordings"]["recordings"] = [];
+    const seen = new Set<string>();
+
+    for (const message of messages) {
+      const messageId = meetString(message.messageId ?? message.id);
+
+      if (!messageId) {
+        continue;
+      }
+
+      let full: unknown;
+
+      try {
+        full = unwrapMeetToolResult(
+          await client.executeTool(
+            "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID",
+            accounts.actingUserId,
+            accounts.gmail,
+            { format: "full", message_id: messageId }
+          )
+        );
+      } catch {
+        continue;
+      }
+
+      for (const fileId of extractMeetDriveIds(full)) {
+        if (seen.has(fileId)) {
+          continue;
+        }
+
+        seen.add(fileId);
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Composio tool payloads are untyped JSON objects.
+        let metadata: Record<string, unknown>;
+
+        try {
+          const value = unwrapMeetToolResult(
+            await client.executeTool(
+              "GOOGLEDRIVE_GET_FILE_METADATA",
+              accounts.actingUserId,
+              accounts.drive,
+              { fields: "id,name,mimeType,size", fileId }
+            )
+          );
+
+          // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Composio tool payloads are untyped JSON narrowed here by shape.
+          if (!value || typeof value !== "object" || Array.isArray(value)) {
+            continue;
+          }
+
+          // SAFETY: The surrounding code checked this value before the assertion.
+          // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Composio tool payloads are untyped JSON objects.
+          metadata = value as Record<string, unknown>;
+        } catch {
+          continue;
+        }
+
+        const name = meetString(metadata.name ?? metadata.title);
+        const mimeType = meetString(metadata.mimeType);
+        const size = metadata.size == null ? 0 : Number(metadata.size);
+
+        if (
+          !(
+            name &&
+            name.length <= 255 &&
+            !/[\\/\x00-\x1f]/.test(name) &&
+            (mimeType.startsWith("video/") ||
+              /\.(mp4|mov|webm|mkv|m4v)$/i.test(name)) &&
+            Number.isSafeInteger(size) &&
+            size >= 0
+          )
+        ) {
+          continue;
+        }
+
+        recordings.push({
+          date: meetString(
+            message.messageTimestamp ?? message.internalDate ?? message.date
+          ),
+          fileId,
+          messageId,
+          name,
+          size,
+        });
+      }
+    }
+
+    return {
+      composioConfigured: true,
+      driveConnected: true,
+      gmailConnected: true,
+      recordings,
+    };
+  }
+
+  async downloadMeetRecording(
+    orgId: string,
+    userId: string,
+    messageId: string,
+    fileId: string
+  ) {
+    const listed = await this.listMeetRecordings(orgId, userId);
+
+    const recording = listed.recordings.find(
+      (item) => item.messageId === messageId && item.fileId === fileId
+    );
+
+    if (!recording) {
+      throw new AirinApiError(
+        "Recording not found in your connected accounts.",
+        404
+      );
+    }
+
+    if (recording.size > 1024 ** 3) {
+      throw new AirinApiError("Recording is larger than 1 GiB.", 400);
+    }
+
+    const accounts = await this.googleAccounts(orgId, userId);
+    const client = await this.getApiClient();
+
+    if (!(client && accounts.drive)) {
+      throw new AirinApiError("Google Drive is not connected.", 400);
+    }
+
+    const result = unwrapMeetToolResult(
+      await client.executeTool(
+        "GOOGLEDRIVE_DOWNLOAD_FILE",
+        accounts.actingUserId,
+        accounts.drive,
+        {
+          file_id: fileId,
+        }
+      )
+    );
+
+    return { file: result, recording };
+  }
+
   reloadConfiguration(): void {
     this.apiClientCache = null;
     this.reachabilityCache = null;
     this.reachabilityInflight = null;
+    this.profileSessionCache.clear();
+    this.configRevision += 1;
+  }
+
+  /**
+   * Chats hold their Composio tools, so the agent rebuilds a chat when this
+   * changes. A change in one org does not rebuild the chats of other orgs.
+   */
+  revisionFor(orgId: string): string {
+    return `${this.configRevision}:${this.orgRevisions.get(orgId) ?? 0}`;
+  }
+
+  private bumpRevision(orgId: string): void {
+    this.orgRevisions.set(orgId, (this.orgRevisions.get(orgId) ?? 0) + 1);
   }
 
   /**
@@ -236,7 +559,7 @@ export class ComposioService {
     const resolvedKey = apiKey?.trim() || (await this.resolveApiKey());
 
     if (!resolvedKey) {
-      throw new NakamaApiError("Composio API key is required.", 400);
+      throw new AirinApiError("Composio API key is required.", 400);
     }
 
     const client = new ComposioApiClient(resolvedKey);
@@ -244,10 +567,10 @@ export class ComposioService {
     try {
       await client.listCatalogToolkits({ limit: 1 });
     } catch (error) {
-      throw new NakamaApiError(
-        error instanceof Error
-          ? error.message
-          : "Failed to validate Composio API key.",
+      throw new AirinApiError(
+        error instanceof Error && isComposioAuthFailure(error)
+          ? COMPOSIO_KEY_REJECTED
+          : "Could not reach Composio to check the project API key. Check your network and the key in Composio, then save it again.",
         400
       );
     }
@@ -258,6 +581,7 @@ export class ComposioService {
     userId: string
   ): Promise<ListComposioToolkitsResponse> {
     const configured = await isComposioConfiguredAsync();
+    const actingUserId = await this.resolveComposioActingUserId(orgId, userId);
 
     const orgToolkits = (
       await this.databaseAdapter.listComposioToolkitsForOrg(orgId)
@@ -270,7 +594,7 @@ export class ComposioService {
     const userConnectionRecords =
       await this.databaseAdapter.listComposioUserConnectionsForUser(
         orgId,
-        userId
+        actingUserId
       );
 
     const userConnections = userConnectionRecords
@@ -335,9 +659,9 @@ export class ComposioService {
       };
     } catch (error) {
       const catalogError =
-        error instanceof Error
-          ? error.message
-          : "Failed to load Composio toolkit catalog.";
+        error instanceof Error && isComposioAuthFailure(error)
+          ? COMPOSIO_KEY_REJECTED
+          : "Check your network and the project API key in Composio, then try again.";
 
       return {
         catalog: [],
@@ -375,6 +699,7 @@ export class ComposioService {
 
       await this.databaseAdapter.upsertComposioToolkit(updated);
       await this.assignToDefaultProfile(orgId, updated.id);
+      this.bumpRevision(orgId);
 
       return toOrgToolkitSummary(updated);
     }
@@ -393,6 +718,7 @@ export class ComposioService {
 
     await this.databaseAdapter.upsertComposioToolkit(record);
     await this.assignToDefaultProfile(orgId, record.id);
+    this.bumpRevision(orgId);
 
     return toOrgToolkitSummary(record);
   }
@@ -411,6 +737,7 @@ export class ComposioService {
 
     await this.databaseAdapter.upsertComposioToolkit(updated);
     await this.unassignFromAllProfiles(orgId, updated.id);
+    this.bumpRevision(orgId);
 
     return toOrgToolkitSummary(updated);
   }
@@ -418,7 +745,7 @@ export class ComposioService {
   /**
    * Enabling a toolkit assigns it to the org's default profile, so a fresh
    * setup is usable without a second trip to Profiles. Other profiles stay an
-   * explicit choice: Super Bot and channel-facing profiles should not gain a
+   * explicit choice: Airin and channel-facing profiles should not gain a
    * member's Gmail because an admin enabled it for the org.
    */
   private async assignToDefaultProfile(
@@ -484,18 +811,48 @@ export class ComposioService {
     }
   }
 
-  async connectToolkit(
+  /**
+   * Meet's Import recording needs Gmail and Google Drive. One click enables the
+   * toolkit for the org when needed, then starts the member's OAuth, which
+   * returns to the Google Meet page instead of Integrations.
+   */
+  async connectMeetRecordingSource(
     orgId: string,
     userId: string,
     toolkitSlug: string,
     callbackBaseUrl: string
+  ): Promise<ComposioConnectResponse> {
+    if (!MEET_RECORDING_TOOLKITS.has(toolkitSlug)) {
+      throw new AirinApiError("Unsupported recording source.", 400);
+    }
+
+    const existing = await this.databaseAdapter.getComposioToolkitBySlug(
+      orgId,
+      toolkitSlug
+    );
+
+    if (existing?.status !== "enabled") {
+      await this.enableToolkit(orgId, { toolkitSlug });
+    }
+
+    return this.connectToolkit(orgId, userId, toolkitSlug, callbackBaseUrl, {
+      returnTo: MEET_RETURN_PATH,
+    });
+  }
+
+  async connectToolkit(
+    orgId: string,
+    userId: string,
+    toolkitSlug: string,
+    callbackBaseUrl: string,
+    options: { returnTo?: string } = {}
   ): Promise<ComposioConnectResponse> {
     const actingUserId = await this.resolveComposioActingUserId(orgId, userId);
     const apiClient = await this.requireAvailable();
     const orgToolkit = await this.getOwnedToolkitBySlug(orgId, toolkitSlug);
 
     if (orgToolkit.status !== "enabled") {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "An org admin must enable this toolkit before you can connect.",
         400
       );
@@ -517,6 +874,7 @@ export class ComposioService {
         connectionId,
         nonce: oauthNonce,
         orgId,
+        returnTo: options.returnTo,
         toolkitId: orgToolkit.id,
         userId: actingUserId,
       } satisfies ComposioOAuthStatePayload)
@@ -524,11 +882,52 @@ export class ComposioService {
 
     const callbackUrl = `${callbackBaseUrl.replace(/\/$/, "")}/v1/composio/oauth/callback?state=${encodeURIComponent(state)}`;
 
-    const link = await apiClient.linkToolkitAccount(
-      composioUserId(actingUserId),
-      toolkitSlug,
-      callbackUrl
-    );
+    let link: Awaited<ReturnType<ComposioApiClient["linkToolkitAccount"]>>;
+
+    try {
+      link = await apiClient.linkToolkitAccount(
+        composioUserId(actingUserId),
+        toolkitSlug,
+        callbackUrl
+      );
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+
+      if (isComposioDefaultAuthConfigMissing(err)) {
+        throw new AirinApiError(
+          `Composio has no managed auth for ${orgToolkit.displayName}. An org admin must add a custom auth config for it in Composio.`,
+          422,
+          undefined,
+          undefined,
+          { code: COMPOSIO_CUSTOM_AUTH_REQUIRED }
+        );
+      }
+
+      if (!isComposioNoAuthApp(err)) {
+        throw err;
+      }
+
+      // No OAuth: mark connected with no account id, then sync session tools.
+      const connection: StoredComposioUserConnectionRecord = {
+        connectedAccountId: null,
+        createdAt: existingConnection?.createdAt ?? now,
+        id: connectionId,
+        lastError: null,
+        oauthStateHash: null,
+        orgId,
+        sessionIdEnc: null,
+        status: "connected",
+        toolkitId: orgToolkit.id,
+        updatedAt: now,
+        userId: actingUserId,
+      };
+
+      await this.databaseAdapter.upsertComposioUserConnection(connection);
+      this.invalidateProfileSessionCachesForUser(orgId, actingUserId);
+      await this.syncUserToolkit(orgId, actingUserId, toolkitSlug);
+
+      return { connected: true, redirectUrl: null };
+    }
 
     const connection: StoredComposioUserConnectionRecord = {
       connectedAccountId:
@@ -552,10 +951,21 @@ export class ComposioService {
     return { redirectUrl: link.redirectUrl };
   }
 
-  async completeOAuth(
+  completeOAuth(
     state: string,
     options: { connectedAccountId?: string | null } = {}
-  ): Promise<{ orgId: string; toolkitSlug: string }> {
+  ): Promise<{ orgId: string; returnTo?: string; toolkitSlug: string }> {
+    return withClaimedOAuthState(
+      `composio:${state}`,
+      () => new AirinApiError("Invalid OAuth state.", 400),
+      () => this.completeClaimedOAuth(state, options)
+    );
+  }
+
+  private async completeClaimedOAuth(
+    state: string,
+    options: { connectedAccountId?: string | null }
+  ): Promise<{ orgId: string; returnTo?: string; toolkitSlug: string }> {
     await this.requireAvailable();
 
     let payload: ComposioOAuthStatePayload;
@@ -566,12 +976,13 @@ export class ComposioService {
           connectionId: z.string(),
           nonce: z.string(),
           orgId: z.string(),
+          returnTo: z.string().refine(isSameSiteReturnPath).optional(),
           toolkitId: z.string(),
           userId: z.string(),
         })
         .parse(JSON.parse(Buffer.from(state, "base64url").toString("utf8")));
     } catch {
-      throw new NakamaApiError("Invalid OAuth state.", 400);
+      throw new AirinApiError("Invalid OAuth state.", 400);
     }
 
     const orgToolkit = await this.getOwnedToolkit(
@@ -589,14 +1000,14 @@ export class ComposioService {
       connection.userId !== payload.userId ||
       connection.toolkitId !== payload.toolkitId
     ) {
-      throw new NakamaApiError("Invalid OAuth state.", 400);
+      throw new AirinApiError("Invalid OAuth state.", 400);
     }
 
     if (
       !connection.oauthStateHash ||
       this.authService.hashToken(payload.nonce) !== connection.oauthStateHash
     ) {
-      throw new NakamaApiError("Invalid OAuth state.", 400);
+      throw new AirinApiError("Invalid OAuth state.", 400);
     }
 
     const connectedAccountId =
@@ -614,14 +1025,18 @@ export class ComposioService {
     };
 
     await this.databaseAdapter.upsertComposioUserConnection(updatedConnection);
-    this.invalidateProfileSessionCachesForUser(payload.userId);
+    this.invalidateProfileSessionCachesForUser(payload.orgId, payload.userId);
     await this.syncUserToolkit(
       payload.orgId,
       payload.userId,
       orgToolkit.toolkitSlug
     );
 
-    return { orgId: payload.orgId, toolkitSlug: orgToolkit.toolkitSlug };
+    return {
+      orgId: payload.orgId,
+      returnTo: payload.returnTo,
+      toolkitSlug: orgToolkit.toolkitSlug,
+    };
   }
 
   async disconnectToolkit(
@@ -651,7 +1066,7 @@ export class ComposioService {
     }
 
     await this.databaseAdapter.deleteComposioUserConnection(connection.id);
-    this.invalidateProfileSessionCachesForUser(actingUserId);
+    this.invalidateProfileSessionCachesForUser(orgId, actingUserId);
 
     return toOrgToolkitSummary(orgToolkit);
   }
@@ -671,10 +1086,7 @@ export class ComposioService {
     );
 
     if (!connection || connection.status !== "connected") {
-      throw new NakamaApiError(
-        "Connect the toolkit before syncing tools.",
-        400
-      );
+      throw new AirinApiError("Connect the toolkit before syncing tools.", 400);
     }
 
     try {
@@ -709,10 +1121,23 @@ export class ComposioService {
       await this.databaseAdapter.upsertComposioUserConnection(
         updatedConnection
       );
-      this.invalidateProfileSessionCachesForUser(actingUserId);
+      this.invalidateProfileSessionCachesForUser(orgId, actingUserId);
 
       return toOrgToolkitSummary(updatedOrgToolkit);
     } catch (error) {
+      if (
+        error instanceof Error &&
+        (await this.markRejectedConnections(
+          orgId,
+          actingUserId,
+          [connection],
+          error,
+          connection.connectedAccountId ? [connection.connectedAccountId] : []
+        )) > 0
+      ) {
+        throw new AirinApiError(STALE_CONNECTION_ERROR, 409);
+      }
+
       const message = error instanceof Error ? error.message : String(error);
 
       const updatedConnection: StoredComposioUserConnectionRecord = {
@@ -775,7 +1200,7 @@ export class ComposioService {
     this.assertProfileOrg(profile, orgId);
 
     if (await this.databaseAdapter.getSharedAgentInstance(orgId, profile.id)) {
-      throw new NakamaApiError("Shared agent configuration is read-only.", 403);
+      throw new AirinApiError("Shared agent configuration is read-only.", 403);
     }
 
     const request: UpdateProfileComposioToolkitsRequest =
@@ -794,7 +1219,7 @@ export class ComposioService {
       const toolkit = toolkitById.get(assignment.toolkitId);
 
       if (!toolkit || toolkit.orgId !== orgId) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Composio toolkit not found for this organization.",
           404
         );
@@ -811,6 +1236,7 @@ export class ComposioService {
       profile.id,
       assignments
     );
+    this.bumpRevision(orgId);
 
     return this.listProfileAssignments(orgId, profile);
   }
@@ -821,6 +1247,14 @@ export class ComposioService {
     profileId: string
   ): Promise<ComposioSessionMcpEndpoint | null> {
     const actingUserId = await this.resolveComposioActingUserId(orgId, userId);
+
+    const cacheKey = this.profileSessionCacheKey(
+      orgId,
+      actingUserId,
+      profileId
+    );
+
+    this.profileSessionErrors.delete(cacheKey);
     const apiClient = await this.getApiClient();
 
     if (!apiClient) {
@@ -882,12 +1316,6 @@ export class ComposioService {
       return null;
     }
 
-    const cacheKey = this.profileSessionCacheKey(
-      orgId,
-      actingUserId,
-      profileId
-    );
-
     const fingerprint = this.buildProfileSessionFingerprint(
       enabledToolkits,
       allowedToolsByToolkit,
@@ -900,16 +1328,108 @@ export class ComposioService {
       return cached.endpoint;
     }
 
-    const endpoint = await apiClient.createProfileSession(
-      composioUserId(actingUserId),
-      enabledToolkits,
-      allowedToolsByToolkit,
-      connectedAccountsByToolkit
-    );
+    let endpoint: ComposioSessionMcpEndpoint;
+
+    try {
+      endpoint = await apiClient.createProfileSession(
+        composioUserId(actingUserId),
+        enabledToolkits,
+        allowedToolsByToolkit,
+        connectedAccountsByToolkit
+      );
+    } catch (error) {
+      const marked =
+        error instanceof Error
+          ? await this.markRejectedConnections(
+              orgId,
+              actingUserId,
+              userConnections,
+              error,
+              Object.values(connectedAccountsByToolkit)
+            )
+          : 0;
+
+      if (marked === 0) {
+        this.profileSessionErrors.set(
+          cacheKey,
+          error instanceof Error ? error.message : String(error)
+        );
+        // Rebuild the chat on the next turn, so it tries to open again.
+        this.bumpRevision(orgId);
+        throw error;
+      }
+
+      // The marked connections now read as "error", so the retry leaves them
+      // out and the user's other apps keep working.
+      return this.getProfileSessionEndpoint(orgId, userId, profileId);
+    }
 
     this.profileSessionCache.set(cacheKey, { endpoint, fingerprint });
 
     return endpoint;
+  }
+
+  /**
+   * Marks the connections whose account Composio refused, so the UI asks the
+   * user to connect the app again. Returns how many were marked; 0 when the
+   * error is not a refused account.
+   */
+  private async markRejectedConnections(
+    orgId: string,
+    actingUserId: string,
+    connections: StoredComposioUserConnectionRecord[],
+    error: Error,
+    requestedIds: string[]
+  ): Promise<number> {
+    const rejected = findRejectedConnectedAccountIds(error, requestedIds);
+
+    if (!rejected) {
+      return 0;
+    }
+
+    const now = new Date().toISOString();
+    let marked = 0;
+
+    for (const connection of connections) {
+      if (
+        connection.connectedAccountId === null ||
+        !rejected.includes(connection.connectedAccountId)
+      ) {
+        continue;
+      }
+
+      // Read the row again: the user can connect the app again while
+      // Composio answers, and that new account must not be overwritten.
+      const current = await this.databaseAdapter.getComposioUserConnection(
+        connection.userId,
+        connection.toolkitId
+      );
+
+      if (
+        current?.status !== "connected" ||
+        current.connectedAccountId !== connection.connectedAccountId
+      ) {
+        continue;
+      }
+
+      await this.databaseAdapter.upsertComposioUserConnection({
+        ...current,
+        lastError: STALE_CONNECTION_ERROR,
+        sessionIdEnc: null,
+        status: "error",
+        updatedAt: now,
+      });
+      marked += 1;
+    }
+
+    if (marked > 0) {
+      console.warn(
+        `Composio refused ${marked} connected account(s) for org ${orgId}; marked them for reconnection.`
+      );
+      this.invalidateProfileSessionCachesForUser(orgId, actingUserId);
+    }
+
+    return marked;
   }
 
   async formatProfileConnectionsContext(
@@ -951,9 +1471,17 @@ export class ComposioService {
       }
     );
 
-    const hasConnected = assigned.some(
-      ({ userConnection }) => userConnection?.status === "connected"
+    const actingUserId = await this.resolveComposioActingUserId(orgId, userId);
+
+    const sessionError = this.profileSessionErrors.get(
+      this.profileSessionCacheKey(orgId, actingUserId, profileId)
     );
+
+    const hasConnected =
+      !sessionError &&
+      assigned.some(
+        ({ userConnection }) => userConnection?.status === "connected"
+      );
 
     const workflowGuidance = hasConnected
       ? [
@@ -969,7 +1497,12 @@ export class ComposioService {
       ...lines,
       "",
       ...workflowGuidance,
-      "Only connected toolkits can be invoked. If a connection is missing, call `composio__connect_account` with the toolkit slug and send the user the OAuth link from the tool result.",
+      ...(sessionError
+        ? [
+            `Composio tools are not available in this turn because the session did not open (${sessionError}). If the task needs them, tell the user.`,
+          ]
+        : []),
+      "Only connected toolkits can be invoked. If a connection is missing, call `composio__connect_account` with the toolkit slug. If the result has an OAuth link, send it to the user.",
     ].join("\n");
   }
 
@@ -1050,11 +1583,16 @@ export class ComposioService {
     return JSON.stringify({
       allowedToolsByToolkit,
       connectedAccountsByToolkit,
+      key: this.apiClientCache?.key,
       toolkits: [...enabledToolkits].sort(),
     });
   }
 
-  private invalidateProfileSessionCachesForUser(userId: string): void {
+  private invalidateProfileSessionCachesForUser(
+    orgId: string,
+    userId: string
+  ): void {
+    this.bumpRevision(orgId);
     const suffix = `:${userId}:`;
 
     for (const key of this.profileSessionCache.keys()) {
@@ -1078,7 +1616,7 @@ export class ComposioService {
     const apiClient = await this.getApiClient();
 
     if (!apiClient) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Composio is not configured on this deployment.",
         503
       );
@@ -1094,7 +1632,7 @@ export class ComposioService {
     const record = await this.databaseAdapter.getComposioToolkit(toolkitId);
 
     if (!record || record.orgId !== orgId) {
-      throw new NakamaApiError("Composio toolkit not found.", 404);
+      throw new AirinApiError("Composio toolkit not found.", 404);
     }
 
     return record;
@@ -1110,7 +1648,7 @@ export class ComposioService {
     );
 
     if (!record) {
-      throw new NakamaApiError("Composio toolkit not found.", 404);
+      throw new AirinApiError("Composio toolkit not found.", 404);
     }
 
     return record;
@@ -1118,7 +1656,153 @@ export class ComposioService {
 
   private assertProfileOrg(profile: StoredProfileRecord, orgId: string): void {
     if (profile.orgId !== orgId) {
-      throw new NakamaApiError("Profile not found for this organization.", 404);
+      throw new AirinApiError("Profile not found for this organization.", 404);
     }
   }
+}
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Composio tool payloads are untyped JSON that this function inspects structurally.
+function meetString(value: unknown): string {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Composio tool payloads are untyped JSON narrowed here by shape.
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns -- Composio tool payloads are untyped JSON that this function inspects structurally.
+function unwrapMeetToolResult(value: unknown): unknown {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Composio tool payloads are untyped JSON narrowed here by shape.
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  // SAFETY: The surrounding code checked this value before the assertion.
+  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Composio tool payloads are untyped JSON objects.
+  const record = value as Record<string, unknown>;
+
+  if (record.successful === false) {
+    throw new Error(meetString(record.error) || "Composio request failed.");
+  }
+
+  if (!("data" in record)) {
+    return value;
+  }
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Composio tool payloads are untyped JSON narrowed here by shape.
+  if (typeof record.data === "string") {
+    try {
+      return unwrapMeetToolResult(JSON.parse(record.data));
+    } catch {
+      return record.data;
+    }
+  }
+
+  return unwrapMeetToolResult(record.data);
+}
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters, anti-slop/no-unsafe-dictionary-type -- Composio tool payloads are untyped JSON that this function inspects structurally.
+function findMeetMessages(value: unknown): Record<string, unknown>[] {
+  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Composio tool payloads are untyped JSON objects.
+  const found: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Composio tool payloads are untyped JSON that this function inspects structurally.
+  const visit = (node: unknown, depth: number) => {
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Composio tool payloads are untyped JSON narrowed here by shape.
+    if (depth > 6 || !node || typeof node !== "object") {
+      return;
+    }
+
+    // SAFETY: The surrounding code checked this value before the assertion.
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Composio tool payloads are untyped JSON objects.
+    const record = node as Record<string, unknown>;
+    const id = meetString(record.messageId ?? record.id);
+
+    if (
+      id &&
+      (record.messageId ||
+        record.threadId ||
+        record.subject ||
+        record.snippet ||
+        record.payload) &&
+      !seen.has(id)
+    ) {
+      seen.add(id);
+      found.push(record);
+    }
+
+    for (const child of Object.values(record)) {
+      visit(child, depth + 1);
+    }
+  };
+
+  visit(value, 0);
+
+  return found;
+}
+
+/** Google Drive and Docs file links; group 1 is the file id. */
+const DRIVE_FILE_LINK_PATTERNS = [
+  /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,})/g,
+  /drive\.google\.com\/(?:open|uc)\?[^\s"'<>]*?id=([A-Za-z0-9_-]{10,})/g,
+  /docs\.google\.com\/[A-Za-z]+\/d\/([A-Za-z0-9_-]{10,})/g,
+];
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Composio tool payloads are untyped JSON that this function inspects structurally.
+function extractMeetDriveIds(value: unknown): string[] {
+  const ids = new Set<string>();
+
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Composio tool payloads are untyped JSON that this function inspects structurally.
+  const visit = (node: unknown, depth: number) => {
+    if (depth > 10 || !node) {
+      return;
+    }
+
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Composio tool payloads are untyped JSON narrowed here by shape.
+    if (typeof node === "string") {
+      let text = node;
+
+      if (
+        text.length > 50 &&
+        !text.includes("://") &&
+        /^[A-Za-z0-9_+/=\s-]+$/.test(text)
+      ) {
+        const decoded = Buffer.from(
+          text.replace(/-/g, "+").replace(/_/g, "/"),
+          "base64"
+        ).toString("utf8");
+
+        if (
+          DRIVE_FILE_LINK_PATTERNS.some((pattern) => decoded.match(pattern))
+        ) {
+          text = decoded;
+        }
+      }
+
+      text = text.replace(/&amp;/g, "&");
+
+      try {
+        text = decodeURIComponent(text);
+      } catch {
+        /* Keep original text. */
+      }
+
+      for (const pattern of DRIVE_FILE_LINK_PATTERNS) {
+        for (const match of text.matchAll(pattern)) {
+          ids.add(match[1]!);
+        }
+      }
+
+      return;
+    }
+
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Composio tool payloads are untyped JSON narrowed here by shape.
+    if (typeof node === "object") {
+      for (const child of Object.values(node)) {
+        visit(child, depth + 1);
+      }
+    }
+  };
+
+  visit(value, 0);
+
+  return [...ids];
 }

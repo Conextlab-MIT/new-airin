@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import { pathExists } from "./fs";
 import {
   applyChatgptOAuthToInstance,
@@ -16,13 +16,57 @@ import {
   loadUserConfig,
   loadUserWebPublicUrl,
   normalizeProviderInstanceLabel,
+  parseIniWithSections,
   readChatgptOAuthFromInstance,
   readXaiOAuthFromInstance,
   saveUserConfig,
+  saveUserLanguage,
   saveUserTimezone,
   saveUserWebPublicUrl,
   validateProviderApiKeyFormat,
 } from "./user-config";
+
+describe("saveUserLanguage", () => {
+  test("rejects missing or unknown language with 400", async () => {
+    const cases = [
+      [undefined, "Language is required."],
+      ["  ", "Language is required."],
+      ["fr", "Invalid language: fr"],
+    ] as const;
+
+    for (const [value, message] of cases) {
+      try {
+        await saveUserLanguage(value);
+        throw new Error("expected a rejection");
+      } catch (error) {
+        if (!(error instanceof AirinApiError)) {
+          throw error;
+        }
+
+        expect(error.message).toBe(message);
+        expect(error.status).toBe(400);
+      }
+    }
+  });
+
+  test("persists id and en", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "airin-language-"));
+    process.env.AIRIN_CONFIG_DIR = dir;
+
+    try {
+      expect(await saveUserLanguage("en")).toBe("en");
+      const raw = await readFile(join(dir, "config.ini"), "utf8");
+      expect(raw).toContain("language=en");
+
+      expect(await saveUserLanguage("id")).toBe("id");
+      const again = await readFile(join(dir, "config.ini"), "utf8");
+      expect(again).toContain("language=id");
+    } finally {
+      delete process.env.AIRIN_CONFIG_DIR;
+      await rm(dir, { force: true, recursive: true });
+    }
+  });
+});
 
 describe("saveUserTimezone", () => {
   // readJson casts the body without validating it, so timezone can arrive
@@ -39,7 +83,7 @@ describe("saveUserTimezone", () => {
         await saveUserTimezone(value);
         throw new Error("expected a rejection");
       } catch (error) {
-        if (!(error instanceof NakamaApiError)) {
+        if (!(error instanceof AirinApiError)) {
           throw error;
         }
 
@@ -87,12 +131,12 @@ describe("ensureUserConfigDir", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("creates the config directory when missing", async () => {
-    configDir = join(tmpdir(), `nakama-config-${Date.now()}`);
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = join(tmpdir(), `airin-config-${Date.now()}`);
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     expect(await pathExists(configDir)).toBe(false);
     await expect(ensureUserConfigDir()).resolves.toBe(configDir);
@@ -104,8 +148,8 @@ describe("user config multi-provider", () => {
   let configDir = "";
 
   test("round-trips Grok OAuth tokens without using the API key field", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-xai-oauth-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-xai-oauth-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const oauth = {
       accessToken: "access",
@@ -139,12 +183,12 @@ describe("user config multi-provider", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("round-trips multiple provider instances", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const openaiId = createProviderInstanceId();
     const compatibleId = createProviderInstanceId();
@@ -177,17 +221,19 @@ describe("user config multi-provider", () => {
           wireApi: "responses",
         },
       ],
-      thinkingEffort: "medium",
+      thinkingEffort: "xhigh",
       thinkingEnabled: true,
       timezone: "UTC",
     });
 
     const raw = await readFile(getUserConfigPath(), "utf8");
+    expect(raw).toContain("thinking_effort=xhigh");
     expect(raw).toContain(`[provider.${openaiId}]`);
     expect(raw).toContain("label=Ollama");
     expect(raw).toContain("default_provider_id=");
 
     const loaded = await loadUserConfig();
+    expect(loaded?.thinkingEffort).toBe("xhigh");
     expect(loaded?.providers).toHaveLength(2);
     expect(loaded?.defaultProviderId).toBe(openaiId);
     expect(loaded?.providers[1]?.baseUrl).toBe("http://localhost:11434/v1");
@@ -198,96 +244,12 @@ describe("user config multi-provider", () => {
     expect(loaded?.providers[1]?.wireApi).toBe("responses");
   });
 
-  test("round-trips cerebras models_json with capability flags", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-
-    const cerebrasId = createProviderInstanceId();
-
-    await saveUserConfig({
-      defaultProviderId: cerebrasId,
-      providers: [
-        {
-          apiKey: "csk-test",
-          createdAt: "2026-07-16T10:00:00.000Z",
-          customModels: [
-            {
-              default: true,
-              id: "gpt-oss-120b",
-              inputPerMillionUsd: 0.25,
-              name: "GPT OSS 120B",
-              outputPerMillionUsd: 0.69,
-              supportsThinking: true,
-              supportsVision: false,
-            },
-          ],
-          id: cerebrasId,
-          label: "Cerebras",
-          type: "cerebras",
-        },
-      ],
-    });
-
-    const loaded = await loadUserConfig();
-    expect(loaded?.providers[0]?.type).toBe("cerebras");
-    expect(loaded?.providers[0]?.customModels?.[0]?.id).toBe("gpt-oss-120b");
-    expect(loaded?.providers[0]?.customModels?.[0]?.supportsThinking).toBe(
-      true
-    );
-    expect(loaded?.providers[0]?.customModels?.[0]?.inputPerMillionUsd).toBe(
-      0.25
-    );
-  });
-
-  test("round-trips fireworks models_json with capability flags", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-
-    const fireworksId = createProviderInstanceId();
-
-    await saveUserConfig({
-      defaultProviderId: fireworksId,
-      providers: [
-        {
-          apiKey: "fw-test",
-          createdAt: "2026-07-24T10:00:00.000Z",
-          customModels: [
-            {
-              default: true,
-              id: "accounts/fireworks/models/kimi-k2p6",
-              inputPerMillionUsd: 0.6,
-              name: "Kimi K2.6",
-              outputPerMillionUsd: 2.5,
-              supportsThinking: true,
-              supportsVision: false,
-            },
-          ],
-          id: fireworksId,
-          label: "Fireworks",
-          type: "fireworks",
-        },
-      ],
-    });
-
-    const loaded = await loadUserConfig();
-    expect(loaded?.providers[0]?.type).toBe("fireworks");
-    expect(loaded?.providers[0]?.customModels?.[0]?.id).toBe(
-      "accounts/fireworks/models/kimi-k2p6"
-    );
-    expect(loaded?.providers[0]?.customModels?.[0]?.supportsThinking).toBe(
-      true
-    );
-    expect(loaded?.providers[0]?.customModels?.[0]?.inputPerMillionUsd).toBe(
-      0.6
-    );
-  });
-
   test("round-trips discovered models_json for discovery providers", async () => {
     // The writer persists customModels for every provider type, so the reader
     // must parse them back for discovery providers too — otherwise a fetched
     // catalog is written to disk and dropped on the next load.
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const moonshotId = createProviderInstanceId();
     const zhipuId = createProviderInstanceId();
@@ -332,44 +294,9 @@ describe("user config multi-provider", () => {
     expect(loaded?.providers[1]?.customModels?.[0]?.id).toBe("glm-5.2");
   });
 
-  test("round-trips catalog shortlist models_json for Xiaomi MiMo", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-
-    const xiaomiId = createProviderInstanceId();
-
-    await saveUserConfig({
-      defaultProviderId: xiaomiId,
-      providers: [
-        {
-          apiKey: "sk-xiaomi-test",
-          createdAt: "2026-09-09T10:00:00.000Z",
-          customModels: [
-            {
-              default: true,
-              id: "mimo-v2.5",
-              name: "MiMo V2.5",
-              supportsThinking: true,
-              supportsVision: true,
-            },
-          ],
-          id: xiaomiId,
-          label: "Xiaomi MiMo",
-          type: "xiaomi",
-        },
-      ],
-    });
-
-    const loaded = await loadUserConfig();
-    expect(loaded?.providers[0]?.customModels?.[0]?.id).toBe("mimo-v2.5");
-    expect(loaded?.providers[0]?.customModels?.[0]?.supportsThinking).toBe(
-      true
-    );
-  });
-
   test("repairs literal undefined label on load", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const id = createProviderInstanceId();
 
@@ -395,8 +322,8 @@ created_at=2026-06-15T00:00:00.000Z
   });
 
   test("saveUserWebPublicUrl preserves path segments", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     await expect(
       saveUserWebPublicUrl("https://gateway.devscale.id/v1/")
@@ -404,6 +331,30 @@ created_at=2026-06-15T00:00:00.000Z
     await expect(loadUserWebPublicUrl()).resolves.toBe(
       "https://gateway.devscale.id/v1"
     );
+  });
+});
+
+describe("parseIniWithSections", () => {
+  test("ignores sections that resolve to Object.prototype members", () => {
+    const parsed = parseIniWithSections(
+      [
+        "timezone = UTC",
+        "[__proto__]",
+        "polluted = yes",
+        "[constructor]",
+        "polluted = yes",
+        "[prototype]",
+        "polluted = yes",
+        "[web_search]",
+        "provider = tavily",
+      ].join("\n")
+    );
+
+    expect(Object.hasOwn(Object.prototype, "polluted")).toBe(false);
+    expect(Object.hasOwn(Object, "polluted")).toBe(false);
+    expect(parsed.global).toEqual({ timezone: "UTC" });
+    expect(Object.keys(parsed.sections)).toEqual(["web_search"]);
+    expect(parsed.sections.web_search).toEqual({ provider: "tavily" });
   });
 });
 

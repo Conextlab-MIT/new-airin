@@ -1,6 +1,6 @@
-import type { TelegramPairingStartResponse } from "@nakama/core";
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
+import type { TelegramPairingStartResponse } from "@airin/core";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
 import { QrCodeScanIcon } from "hugeicons-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";

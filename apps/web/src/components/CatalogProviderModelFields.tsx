@@ -1,7 +1,7 @@
-import type { ProviderModelOption } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { FormField } from "@nakama/ui/form-field";
-import { Spinner } from "@nakama/ui/spinner";
+import type { ProviderModelOption } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { FormField } from "@airin/ui/form-field";
+import { Spinner } from "@airin/ui/spinner";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import type { CatalogShortlistProvider } from "@/components/catalog-provider-model-fields.shared";
@@ -165,23 +165,19 @@ export function CatalogProviderModelFields({
     setIsBrowsing(false);
   };
 
-  const browseFooter = remoteError
-    ? `Could not load models from ${providerLabel}.`
-    : remoteLoading
-      ? `Loading models from ${providerLabel}…`
-      : `Choose which ${providerLabel} models appear in chat for this provider.`;
+  const footerError =
+    modelsError ??
+    (remoteError ? `Could not load models from ${providerLabel}.` : null);
 
   return (
     <FormField
       density={density}
       footer={
-        modelsError ? (
+        footerError ? (
           <p className="text-destructive text-sm" role="alert">
-            {modelsError}
+            {footerError}
           </p>
-        ) : (
-          <p className="text-muted-foreground text-xs">{browseFooter}</p>
-        )
+        ) : null
       }
       id={`${provider}-provider-models`}
       label="Models"
@@ -228,12 +224,15 @@ export function CatalogProviderModelFields({
         </div>
       ) : (
         <ModelListEditor
-          browseLabel={`Browse ${providerLabel}`}
+          browse={{
+            label: "Browse models",
+            onClick: () => setIsBrowsing(true),
+          }}
           disabled={disabled}
           models={customModels}
-          onBrowse={() => setIsBrowsing(true)}
           onChange={onCustomModelsChange}
           showPricing
+          showThinking
           showVision
           visionDefaultOn={[
             "openai",

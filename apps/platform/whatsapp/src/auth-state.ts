@@ -1,6 +1,6 @@
 import { chmod, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { PRIVATE_DIR_MODE, PRIVATE_FILE_MODE } from "@nakama/core/fs";
+import { PRIVATE_DIR_MODE, PRIVATE_FILE_MODE } from "@airin/core/fs";
 import { useMultiFileAuthState } from "@whiskeysockets/baileys";
 
 const PRIVATE_UMASK = 0o077;

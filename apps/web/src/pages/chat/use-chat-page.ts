@@ -1,14 +1,19 @@
-import type { RemoteChatSession } from "@nakama/client";
+import type { RemoteChatSession } from "@airin/client";
+import { AirinApiError } from "@airin/core/api-error";
 import type {
   AgentChannel,
   AgentQuestionAnswer,
   AgentQuestionnaire,
   AgentTodo,
   ChatContextUsage,
-} from "@nakama/core/contract";
+  ThinkingEffort,
+} from "@airin/core/contract";
+import { isThinkingEffort } from "@airin/core/thinking-effort";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -16,10 +21,10 @@ import {
   useState,
 } from "react";
 import {
+  type Params,
   useLocation,
   useNavigate,
   useParams,
-  useSearchParams,
 } from "react-router-dom";
 import type { QueuedComposerMessage } from "@/components/chat/ChatMessageQueuePanel";
 import { useRunningTurnsStore } from "@/context/running-turns-store";
@@ -37,6 +42,7 @@ import {
   useBranchSessionMutation,
   useUpdateSessionMutation,
 } from "@/hooks/use-resource-mutations";
+import { notifyReplyReady, pageHidesNow } from "@/hooks/use-web-push";
 import { acpAgentSettingsKey } from "@/lib/acp-settings";
 import type { FileUIPart } from "@/lib/ai-ui-types";
 import {
@@ -120,18 +126,57 @@ interface QueuedSend {
   text: string;
 }
 
+/**
+ * Where a chat reads its route and active profile. The page uses the browser
+ * URL and the shared profile store; the `/btw` side chat swaps in its own, so
+ * it can run next to the page without moving it.
+ */
+export interface ChatHost {
+  /** Start in cognito: not saved, not in History, not in the URL. */
+  cognito: boolean;
+  /** Draft key slot for a chat with no session, so two drafts do not mix. */
+  draftSessionId: string | null;
+  location: { pathname: string; search: string };
+  navigate: (to: string, options?: { replace?: boolean }) => void;
+  params: Readonly<Params>;
+  profile: ReturnType<typeof useActiveChatProfile>;
+}
+
+export const ChatHostContext = createContext<ChatHost | null>(null);
+
+function useChatHost(): ChatHost {
+  const override = useContext(ChatHostContext);
+  const params = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const profile = useActiveChatProfile();
+
+  return (
+    override ?? {
+      cognito: false,
+      draftSessionId: null,
+      location,
+      navigate,
+      params,
+      profile,
+    }
+  );
+}
+
 function useChatComposerDraft({
   userId,
   orgId,
   profileId,
   routeSession,
   search,
+  draftSessionId,
 }: {
   userId?: string;
   orgId?: string;
   profileId: string;
   routeSession: ReturnType<typeof parseChatRouteParams>;
   search: string;
+  draftSessionId: string | null;
 }) {
   const composerDraftKey = chatComposerDraftKey(
     userId,
@@ -139,7 +184,7 @@ function useChatComposerDraft({
     readRequestedProfileFromNewChatSearch(search) ??
       routeSession?.profileId ??
       profileId,
-    routeSession?.sessionId ?? null
+    routeSession?.sessionId ?? draftSessionId
   );
 
   const [composerEntry, setComposerEntry] = useState<{
@@ -169,10 +214,14 @@ const AUTOMATION_COMPOSER_PLACEHOLDER =
 
 export function useChatPage() {
   const queryClient = useQueryClient();
-  const params = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const host = useChatHost();
+  const { location, navigate, params } = host;
+
+  const searchParams = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search]
+  );
+
   const routeSession = useMemo(() => parseChatRouteParams(params), [params]);
   const { health, models } = useAppContext();
   const { user, activeOrg, isLoading: authLoading } = useAuth();
@@ -183,7 +232,7 @@ export function useChatPage() {
     profileId: storeProfileId,
     setProfileId,
     syncForOrg,
-  } = useActiveChatProfile();
+  } = host.profile;
 
   const profilesQuery = useProfilesQuery(activeOrg?.id ?? null);
 
@@ -201,8 +250,13 @@ export function useChatPage() {
   });
 
   const [session, setSession] = useState<RemoteChatSession | null>(null);
-  const [cognito, setCognito] = useState(false);
+  const [cognito, setCognito] = useState(host.cognito);
   const [sessionModel, setSessionModel] = useState<string | null>(null);
+
+  // Null follows the install effort. A member's pick for this chat only.
+  const [sessionThinkingEffort, setSessionThinkingEffort] =
+    useState<ThinkingEffort | null>(null);
+
   const [sessionChannel, setSessionChannel] = useState<AgentChannel>("web");
   const [messages, setMessages] = useState<ChatListItem[]>([]);
   const [agentTodos, setAgentTodos] = useState<AgentTodo[]>([]);
@@ -231,6 +285,7 @@ export function useChatPage() {
 
   const { composerDraftKey, composerEntry, setComposerEntry } =
     useChatComposerDraft({
+      draftSessionId: host.draftSessionId,
       orgId: activeOrg?.id,
       profileId,
       routeSession,
@@ -249,6 +304,14 @@ export function useChatPage() {
   const messageQueueRef = useRef<QueuedSend[]>([]);
   const isSendingRef = useRef(false);
   const skipNextProfileSessionRef = useRef(false);
+
+  const pendingSendRef = useRef<{ profileId: string; text: string } | null>(
+    null
+  );
+
+  // The new-chat link that already queued its send; StrictMode reruns effects.
+  const queuedSendSearchRef = useRef<string | null>(null);
+
   const loadedRouteRef = useRef<string | null>(null);
   const profileIdRef = useRef(profileId);
   const busyRef = useRef(busy);
@@ -258,19 +321,19 @@ export function useChatPage() {
   const sessionLoadRef = useRef(0);
   const sessionOrgRef = useRef<string | null | undefined>(undefined);
   const orgRouteResetRef = useRef(false);
+  // Outlives the composer's own remount when the first send in a new chat
+  // swaps `session` from null to a real id (see PromptInputProvider's key).
+  const promptHistoryRef = useRef<string[]>([]);
 
   /**
    * Hand the current stream back before the page moves to another chat.
    *
-   * The server ends a turn as soon as the request streaming it goes away, so a
-   * send stream is detached rather than aborted: the chat keeps running in the
-   * background and is picked up again by the reconnect in `resumeSession`.
+   * A send stream is detached rather than aborted: the chat keeps running in
+   * the background and is picked up again by the reconnect in `resumeSession`.
    * Everything the turn owned on the page (busy flags, the queue) is released
-   * here, because the next chat needs a clean composer.
-   *
-   * ponytail: a detached turn still dies with the page (reload, closed tab).
-   * Give the server an explicit stop endpoint and stop cancelling on
-   * disconnect if turns need to outlive the tab.
+   * here, because the next chat needs a clean composer. The server keeps a
+   * browser's turn running even when the page goes away; only Stop
+   * (`stopSessionTurn`) ends it.
    */
   const releaseActiveStream = useCallback(() => {
     const released = releaseChatStream({
@@ -347,6 +410,34 @@ export function useChatPage() {
     [profiles, profileId]
   );
 
+  // Read when a turn ends, which can be after the user opened another chat.
+  const profilesRef = useRef(profiles);
+
+  useEffect(() => {
+    profilesRef.current = profiles;
+  }, [profiles]);
+
+  const notifyTurnDone = useCallback(
+    (
+      turnProfileId: string,
+      sessionId: string,
+      reply: string,
+      hidesAtStart: number
+    ) => {
+      notifyReplyReady({
+        body: reply,
+        hidesAtStart,
+        onOpen: () => navigate(buildChatPath(turnProfileId, sessionId)),
+        profileId: turnProfileId,
+        tag: `session-${sessionId}`,
+        title:
+          profilesRef.current.find((profile) => profile.id === turnProfileId)
+            ?.name ?? "Airin",
+      });
+    },
+    [navigate]
+  );
+
   const availableSkills = activeProfileQuery.data?.skills ?? [];
 
   const readOnlySession = isReadOnlySessionChannel(sessionChannel);
@@ -357,7 +448,6 @@ export function useChatPage() {
     acpAgentKey: acpAgentSettingsKey(activeProfile?.acpAgent),
     acpEnabled: Boolean(activeProfile?.acpAgent),
     busy,
-    canManageInstallSettings,
     currentProviderId: models?.currentProviderId,
     models: models?.models,
     profileId: profileId || null,
@@ -366,6 +456,7 @@ export function useChatPage() {
     saveThinkingPending: saveThinkingSettingsMutation.isPending,
     sessionId: session?.id ?? null,
     sessionModel,
+    sessionThinkingEffort,
     thinkingSettingsEffort: thinkingSettings?.effort,
     thinkingSettingsLoading,
   });
@@ -375,6 +466,7 @@ export function useChatPage() {
     activeModelSupportsThinking,
     currentModelSelection,
     providerModelGroups,
+    savedThinkingEffort,
     thinkingEffort,
     thinkingEffortDisabled,
     thinkingEffortOptions,
@@ -496,11 +588,18 @@ export function useChatPage() {
 
   const enterDraftChat = useCallback(
     (nextProfileId: string) => {
+      // oxlint-disable react-doctor/no-adjust-state-on-prop-change -- The ?new=1 layout effect calls this for a one-shot "New chat" link, then clears the URL; it is an event, not a prop change.
       sessionLoadRef.current += 1;
       releaseActiveStream();
       setBusy(false);
       setTurnStartedAt(null);
-      localStorage.removeItem(sessionStorageKey(nextProfileId));
+
+      try {
+        localStorage.removeItem(sessionStorageKey(nextProfileId));
+      } catch {
+        // Starting a new chat must still work when browser storage is disabled.
+      }
+
       skipNextProfileSessionRef.current = true;
       loadedRouteRef.current = null;
       messageQueueRef.current = [];
@@ -509,12 +608,14 @@ export function useChatPage() {
       setQueuedMessages([]);
       setSession(null);
       setSessionModel(restoreLastChatModel(nextProfileId));
+      setSessionThinkingEffort(null);
       setSessionChannel("web");
       setMessages([]);
       setError(null);
       setAgentTodos([]);
       setAgentQuestionnaire(null);
       setContextUsage(null);
+      // oxlint-enable react-doctor/no-adjust-state-on-prop-change
 
       // Session routes remount ChatPage on /chat — pass profile in the query so it survives.
       // The ?new=1 handler then replaces the URL with bare /chat.
@@ -557,6 +658,7 @@ export function useChatPage() {
     setAgentQuestionnaire(null);
     setContextUsage(null);
     setSessionModel(null);
+    setSessionThinkingEffort(null);
     setError(null);
     setBusy(false);
     setTurnStartedAt(null);
@@ -574,18 +676,19 @@ export function useChatPage() {
         return;
       }
 
-      if (effort !== "low" && effort !== "medium" && effort !== "high") {
+      if (!isThinkingEffort(effort)) {
+        return;
+      }
+
+      if (!profileId || effort === savedThinkingEffort) {
         return;
       }
 
       if (
-        !(canManageInstallSettings && profileId) ||
-        effort === thinkingEffort
+        busy ||
+        saveThinkingSettingsMutation.isPending ||
+        updateSessionMutation.isPending
       ) {
-        return;
-      }
-
-      if (busy || saveThinkingSettingsMutation.isPending) {
         if (busy) {
           setError("Wait for the current response to finish.");
         }
@@ -593,9 +696,38 @@ export function useChatPage() {
         return;
       }
 
-      void saveThinkingSettingsMutation
-        .mutateAsync(buildThinkingSettingsPayload(effort))
+      // An admin's pick stays the install default. Everyone else, or a chat
+      // that already has its own effort, changes only this chat.
+      if (canManageInstallSettings && sessionThinkingEffort === null) {
+        void saveThinkingSettingsMutation
+          .mutateAsync(buildThinkingSettingsPayload(effort))
+          .catch((err) => {
+            setError(formatError(err));
+          });
+
+        return;
+      }
+
+      const previousEffort = sessionThinkingEffort;
+      setSessionThinkingEffort(effort);
+
+      if (!session) {
+        return;
+      }
+
+      const updatedSessionId = session.id;
+      void updateSessionMutation
+        .mutateAsync({
+          input: { thinkingEffort: effort },
+          profileId,
+          sessionId: updatedSessionId,
+        })
         .catch((err) => {
+          if (activeSessionIdRef.current !== updatedSessionId) {
+            return;
+          }
+
+          setSessionThinkingEffort(previousEffort);
           setError(formatError(err));
         });
     },
@@ -604,9 +736,12 @@ export function useChatPage() {
       acpProfile,
       canManageInstallSettings,
       profileId,
-      thinkingEffort,
+      savedThinkingEffort,
       busy,
       saveThinkingSettingsMutation,
+      session,
+      sessionThinkingEffort,
+      updateSessionMutation,
     ]
   );
 
@@ -700,6 +835,7 @@ export function useChatPage() {
           messages: storedMessages,
           messageMeta,
           model,
+          thinkingEffort: storedThinkingEffort,
           todos,
           questionnaire,
           contextUsage: nextContextUsage,
@@ -712,8 +848,9 @@ export function useChatPage() {
         const nextSession = client.createChatSession(sessionId, channel);
         let listItems = chatMessagesToListItems(storedMessages, messageMeta);
 
-        const storedFailedTurn =
-          channel === "web" ? readFailedChatTurn(sessionId) : null;
+        // This page stores a failed turn for any chat it can send in, and a
+        // retry branch keeps cli or task, so read it whatever the channel.
+        const storedFailedTurn = readFailedChatTurn(sessionId);
 
         if (storedFailedTurn) {
           listItems = appendFailedTurnIfNeeded(listItems, storedFailedTurn);
@@ -723,6 +860,7 @@ export function useChatPage() {
         setSessionChannel(channel);
         setSession(nextSession);
         setSessionModel(model);
+        setSessionThinkingEffort(storedThinkingEffort ?? null);
         setMessages(listItems);
         setAgentTodos(todos);
         setAgentQuestionnaire(questionnaire);
@@ -744,12 +882,30 @@ export function useChatPage() {
 
             const abortController = new AbortController();
             streamAbortRef.current = abortController;
+            // Opening another chat detaches this stream instead of aborting
+            // it, so the turn can still announce its reply when it ends.
+            let detached = false;
+            detachStreamRef.current = () => {
+              detached = true;
+            };
+
+            const whileAttached =
+              <TValue>(write: (value: TValue) => void) =>
+              (value: TValue) => {
+                if (!detached) {
+                  write(value);
+                }
+              };
+
+            const hidesAtStart = pageHidesNow();
 
             const { reconnected } = await reconnectActiveSessionStream({
-              handlers: buildStreamHandlers(setMessages, {
-                onContextUsage: setContextUsage,
-                onQuestionnaireUpdated: setAgentQuestionnaire,
-                onTodosUpdated: setAgentTodos,
+              handlers: buildStreamHandlers(whileAttached(setMessages), {
+                onContextUsage: whileAttached(setContextUsage),
+                onDone: (reply) =>
+                  notifyTurnDone(nextProfileId, sessionId, reply, hidesAtStart),
+                onQuestionnaireUpdated: whileAttached(setAgentQuestionnaire),
+                onTodosUpdated: whileAttached(setAgentTodos),
               }),
               messages: listItems,
               sessionId,
@@ -788,6 +944,7 @@ export function useChatPage() {
             setAgentQuestionnaire(refreshed.questionnaire);
             setContextUsage(refreshed.contextUsage ?? null);
             setSessionModel(refreshed.model);
+            setSessionThinkingEffort(refreshed.thinkingEffort ?? null);
 
             if (reconnected) {
               setLastSuccessfulTurnAt((previous) =>
@@ -807,17 +964,32 @@ export function useChatPage() {
           return;
         }
 
+        // The chat was deleted: open a new chat instead of an error.
+        if (err instanceof AirinApiError && err.status === 404) {
+          navigate(buildNewChatPath(nextProfileId), { replace: true });
+
+          return;
+        }
+
         setError(formatError(err));
       } finally {
         setBusy((current) => (isCurrentLoad() ? false : current));
 
         if (isCurrentLoad()) {
           streamAbortRef.current = null;
+          detachStreamRef.current = null;
           setTurnStartedAt(null);
         }
       }
     },
-    [profileId, releaseActiveStream, setProfileId, syncChatUrl]
+    [
+      navigate,
+      notifyTurnDone,
+      profileId,
+      releaseActiveStream,
+      setProfileId,
+      syncChatUrl,
+    ]
   );
 
   const handleBranchMessage = useCallback(
@@ -901,7 +1073,10 @@ export function useChatPage() {
   // Layout effect so session is cleared before the syncChatUrl effect can
   // re-push the previous /chat/:profile/:session URL (first-click blink).
   useLayoutEffect(() => {
-    if (searchParams.get("new") !== "1") {
+    if (
+      searchParams.get("new") !== "1" ||
+      queuedSendSearchRef.current === location.search
+    ) {
       return;
     }
 
@@ -924,32 +1099,8 @@ export function useChatPage() {
     const storedDraft = draftKey ? consumeStoredChatDraft(draftKey) : null;
     const requestedDraft = inlineDraft ?? storedDraft;
 
-    try {
-      localStorage.removeItem(sessionStorageKey(targetProfileId));
-    } catch {
-      // Starting a new chat must still work when browser storage is disabled.
-    }
-
-    skipNextProfileSessionRef.current = true;
-    loadedRouteRef.current = null;
-    sessionLoadRef.current += 1;
-    releaseActiveStream();
-    setBusy(false);
-    setTurnStartedAt(null);
-    messageQueueRef.current = [];
-    isSendingRef.current = false;
-    activeSessionIdRef.current = null;
-    setQueuedMessages([]);
-    setSession(null);
-    setSessionModel(
-      targetProfileId ? restoreLastChatModel(targetProfileId) : null
-    );
-    setSessionChannel("web");
-    setMessages([]);
-    setError(null);
-    setAgentTodos([]);
-    setAgentQuestionnaire(null);
-    setContextUsage(null);
+    // ?new=1 is always on /chat, so enterDraftChat does not navigate here.
+    enterDraftChat(targetProfileId);
 
     if (requestedProfile && requestedProfile !== profileIdRef.current) {
       setProfileId(requestedProfile);
@@ -960,11 +1111,20 @@ export function useChatPage() {
         ? AUTOMATION_COMPOSER_PLACEHOLDER
         : undefined;
 
-    if (requestedDraft !== null) {
+    const send =
+      requestedDraft && targetProfileId && searchParams.get("send") === "1";
+
+    if (send) {
+      queuedSendSearchRef.current = location.search;
+      pendingSendRef.current = {
+        profileId: targetProfileId,
+        text: requestedDraft,
+      };
+    } else if (requestedDraft !== null) {
       storeComposerDraft(targetDraftKey, requestedDraft);
     }
 
-    if (requestedDraft !== null || placeholder) {
+    if ((requestedDraft !== null && !pendingSendRef.current) || placeholder) {
       setComposerEntry((current) => ({
         initialInput: requestedDraft ?? current.initialInput,
         placeholder,
@@ -980,8 +1140,7 @@ export function useChatPage() {
     setProfileId,
     navigate,
     location.search,
-    releaseActiveStream,
-    restoreLastChatModel,
+    enterDraftChat,
     profileId,
     user?.id,
     activeOrg?.id,
@@ -1085,11 +1244,82 @@ export function useChatPage() {
   ]);
 
   const stopStreaming = useCallback(() => {
-    // Stop means stop: aborting closes the request, which is how the server
-    // learns to end the turn. Detaching is only for switching chats.
+    // Stop means stop. Closing the request no longer ends a browser's turn
+    // (a phone locking must not), so the server is told outright. Detaching
+    // is only for switching chats.
+    const sessionId = activeSessionIdRef.current;
+
+    if (sessionId) {
+      // The abort below no longer stops the server, so a lost /stop would
+      // leave the turn running out of sight: try twice, then say so. A 4xx
+      // answer will not change, so only a network or server error retries.
+      const stop = () => client.stopSessionTurn(sessionId);
+
+      stop()
+        .catch((err) => {
+          if (err instanceof AirinApiError && err.status < 500) {
+            throw err;
+          }
+
+          return stop();
+        })
+        .catch((err) => {
+          // The session went away, and its turn with it.
+          if (err instanceof AirinApiError && err.status === 404) {
+            return;
+          }
+
+          // Only on the chat that was stopped, not one opened since.
+          if (activeSessionIdRef.current === sessionId) {
+            setError(`The reply could not be stopped: ${formatError(err)}`);
+          }
+        });
+    }
+
     detachStreamRef.current = null;
     streamAbortRef.current?.abort();
   }, []);
+
+  const removeQueuedMessage = useCallback((id: string) => {
+    messageQueueRef.current = messageQueueRef.current.filter(
+      (item) => item.id !== id
+    );
+    setQueuedMessages((current) => current.filter((item) => item.id !== id));
+  }, []);
+
+  const editQueuedMessage = useCallback((id: string, text: string) => {
+    messageQueueRef.current = messageQueueRef.current.map((item) =>
+      item.id === id ? { ...item, text } : item
+    );
+    setQueuedMessages((current) =>
+      current.map((item) => (item.id === id ? { ...item, text } : item))
+    );
+  }, []);
+
+  // Moves the message to the front, then stops the reply so it sends next.
+  const sendQueuedMessageNow = useCallback(
+    (id: string) => {
+      const item = messageQueueRef.current.find((entry) => entry.id === id);
+
+      if (!item) {
+        return;
+      }
+
+      messageQueueRef.current = [
+        item,
+        ...messageQueueRef.current.filter((entry) => entry.id !== id),
+      ];
+      setQueuedMessages((current) => {
+        const hit = current.find((entry) => entry.id === id);
+
+        return hit
+          ? [hit, ...current.filter((entry) => entry.id !== id)]
+          : current;
+      });
+      stopStreaming();
+    },
+    [stopStreaming]
+  );
 
   const executeSend = useCallback(
     async (
@@ -1150,6 +1380,7 @@ export function useChatPage() {
             cognito: cognitoRef.current || undefined,
             model: sessionModel ?? undefined,
             profileId,
+            thinkingEffort: sessionThinkingEffort ?? undefined,
           });
 
           // A cognito session id is never stored or put in the URL: either
@@ -1196,6 +1427,11 @@ export function useChatPage() {
             }
           };
 
+        const sessionForTurn = activeSession;
+        // A cognito chat has no URL to open and promises no trace.
+        const announceTurn = !cognitoRef.current;
+        const hidesAtStart = pageHidesNow();
+
         await activeSession.sendStream(
           {
             documents: documents.length > 0 ? documents : undefined,
@@ -1204,6 +1440,17 @@ export function useChatPage() {
           },
           buildStreamHandlers(whileAttached(setMessages), {
             onContextUsage: whileAttached(setContextUsage),
+            // Not while attached only: a detached turn is the one to announce.
+            onDone: (reply) => {
+              if (announceTurn) {
+                notifyTurnDone(
+                  profileId,
+                  sessionForTurn.id,
+                  reply,
+                  hidesAtStart
+                );
+              }
+            },
             onQuestionnaireUpdated: whileAttached(setAgentQuestionnaire),
             onTodosUpdated: whileAttached(setAgentTodos),
           }),
@@ -1223,6 +1470,7 @@ export function useChatPage() {
           questionnaire,
           contextUsage: nextContextUsage,
           model: nextSessionModel,
+          thinkingEffort: nextThinkingEffort,
         } = await client.getSessionMessages(activeSession.id);
 
         setMessages(chatMessagesToListItems(storedMessages, messageMeta));
@@ -1230,6 +1478,7 @@ export function useChatPage() {
         setAgentQuestionnaire(questionnaire);
         setContextUsage(nextContextUsage ?? null);
         setSessionModel(nextSessionModel);
+        setSessionThinkingEffort(nextThinkingEffort ?? null);
         setLastSuccessfulTurnAt((previous) => nextSuccessfulTurnAt(previous));
       } catch (err) {
         if (!activeSession) {
@@ -1284,6 +1533,7 @@ export function useChatPage() {
               cognito: cognitoRef.current || undefined,
               model: sessionModel ?? undefined,
               profileId,
+              thinkingEffort: sessionThinkingEffort ?? undefined,
             });
 
             if (!cognitoRef.current) {
@@ -1337,6 +1587,11 @@ export function useChatPage() {
         void invalidateQueries(queryClient, queryKeys.sessions(profileId));
         // A turn can remove an artifact owned by any profile.
         void invalidateQueries(queryClient, ["artifacts"]);
+        // A turn's first automation turns the profile's automations on.
+        void invalidateQueries(
+          queryClient,
+          queryKeys.profiles.detail(profileId)
+        );
 
         if (!detached) {
           streamAbortRef.current = null;
@@ -1377,7 +1632,9 @@ export function useChatPage() {
       showThinking,
       activeModelSupportsVision,
       sessionModel,
+      sessionThinkingEffort,
       queryClient,
+      notifyTurnDone,
     ]
   );
 
@@ -1427,6 +1684,18 @@ export function useChatPage() {
     [executeSend, profileId, readOnlySession]
   );
 
+  // A new chat opened with send=1 sends its draft once its profile is active.
+  useEffect(() => {
+    const pending = pendingSendRef.current;
+
+    if (!pending || pending.profileId !== profileId) {
+      return;
+    }
+
+    pendingSendRef.current = null;
+    sendMessage(pending.text).catch(() => undefined);
+  }, [profileId, sendMessage]);
+
   /**
    * Branch the session at the checkpoint before `prompt`, then send `text` into
    * the branch.
@@ -1452,7 +1721,14 @@ export function useChatPage() {
       setBranchingMessageId(anchorId);
       setError(null);
 
+      // Opening another chat bumps this, so a branch or session that arrives
+      // after the user left does not take over the chat they are on now.
+      const loadId = sessionLoadRef.current;
+      const isCurrentChat = () => sessionLoadRef.current === loadId;
+
       try {
+        // A first reply has no checkpoint, so its retry is a new web chat.
+        let retryChannel: AgentChannel = "web";
         let retrySession: RemoteChatSession;
         let initialMessages: ChatListItem[] = [];
 
@@ -1463,17 +1739,32 @@ export function useChatPage() {
             sessionId: session.id,
           });
 
-          retrySession = client.createChatSession(result.sessionId, "web");
+          if (!isCurrentChat()) {
+            return;
+          }
+
+          // The server copies the source's channel into the branch.
+          retryChannel = result.channel;
+          retrySession = client.createChatSession(
+            result.sessionId,
+            retryChannel
+          );
           initialMessages = plan.initialMessages;
         } else {
-          retrySession = await client.createSession("web", {
+          retrySession = await client.createSession(retryChannel, {
             cognito: cognitoRef.current || undefined,
             model: sessionModel ?? undefined,
             profileId,
+            thinkingEffort: sessionThinkingEffort ?? undefined,
           });
+
+          if (!isCurrentChat()) {
+            return;
+          }
         }
 
         setSession(retrySession);
+        setSessionChannel(retryChannel);
 
         if (cognitoRef.current) {
           activeSessionIdRef.current = retrySession.id;
@@ -1487,7 +1778,9 @@ export function useChatPage() {
           sessionOverride: retrySession,
         });
       } catch (err) {
-        setError(formatError(err));
+        if (isCurrentChat()) {
+          setError(formatError(err));
+        }
       } finally {
         setBranchingMessageId(null);
       }
@@ -1500,6 +1793,7 @@ export function useChatPage() {
       sendMessage,
       session,
       sessionModel,
+      sessionThinkingEffort,
       syncChatUrl,
     ]
   );
@@ -1612,6 +1906,7 @@ export function useChatPage() {
     composerEntry,
     contextUsage: isEmptyState ? null : contextUsage,
     currentModelSelection,
+    editQueuedMessage,
     error,
     handleBranchMessage,
     handleCognitoChange,
@@ -1626,11 +1921,14 @@ export function useChatPage() {
     messages,
     profileId,
     profiles,
+    promptHistoryRef,
     providerModelGroups,
     queuedMessages,
     readOnlySession,
+    removeQueuedMessage,
     renderModelLabel,
     sendMessage,
+    sendQueuedMessageNow,
     session,
     sessionChannel,
     showOfflineHint,

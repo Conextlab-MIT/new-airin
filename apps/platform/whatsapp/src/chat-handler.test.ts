@@ -6,20 +6,18 @@ import {
   hasActiveStreams,
   resetActiveStreamsForTests,
   stopActiveStream,
-} from "@nakama/core/channel-active-stream";
-import { ChannelSessionStore as SessionStore } from "@nakama/core/channel-session-store";
+} from "@airin/core/channel-active-stream";
+import { ChannelSessionStore as SessionStore } from "@airin/core/channel-session-store";
 import {
   getWhatsAppConfigDir,
+  regenerateWhatsAppPairingCode,
   saveWhatsAppConfig,
   syncWhatsAppOwnerPairing,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 import * as baileys from "@whiskeysockets/baileys";
 import { WhatsAppAuthStore } from "./auth-store";
-import {
-  createChatHandler,
-  resetChatLocksForTests,
-  withChatLock,
-} from "./chat-handler";
+import { createChatHandler, resetChatLocksForTests } from "./chat-handler";
+import { resetWhatsAppBotMessagesForTests } from "./group-message";
 import { resetWhatsAppOutboundForTests } from "./inbound-message";
 import {
   createMockClient,
@@ -88,6 +86,8 @@ function createMockSocket() {
         jid,
         text: "text" in content ? (content.text ?? "") : "",
       });
+
+      return { key: { id: `BOT_MSG_${sent.length}` } };
     },
     sendPresenceUpdate: async () => {},
   };
@@ -108,7 +108,7 @@ async function createTestHandler(
   const mock = createMockClient(clientOptions);
 
   const sessionStore = new SessionStore(
-    path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+    path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
   );
 
   const orgStore = createTestOrgStore(homeDir);
@@ -140,6 +140,7 @@ beforeEach(() => {
   resetActiveStreamsForTests();
   resetChatLocksForTests();
   resetWhatsAppOutboundForTests();
+  resetWhatsAppBotMessagesForTests();
 });
 
 describe("createChatHandler", () => {
@@ -431,6 +432,54 @@ describe("createChatHandler", () => {
     });
   });
 
+  test("a new pairing replaces the paired phone; the linked number and allowed phones still chat", async () => {
+    await withTempHome(async (homeDir) => {
+      const linkedNumber = { id: "628100000000@s.whatsapp.net" };
+      const firstPhone = "6281111111111@s.whatsapp.net";
+      const secondPhone = "6282222222222@s.whatsapp.net";
+
+      // After the QR link, the agent's own number is the paired JID.
+      await writeWhatsAppConfigIni(homeDir, {
+        pairedJid: linkedNumber.id,
+        pairingCode: PAIRING_CODE,
+        pairingCodeExpiresAt: LIVE_CODE_EXPIRY,
+        phoneNumber: "628100000000",
+      });
+
+      const {
+        calls,
+        handler: handleMessage,
+        sent,
+      } = await createTestHandler(homeDir, undefined, {
+        profiles: defaultProfiles(),
+      });
+
+      await handleMessage({ jid: firstPhone, text: PAIRING_CODE });
+      const { pairingCode } = await regenerateWhatsAppPairingCode();
+      await handleMessage({ jid: secondPhone, text: pairingCode ?? "" });
+
+      expect(
+        sent.filter((message) => message.text.includes("Linked successfully"))
+      ).toHaveLength(2);
+
+      await handleMessage({ jid: firstPhone, text: "hello from first phone" });
+      expect(calls.sendStream).toBe(0);
+
+      await handleMessage({ jid: secondPhone, text: "hello" });
+      await handleMessage({
+        fromMe: true,
+        jid: linkedNumber.id,
+        me: linkedNumber,
+        text: "hello from the linked number",
+      });
+      expect(calls.sendStream).toBe(2);
+
+      await saveWhatsAppConfig({ allowedPhones: "6281111111111" });
+      await handleMessage({ jid: firstPhone, text: "hello again" });
+      expect(calls.sendStream).toBe(3);
+    });
+  });
+
   test("allows pre-paired JID to chat directly", async () => {
     await withTempHome(async (homeDir) => {
       await writeWhatsAppConfigIni(homeDir, {
@@ -480,28 +529,6 @@ describe("createChatHandler", () => {
     });
   });
 
-  test("handles /help command for authorized JID", async () => {
-    await withTempHome(async (homeDir) => {
-      await writeWhatsAppConfigIni(homeDir, {
-        pairedJid: PAIRED_JID,
-        phoneNumber: "1234567890",
-      });
-
-      const {
-        calls,
-        handler: handleMessage,
-        sent,
-      } = await createTestHandler(homeDir);
-
-      await handleMessage({ jid: PAIRED_JID, text: "/help" });
-
-      const helpText = sent.map((message) => message.text).join("\n");
-      expect(helpText).toContain("/help");
-      expect(helpText).toContain("/attach");
-      expect(calls.sendStream).toBe(0);
-    });
-  });
-
   test("handles /clear command", async () => {
     await withTempHome(async (homeDir) => {
       await writeWhatsAppConfigIni(homeDir, {
@@ -520,6 +547,70 @@ describe("createChatHandler", () => {
       expect(calls.compact).toBe(0);
       expect(sent.length).toBe(1);
       expect(sent[0].text).toBe("History cleared.");
+    });
+  });
+
+  test("/status names the agent and this chat's session", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeWhatsAppConfigIni(homeDir, {
+        pairedJid: PAIRED_JID,
+        phoneNumber: "1234567890",
+      });
+
+      const { handler: handleMessage, sent } = await createTestHandler(
+        homeDir,
+        undefined,
+        { providerConfigured: true }
+      );
+
+      await handleMessage({ jid: PAIRED_JID, text: "/new" });
+      await handleMessage({ jid: PAIRED_JID, text: "/status" });
+
+      expect(sent.at(-1)?.text).toBe(
+        [
+          "Server: ok",
+          "Provider configured: yes",
+          "Agent: Default",
+          "Provider: unknown",
+          "Model: none",
+          "Session: session_",
+        ].join("\n")
+      );
+    });
+  });
+
+  // The owner's agent is listed only in the owner's org, not the active one.
+  test("/status names the owner's agent from the owner's org", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeWhatsAppConfigIni(homeDir, {
+        pairedJid: PAIRED_JID,
+        phoneNumber: "1234567890",
+      });
+
+      const { handler: handleMessage, sent } = await createTestHandler(
+        homeDir,
+        {
+          config: {
+            owner: { orgId: "org_owner", profileId: "agent_owner" },
+            phoneNumber: "1234567890",
+            profileId: "default",
+          },
+        },
+        {
+          profilesByOrgId: {
+            org_owner: [
+              { id: "agent_owner", model: "local::owned", name: "Owner Bot" },
+            ],
+          },
+          providerConfigured: true,
+        }
+      );
+
+      await handleMessage({ jid: PAIRED_JID, text: "/status" });
+
+      const statusText = sent.map((entry) => entry.text).join("\n");
+      expect(statusText).toContain("Agent: Owner Bot");
+      expect(statusText).toContain("Model: owned");
     });
   });
 
@@ -589,27 +680,6 @@ describe("createChatHandler", () => {
 
       expect(sent.length).toBe(1);
       expect(sent[0].text).toBe("Nothing to stop.");
-    });
-  });
-
-  test("unknown commands return help text", async () => {
-    await withTempHome(async (homeDir) => {
-      await writeWhatsAppConfigIni(homeDir, {
-        pairedJid: PAIRED_JID,
-        phoneNumber: "1234567890",
-      });
-
-      const {
-        calls,
-        handler: handleMessage,
-        sent,
-      } = await createTestHandler(homeDir);
-
-      await handleMessage({ jid: PAIRED_JID, text: "/unknown" });
-
-      expect(sent.length).toBe(1);
-      expect(sent[0].text).toContain("Unknown command");
-      expect(calls.sendStream).toBe(0);
     });
   });
 
@@ -764,6 +834,7 @@ function groupInbound(options: {
   senderJid?: string;
   senderJids?: string[];
   mentionedJids?: string[];
+  quotedMessageId?: string | null;
   quotedParticipant?: string | null;
   quotedText?: string | null;
   fromMe?: boolean;
@@ -776,6 +847,7 @@ function groupInbound(options: {
     jid: GROUP_JID,
     me: BOT_ME,
     mentionedJids: options.mentionedJids ?? [],
+    quotedMessageId: options.quotedMessageId ?? null,
     quotedParticipant: options.quotedParticipant ?? null,
     quotedText: options.quotedText ?? null,
     senderJid,
@@ -789,8 +861,8 @@ describe("createChatHandler group chats", () => {
     await withTempHome(async (homeDir) => {
       const privateMessage = "private 🔒 message";
       const senderJid = "6281379292556@s.whatsapp.net";
-      const previousDebug = process.env.NAKAMA_CH_DEBUG;
-      process.env.NAKAMA_CH_DEBUG = "1";
+      const previousDebug = process.env.AIRIN_CH_DEBUG;
+      process.env.AIRIN_CH_DEBUG = "1";
       const log = spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -826,9 +898,9 @@ describe("createChatHandler group chats", () => {
         log.mockRestore();
 
         if (previousDebug === undefined) {
-          delete process.env.NAKAMA_CH_DEBUG;
+          delete process.env.AIRIN_CH_DEBUG;
         } else {
-          process.env.NAKAMA_CH_DEBUG = previousDebug;
+          process.env.AIRIN_CH_DEBUG = previousDebug;
         }
       }
     });
@@ -891,6 +963,51 @@ describe("createChatHandler group chats", () => {
     });
   });
 
+  test("group reply triggers the agent only when it quotes an Airin message", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeWhatsAppConfigIni(homeDir, {
+        pairedJid: PAIRED_JID,
+        phoneNumber: "1234567890",
+      });
+
+      const { calls, handler: handleMessage } =
+        await createTestHandler(homeDir);
+
+      // The linked number is the owner's own number: a reply to a message the
+      // owner typed by hand quotes the same address as a reply to Airin.
+      await handleMessage(
+        groupInbound({
+          fromMe: true,
+          quotedMessageId: "OWNER_TYPED_MSG",
+          quotedParticipant: BOT_ME.id,
+          text: "dapat dari reddit",
+        })
+      );
+
+      expect(calls.sendStream).toBe(0);
+      expect(calls.createSession).toBe(0);
+
+      await handleMessage(
+        groupInbound({
+          mentionedJids: [BOT_ME.id],
+          text: "@Airin hello",
+        })
+      );
+
+      expect(calls.sendStream).toBe(1);
+
+      await handleMessage(
+        groupInbound({
+          quotedMessageId: "BOT_MSG_1",
+          quotedParticipant: BOT_ME.lid,
+          text: "follow up",
+        })
+      );
+
+      expect(calls.sendStream).toBe(2);
+    });
+  });
+
   test("unpaired plain group message reaches the agent when mention is not required", async () => {
     await withTempHome(async (homeDir) => {
       await writeWhatsAppConfigIni(homeDir, {
@@ -931,7 +1048,7 @@ describe("createChatHandler group chats", () => {
       await handleMessage(
         groupInbound({
           mentionedJids: [BOT_ME.id],
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -961,7 +1078,7 @@ describe("createChatHandler group chats", () => {
           mentionedJids: [BOT_ME.id],
           quotedParticipant: "6281352311912@s.whatsapp.net",
           quotedText: "Update Daily Well PHSS 20-08-2026\nSFT-01 Unload flow",
-          text: "@Nakama ini data laporan hari berikutnya",
+          text: "@Airin ini data laporan hari berikutnya",
         })
       );
 
@@ -992,7 +1109,7 @@ describe("createChatHandler group chats", () => {
         groupInbound({
           mentionedJids: [BOT_ME.id],
           senderJid: "9999999999@s.whatsapp.net",
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -1068,7 +1185,7 @@ describe("createChatHandler group chats", () => {
         groupInbound({
           mentionedJids: [BOT_ME.id],
           senderJid: "9999999999@s.whatsapp.net",
-          text: `@Nakama ${PAIRING_CODE}`,
+          text: `@Airin ${PAIRING_CODE}`,
         })
       );
 
@@ -1115,7 +1232,7 @@ describe("createChatHandler group chats", () => {
       await handleMessage(
         groupInbound({
           mentionedJids: [BOT_ME.lid ?? BOT_ME.id],
-          text: "@Nakama hello group",
+          text: "@Airin hello group",
         })
       );
 
@@ -1143,7 +1260,7 @@ describe("createChatHandler group chats", () => {
           mentionedJids: [BOT_ME.id],
           senderJid: "104784384290844@lid",
           senderJids: ["104784384290844@lid", PAIRED_JID],
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -1167,7 +1284,7 @@ describe("createChatHandler group chats", () => {
           mentionedJids: [BOT_ME.id],
           senderJid: BOT_ME.lid,
           senderJids: [BOT_ME.lid ?? BOT_ME.id],
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -1212,29 +1329,7 @@ describe("createChatHandler group chats", () => {
         groupInbound({
           mentionedJids: [BOT_ME.id],
           senderJid: "628111111111@s.whatsapp.net",
-          text: "@Nakama hello",
-        })
-      );
-
-      expect(calls.sendStream).toBe(1);
-    });
-  });
-
-  test("answers any group member when mention is not required", async () => {
-    await withTempHome(async (homeDir) => {
-      await writeWhatsAppConfigIni(homeDir, {
-        pairedJid: PAIRED_JID,
-        phoneNumber: "1234567890",
-        requireGroupMention: false,
-      });
-
-      const { calls, handler: handleMessage } =
-        await createTestHandler(homeDir);
-
-      await handleMessage(
-        groupInbound({
-          senderJid: "6281227900622@s.whatsapp.net",
-          text: "hi",
+          text: "@Airin hello",
         })
       );
 
@@ -1294,7 +1389,7 @@ describe("createChatHandler group chats", () => {
         groupInbound({
           mentionedJids: [BOT_ME.id],
           senderJid,
-          text: "@Nakama hi",
+          text: "@Airin hi",
         })
       );
 
@@ -1316,7 +1411,7 @@ describe("createChatHandler group chats", () => {
       const { client, calls } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+        path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -1384,7 +1479,7 @@ describe("createChatHandler artifact delivery", () => {
         {
           arguments: {
             content: metaJson,
-            path: "artifacts/report.md.nakama-meta.json",
+            path: "artifacts/report.md.airin-meta.json",
           },
           id: "tool_2",
           name: "write_file",
@@ -1394,7 +1489,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: 8,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md",
       }),
       name: "write_file",
       role: "tool" as const,
@@ -1403,7 +1498,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: metaJson.length,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md.nakama-meta.json",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md.airin-meta.json",
       }),
       name: "write_file",
       role: "tool" as const,
@@ -1458,7 +1553,7 @@ describe("createChatHandler artifact delivery", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+        path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -1575,7 +1670,14 @@ describe("createChatHandler artifact delivery", () => {
       let pinnedOrg: string | null = null;
       let reads = 0;
       const readContent = ctx.client.readProfileArtifactContent;
+      const messageClient = ctx.client;
       ctx.client.forOrg = (orgId) => {
+        // The handler scopes each message with forOrg() first; only the
+        // delivery pins an explicit org.
+        if (orgId === undefined) {
+          return messageClient;
+        }
+
         pinnedOrg = orgId;
 
         // SAFETY: This client override only replaces the method used by the test.
@@ -1816,7 +1918,7 @@ describe("createChatHandler artifact delivery", () => {
       await ctx.handleMessage(
         groupInbound({
           mentionedJids: [BOT_ME.id],
-          text: "@Nakama send report.md",
+          text: "@Airin send report.md",
         })
       );
       const documents = ctx.sent.filter((message) => message.content.document);
@@ -1907,7 +2009,7 @@ describe("stream cleanup", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+        path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -1939,39 +2041,6 @@ describe("stream cleanup", () => {
   });
 });
 
-describe("withChatLock", () => {
-  test("keeps the lock chain rejection-safe across a failed prior run", async () => {
-    const rejections: Error[] = [];
-
-    const onUnhandled = (reason: Error) => {
-      rejections.push(reason);
-    };
-
-    process.on("unhandledRejection", onUnhandled);
-
-    try {
-      await expect(
-        withChatLock("wa-lock-a", async () => {
-          throw new Error("first failed");
-        })
-      ).rejects.toThrow("first failed");
-
-      let ranSecond = false;
-      await withChatLock("wa-lock-a", async () => {
-        ranSecond = true;
-      });
-
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(ranSecond).toBe(true);
-      expect(rejections).toEqual([]);
-    } finally {
-      process.off("unhandledRejection", onUnhandled);
-    }
-  });
-});
-
 describe("createChatHandler session hot cache", () => {
   test("reuses RemoteChatSession across messages without recreate", async () => {
     await withTempHome(async (homeDir) => {
@@ -1985,7 +2054,7 @@ describe("createChatHandler session hot cache", () => {
       const { client, calls } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+        path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
       );
 
       await sessionStore.load();

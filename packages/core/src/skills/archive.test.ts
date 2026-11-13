@@ -5,11 +5,7 @@ import path from "node:path";
 import { pathExists } from "../fs";
 import { archiveSkillDirectory } from "./archive";
 import { discoverSkills } from "./discover";
-import {
-  classifySkillFreshness,
-  SKILL_ARCHIVE_AFTER_MS,
-  SKILL_STALE_AFTER_MS,
-} from "./freshness";
+import { classifySkillFreshness } from "./freshness";
 import { SKILL_ARCHIVE_DIR_NAME } from "./paths";
 
 const ORG_ID = "org_test";
@@ -20,38 +16,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe("classifySkillFreshness", () => {
   const now = new Date("2026-08-15T12:00:00.000Z");
-
-  test("uses lastUsedAt when present", () => {
-    expect(
-      classifySkillFreshness({
-        createdAt: "2025-01-01T00:00:00.000Z",
-        lastUsedAt: new Date(now.getTime() - 10 * DAY_MS).toISOString(),
-        now,
-      })
-    ).toBe("active");
-  });
-
-  test("falls back to createdAt when never matched", () => {
-    expect(
-      classifySkillFreshness({
-        createdAt: new Date(now.getTime() - 10 * DAY_MS).toISOString(),
-        lastUsedAt: null,
-        now,
-      })
-    ).toBe("active");
-  });
-
-  test("marks unused at the 30-day threshold as stale", () => {
-    expect(
-      classifySkillFreshness({
-        createdAt: "2025-01-01T00:00:00.000Z",
-        lastUsedAt: new Date(
-          now.getTime() - SKILL_STALE_AFTER_MS
-        ).toISOString(),
-        now,
-      })
-    ).toBe("stale");
-  });
 
   test("uses organization stale and archive day overrides", () => {
     const staleAfterDays = 7;
@@ -77,35 +41,13 @@ describe("classifySkillFreshness", () => {
       })
     ).toBe("archive_due");
   });
-
-  test("marks unused at the 90-day threshold as archive_due", () => {
-    expect(
-      classifySkillFreshness({
-        createdAt: "2025-01-01T00:00:00.000Z",
-        lastUsedAt: new Date(
-          now.getTime() - SKILL_ARCHIVE_AFTER_MS
-        ).toISOString(),
-        now,
-      })
-    ).toBe("archive_due");
-  });
-
-  test("never-matched skills become archive_due from createdAt age", () => {
-    expect(
-      classifySkillFreshness({
-        createdAt: new Date(now.getTime() - 100 * DAY_MS).toISOString(),
-        lastUsedAt: null,
-        now,
-      })
-    ).toBe("archive_due");
-  });
 });
 
 describe("archiveSkillDirectory", () => {
   let configDir: string;
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (configDir) {
       await rm(configDir, { force: true, recursive: true });
@@ -117,9 +59,8 @@ describe("archiveSkillDirectory", () => {
     body = "Keep this."
   ): Promise<string> {
     configDir =
-      configDir ??
-      (await mkdtemp(path.join(tmpdir(), "nakama-skill-archive-")));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+      configDir ?? (await mkdtemp(path.join(tmpdir(), "airin-skill-archive-")));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const directory = path.join(
       configDir,
@@ -220,8 +161,8 @@ describe("archiveSkillDirectory", () => {
   });
 
   test("refuses a skill that is already under .archive", async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-skill-archive-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-skill-archive-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const archived = path.join(
       configDir,
@@ -256,7 +197,7 @@ describe("discoverSkills archive skip", () => {
   let configDir: string;
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (configDir) {
       await rm(configDir, { force: true, recursive: true });
@@ -265,9 +206,9 @@ describe("discoverSkills archive skip", () => {
 
   test("does not return skills that live under skills/.archive", async () => {
     configDir = await mkdtemp(
-      path.join(tmpdir(), "nakama-skill-discover-archive-")
+      path.join(tmpdir(), "airin-skill-discover-archive-")
     );
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const liveDir = path.join(
       configDir,

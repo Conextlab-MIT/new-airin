@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { NakamaClient } from "./index";
+import { AirinClient } from "./index";
 
 function captureClient() {
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {

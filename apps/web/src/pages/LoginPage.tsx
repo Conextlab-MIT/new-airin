@@ -1,11 +1,11 @@
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import {
   DEMO_LOGIN_EMAIL,
   DEMO_LOGIN_HOST,
   DEMO_LOGIN_PASSWORD,
-} from "@nakama/core/demo-login";
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
+} from "@airin/core/demo-login";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
 import { ArrowLeft02Icon } from "hugeicons-react";
 import { useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
@@ -16,7 +16,7 @@ import { useTheme } from "@/context/use-theme";
 import { client } from "@/lib/client";
 import { SETUP_PATH } from "@/lib/navigation";
 import { getPasskey } from "@/lib/passkey";
-import { ditherLogoSrc } from "@/lib/theme";
+import { markLogoSrc } from "@/lib/theme";
 
 function isDemoLoginHost(
   hostname: string = typeof window === "undefined"
@@ -125,19 +125,19 @@ function LoginHeader({
   demoLogin: boolean;
   mfaRequired: boolean;
   passkeyRequired: boolean;
-  resolvedTheme: Parameters<typeof ditherLogoSrc>[0];
+  resolvedTheme: Parameters<typeof markLogoSrc>[0];
 }) {
   return (
     <div className="flex flex-col items-center text-center">
       <img
-        alt="Nakama"
+        alt="Airin"
         className="mb-4 size-14 rounded-xl"
-        src={ditherLogoSrc(resolvedTheme)}
+        src={markLogoSrc(resolvedTheme)}
       />
       <h1 className="font-semibold text-xl tracking-tight">
         {mfaRequired || passkeyRequired
           ? "Verify your identity"
-          : "Sign in to Nakama"}
+          : "Sign in to Airin"}
       </h1>
       {mfaRequired || passkeyRequired || demoLogin ? null : (
         <p className="text-muted-foreground text-sm">
@@ -380,7 +380,7 @@ export function LoginPage() {
       });
 
       if (response.mfaRequired && !response.mfaEnrolled) {
-        navigate("/settings?mfa=required", { replace: true });
+        navigate("/settings/preferences?mfa=required", { replace: true });
       } else {
         navigate(resolvePostAuthPath(from), { replace: true });
       }
@@ -423,7 +423,7 @@ export function LoginPage() {
       });
 
       if (response.mfaRequired && !response.mfaEnrolled) {
-        navigate("/settings?mfa=required", { replace: true });
+        navigate("/settings/preferences?mfa=required", { replace: true });
       } else {
         navigate(resolvePostAuthPath(from), { replace: true });
       }
@@ -431,7 +431,7 @@ export function LoginPage() {
       const message = err instanceof Error ? err.message : "Login failed";
 
       if (
-        err instanceof NakamaApiError &&
+        err instanceof AirinApiError &&
         err.message === "Passkey verification required."
       ) {
         setPasskeyTotpEnabled(err.totpEnabled === true);
@@ -442,7 +442,7 @@ export function LoginPage() {
       }
 
       if (
-        err instanceof NakamaApiError &&
+        err instanceof AirinApiError &&
         err.message === "MFA verification required."
       ) {
         setMfaRequired(true);

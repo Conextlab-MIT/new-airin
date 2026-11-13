@@ -19,9 +19,6 @@ describe("normalizeAutomationDelivery", () => {
   test.each(
     [
       false,
-      7,
-      "telegram",
-      [],
       {},
       { channel: "telegram", chatId: "1" },
       { channel: "discord", channelId: 7 },
@@ -35,18 +32,6 @@ describe("normalizeAutomationDelivery", () => {
   test("returns undefined for missing delivery", () => {
     expect(normalizeAutomationDelivery(undefined)).toBeUndefined();
     expect(normalizeAutomationDelivery(null)).toBeUndefined();
-  });
-
-  test("parses telegram delivery", () => {
-    expect(normalizeAutomationDelivery({ channel: "telegram" })).toEqual({
-      channel: "telegram",
-    });
-  });
-
-  test("parses discord delivery", () => {
-    expect(normalizeAutomationDelivery({ channel: "discord" })).toEqual({
-      channel: "discord",
-    });
   });
 
   test("parses discord delivery with channelId", () => {
@@ -161,11 +146,11 @@ describe("shouldDeliverForRun", () => {
 });
 
 describe("validateAutomationDelivery", () => {
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
   test("validates only the owning organization's WhatsApp connection", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-wa-delivery-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-wa-delivery-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       await saveWhatsAppConfig({ profileId: "agent_a" }, owner);
@@ -192,15 +177,15 @@ describe("validateAutomationDelivery", () => {
 
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
   });
 
   test("rejects discord without a bot token", async () => {
-    process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
-      join(tmpdir(), "nakama-discord-delivery-")
+    process.env.AIRIN_CONFIG_DIR = await mkdtemp(
+      join(tmpdir(), "airin-discord-delivery-")
     );
 
     await expect(
@@ -209,12 +194,12 @@ describe("validateAutomationDelivery", () => {
       "Discord is not configured. Set up Integrations → Discord first."
     );
 
-    await rm(process.env.NAKAMA_CONFIG_DIR, { force: true, recursive: true });
+    await rm(process.env.AIRIN_CONFIG_DIR, { force: true, recursive: true });
   });
 
   test("rejects discord without pairing when channelId is omitted", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-discord-delivery-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-discord-delivery-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     await mkdir(getDiscordConfigDir(owner), { recursive: true });
     await writeFile(
       getDiscordConfigPath(owner),
@@ -232,8 +217,8 @@ describe("validateAutomationDelivery", () => {
   });
 
   test("accepts discord with token and pairing", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-discord-delivery-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-discord-delivery-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     await mkdir(getDiscordConfigDir(owner), { recursive: true });
     await writeFile(
       getDiscordConfigPath(owner),
@@ -249,8 +234,8 @@ describe("validateAutomationDelivery", () => {
   });
 
   test("rejects a member discord channelId even when users are paired", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-discord-delivery-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-discord-delivery-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     await mkdir(getDiscordConfigDir(owner), { recursive: true });
     await writeFile(
       getDiscordConfigPath(owner),

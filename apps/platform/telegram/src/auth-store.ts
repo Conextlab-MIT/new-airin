@@ -1,13 +1,13 @@
 import type {
   TelegramConfigFile,
   TelegramConfigScope,
-} from "@nakama/core/telegram-config";
+} from "@airin/core/telegram-config";
 import {
   isTelegramUserAuthorized,
   loadTelegramConfigFile,
   recordTelegramAccessRequest,
   verifyAndPairTelegramUser,
-} from "@nakama/core/telegram-config";
+} from "@airin/core/telegram-config";
 
 export class TelegramAuthStore {
   private config: TelegramConfigFile | null = null;

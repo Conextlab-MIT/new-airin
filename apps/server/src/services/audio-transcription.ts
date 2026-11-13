@@ -1,4 +1,4 @@
-import { NakamaApiError, type UserConfig } from "@nakama/core";
+import { AirinApiError, type UserConfig } from "@airin/core";
 import { modelSupportsTranscription } from "../providers/models";
 import {
   type ResolvedProfileProviderSelection,
@@ -6,7 +6,7 @@ import {
 } from "./provider-instance-helpers";
 
 export const TRANSCRIPTION_MODEL_REQUIRED_MESSAGE =
-  "Configure an audio transcription model in Settings before sending voice messages.";
+  "Configure an audio transcription model in Settings → AI Providers (/settings/providers#transcription) before sending voice messages.";
 
 export function resolveTranscriptionProviderSelection(
   userConfig: UserConfig | null | undefined
@@ -16,9 +16,9 @@ export function resolveTranscriptionProviderSelection(
     userConfig?.transcriptionModel,
     {
       invalid:
-        "Configured audio transcription model is invalid. Update it in Settings.",
+        "Configured audio transcription model is invalid. Update it in Settings → AI Providers (/settings/providers#transcription).",
       missingProvider:
-        "Configured audio transcription provider is missing. Update it in Settings.",
+        "Configured audio transcription provider is missing. Update it in Settings → AI Providers (/settings/providers#transcription).",
     }
   );
 
@@ -28,16 +28,18 @@ export function resolveTranscriptionProviderSelection(
 
   // Self-hosted backends speaking the OpenAI-compatible transcriptions API
   // surface as `openai_compatible` with a baseUrl (e.g. local Whisper),
-  // alongside first-party `openai`. Other types are not supported.
+  // alongside first-party `openai` and OpenRouter (audio through chat).
+  // Other types are not supported.
   if (
     !(
       configured.instance.type === "openai" ||
+      configured.instance.type === "openrouter" ||
       (configured.instance.type === "openai_compatible" &&
         configured.instance.baseUrl?.trim())
     )
   ) {
-    throw new NakamaApiError(
-      "Audio transcription requires an OpenAI or OpenAI-compatible provider with a base URL. Update it in Settings.",
+    throw new AirinApiError(
+      "Audio transcription requires an OpenAI, OpenRouter or OpenAI-compatible provider with a base URL. Update it in Settings → AI Providers (/settings/providers#transcription).",
       400
     );
   }
@@ -45,7 +47,7 @@ export function resolveTranscriptionProviderSelection(
   if (
     !modelSupportsTranscription(configured.modelId, configured.instance.type)
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Configured audio transcription model "${configured.modelId}" is not supported.`,
       400
     );

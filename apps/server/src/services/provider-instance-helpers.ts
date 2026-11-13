@@ -1,21 +1,21 @@
 import {
+  AirinApiError,
   applyChatgptOAuthToInstance,
   applyXaiOAuthToInstance,
   createProviderInstanceId,
   defaultOllamaBaseUrl,
   defaultOllamaLabel,
-  findCustomModel,
   isChatgptProviderConnected,
+  isOllamaCloudBaseUrl,
   isOllamaCloudInstance,
   isValidBaseUrl,
-  NakamaApiError,
   normalizeBaseUrl,
   normalizeProviderInstanceLabel,
   type OllamaHostMode,
-  ollamaRequiresApiKey,
   type ProviderClient,
   type ProviderInstance,
   parseWireApi,
+  readChatgptOAuthFromInstance,
   readXaiOAuthFromInstance,
   resolveOllamaHostMode,
   type UserConfig,
@@ -24,23 +24,24 @@ import {
   validateOpenRouterRoutingSettings,
   validateProviderApiKeyFormat,
   validateProviderInstanceLabel,
-} from "@nakama/core";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
+} from "@airin/core";
+import { createChatLock } from "@airin/core/channel-chat-lock";
 import type {
   CreateProviderRequest,
   ProviderInstanceSummary,
   ProviderModelOption,
+  ProviderName,
   UpdateProviderRequest,
-} from "@nakama/core/contract";
-import { NETRA_AGENT_MODEL_ID } from "@nakama/core/discovery-providers";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core/contract";
+import {
+  isDiscoveryModelProvider,
+  resolveNetraModelId,
+} from "@airin/core/discovery-providers";
+import type { DatabaseAdapter } from "@airin/db";
 import {
   getDefaultModel,
   getModelById,
-  getModelsForProvider,
   getModelsForProviderInstance,
-  isCompatibleModelId,
-  isOpenRouterModelSlug,
   resolveModel,
   validateCerebrasCustomModels,
   validateCloudflareCustomModels,
@@ -49,10 +50,15 @@ import {
   validateOpenCodeGoCustomModels,
   validateOpenRouterCustomModels,
 } from "../providers";
+import { readChatgptPlanType } from "../providers/chatgpt/oauth";
 import {
   type CreateProviderForInstanceOptions,
   createProviderForInstance,
 } from "../providers/create";
+
+import { modelExistsOnInstance } from "./provider-instance-models";
+
+export { modelExistsOnInstance } from "./provider-instance-models";
 
 // shortcut: One process only; use a shared lock if servers share provider configuration.
 export const providerPublicationLock = createChatLock();
@@ -65,6 +71,10 @@ export function toProviderInstanceSummary(
 
   return {
     baseUrl: instance.baseUrl ?? null,
+    // Same token check as the automatic image pick.
+    chatgptPlanType: readChatgptPlanType(
+      chatgptConnected ? readChatgptOAuthFromInstance(instance) : null
+    ),
     createdAt: instance.createdAt,
     customModels: instance.customModels?.length
       ? instance.customModels
@@ -104,105 +114,33 @@ export function resolveInitialModel(
   return getDefaultModel(instance.type, instance.customModels);
 }
 
-export function modelExistsOnInstance(
-  instance: ProviderInstance,
-  modelId: string
-): boolean {
-  const trimmed = modelId.trim();
-
-  if (!trimmed) {
-    return false;
-  }
-
-  const catalog = getModelsForProviderInstance(instance);
-
-  if (catalog.some((model) => model.id === trimmed)) {
-    return true;
-  }
-
-  // Keep saved selections resolvable after retirement from the ChatGPT picker.
-  if (
-    instance.type === "chatgpt" &&
-    (trimmed === "gpt-5.4" || trimmed === "gpt-5.4-mini")
-  ) {
-    return true;
-  }
-
-  if (instance.type === "openrouter" && isOpenRouterModelSlug(trimmed)) {
-    return true;
-  }
-
-  if (instance.type === "cerebras") {
-    if (instance.customModels?.length) {
-      return findCustomModel(instance.customModels, trimmed) !== undefined;
-    }
-
-    return Boolean(getModelById(trimmed)?.provider === "cerebras");
-  }
-
-  if (instance.type === "fireworks") {
-    if (instance.customModels?.length) {
-      return findCustomModel(instance.customModels, trimmed) !== undefined;
-    }
-
-    return Boolean(getModelById(trimmed)?.provider === "fireworks");
-  }
-
-  if (instance.type === "ollama") {
-    if (instance.customModels?.length) {
-      return findCustomModel(instance.customModels, trimmed) !== undefined;
-    }
-
-    return false;
-  }
-
-  if (instance.type === "netra") {
-    return (
-      trimmed === NETRA_AGENT_MODEL_ID &&
-      isCompatibleModelId(trimmed, instance.customModels)
-    );
-  }
-
-  if (instance.type === "openai_compatible") {
-    return isCompatibleModelId(trimmed, instance.customModels);
-  }
-
-  if (instance.type === "opencode_go" && trimmed.startsWith("opencode-go/")) {
-    if (instance.customModels?.length) {
-      return findCustomModel(instance.customModels, trimmed) !== undefined;
-    }
-
-    return true;
-  }
-
-  if (
-    (instance.type === "openai" ||
-      instance.type === "chatgpt" ||
-      instance.type === "anthropic" ||
-      instance.type === "gemini" ||
-      instance.type === "deepseek" ||
-      instance.type === "doubao" ||
-      instance.type === "vercel_ai_gateway" ||
-      instance.type === "together" ||
-      instance.type === "xiaomi" ||
-      instance.type === "mistral" ||
-      instance.type === "qwen" ||
-      instance.type === "qwen_cn" ||
-      instance.type === "perplexity") &&
-    instance.customModels?.length
-  ) {
-    return findCustomModel(instance.customModels, trimmed) !== undefined;
-  }
-
-  return getModelsForProvider(instance.type).some(
-    (model) => model.id === trimmed
-  );
-}
-
 export function resolveDefaultModelForInstance(
   instance: ProviderInstance
 ): string {
   return getDefaultModel(instance.type, instance.customModels);
+}
+
+// Catalog providers that keep the user's own model list, on create and update.
+const CATALOG_LIST_TYPES: ReadonlySet<string> = new Set([
+  "openai",
+  "chatgpt",
+  "xai_oauth",
+  "anthropic",
+  "gemini",
+  "deepseek",
+  "doubao",
+  "together",
+  "xiaomi",
+  "meta",
+  "vercel_ai_gateway",
+  "mistral",
+  "qwen",
+  "qwen_cn",
+  "perplexity",
+]);
+
+function keepsUserModelList(type: ProviderName): boolean {
+  return isDiscoveryModelProvider(type) || CATALOG_LIST_TYPES.has(type);
 }
 
 export function buildProviderInstanceFromCreateRequest(
@@ -218,24 +156,14 @@ export function buildProviderInstanceFromCreateRequest(
   const type = request.type;
 
   if (!type) {
-    throw new NakamaApiError("Provider type is required.", 400);
+    throw new AirinApiError("Provider type is required.", 400);
   }
 
   const apiKey = request.apiKey?.trim() ?? "";
 
-  if (
-    !apiKey &&
-    type !== "openai_compatible" &&
-    type !== "ollama" &&
-    type !== "chatgpt" &&
-    type !== "xai_oauth"
-  ) {
-    throw new NakamaApiError("API key is required.", 400);
-  }
-
   if (type === "xai_oauth") {
     if (!request.xaiOAuth) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Sign in with Grok before saving this provider.",
         400
       );
@@ -266,7 +194,7 @@ export function buildProviderInstanceFromCreateRequest(
 
   if (type === "chatgpt") {
     if (!request.chatgptOAuth) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Sign in with ChatGPT before saving this provider.",
         400
       );
@@ -293,17 +221,6 @@ export function buildProviderInstanceFromCreateRequest(
 
   if (apiKey) {
     validateProviderApiKeyFormat(apiKey, type);
-  }
-
-  if (type === "ollama") {
-    const hostMode = resolveOllamaHostMode({
-      baseUrl: request.baseUrl,
-      hostMode: request.hostMode,
-    });
-
-    if (ollamaRequiresApiKey(hostMode) && !apiKey) {
-      throw new NakamaApiError("API key is required for Ollama Cloud.", 400);
-    }
   }
 
   const fields = buildProviderFieldsFromRequest({ ...request, apiKey, type });
@@ -407,31 +324,8 @@ export function applyProviderInstanceUpdate(
       next.customModels = validateCloudflareCustomModels(request.customModels);
     } else if (instance.type === "opencode_go") {
       next.customModels = validateOpenCodeGoCustomModels(request.customModels);
-    } else if (
-      instance.type === "openai" ||
-      instance.type === "chatgpt" ||
-      instance.type === "xai_oauth" ||
-      instance.type === "anthropic" ||
-      instance.type === "gemini" ||
-      instance.type === "deepseek" ||
-      instance.type === "doubao" ||
-      instance.type === "together" ||
-      instance.type === "xiaomi" ||
-      instance.type === "vercel_ai_gateway" ||
-      instance.type === "mistral" ||
-      instance.type === "qwen" ||
-      instance.type === "qwen_cn" ||
-      instance.type === "perplexity"
-    ) {
+    } else if (keepsUserModelList(instance.type)) {
       next.customModels = validateCustomModels(request.customModels);
-    }
-  }
-
-  if (next.type === "ollama") {
-    const hostMode = resolveOllamaHostMode(next);
-
-    if (ollamaRequiresApiKey(hostMode) && !next.apiKey.trim()) {
-      throw new Error("API key is required for Ollama Cloud.");
     }
   }
 
@@ -456,7 +350,7 @@ function buildProviderFieldsFromRequest(
   if (type === "ollama") {
     const resolvedHostMode: OllamaHostMode =
       request.hostMode ??
-      (request.baseUrl?.includes("ollama.com") ? "cloud" : "local");
+      (isOllamaCloudBaseUrl(request.baseUrl) ? "cloud" : "local");
 
     const baseUrl = normalizeBaseUrl(
       request.baseUrl?.trim() || defaultOllamaBaseUrl(resolvedHostMode)
@@ -599,10 +493,23 @@ function buildProviderFieldsFromRequest(
     return { customModels };
   }
 
+  const pickedModel = request.model?.trim();
+
+  // The Add form sends only the picked model for discovery providers.
+  const customModels = request.customModels?.length
+    ? type === "cloudflare"
+      ? validateCloudflareCustomModels(request.customModels)
+      : keepsUserModelList(type)
+        ? validateCustomModels(request.customModels)
+        : undefined
+    : pickedModel && isDiscoveryModelProvider(type)
+      ? validateCustomModels([{ default: true, id: pickedModel }])
+      : undefined;
+
   const rawBaseUrl = request.baseUrl?.trim();
 
   if (!rawBaseUrl) {
-    return {};
+    return customModels ? { customModels } : {};
   }
 
   const baseUrl = normalizeBaseUrl(rawBaseUrl);
@@ -611,7 +518,7 @@ function buildProviderFieldsFromRequest(
     throw new Error("A valid http(s) base URL is required.");
   }
 
-  return { baseUrl };
+  return customModels ? { baseUrl, customModels } : { baseUrl };
 }
 
 export function mergeModelsForConfig(
@@ -677,7 +584,7 @@ export function resolveConfiguredModelInstance(
   const decoded = decodeStoredModelSelection(trimmed);
 
   if (!decoded || decoded.providerId === "__unknown__") {
-    throw new NakamaApiError(errors.invalid, 400);
+    throw new AirinApiError(errors.invalid, 400);
   }
 
   const instance = userConfig?.providers.find(
@@ -685,10 +592,16 @@ export function resolveConfiguredModelInstance(
   );
 
   if (!instance) {
-    throw new NakamaApiError(errors.missingProvider, 400);
+    throw new AirinApiError(errors.missingProvider, 400);
   }
 
-  return { instance, modelId: decoded.modelId.trim() };
+  return {
+    instance,
+    modelId:
+      instance.type === "netra"
+        ? resolveNetraModelId(decoded.modelId.trim())
+        : decoded.modelId.trim(),
+  };
 }
 
 export function resolveProfileProviderSelection(options: {

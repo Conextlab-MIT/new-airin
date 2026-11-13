@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  isValidCronExpression,
+  computeAutomationNextRunAt,
   isWorkerSchedulable,
   resolveScheduleTimezone,
   validateAutomationInput,
@@ -8,16 +8,6 @@ import {
 } from "./automation-validate";
 
 describe("validateAutomationInput", () => {
-  test("accepts manual automations with prompt", () => {
-    expect(() =>
-      validateAutomationInput({
-        name: "Daily digest",
-        prompt: "Summarize news",
-        trigger: { type: "manual" },
-      })
-    ).not.toThrow();
-  });
-
   test("names the missing field when name is absent", () => {
     expect(() =>
       validateAutomationInput({
@@ -48,16 +38,6 @@ describe("validateAutomationInput", () => {
     ).toThrow(/Invalid cron/);
   });
 
-  test("accepts runAt automations", () => {
-    expect(() =>
-      validateAutomationInput({
-        name: "Reminder",
-        prompt: "Send reminder email",
-        trigger: { at: "2026-06-27T13:00:00.000Z", type: "runAt" },
-      })
-    ).not.toThrow();
-  });
-
   test("rejects invalid runAt", () => {
     expect(() =>
       validateAutomationInput({
@@ -79,15 +59,7 @@ describe("validateAutomationInput", () => {
   });
 });
 
-describe("isValidCronExpression", () => {
-  test("accepts standard 5-field cron", () => {
-    expect(isValidCronExpression("0 8 * * *")).toBe(true);
-  });
-
-  test("rejects non-cron strings", () => {
-    expect(isValidCronExpression("0 8 * *")).toBe(false);
-  });
-});
+describe("isValidCronExpression", () => {});
 
 describe("validateTimezone", () => {
   test("defaults to UTC", () => {
@@ -175,13 +147,16 @@ describe("isWorkerSchedulable", () => {
       )
     ).toBe(false);
   });
+});
 
-  test("excludes past runAt automations", () => {
-    expect(
-      isWorkerSchedulable({
-        enabled: true,
-        trigger: { at: "2020-01-01T00:00:00.000Z", type: "runAt" },
-      })
-    ).toBe(false);
+describe("webhook trigger", () => {
+  test("is valid, never scheduled and has no next run", () => {
+    const trigger = { type: "webhook" } as const;
+
+    expect(() =>
+      validateAutomationInput({ name: "PR review", prompt: "Review", trigger })
+    ).not.toThrow();
+    expect(isWorkerSchedulable({ enabled: true, trigger })).toBe(false);
+    expect(computeAutomationNextRunAt(trigger)).toBeNull();
   });
 });

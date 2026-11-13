@@ -13,7 +13,7 @@ import { getMemoryArchiveFilePath } from "./memory-paths";
 
 const PROFILE = { orgId: "org_test", profileId: "profile_test" };
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 describe("memory archive", () => {
   let tempDir = "";
@@ -25,14 +25,14 @@ describe("memory archive", () => {
     }
 
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
   });
 
   async function setupProfileMemory(content: string): Promise<string> {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "nakama-memory-archive-"));
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "airin-memory-archive-"));
 
     const soulDir = path.join(
       tempDir,
@@ -44,7 +44,7 @@ describe("memory archive", () => {
 
     await mkdir(soulDir, { recursive: true });
     await writeFile(path.join(soulDir, "MEMORY.md"), content, "utf8");
-    process.env.NAKAMA_CONFIG_DIR = tempDir;
+    process.env.AIRIN_CONFIG_DIR = tempDir;
 
     return soulDir;
   }
@@ -123,6 +123,22 @@ describe("memory archive", () => {
     expect(rebuilt).toContain("## 2026-06-29");
     expect(rebuilt).toContain("- Still here.");
     expect(rebuilt).not.toContain("2026-06-28");
+  });
+
+  test("formatArchiveAppend keeps the reason inside its comment", () => {
+    const append = formatArchiveAppend(
+      new Date("2026-06-29T12:00:00.000Z"),
+      [{ bullets: ["Old preference."], date: "2026-06-15" }],
+      "ran migrate --force; a ---->> b --!> c"
+    );
+
+    const reasonLine = append
+      .split("\n")
+      .find((line) => line.startsWith("<!-- reason:"));
+
+    expect(reasonLine).toBe(
+      "<!-- reason: ran migrate --force; a ----&gt;> b --!&gt; c -->"
+    );
   });
 
   test("formatArchiveAppend preserves original section dates", () => {

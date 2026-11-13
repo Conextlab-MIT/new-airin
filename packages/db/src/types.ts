@@ -8,10 +8,13 @@ import type {
   OrgPluginSummary,
   OrgRole,
   PluginReleaseSummary,
+  RegressionCaseRun,
+  RegressionCaseSourceType,
+  RegressionCaseVerdict,
   ThinkingEffort,
-} from "@nakama/core";
+} from "@airin/core";
 
-export type { OrgRole } from "@nakama/core";
+export type { OrgRole } from "@airin/core";
 
 export type ChannelType = "telegram" | "whatsapp";
 
@@ -36,8 +39,11 @@ export interface StoredAutomationRunRecord {
   deliveryStatus?: string | null;
   error: string | null;
   id: string;
+  /** Webhook request body, replayed on resume. Never returned in run lists. */
+  input?: string | null;
   output: string | null;
   progress?: ChatMessage[];
+  source?: "webhook" | null;
   startedAt: string;
   status: AutomationRunStatus;
 }
@@ -105,6 +111,8 @@ export interface StoredProfileRecord {
   /** Defaults to enabled when absent for legacy in-memory records. */
   automationsEnabled?: boolean;
   createdAt: string;
+  /** Whether a super agent may create agent groups. Defaults to enabled. */
+  groupsEnabled?: boolean;
   id: string;
   isDefault?: boolean;
   isSuper: boolean;
@@ -127,6 +135,29 @@ export interface StoredProfileRecord {
   updatedAt: string;
 }
 
+export interface StoredRegressionCaseRecord {
+  createdAt: string;
+  createdByUserId: string | null;
+  expectedResult: string;
+  id: string;
+  input: string;
+  orgId: string;
+  /**
+   * Set when the source chat was private. Only this user and platform admins
+   * may read the copied input.
+   */
+  privateToUserId: string | null;
+  profileId: string;
+  /** Set only for `automation_run` sources, which need it to reach the run. */
+  sourceAutomationId: string | null;
+  sourceId: string;
+  sourceType: RegressionCaseSourceType;
+}
+
+export interface StoredRegressionCaseRunRecord extends RegressionCaseRun {
+  orgId: string;
+}
+
 export interface StoredToolRecord {
   createdAt: string;
   description: string;
@@ -143,13 +174,21 @@ export interface StoredToolRecord {
 export interface StoredSessionRecord {
   agentQuestionnaire: AgentQuestionnaire | null;
   agentTodos: AgentTodo[];
+  branchMessageIndex?: number | null;
   channel: string;
+  /** Set while the chat is hidden from Recents; the next message clears it. */
+  closedAt?: string | null;
+  /** Local CLI launch folder for bash and coding agents. Never sent to clients. */
+  codingWorkspaceRoot?: string | null;
   createdAt: string;
   id: string;
   model: string | null;
   orgId?: string | null;
+  parentSessionId?: string | null;
   pinned?: boolean;
   profileId: string;
+  /** Null uses the install thinking effort. */
+  thinkingEffort?: ThinkingEffort | null;
   title: string | null;
   userId?: string | null;
 }
@@ -185,16 +224,19 @@ export interface StoredAttachmentRecord {
 }
 
 export interface StoredSessionSummaryRecord {
+  branchMessageIndex: number | null;
   channel: string;
   createdAt: string;
   id: string;
   messageCount: number;
   orgId?: string | null;
+  parentSessionId: string | null;
   pinned: boolean;
   /** 1-based place in the list the query returned the row from. */
   position: number;
   preview: string | null;
   profileId: string;
+  sortPosition: number | null;
   title: string | null;
   updatedAt: string;
 }
@@ -253,15 +295,13 @@ export interface StoredWorkspaceSettingsRecord {
   automationWorkerPollIntervalMs: number;
   codingAgentHarnesses: StoredCodingAgentHarnessRecord[];
   /**
-   * When true (default), coding CLIs get Nakama provider credentials at spawn.
+   * When true (default), coding CLIs get Airin provider credentials at spawn.
    * When false, harness-native vendor login on the host is used instead.
    */
   codingAgentProviderPassthrough: boolean;
   id: string;
   imageModel: string | null;
   selectedCodingAgentHarness: string | null;
-  /** null = inherit the NAKAMA_OMNI env var; true/false = set explicitly here. */
-  tokenOptimizerEnabled?: boolean | null;
   transcriptionModel: string | null;
   updatedAt: string;
   visionModel: string | null;
@@ -365,45 +405,20 @@ export interface LlmUsageStatsDelta {
   requestCount: number;
 }
 
-/** Bytes one optimiser removed from one tool result before it was inserted. */
-export interface ToolOutputSavingsDelta {
-  bytesIn: number;
-  bytesOut: number;
-  optimizer: string;
-  tool: string;
-}
-
-/** One request's provider tokens, tagged with the arm it belongs to. */
+/** One request's provider tokens. */
 export interface LlmTurnUsageDelta {
   estimated: boolean;
   inputTokens: number;
-  optimized: boolean;
   outputTokens: number;
 }
 
 export interface StoredLlmTurnUsageRecord {
-  arm: string;
   bucket: string;
   estimatedTurns: number;
   inputTokens: number;
   orgId: string;
   outputTokens: number;
   turns: number;
-}
-
-export interface StoredToolOutputSavingsRecord {
-  /** Day the bytes were removed, `YYYY-MM-DD`. Day resolution because the panel
-   * plots days and an hour column would be 24x the rows for a chart nobody asked
-   * for at that grain. */
-  bucket: string;
-  bytesIn: number;
-  bytesOut: number;
-  calls: number;
-  optimizer: string;
-  orgId: string;
-  tool: string;
-  trackedSince: string;
-  updatedAt: string;
 }
 
 export type McpServerStatus =
@@ -418,6 +433,8 @@ export interface CachedMcpTool {
   description: string;
   inputSchema?: unknown;
   name: string;
+  /** The server's own claim that the tool changes nothing. */
+  readOnlyHint?: true;
 }
 
 export interface StoredSkillRecord {
@@ -658,7 +675,7 @@ export type OrgMemoryProposalStatus = "pending" | "approved" | "rejected";
 
 export type ProfileChangeSource =
   | "dashboard"
-  | "super_bot"
+  | "super_airin"
   | "skill_manage"
   | "pack_import";
 
@@ -768,6 +785,23 @@ export interface StoredSkillSuggestion {
   warnings: string[] | null;
 }
 
+/** Owner of a file under a profile's artifacts/ folder. */
+export interface StoredArtifactRecord {
+  channel: string | null;
+  createdAt: string;
+  /** Relative to the profile's artifacts/ folder, with `/` separators. */
+  filename: string;
+  orgId: string;
+  profileId: string;
+  sessionId: string | null;
+  userId: string | null;
+}
+
+export interface StoredArtifactOwnerRecord extends StoredArtifactRecord {
+  /** The owner's name, or email when the name is empty. Null for channel users. */
+  userName: string | null;
+}
+
 export interface StoredArtifactShareRecord {
   createdAt: string;
   createdByUserId: string;
@@ -792,6 +826,8 @@ export interface StoredBrowserSessionRecord {
   lastUsedAt: string | null;
   revokedAt: string | null;
   sessionTokenHash: string;
+  /** Capped User-Agent header, so the owner can tell sessions apart. */
+  userAgent?: string | null;
   userId: string;
 }
 
@@ -805,6 +841,21 @@ export interface StoredAuditEvent {
   requestId: string | null;
   resourceId: string | null;
   resourceType: string;
+}
+
+export interface StoredAutomationWebhookSecret {
+  automationId: string;
+  createdAt: string;
+  createdByUserId: string;
+  encryptedValue: string;
+}
+
+export interface StoredManagedSecret {
+  encryptedValue: string | null;
+  name: string;
+  scope: string;
+  source: "environment" | "settings";
+  version: number;
 }
 
 export interface DatabaseAdapter {
@@ -843,13 +894,23 @@ export interface DatabaseAdapter {
   /** Verify the live connection can read the migrated schema. */
   checkHealth(): Promise<void>;
   /**
+   * Atomically claims a delivery ID for an automation webhook. Prunes rows
+   * older than the replay window, then returns true on first claim and false
+   * on replay within that window.
+   */
+  claimAutomationWebhookDelivery(
+    automationId: string,
+    deliveryId: string,
+    createdAt: string
+  ): Promise<boolean>;
+  /**
    * Automation runs left `running` by a dead process: those already resumed
    * `maxResumes` times are failed, the rest have their resume count raised and
    * are returned for the caller to continue.
    */
   claimInterruptedAutomationRuns(
     maxResumes: number
-  ): Promise<Array<{ automationId: string; id: string }>>;
+  ): Promise<Array<{ automationId: string; id: string; input?: string }>>;
   /**
    * Atomically claims an idempotency key for a notification webhook delivery.
    * Prunes rows older than the replay window, then returns true on first claim
@@ -887,11 +948,12 @@ export interface DatabaseAdapter {
     type: PasskeyChallengeType,
     consumedAt: string
   ): Promise<boolean>;
+  /** Returns the id of the user whose password changed, or null. */
   consumePasswordResetToken(
     tokenHash: string,
     passwordHash: string,
     consumedAt: string
-  ): Promise<boolean>;
+  ): Promise<string | null>;
   /** Users excluding the auto-created CLI bearer-auth identity. */
   countHumanUsers(): Promise<number>;
   countOrgMemoryProposals(
@@ -929,6 +991,18 @@ export interface DatabaseAdapter {
 
   /** Append-only insert. Adapters must not expose update/delete for this table. */
   createProfileChangeEvent(record: StoredProfileChangeEvent): Promise<void>;
+
+  /**
+   * Inserts a profile only when its id is still free. Resolves to `false`,
+   * leaving the existing row untouched, when the id is already taken, so
+   * allocation and insertion stay atomic for concurrent callers.
+   */
+  createProfileIfAbsent(record: StoredProfileRecord): Promise<boolean>;
+
+  createRegressionCase(record: StoredRegressionCaseRecord): Promise<void>;
+
+  createRegressionCaseRun(record: StoredRegressionCaseRunRecord): Promise<void>;
+
   createSharedAgentInstance(
     teamOrgId: string,
     publicationId: string,
@@ -945,10 +1019,22 @@ export interface DatabaseAdapter {
     record: Omit<StoredSkillVersion, "version">
   ): Promise<StoredSkillVersion>;
   createUser(record: StoredUserRecord): Promise<void>;
+  deleteArtifactRecord(
+    orgId: string,
+    profileId: string,
+    filename: string
+  ): Promise<void>;
   deleteAttachment(id: string): Promise<boolean>;
   deleteAutomation(id: string): Promise<boolean>;
+  deleteAutomationWebhookSecret(automationId: string): Promise<void>;
+  /** Deletes the secrets this user made; with `orgId`, only on that org's automations. */
+  deleteAutomationWebhookSecretsForUser(
+    userId: string,
+    orgId?: string
+  ): Promise<void>;
   deleteComposioToolkit(id: string): Promise<boolean>;
   deleteComposioUserConnection(id: string): Promise<boolean>;
+  deleteManagedSecret(scope: string, name: string): Promise<void>;
   deleteMcpServer(id: string): Promise<boolean>;
   deleteMessagesForSession(sessionId: string): Promise<void>;
   deleteMfaBackupCodes(userId: string): Promise<void>;
@@ -964,13 +1050,28 @@ export interface DatabaseAdapter {
   deletePasskeys(userId: string): Promise<void>;
   deletePluginRelease(pluginId: string, version: string): Promise<boolean>;
   deleteProfile(id: string): Promise<boolean>;
+  deleteProfileAndPromoteDefault(
+    id: string,
+    orgId: string,
+    successorId?: string
+  ): Promise<boolean>;
+  /** Org-scoped delete: resolves to `false` when the profile belongs elsewhere. */
+  deleteProfileForOrg(id: string, orgId: string): Promise<boolean>;
   deleteSession(id: string): Promise<boolean>;
   deleteSkill(id: string): Promise<boolean>;
   deleteTool(id: string): Promise<boolean>;
   deleteWorkflow(id: string): Promise<boolean>;
   deleteWorkflowRun(workflowId: string, runId: string): Promise<boolean>;
-  disableUser(id: string, disabledAt: string): Promise<void>;
+  /**
+   * Resolves to `false` when the user is the last usable admin of a live org
+   * or the last usable platform admin.
+   */
+  disableUserUnlessLastAdmin(id: string, disabledAt: string): Promise<boolean>;
   enableUser(id: string): Promise<void>;
+  /**
+   * Resolves to `false`, with nothing written, when the user is missing or is
+   * the last usable admin of a live org or the last usable platform admin.
+   */
   eraseUser(input: {
     id: string;
     email: string;
@@ -994,6 +1095,11 @@ export interface DatabaseAdapter {
   getActiveAutomationRun(
     automationId: string
   ): Promise<StoredAutomationRunRecord | null>;
+  getArtifactRecord(
+    orgId: string,
+    profileId: string,
+    filename: string
+  ): Promise<StoredArtifactRecord | null>;
   getArtifactShareById(
     orgId: string,
     profileId: string,
@@ -1014,6 +1120,9 @@ export interface DatabaseAdapter {
     orgId: string,
     automationId: string
   ): Promise<string | null>;
+  getAutomationWebhookSecret(
+    automationId: string
+  ): Promise<StoredAutomationWebhookSecret | null>;
   getBrowserSessionBySessionTokenHash(
     sessionTokenHash: string
   ): Promise<StoredBrowserSessionRecord | null>;
@@ -1032,6 +1141,10 @@ export interface DatabaseAdapter {
   getDefaultProfileForOrg(orgId: string): Promise<StoredProfileRecord | null>;
 
   getLlmUsageStats(orgId: string): Promise<StoredLlmUsageStatsRecord | null>;
+  getManagedSecret(
+    scope: string,
+    name: string
+  ): Promise<StoredManagedSecret | null>;
   getMcpServer(id: string): Promise<StoredMcpServerRecord | null>;
   getMcpServerByName(name: string): Promise<StoredMcpServerRecord | null>;
   getNotificationDestination(
@@ -1109,6 +1222,16 @@ export interface DatabaseAdapter {
     id: string,
     orgId: string
   ): Promise<StoredProfileRecord | null>;
+  getRegressionCase(
+    orgId: string,
+    profileId: string,
+    caseId: string
+  ): Promise<StoredRegressionCaseRecord | null>;
+  getRegressionCaseRun(
+    orgId: string,
+    caseId: string,
+    runId: string
+  ): Promise<StoredRegressionCaseRunRecord | null>;
   getSession(id: string): Promise<StoredSessionRecord | null>;
   getSessionQuestionnaire(
     sessionId: string
@@ -1204,18 +1327,16 @@ export interface DatabaseAdapter {
     usedAt?: string;
     patchedAt?: string;
   }): Promise<void>;
-  incrementToolOutputSavings(
-    orgId: string,
-    delta: ToolOutputSavingsDelta,
-    trackedSince: string
-  ): Promise<void>;
-
   insertAttachment(record: StoredAttachmentRecord): Promise<void>;
   insertAutomationRun(record: StoredAutomationRunRecord): Promise<void>;
   insertAutomationRunStep(step: StoredAutomationRunStepRecord): Promise<void>;
   insertWorkflowRun(record: StoredWorkflowRunRecord): Promise<void>;
   insertWorkflowRunStep(record: StoredWorkflowRunStepRecord): Promise<void>;
 
+  listArtifactRecords(
+    orgId: string,
+    profileId: string
+  ): Promise<StoredArtifactOwnerRecord[]>;
   listArtifactSharesForProfile(
     orgId: string,
     profileId: string
@@ -1242,11 +1363,15 @@ export interface DatabaseAdapter {
 
   listAutomations(): Promise<StoredAutomationRecord[]>;
   listAutomationsForOrg(orgId: string): Promise<StoredAutomationRecord[]>;
+  listAutomationWebhookSecrets(): Promise<StoredAutomationWebhookSecret[]>;
   /** Live sessions for one user, newest first. Revoked and expired rows are left out. */
   listBrowserSessionsForUser(
     userId: string,
     now: string
   ): Promise<StoredBrowserSessionRecord[]>;
+
+  /** Sessions whose parent is this one: sub_agent chats and branches. */
+  listChildSessions(parentSessionId: string): Promise<StoredSessionRecord[]>;
 
   listComposioToolkitsForOrg(
     orgId: string
@@ -1274,6 +1399,7 @@ export interface DatabaseAdapter {
   listLlmUsageStatsByModel(
     orgId: string
   ): Promise<StoredLlmUsageModelStatsRecord[]>;
+  listManagedSecrets(): Promise<StoredManagedSecret[]>;
   listMcpServerProfileCounts(): Promise<Record<string, number>>;
 
   listMcpServers(): Promise<StoredMcpServerRecord[]>;
@@ -1298,6 +1424,11 @@ export interface DatabaseAdapter {
     orgId: string
   ): Promise<StoredOrgSharedResourceRecord[]>;
   listPasskeys(userId: string): Promise<StoredPasskeyRecord[]>;
+  /** Not accepted, not revoked and not expired at `now`, newest first. */
+  listPendingOrgInvites(
+    orgId: string,
+    now: string
+  ): Promise<StoredOrgInviteRecord[]>;
 
   listPlatformAdminUsers(): Promise<StoredUserRecord[]>;
 
@@ -1315,9 +1446,17 @@ export interface DatabaseAdapter {
   listProfiles(): Promise<StoredProfileRecord[]>;
   listProfilesForMcpServer(serverId: string): Promise<StoredProfileRecord[]>;
   listProfilesForOrg(orgId: string): Promise<StoredProfileRecord[]>;
+  /** Newest first. Org-scoped: another org's profile returns nothing. */
+  listRegressionCasesForProfile(
+    orgId: string,
+    profileId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<StoredRegressionCaseRecord[]>;
   /**
    * Newest first, pinned ahead. `after` is the last row of the previous page;
-   * `sessionId` narrows the list to that one session.
+   * `sessionId` narrows the list to that one session. `userId` keeps the
+   * sessions that user owns, plus every session on a `sharedChannels` channel
+   * or whose parent is on one.
    */
   listSessionSummaries(
     profileId: string,
@@ -1331,6 +1470,8 @@ export interface DatabaseAdapter {
       /** Keeps the sessions whose title or user/assistant text contains it. */
       query?: string;
       sessionId?: string;
+      sharedChannels?: readonly string[];
+      userId?: string;
     }
   ): Promise<StoredSessionSummaryRecord[]>;
 
@@ -1368,10 +1509,6 @@ export interface DatabaseAdapter {
     options?: { limit?: number }
   ): Promise<StoredSkillVersion[]>;
 
-  listToolOutputSavings(
-    orgId: string
-  ): Promise<StoredToolOutputSavingsRecord[]>;
-
   listTools(): Promise<StoredToolRecord[]>;
 
   listToolsForProfile(profileId: string): Promise<StoredToolRecord[]>;
@@ -1403,8 +1540,19 @@ export interface DatabaseAdapter {
   publishOrgSharedResource(
     record: StoredOrgSharedResourceRecord
   ): Promise<StoredOrgSharedResourceRecord>;
+  /** Replaces the automation's secret, so the old one stops at once. */
+  putAutomationWebhookSecret(
+    secret: StoredAutomationWebhookSecret
+  ): Promise<void>;
+  putManagedSecret(secret: Omit<StoredManagedSecret, "version">): Promise<void>;
+  /** Frees a claimed automation webhook delivery ID so a redelivery can run. */
+  releaseAutomationWebhookDelivery(
+    automationId: string,
+    deliveryId: string
+  ): Promise<void>;
   /** Gives back one hold taken by tryReserveMonthlyLlmQuota, at most once. */
   releaseMonthlyLlmQuota(orgId: string, reservationId: string): Promise<void>;
+
   renameFilePins(
     orgId: string,
     profileId: string,
@@ -1412,6 +1560,16 @@ export interface DatabaseAdapter {
     newPath: string
   ): Promise<void>;
   renameSessionTitle(sessionId: string, title: string): Promise<boolean>;
+  replaceManagedSecrets(
+    secrets: Array<
+      Pick<StoredManagedSecret, "scope" | "name" | "encryptedValue">
+    >,
+    webhookSecrets: Array<
+      Pick<StoredAutomationWebhookSecret, "automationId" | "encryptedValue"> & {
+        previousEncryptedValue: string;
+      }
+    >
+  ): Promise<void>;
   replaceMessagesForSession(
     sessionId: string,
     messages: StoredSessionMessageRecord[]
@@ -1448,6 +1606,12 @@ export interface DatabaseAdapter {
     sessionId: string | null,
     revokedAt: string
   ): Promise<number>;
+  /** Only a pending invite of this org; the org check is in the statement. */
+  revokeOrgInvite(
+    orgId: string,
+    id: string,
+    revokedAt: string
+  ): Promise<boolean>;
   setFilePinned(
     orgId: string,
     userId: string,
@@ -1460,6 +1624,14 @@ export interface DatabaseAdapter {
     pendingTotpSecretEnc: string,
     updatedAt: string
   ): Promise<void>;
+  /** Resolves to the marked run, or null when no such run is in the org. */
+  setRegressionCaseRunVerdict(
+    orgId: string,
+    caseId: string,
+    runId: string,
+    mark: { at: string; userId: string; verdict: RegressionCaseVerdict }
+  ): Promise<StoredRegressionCaseRunRecord | null>;
+  setSessionOrder(userId: string, sessionIds: string[]): Promise<void>;
   setUserContext(
     orgId: string,
     userId: string,
@@ -1500,7 +1672,12 @@ export interface DatabaseAdapter {
     id: string,
     activeOrgId: string | null
   ): Promise<void>;
-  updateBrowserSessionLastUsedAt(id: string, lastUsedAt: string): Promise<void>;
+  /** Also fills user_agent when the row has none, so sessions from before the column get a device label. */
+  updateBrowserSessionLastUsedAt(
+    id: string,
+    lastUsedAt: string,
+    userAgent?: string | null
+  ): Promise<void>;
   /** False when the change would leave the org without an admin. */
   updateOrgMemberRole(
     orgId: string,
@@ -1522,12 +1699,24 @@ export interface DatabaseAdapter {
     credentialId: string,
     counter: number
   ): Promise<void>;
+  updateSessionClosedAt(
+    sessionId: string,
+    closedAt: string | null
+  ): Promise<boolean>;
   updateSessionModel(sessionId: string, model: string | null): Promise<boolean>;
+  updateSessionParent(
+    sessionId: string,
+    parentSessionId: string | null
+  ): Promise<boolean>;
   updateSessionPinned(sessionId: string, pinned: boolean): Promise<boolean>;
   updateSessionQuestionnaire(
     sessionId: string,
     questionnaire: AgentQuestionnaire | null
   ): Promise<void>;
+  updateSessionThinkingEffort(
+    sessionId: string,
+    effort: ThinkingEffort | null
+  ): Promise<boolean>;
   updateSessionTitle(sessionId: string, title: string): Promise<boolean>;
   updateSessionTodos(sessionId: string, todos: AgentTodo[]): Promise<void>;
   updateSkillProposalStatus(
@@ -1561,6 +1750,8 @@ export interface DatabaseAdapter {
   ): Promise<void>;
   updateWorkflowRun(record: StoredWorkflowRunRecord): Promise<void>;
   updateWorkflowRunStep(record: StoredWorkflowRunStepRecord): Promise<void>;
+  /** A new file at a path whose old row survived (e.g. removed by a shell) replaces that row. */
+  upsertArtifactRecord(record: StoredArtifactRecord): Promise<void>;
   upsertAutomation(record: StoredAutomationRecord): Promise<void>;
   upsertAutomationRunReadThrough(
     userId: string,

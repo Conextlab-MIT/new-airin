@@ -70,10 +70,11 @@ describe("resolveTelegramWorkerStatus", () => {
 
 describe("createTelegramWorkerHeartbeat", () => {
   test("claims each identity separately", async () => {
-    await withTempHomedir("nakama-telegram-hb-", async () => {
+    await withTempHomedir("airin-telegram-hb-", async () => {
       const legacy = createTelegramWorkerHeartbeat(null);
       const orgA = createTelegramWorkerHeartbeat("org_a");
 
+      await legacy.acquire();
       await legacy.write({
         pid: process.pid,
         updatedAt: new Date().toISOString(),
@@ -81,6 +82,7 @@ describe("createTelegramWorkerHeartbeat", () => {
 
       expect(await legacy.isRunning()).toBe(true);
       expect(await orgA.isRunning()).toBe(false);
+      await legacy.clear();
     });
   });
 });

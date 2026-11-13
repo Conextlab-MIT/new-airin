@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { isToolHiddenEnvKey } from "@airin/core";
 
 let ensured = false;
 
@@ -26,7 +27,7 @@ function applyLoginShellPath(): void {
 }
 
 export function ensureProcessPath(): void {
-  if (ensured || process.env.NAKAMA_DISABLE_FIX_PATH === "1") {
+  if (ensured || process.env.AIRIN_DISABLE_FIX_PATH === "1") {
     return;
   }
 
@@ -85,13 +86,21 @@ function withBunInstallBin(current: string): string {
 export function getToolExecutionEnv(): NodeJS.ProcessEnv {
   ensureProcessPath();
 
+  const baseEnv = { ...process.env };
+
+  for (const key of Object.keys(baseEnv)) {
+    if (isToolHiddenEnvKey(key)) {
+      delete baseEnv[key];
+    }
+  }
+
   const home = homedir();
   const { binDir, globalDir } = getBunGlobalPaths(home);
   const pathKey = getPathKey();
 
-  if (process.env.NAKAMA_DISABLE_FIX_PATH === "1") {
+  if (process.env.AIRIN_DISABLE_FIX_PATH === "1") {
     return {
-      ...process.env,
+      ...baseEnv,
       BUN_INSTALL_BIN: process.env.BUN_INSTALL_BIN ?? binDir,
       BUN_INSTALL_GLOBAL_DIR: process.env.BUN_INSTALL_GLOBAL_DIR ?? globalDir,
       [pathKey]: withBunInstallBin(process.env[pathKey] ?? ""),
@@ -103,7 +112,7 @@ export function getToolExecutionEnv(): NodeJS.ProcessEnv {
   const prefix = extras.join(path.delimiter);
 
   return {
-    ...process.env,
+    ...baseEnv,
     BUN_INSTALL_BIN: process.env.BUN_INSTALL_BIN ?? binDir,
     BUN_INSTALL_GLOBAL_DIR: process.env.BUN_INSTALL_GLOBAL_DIR ?? globalDir,
     [pathKey]: prefix ? `${prefix}${path.delimiter}${current}` : current,

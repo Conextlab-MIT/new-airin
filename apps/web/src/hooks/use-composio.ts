@@ -1,8 +1,11 @@
-import type {
-  UpdateComposioSettingsRequest,
-  UpdateProfileComposioToolkitsRequest,
-} from "@nakama/core/contract";
-import { toast } from "@nakama/ui/toast";
+import { AirinApiError } from "@airin/core/api-error";
+import {
+  COMPOSIO_CUSTOM_AUTH_REQUIRED,
+  type ListComposioToolkitsResponse,
+  type UpdateComposioSettingsRequest,
+  type UpdateProfileComposioToolkitsRequest,
+} from "@airin/core/contract";
+import { toast } from "@airin/ui/toast";
 import {
   queryOptions,
   useMutation,
@@ -17,7 +20,13 @@ import { queryKeys } from "@/lib/query-keys";
  * Composio OAuth connect links are hosted on composio.dev (and subdomains such
  * as backend.composio.dev). Reject anything else before assigning location.href.
  */
-export function isAllowedComposioRedirectUrl(url: string): boolean {
+export function isAllowedComposioRedirectUrl(
+  url: string | null | undefined
+): boolean {
+  if (!url) {
+    return false;
+  }
+
   try {
     const parsed = new URL(url);
 
@@ -47,7 +56,9 @@ export function useSaveComposioSettings() {
 
   return useMutation({
     mutationFn: (request: UpdateComposioSettingsRequest) =>
-      client.setComposioSettings(request),
+      request.apiKey?.trim()
+        ? client.setComposioSecret(request.apiKey)
+        : client.getComposioSettings(),
     onSuccess: async (saved) => {
       queryClient.setQueryData(queryKeys.composio.settings, saved);
       await invalidateQueries(
@@ -64,8 +75,24 @@ const composioToolkitsQueryOptions = queryOptions({
   queryKey: queryKeys.composio.toolkits,
 });
 
-export function useComposioToolkits() {
-  return useQuery(composioToolkitsQueryOptions);
+export function useComposioToolkits(
+  options: {
+    enabled?: boolean;
+    refetchInterval?: (
+      data: ListComposioToolkitsResponse | undefined
+    ) => number | false;
+    refetchOnWindowFocus?: boolean;
+  } = {}
+) {
+  const { refetchInterval, ...rest } = options;
+
+  return useQuery({
+    ...composioToolkitsQueryOptions,
+    ...rest,
+    refetchInterval: refetchInterval
+      ? (query) => refetchInterval(query.state.data)
+      : undefined,
+  });
 }
 
 export function useEnableComposioToolkit() {
@@ -93,10 +120,20 @@ export function useDisableComposioToolkit() {
 }
 
 export function useConnectComposioToolkit() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: (toolkitSlug: string) =>
       client.connectComposioToolkit(toolkitSlug),
     onSuccess: (response) => {
+      // No-auth toolkits finish in this call; OAuth ones leave for Composio.
+      if (response.connected || !response.redirectUrl) {
+        invalidateQueries(queryClient, queryKeys.composio.toolkits);
+        toast("Connected.");
+
+        return;
+      }
+
       // Composio hosts the account picker and consent, then redirects back to
       // /integrations through our OAuth callback.
       if (!isAllowedComposioRedirectUrl(response.redirectUrl)) {
@@ -108,6 +145,82 @@ export function useConnectComposioToolkit() {
       window.location.href = response.redirectUrl;
     },
   });
+}
+
+/** Composio has no managed OAuth app for this toolkit (for example Google Forms). */
+export function needsComposioCustomAuth(error: Error) {
+  return (
+    error instanceof AirinApiError &&
+    error.code === COMPOSIO_CUSTOM_AUTH_REQUIRED
+  );
+}
+
+/**
+ * One click from the Connect an app dialog. An admin turns the toolkit on; it
+ * is added to `profileId`, which the caller passes only when the user manages
+ * that agent; then anyone who has no account linked yet signs in, and
+ * Composio returns them to `returnTo`. Resolves to the sign-in URL, or null
+ * when the account was already linked.
+ */
+export async function connectComposioApp(input: {
+  isOrgAdmin: boolean;
+  /** The agent to add the toolkit to. Pass it only when the user manages it. */
+  profileId?: string;
+  returnTo: string;
+  toolkits: Pick<
+    ListComposioToolkitsResponse,
+    "orgToolkits" | "userConnections"
+  >;
+  toolkitSlug: string;
+}): Promise<string | null> {
+  let toolkit = input.toolkits.orgToolkits.find(
+    (item) => item.toolkitSlug === input.toolkitSlug
+  );
+
+  if (input.isOrgAdmin && toolkit?.status !== "enabled") {
+    toolkit = await client.enableComposioToolkit(input.toolkitSlug);
+  }
+
+  if (input.profileId && toolkit?.status === "enabled") {
+    const { assignments } = await client.listProfileComposioToolkits(
+      input.profileId
+    );
+
+    if (!assignments.some((item) => item.toolkitId === toolkit.id)) {
+      await client.updateProfileComposioToolkits(input.profileId, {
+        assignments: [
+          ...assignments.map(({ allowedActions, toolkitId }) => ({
+            allowedActions,
+            toolkitId,
+          })),
+          { toolkitId: toolkit.id },
+        ],
+      });
+    }
+  }
+
+  const linked = input.toolkits.userConnections.some(
+    (item) => item.toolkitId === toolkit?.id && item.status === "connected"
+  );
+
+  if (linked) {
+    return null;
+  }
+
+  const { connected, redirectUrl } = await client.connectComposioToolkit(
+    input.toolkitSlug,
+    { returnTo: input.returnTo }
+  );
+
+  if (connected || !redirectUrl) {
+    return null;
+  }
+
+  if (!isAllowedComposioRedirectUrl(redirectUrl)) {
+    throw new Error("Blocked an unexpected Composio redirect URL.");
+  }
+
+  return redirectUrl;
 }
 
 export function useDisconnectComposioToolkit() {

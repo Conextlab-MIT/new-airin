@@ -1,36 +1,42 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   type AgentChatSession,
   type AgentDependencies,
+  buildSetupChecklist,
   type CompactionConfig,
   createAgentChatSession,
   createAutomationFromPrompt,
   executeToolCall,
   expandLearnInLastUserMessage,
+  listSetupChecklistCandidates,
   suggestToolParamsFromPrompt,
-} from "@nakama/agent";
+} from "@airin/agent";
 import type {
   AcpSessionSettingsResponse,
   AgentBrowserStatusResponse,
   AgentChannel,
   AgentQuestionnaire,
   AgentTodo,
+  AppLanguage,
   ApplyTelegramPairingRequest,
   AssignSkillRequest,
   AssignToolRequest,
   AutomationDeliveryChannel,
+  AutomationToolLimit,
   BranchSessionResponse,
   ChatContextUsage,
   ChatgptOAuthCredentials,
   ChatMessage,
+  CheckProviderResponse,
   CloneProfileRequest,
   CompactionResponse,
   ComposioSettingsResponse,
   ConfigureProviderRequest,
   ConfigureProviderResponse,
   CreateProfileRequest,
-  CreateProfileWithSuperBotRequest,
+  CreateProfileWithSuperAirinRequest,
   CreateProviderRequest,
   CreateProviderResponse,
   CreateSkillRequest,
@@ -77,16 +83,19 @@ import type {
   SendEmailTestResponse,
   SendErrorTrackingTestResponse,
   SessionSummary,
+  SetupChecklistResponse,
   SkillResponse,
   SoulStackResponse,
   SoulStatusResponse,
   StartTelegramPairingRequest,
+  StoredAutomation,
   SuggestToolParamsResponse,
   SyncSkillsResponse,
   TelegramAccessRequestsResponse,
   TelegramPairingStartResponse,
   TelegramPairingStatusResponse,
   TelegramSettingsResponse,
+  ThinkingEffort,
   ThinkingSettings,
   ThinkingSettingsResponse,
   ToolContext,
@@ -97,6 +106,7 @@ import type {
   TranscribeAudioResponse,
   TranscriptionSettings,
   TranscriptionSettingsResponse,
+  UpdateAgentBrowserSettingsRequest,
   UpdateArtifactResponse,
   UpdateComposioSettingsRequest,
   UpdateDiscordSettingsRequest,
@@ -120,11 +130,13 @@ import type {
   UserContextStatusResponse,
   VisionSettings,
   VisionSettingsResponse,
+  WebSearchProvider,
   WebSearchSettingsResponse,
   WhatsAppSettingsResponse,
   XaiOAuthCredentials,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   apiKeyEnvVarForProvider,
   appendOrgMemorySection,
   applyChatgptOAuthToInstance,
@@ -134,7 +146,9 @@ import {
   buildToolExecutionContext,
   buildUserContextStatus,
   chatgptOAuthNeedsRefresh,
+  cloudflareBaseUrlFromAccountId,
   composeKnowledgeBaseCatalog,
+  composeLoadedSkillPrompt,
   composeSoulSystemPrompt,
   createErrorTrackingSink,
   createId,
@@ -144,7 +158,9 @@ import {
   defaultOllamaBaseUrl,
   deleteArtifactFile,
   deleteAttachmentBytes,
+  extractExplicitSkillName,
   extractImageParts,
+  findCustomModel,
   findProviderInstance,
   getActiveProviderInstance,
   getProfileSoulDir,
@@ -152,6 +168,7 @@ import {
   initSoulDirectory,
   isEmailConfigComplete,
   isProviderConfigured,
+  isWebSearchProvider,
   isWritableSoulFileKey,
   listArtifacts,
   listTelegramAccessRequests,
@@ -164,18 +181,21 @@ import {
   loadTelegramConfigFile,
   loadTelegramSettingsPublic,
   loadUserConfig,
+  loadUserLanguage,
   loadUserThinkingSettings,
   loadUserTimezone,
   loadUserTranscriptionSettings,
   loadUserVisionSettings,
   loadWebSearchSettingsPublic,
   loadWhatsAppSettingsPublic,
+  MODEL_CONNECTION_CLOSED_MESSAGE,
   messageContentHasImages,
-  NakamaApiError,
   nanoid,
+  normalizeBaseUrl,
   normalizeUserContextContent,
   type OrgRole,
   ollamaRequiresApiKey,
+  ProviderStreamInterruptedError,
   parseAgentChannel,
   parseSentryDsn,
   partitionTools,
@@ -194,15 +214,17 @@ import {
   removeTelegramAccessRequest,
   replaceImagePartsWithDescriptions,
   requireToolOrgMember,
+  resolveArtifactName,
+  resolveCloudflareAccountInput,
   resolveDiscordApplicationId,
   resolveOllamaHostMode,
-  saveComposioConfig,
   saveDiscordConfig,
   saveEmailConfig,
   saveErrorTrackingDsn,
   saveErrorTrackingTestResult,
   saveTelegramConfig,
   saveUserConfig,
+  saveUserLanguage,
   saveUserThinkingSettings,
   saveUserTimezone,
   saveWebSearchConfig,
@@ -210,20 +232,25 @@ import {
   toMailboxConfig,
   transcribeAudio,
   USER_CONTEXT_TEMPLATE,
+  WEB_SEARCH_PROVIDER_ENV_NAMES,
   WRITABLE_SOUL_FILES,
   writeArtifactFile,
   writeSoulFile,
-} from "@nakama/core";
+} from "@airin/core";
+import { findAgentQuestionnaireAnswers } from "@airin/core/agent-questionnaire";
+import { isDocxFile, isLegacyDocFile } from "@airin/core/artifact-mime";
 import {
   type ChannelConfigScope,
   isChannelOwner,
-} from "@nakama/core/channel-config-shared";
+} from "@airin/core/channel-config-shared";
 import {
+  commandCodeModelSupportsVision,
   defaultDiscoveryBaseUrl,
-  NETRA_AGENT_MODEL_ID,
-} from "@nakama/core/discovery-providers";
-import { readTextIfExists } from "@nakama/core/fs";
-import { canAccessSuperBotProfile } from "@nakama/core/profiles";
+  isDiscoveryModelProvider,
+} from "@airin/core/discovery-providers";
+import { convertDocxToMarkdown } from "@airin/core/docx-text";
+import { readTextIfExists } from "@airin/core/fs";
+import { canAccessSuperAirinProfile } from "@airin/core/profiles";
 import {
   type DatabaseAdapter,
   mergeWorkspaceSettings,
@@ -232,24 +259,31 @@ import {
   type StoredSessionRecord,
   type StoredSessionSummaryRecord,
   type StoredToolRecord,
-  SUPER_BOT_TOOL_AUTHORING_RULES,
-} from "@nakama/db";
+  SUPER_AIRIN_TEAM_RULES,
+  SUPER_AIRIN_TOOL_AUTHORING_RULES,
+} from "@airin/db";
 import { z } from "zod";
 import {
   AVAILABLE_MODELS,
+  apiKeyCheckRequest,
   catalogCustomModelsToCatalog,
   createProviderForInstance,
   createProviderFromActiveConfig,
+  fetchCloudflareWorkersAiModels,
   fetchFireworksGatewayModels,
+  fetchNetraModelLimits,
   fetchNetraModels,
   fetchOllamaModels,
   fetchRemoteOpenAIModels,
   getModelsForProviderInstance,
   isCostEstimated,
+  NETRA_MAX_OUTPUT_TOKENS,
+  readApiKeyForInstance,
   resolveModelLimits,
 } from "../providers";
 import {
   acpMcpServerFor,
+  clearAcpToolAccess,
   setAcpToolAccess,
 } from "../providers/acp/acp-mcp-tools";
 import {
@@ -258,6 +292,7 @@ import {
   createAcpProvider,
   getAcpConfigOptions,
   setAcpConfigOption,
+  stopAcpSession,
 } from "../providers/acp/acp-provider";
 import { toAcpSessionSettings } from "../providers/acp/acp-session-settings";
 import {
@@ -272,15 +307,19 @@ import {
 } from "../providers/xai-oauth/oauth";
 import { createAskUserQuestionTools } from "../tools/ask-user-question-tool";
 import { formatImageMentionContext } from "../tools/generate-image-tool";
+import { groupMemoryTool } from "../tools/group-memory-tool";
 import {
   createOrgMemoryTools,
   PROPOSE_ORG_MEMORY_TOOL_NAME,
 } from "../tools/org-memory-tools";
+import { SAVE_ARTIFACT_TOOL_NAME } from "../tools/save-artifact-tool";
 import {
   createSendDiscordArtifactTools,
   sendWhatsAppArtifactTool,
 } from "../tools/send-discord-artifact-tool";
+import { SEND_TO_BOT_TOOL_NAME } from "../tools/send-to-bot-tool";
 import {
+  createLoadSkillTool,
   createSkillManageTools,
   SKILL_MANAGE_CHANNELS,
 } from "../tools/skill-manage-tool";
@@ -290,14 +329,19 @@ import {
   buildSubAgentResult,
   DEFAULT_SUB_AGENT_TIMEOUT_MS,
   failSubAgentResult,
+  type GroupTurnRunInput,
   MAX_SUB_AGENT_TIMEOUT_MS,
   type SubAgentRunInput,
   type SubAgentRunResult,
 } from "../tools/sub-agent-shared";
 import { SUB_AGENT_TOOL_NAME } from "../tools/sub-agent-tool";
-import { createSuperBotTools } from "../tools/super-bot-tools";
+import { createSuperAirinTools } from "../tools/super-airin-tools";
 import { createTodoTools } from "../tools/todo-tools";
-import { getAgentBrowserStatus } from "./agent-browser-service";
+import {
+  getAgentBrowserStatus,
+  saveAgentBrowserConfig,
+} from "./agent-browser-service";
+import { AgentGroupService } from "./agent-group-service";
 import { AgentQuestionnaireState } from "./agent-questionnaire-state";
 import { AgentTodoState } from "./agent-todo-state";
 import {
@@ -328,15 +372,13 @@ import {
   customToolTypesLabel,
   getCustomToolHandler,
 } from "./custom-tool-handlers";
-import {
-  type EphemeralSession,
-  EphemeralSessionStore,
-} from "./ephemeral-session-store";
+import type { EphemeralSession } from "./ephemeral-session-store";
 import {
   generateImageWithOpenAI,
-  IMAGE_MODEL_REQUIRED_MESSAGE,
+  imageGenerationUnavailableMessage,
   resolveImageGenerationSelection,
 } from "./image-generation";
+import { chatgptImageInput } from "./image-generation-chatgpt";
 import {
   describeImagesWithVisionModel,
   resolvePrimaryModelVisionSupport,
@@ -344,6 +386,7 @@ import {
   VISION_MODEL_REQUIRED_MESSAGE,
 } from "./image-vision-fallback";
 import type { LlmUsageTracker } from "./llm-usage-tracker";
+import { type ManagedSecrets, providerSecretEnvNames } from "./managed-secrets";
 import type { McpClientManager } from "./mcp-client-manager";
 import type { McpService } from "./mcp-service";
 import { buildMcpToolDefinitions } from "./mcp-tool-bridge";
@@ -380,57 +423,144 @@ import {
   loadSessionHistory,
   wrapPersistedSession,
 } from "./session-persistence";
+import {
+  type ChatBuildContext,
+  inheritFrom,
+  SessionRuntime,
+  sessionKind,
+} from "./session-runtime";
 import { SessionTitleService } from "./session-title-service";
 import { sessionTurnRegistry } from "./session-turn-registry";
 import { SkillPostTurnReviewService } from "./skill-post-turn-review-service";
 import type { SkillProposalService } from "./skill-proposal-service";
 import type { SkillSuggestionService } from "./skill-suggestion-service";
 import type { SkillsService } from "./skills-service";
-import { SuperBotSessionState } from "./super-bot-session-state";
+import { SuperAirinSessionState } from "./super-airin-session-state";
 import { telegramManagedBotPairing } from "./telegram-managed-bot-pairing";
 import {
   resolveProfileStoredTools,
   type ServerToolOverrides,
 } from "./tool-resolver";
+import {
+  type OneShotKind,
+  READ_ONLY_TOOL_NAMES,
+  REPLAYABLE_TOOL_NAMES,
+  refuseToolsOutside,
+  type TurnKind,
+  turnPolicy,
+  withTurnInstructions,
+} from "./turn-kinds";
+import { TurnRunner } from "./turn-runner";
 import type { WorkerManagerService } from "./worker-manager-service";
 
-interface StoredSession {
-  channel: AgentChannel;
-  pluginRevision: string;
-  profileId: string;
-  session: AgentChatSession;
-  sharedCapabilityRevision?: string;
-}
-
 export type { SubAgentRunInput, SubAgentRunResult };
-
-interface CognitoSessionOptions {
-  /** Seeds a rebuild (model change) with the history held in memory. */
-  initialHistory?: ChatMessage[];
-}
 
 export interface CreateSessionOptions {
   codingWorkspaceRoot?: string;
   cognito?: boolean;
-  excludeSuperBot?: boolean;
+  excludeSuperAirin?: boolean;
   isPlatformAdmin?: boolean;
   model?: string | null;
   orgRole?: OrgRole | null;
+  parentSessionId?: string;
+  thinkingEffort?: ThinkingEffort | null;
+  title?: string;
 }
+
+/** Per-session settings a chat is built with. Branches copy them. */
+type SessionRunSettings = Pick<StoredSessionRecord, "model" | "thinkingEffort">;
+
+const QUESTIONNAIRE_ANSWERS_CONTEXT =
+  "The user's message answers the questions you asked with ask_user_question. Continue the task with these answers and write a reply.";
+
+/** sub_agent chats one parent may start; the cap proposed on #2036. */
+const MAX_CHILD_SESSIONS = 5;
 
 type ChatProfileAccess = Pick<
   CreateSessionOptions,
-  "excludeSuperBot" | "isPlatformAdmin" | "orgRole"
+  "excludeSuperAirin" | "isPlatformAdmin" | "orgRole"
 > & { user?: { id: string } };
+
+/**
+ * Messaging-app chats are started by the channel worker's service user, not by
+ * a person in the org, so they stay visible to everyone who can use the agent.
+ */
+const SHARED_HISTORY_CHANNELS: readonly AgentChannel[] = [
+  "discord",
+  "slack",
+  "teams",
+  "telegram",
+  "whatsapp",
+];
+
+function isSharedHistory(record: StoredSessionRecord): boolean {
+  return SHARED_HISTORY_CHANNELS.some((channel) => channel === record.channel);
+}
+
+const API_KEY_CHECK_TIMEOUT_MS = 8000;
+
+// Stops a key the provider refuses before it is saved. Only 401/403 blocks:
+// a slow or unreachable provider must not stop an admin from saving a key.
+async function checkApiKey(
+  instance: ProviderInstance
+): Promise<CheckProviderResponse["status"]> {
+  const localBaseUrl = instance.baseUrl && normalizeBaseUrl(instance.baseUrl);
+
+  // A local or custom endpoint without a key still answers /models when up.
+  const check = instance.apiKey
+    ? apiKeyCheckRequest(instance)
+    : localBaseUrl &&
+        (instance.type === "ollama" || instance.type === "openai_compatible")
+      ? { headers: {}, url: `${localBaseUrl}/models` }
+      : null;
+
+  if (!check) {
+    return "unchecked";
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(check.url, {
+      headers: check.headers,
+      signal: AbortSignal.timeout(API_KEY_CHECK_TIMEOUT_MS),
+    });
+  } catch (error) {
+    console.warn(`Could not check the ${instance.label} API key:`, error);
+
+    return "unreachable";
+  }
+
+  await response.body?.cancel();
+
+  if (response.status === 401 || response.status === 403) {
+    // With no key sent, the endpoint is asking for one, not refusing it.
+    return instance.apiKey ? "rejected" : "needs-key";
+  }
+
+  return "ok";
+}
+
+// Only a key the provider refuses stops a save; an outage does not.
+async function rejectRefusedApiKey(instance: ProviderInstance): Promise<void> {
+  if ((await checkApiKey(instance)) === "rejected") {
+    throw new AirinApiError(
+      `${instance.label} rejected this API key. Check the key and try again.`,
+      400
+    );
+  }
+}
 
 export class AgentService {
   private userConfig: UserConfig | null;
   private readonly db: DatabaseAdapter;
+  /** The one group service; its in-memory run state lives as long as this. */
+  readonly groups: AgentGroupService;
   private readonly profileService: ProfileService;
-  private readonly superBotSessionState = new SuperBotSessionState();
+  private readonly superAirinSessionState = new SuperAirinSessionState();
   private readonly agentTodoState: AgentTodoState;
   private readonly agentQuestionnaireState: AgentQuestionnaireState;
-  private readonly superBotTools: ToolDefinition[];
+  private readonly superAirinTools: ToolDefinition[];
   private readonly orgMemoryTools: ToolDefinition[];
   private automationTools: ToolDefinition[] = [];
   private automationRunHistoryTools: ToolDefinition[] = [];
@@ -456,10 +586,29 @@ export class AgentService {
   private orgMemoryService: OrgMemoryService | null = null;
   private orgService: OrgService | null = null;
   private readonly memoryBackend: MemoryBackendService;
-  private readonly sessions = new Map<string, StoredSession>();
-  private readonly ephemeralSessions = new EphemeralSessionStore((entry) =>
-    this.purgeEphemeralAttachments(entry)
-  );
+  readonly sessions = new SessionRuntime({
+    accessFor: (orgId, userId) => this.resolveSessionAccess(orgId, userId),
+    build: (record, context) => this.buildChatSession(record, context),
+    loadRecord: (sessionId, orgId) =>
+      this.getSessionRecordForOrg(sessionId, orgId),
+    onCognitoEnd: (entry) => this.purgeEphemeralAttachments(entry),
+    revisionFor: async (orgId, profileId) =>
+      JSON.stringify([
+        await this.capabilityRevisionForProfile(orgId, profileId),
+        await this.pluginCapabilityRevision(orgId),
+        this.composioService?.revisionFor(orgId) ?? "",
+      ]),
+  });
+  readonly turns = new TurnRunner({
+    loadRecord: (sessionId, orgId) =>
+      this.getSessionRecordForOrg(sessionId, orgId),
+    prepare: (record, orgId) => this.prepareTurn(record, orgId),
+    scheduleSkillReview: (sessionId) =>
+      this.schedulePostTurnSkillReview(sessionId),
+    scheduleTitle: (sessionId) =>
+      this.scheduleSessionTitleGeneration(sessionId),
+    sessions: this.sessions,
+  });
   private readonly sessionTitleService: SessionTitleService;
   private readonly orgUsageQuotaService: OrgUsageQuotaService;
   private skillPostTurnReviewService: SkillPostTurnReviewService;
@@ -468,15 +617,18 @@ export class AgentService {
   private visionSettingsPromise: Promise<void> | null = null;
   private transcriptionSettingsPromise: Promise<void> | null = null;
   private imageGenerationSettingsPromise: Promise<void> | null = null;
+  private secretFingerprint: string | null = null;
 
   constructor(
     userConfig: UserConfig | null,
     provider: ProviderClient | null,
     db: DatabaseAdapter,
-    private readonly llmUsageTracker?: LlmUsageTracker
+    private readonly llmUsageTracker?: LlmUsageTracker,
+    private readonly managedSecrets?: ManagedSecrets
   ) {
     this.userConfig = userConfig;
     this.db = db;
+    this.groups = new AgentGroupService(db, this);
     this.memoryBackend = new MemoryBackendService(db);
     this.profileService = new ProfileService(db);
     this.orgUsageQuotaService = new OrgUsageQuotaService(db);
@@ -494,9 +646,9 @@ export class AgentService {
       this.agentQuestionnaireState
     );
     this.todoTools = createTodoTools(this.agentTodoState);
-    this.superBotTools = createSuperBotTools(
+    this.superAirinTools = createSuperAirinTools(
       this.profileService,
-      this.superBotSessionState,
+      this.superAirinSessionState,
       async (profileModel, context) => {
         const session =
           context.sessionId && context.orgId
@@ -518,6 +670,15 @@ export class AgentService {
         return selection
           ? `${selection.instance.id}::${selection.model}`
           : profileModel;
+      },
+      () => this.pluginService,
+      {
+        assignSkill: (orgId, profileId, request, meta) =>
+          this.assignSkill(orgId, profileId, request, meta),
+        createGroup: (orgId, userId, name, memberIds, brief) =>
+          this.groups.create(orgId, userId, name, memberIds, brief),
+        getModels: () => this.getModels(),
+        listSkills: (orgId) => this.listSkills(orgId),
       }
     );
     this.orgMemoryTools = createOrgMemoryTools(this.getOrgMemoryService());
@@ -525,12 +686,6 @@ export class AgentService {
       isProviderConfigured(userConfig) && provider !== null;
   }
 
-  /**
-   * Binds a savings recorder to one org. Fire and forget on purpose: a counter
-   * for a dashboard must never delay a tool result or fail a turn, so the write
-   * is not awaited and a rejection is swallowed.
-   */
-  /** Same fire-and-forget shape as the savings recorder, for provider tokens. */
   private llmTurnQuotaCheckerFor(orgId: string | undefined) {
     if (!orgId?.trim()) {
       return;
@@ -545,6 +700,10 @@ export class AgentService {
       );
   }
 
+  /**
+   * Fire and forget on purpose: a usage counter must never fail a turn, so the
+   * write is not awaited and a rejection is swallowed.
+   */
   private turnUsageRecorderFor(orgId: string | undefined) {
     if (!orgId?.trim()) {
       return;
@@ -555,34 +714,10 @@ export class AgentService {
     return (turn: {
       estimated: boolean;
       inputTokens: number;
-      optimized: boolean;
       outputTokens: number;
     }): void => {
       void this.db
         .incrementLlmTurnUsage(scopedOrgId, turn)
-        .catch(() => undefined);
-    };
-  }
-
-  private savingsRecorderFor(orgId: string | undefined) {
-    if (!orgId?.trim()) {
-      return;
-    }
-
-    const scopedOrgId = orgId.trim();
-
-    return (saving: {
-      bytesIn: number;
-      bytesOut: number;
-      optimizer: string;
-      tool: string;
-    }): void => {
-      void this.db
-        .incrementToolOutputSavings(
-          scopedOrgId,
-          saving,
-          new Date().toISOString()
-        )
         .catch(() => undefined);
     };
   }
@@ -617,7 +752,7 @@ export class AgentService {
 
   setAutomationTools(tools: ToolDefinition[]): void {
     this.automationTools = tools;
-    this.sessions.clear();
+    this.sessions.invalidateAll();
   }
 
   setServerTools(tools: ServerToolOverrides): void {
@@ -634,7 +769,7 @@ export class AgentService {
 
   setMcpClientManager(manager: McpClientManager): void {
     this.mcpClientManager = manager;
-    this.sessions.clear();
+    this.sessions.invalidateAll();
   }
 
   setMcpService(service: McpService): void {
@@ -647,12 +782,12 @@ export class AgentService {
 
   setPluginService(service: PluginService | null): void {
     this.pluginService = service;
-    this.sessions.clear();
+    this.sessions.invalidateAll();
   }
 
   setSkillsService(service: SkillsService): void {
     this.skillsService = service;
-    this.sessions.clear();
+    this.sessions.invalidateAll();
   }
 
   setOrgService(service: OrgService): void {
@@ -721,10 +856,13 @@ export class AgentService {
           });
         }
       } catch (error) {
-        console.error(
-          "Failed to record post-turn skill review outcome:",
-          error
-        );
+        // A 4xx means the outcome was refused (e.g. old_string no longer matches), not a failure.
+        if (!(error instanceof AirinApiError && error.status < 500)) {
+          console.error(
+            "Failed to record post-turn skill review outcome:",
+            error
+          );
+        }
       }
 
       return outcome;
@@ -759,6 +897,20 @@ export class AgentService {
     return saved;
   }
 
+  async getUserLanguage(): Promise<AppLanguage> {
+    return this.userConfig?.language ?? loadUserLanguage();
+  }
+
+  async setUserLanguage(language: string | undefined): Promise<AppLanguage> {
+    const saved = await saveUserLanguage(language);
+
+    if (this.userConfig) {
+      this.userConfig = { ...this.userConfig, language: saved };
+    }
+
+    return saved;
+  }
+
   async getThinkingSettings(): Promise<ThinkingSettingsResponse> {
     const thinking = await this.resolveThinkingSettings();
 
@@ -786,7 +938,7 @@ export class AgentService {
       };
     }
 
-    this.sessions.clear();
+    this.sessions.invalidateAll();
 
     return { thinking };
   }
@@ -813,7 +965,7 @@ export class AgentService {
       });
 
       if (!resolved) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Selected image parsing model is unavailable. Choose a vision-capable model.",
           400
         );
@@ -841,7 +993,7 @@ export class AgentService {
       };
     }
 
-    this.sessions.clear();
+    this.sessions.invalidateAll();
 
     return { vision };
   }
@@ -868,7 +1020,7 @@ export class AgentService {
       });
 
       if (!resolved) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Selected audio transcription model is unavailable. Choose an OpenAI Whisper model.",
           400
         );
@@ -901,13 +1053,14 @@ export class AgentService {
     input: TranscribeAudioRequest,
     signal?: AbortSignal
   ): Promise<TranscribeAudioResponse> {
+    await this.refreshManagedProviderKeys();
     await this.ensureTranscriptionSettingsLoaded();
 
     const data = input.data?.trim();
     const mediaType = input.mediaType?.trim();
 
     if (!(data && mediaType)) {
-      throw new NakamaApiError("Audio data and media type are required.", 400);
+      throw new AirinApiError("Audio data and media type are required.", 400);
     }
 
     let bytes: Buffer;
@@ -915,17 +1068,17 @@ export class AgentService {
     try {
       bytes = Buffer.from(data, "base64");
     } catch {
-      throw new NakamaApiError("Audio data must be valid base64.", 400);
+      throw new AirinApiError("Audio data must be valid base64.", 400);
     }
 
     if (bytes.length === 0) {
-      throw new NakamaApiError("Audio data is empty.", 400);
+      throw new AirinApiError("Audio data is empty.", 400);
     }
 
     const selection = resolveTranscriptionProviderSelection(this.userConfig);
 
     if (!selection) {
-      throw new NakamaApiError(TRANSCRIPTION_MODEL_REQUIRED_MESSAGE, 400);
+      throw new AirinApiError(TRANSCRIPTION_MODEL_REQUIRED_MESSAGE, 400);
     }
 
     const text = await transcribeAudio({
@@ -1042,23 +1195,32 @@ export class AgentService {
     orgId: string | null,
     userId?: string | null
   ): Promise<GenerateImageResponse> {
+    await this.refreshManagedProviderKeys();
     await this.ensureImageGenerationSettingsLoaded();
 
     const prompt = input.prompt?.trim();
 
     if (!prompt) {
-      throw new NakamaApiError("Image prompt is required.", 400);
+      throw new AirinApiError("Image prompt is required.", 400);
     }
 
     const selection = resolveImageGenerationSelection(this.userConfig);
 
     if (!selection) {
-      throw new NakamaApiError(IMAGE_MODEL_REQUIRED_MESSAGE, 400);
+      throw new AirinApiError(
+        imageGenerationUnavailableMessage(this.userConfig),
+        400
+      );
     }
 
     const result = await generateImageWithOpenAI({
       apiKey: selection.apiKey,
       baseUrl: selection.baseUrl,
+      ...chatgptImageInput(
+        selection,
+        () => this.userConfig,
+        (instanceId, oauth) => this.persistChatgptOAuth(instanceId, oauth)
+      ),
       model: selection.model,
       prompt,
       size: input.size,
@@ -1546,33 +1708,52 @@ export class AgentService {
   async getComposioSettings(): Promise<ComposioSettingsResponse> {
     const settings = await loadComposioSettingsPublic();
 
+    const status = await this.managedSecrets?.status("global", "composio", [
+      "COMPOSIO_API_KEY",
+    ]);
+
     return {
       ...settings,
+      apiKeyMasked: null,
       composioReachable: settings.configured
         ? await (this.composioService?.isReachable() ?? false)
         : false,
+      savedAvailable: status?.savedAvailable ?? false,
+      source: status?.source ?? "missing",
     };
   }
 
   async setComposioSettings(
     input: UpdateComposioSettingsRequest
   ): Promise<ComposioSettingsResponse> {
-    const existing = await loadComposioSettingsPublic();
-
-    const apiKey =
-      input.apiKey !== undefined && input.apiKey.trim()
-        ? input.apiKey.trim()
-        : undefined;
-
-    if (!(apiKey || existing.configured)) {
-      throw new Error("Composio API key is required.");
+    if (input.apiKey?.trim()) {
+      throw new AirinApiError(
+        "Save the Composio key through the secret settings API.",
+        400
+      );
     }
 
-    if (apiKey) {
-      await this.composioService?.validateConfiguration(apiKey);
-      await saveComposioConfig({ apiKey });
-      this.composioService?.reloadConfiguration();
+    return this.getComposioSettings();
+  }
+
+  async setComposioSecret(apiKey: string): Promise<ComposioSettingsResponse> {
+    if (!this.managedSecrets) {
+      throw new Error("Secret store is not ready.");
     }
+
+    if (
+      (
+        await this.managedSecrets.resolve("global", "composio", [
+          "COMPOSIO_API_KEY",
+        ])
+      ).source === "environment"
+    ) {
+      throw new AirinApiError("This key is managed by the environment.", 409);
+    }
+
+    await this.composioService?.validateConfiguration(apiKey);
+    await this.managedSecrets.save("global", "composio", apiKey);
+    this.composioService?.reloadConfiguration();
 
     return this.getComposioSettings();
   }
@@ -1587,7 +1768,7 @@ export class AgentService {
     const dsn = input.dsn?.trim() ?? "";
 
     if (dsn && !parseSentryDsn(dsn)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "That does not look like a Sentry-compatible DSN.",
         400
       );
@@ -1609,11 +1790,11 @@ export class AgentService {
     const { configured } = await loadErrorTrackingSettingsPublic();
 
     if (!configured) {
-      throw new NakamaApiError("Save a DSN first.", 400);
+      throw new AirinApiError("Save a DSN first.", 400);
     }
 
     const delivered = await createErrorTrackingSink()(
-      buildErrorReport(new Error("Test event from nakama"), {
+      buildErrorReport(new Error("Test event from airin"), {
         kind: "test",
         source: "settings",
       })
@@ -1625,29 +1806,169 @@ export class AgentService {
   }
 
   async getEmailSettings(): Promise<EmailSettingsResponse> {
-    return loadEmailSettingsPublic();
+    const settings = await loadEmailSettingsPublic();
+
+    const status = await this.managedSecrets?.status("global", "email", [
+      "AIRIN_EMAIL_PASSWORD",
+    ]);
+
+    return {
+      ...settings,
+      passwordMasked: null,
+      savedAvailable: status?.savedAvailable ?? false,
+      source: status?.source ?? "missing",
+    };
   }
 
   async setEmailSettings(
     input: UpdateEmailSettingsRequest
   ): Promise<EmailSettingsResponse> {
-    return saveEmailConfig(input);
+    await saveEmailConfig(input);
+
+    return this.getEmailSettings();
+  }
+
+  async setEmailSecret(password: string): Promise<EmailSettingsResponse> {
+    if (!this.managedSecrets) {
+      throw new Error("Secret store is not ready.");
+    }
+
+    if (
+      (
+        await this.managedSecrets.resolve("global", "email", [
+          "AIRIN_EMAIL_PASSWORD",
+        ])
+      ).source === "environment"
+    ) {
+      throw new AirinApiError(
+        "This password is managed by the environment.",
+        409
+      );
+    }
+
+    await this.managedSecrets.save("global", "email", password);
+
+    return this.getEmailSettings();
   }
 
   async getWebSearchSettings(): Promise<WebSearchSettingsResponse> {
-    return loadWebSearchSettingsPublic();
+    const settings = await loadWebSearchSettingsPublic();
+
+    const status = settings.provider
+      ? await this.managedSecrets?.status(
+          "global",
+          `web-search:${settings.provider}`,
+          [WEB_SEARCH_PROVIDER_ENV_NAMES[settings.provider]]
+        )
+      : null;
+
+    return {
+      ...settings,
+      apiKeyMasked: null,
+      savedAvailable: status?.savedAvailable ?? false,
+      source: status?.source ?? "missing",
+    };
   }
 
   async setWebSearchSettings(
     input: UpdateWebSearchSettingsRequest
   ): Promise<WebSearchSettingsResponse> {
-    const settings = await saveWebSearchConfig(input);
+    const previous = await loadWebSearchSettingsPublic();
+    await saveWebSearchConfig(input);
+
+    if (
+      previous.provider &&
+      input.provider !== undefined &&
+      input.provider !== previous.provider
+    ) {
+      await this.managedSecrets?.delete(
+        "global",
+        `web-search:${previous.provider}`
+      );
+    }
 
     // Sessions cache their resolved tool list, so the swap between hosted and
     // custom search only takes effect once they are rebuilt.
-    this.sessions.clear();
+    this.sessions.invalidateAll();
 
-    return settings;
+    return this.getWebSearchSettings();
+  }
+
+  async setWebSearchSecret(
+    provider: WebSearchProvider,
+    apiKey: string
+  ): Promise<WebSearchSettingsResponse> {
+    if (!(this.managedSecrets && isWebSearchProvider(provider))) {
+      throw new AirinApiError("Invalid web search provider.", 400);
+    }
+
+    const envName = WEB_SEARCH_PROVIDER_ENV_NAMES[provider];
+
+    if (
+      (
+        await this.managedSecrets.resolve("global", `web-search:${provider}`, [
+          envName,
+        ])
+      ).source === "environment"
+    ) {
+      throw new AirinApiError("This key is managed by the environment.", 409);
+    }
+
+    await this.managedSecrets.save("global", `web-search:${provider}`, apiKey);
+    this.sessions.invalidateAll();
+
+    return this.getWebSearchSettings();
+  }
+
+  async manageSettingSecret(
+    kind: "email" | "web-search" | "composio",
+    action: "clear" | "use-stored"
+  ): Promise<
+    EmailSettingsResponse | WebSearchSettingsResponse | ComposioSettingsResponse
+  > {
+    if (!this.managedSecrets) {
+      throw new Error("Secret store is not ready.");
+    }
+
+    const provider =
+      kind === "web-search"
+        ? (await loadWebSearchSettingsPublic()).provider
+        : null;
+
+    if (kind === "web-search" && !provider) {
+      throw new AirinApiError("Select a web search provider.", 400);
+    }
+
+    const name = kind === "web-search" ? `web-search:${provider}` : kind;
+
+    const envNames =
+      kind === "email"
+        ? ["AIRIN_EMAIL_PASSWORD"]
+        : kind === "composio"
+          ? ["COMPOSIO_API_KEY"]
+          : provider
+            ? [WEB_SEARCH_PROVIDER_ENV_NAMES[provider]]
+            : [];
+
+    if (action === "clear") {
+      await this.managedSecrets.delete("global", name);
+    } else {
+      await this.managedSecrets.useStored("global", name, envNames);
+    }
+
+    if (kind === "composio") {
+      this.composioService?.reloadConfiguration();
+
+      return this.getComposioSettings();
+    }
+
+    if (kind === "web-search") {
+      this.sessions.invalidateAll();
+
+      return this.getWebSearchSettings();
+    }
+
+    return this.getEmailSettings();
   }
 
   async sendEmailTest(recipient: string): Promise<SendEmailTestResponse> {
@@ -1666,8 +1987,8 @@ export class AgentService {
     const sender = createSmtpSender(toMailboxConfig(config));
 
     const result = await sender.send({
-      subject: "Nakama test email",
-      text: "This is a test email from your Nakama deployment.",
+      subject: "Airin test email",
+      text: "This is a test email from your Airin deployment.",
       to,
     });
 
@@ -1679,6 +2000,18 @@ export class AgentService {
   }
 
   async getAgentBrowserStatus(): Promise<AgentBrowserStatusResponse> {
+    return getAgentBrowserStatus();
+  }
+
+  async saveAgentBrowserSettings(
+    input: UpdateAgentBrowserSettingsRequest
+  ): Promise<AgentBrowserStatusResponse> {
+    if (!this.managedSecrets) {
+      throw new Error("Secret store is not ready.");
+    }
+
+    await saveAgentBrowserConfig(input, this.managedSecrets);
+
     return getAgentBrowserStatus();
   }
 
@@ -1740,14 +2073,11 @@ export class AgentService {
       : save();
   }
 
-  async regenerateWhatsAppPairingCode(
+  // No worker restart: the worker reads config.ini on every message.
+  regenerateWhatsAppPairingCode(
     orgId: ChannelConfigScope
   ): Promise<WhatsAppSettingsResponse> {
-    return isChannelOwner(orgId) && this.channelWorkers
-      ? this.channelWorkers.saveChannelConfig("whatsapp", orgId, () =>
-          regenerateWhatsAppPairingCode(orgId)
-        )
-      : regenerateWhatsAppPairingCode(orgId);
+    return regenerateWhatsAppPairingCode(orgId);
   }
 
   async runAutomationPrompt(
@@ -1758,53 +2088,50 @@ export class AgentService {
     automationRunId?: string,
     handlers?: Parameters<AgentChatSession["sendStream"]>[1],
     resume = false,
-    deliveryChannel?: AutomationDeliveryChannel
+    deliveryChannel?: AutomationDeliveryChannel,
+    run: Pick<StoredAutomation, "runAsUserId" | "toolLimit"> = {}
   ): Promise<string> {
     if (!this._providerConfigured) {
       throw new Error("Provider is not configured.");
     }
 
-    const profile = await this.requireExecutionProfile(orgId, profileId);
-
-    const tools = [
-      ...(await this.resolveProfileTools(profile, {
-        includeAutomationTools: false,
-        includeTodoTools: false,
-      })),
-      ...this.automationRunHistoryTools,
-    ];
-
-    const { systemPrompt, soulActive } = await this.resolveProfileSystemPrompt(
-      orgId,
-      profileId,
-      profile.systemPrompt,
-      "member"
-    );
-
-    const userTimezone = await this.getUserTimezone();
-    const userContext = await this.loadUserContextForUser(orgId, undefined);
-    const harness = this.createHarnessForProfile(profile);
-
-    const toolContext = buildToolExecutionContext({
-      assertCanStartLlmTurn: this.llmTurnQuotaCheckerFor(orgId),
-      automationId,
-      ...this.knowledgeToolContext(orgId, profileId),
-      automationRunId,
-      orgId,
-      orgRole: "member",
-      profileId,
-      recordToolOutputSavings: this.savingsRecorderFor(orgId),
-      recordTurnUsage: this.turnUsageRecorderFor(orgId),
-    });
+    // A person who left the org no longer lends their Composio sign-ins.
+    const userId =
+      run.runAsUserId && (await this.db.getOrgMember(orgId, run.runAsUserId))
+        ? run.runAsUserId
+        : undefined;
 
     const savedSteps = automationRunId
       ? await this.db.listAutomationRunSteps(automationRunId)
       : [];
 
-    const replay =
-      resume && savedSteps.length > 0
-        ? await this.replayAutomationSteps(savedSteps, tools, toolContext)
-        : [];
+    const { chat, close, initialHistory } = await this.openOneShotChat(
+      "automation",
+      {
+        context: { automationId, automationRunId },
+        deliveryChannel,
+        extraTools: this.automationRunHistoryTools,
+        initialHistory: async (tools, toolContext) => {
+          if (!resume || savedSteps.length === 0) {
+            return;
+          }
+
+          const replay = await this.replayAutomationSteps(
+            savedSteps,
+            tools,
+            toolContext
+          );
+
+          return replay.length
+            ? [{ content: prompt, role: "user" }, ...replay]
+            : undefined;
+        },
+        orgId,
+        profileId,
+        toolLimit: run.toolLimit,
+        userId,
+      }
+    );
 
     let stepPosition = savedSteps.length;
 
@@ -1850,25 +2177,131 @@ export class AgentService {
         }
       : handlers;
 
-    const session = createAgentChatSession(harness, {
-      channel: "automation",
-      deliveryChannel,
-      enableToolLoop: true,
-      initialHistory: replay.length
-        ? [{ content: prompt, role: "user" }, ...replay]
-        : undefined,
-      soul: soulActive,
-      systemPrompt,
-      toolContext,
-      tools,
-      userContext,
-      userTimezone,
+    try {
+      return await chat.sendStream(
+        initialHistory ? RESUME_AUTOMATION_PROMPT : prompt,
+        stepHandlers ?? { onChunk() {} }
+      );
+    } finally {
+      close();
+    }
+  }
+
+  /**
+   * Builds a chat for a turn outside any session: the profile's prompt and
+   * tools as the kind allows, and a fresh ACP process that `close` ends.
+   * `initialHistory` gets the tools and context, as a resumed run replays
+   * its saved tool calls with them; the history it built comes back too.
+   */
+  private async openOneShotChat(
+    kind: OneShotKind,
+    input: {
+      context?: Pick<
+        ToolContext,
+        | "agentDepth"
+        | "automationId"
+        | "automationRunId"
+        | "clientOrigin"
+        | "sessionId"
+        | "sharedDir"
+      >;
+      deliveryChannel?: AutomationDeliveryChannel;
+      extraTools?: ToolDefinition[];
+      initialHistory?: (
+        tools: ToolDefinition[],
+        toolContext: ToolContext
+      ) => Promise<ChatMessage[] | undefined>;
+      orgId: string;
+      orgRole?: OrgRole | null;
+      profileId: string;
+      toolLimit?: AutomationToolLimit;
+      userId?: string | null;
+    }
+  ): Promise<{
+    chat: AgentChatSession;
+    close: () => void;
+    initialHistory: ChatMessage[] | undefined;
+  }> {
+    const { orgId, profileId, userId } = input;
+    const policy = turnPolicy(kind);
+    const orgRole = policy.orgRole ?? input.orgRole;
+    const profile = await this.requireExecutionProfile(orgId, profileId);
+
+    // An ACP agent runs its own tools, past the read-only gate.
+    if (policy.tools?.readOnly && profile.acpAgent) {
+      throw new AirinApiError(
+        "An ACP agent profile cannot be rerun read-only.",
+        409
+      );
+    }
+
+    const tools = policy.tools
+      ? [
+          ...(await this.resolveProfileTools(profile, kind, {
+            toolLimit: input.toolLimit,
+            userId,
+          })),
+          ...(input.extraTools ?? []),
+        ]
+      : [];
+
+    const { systemPrompt, soulActive } = await this.resolveProfileSystemPrompt(
+      orgId,
+      profileId,
+      profile.systemPrompt,
+      orgRole
+    );
+
+    const userTimezone = await this.getUserTimezone();
+    const userLanguage = await this.getUserLanguage();
+    const userContext = await this.loadUserContextForUser(orgId, userId);
+
+    const toolContext = buildToolExecutionContext({
+      ...input.context,
+      ...this.knowledgeToolContext(orgId, profileId),
+      assertCanStartLlmTurn: this.llmTurnQuotaCheckerFor(orgId),
+      orgId,
+      orgRole: orgRole ?? undefined,
+      profileId,
+      recordTurnUsage: this.turnUsageRecorderFor(orgId),
+      userId: userId ?? undefined,
     });
 
-    return session.sendStream(
-      replay.length ? RESUME_AUTOMATION_PROMPT : prompt,
-      stepHandlers ?? { onChunk() {} }
-    );
+    // Before the harness: a replay that throws must not leave ACP tool access.
+    const initialHistory = await input.initialHistory?.(tools, toolContext);
+
+    const acpKey = oneShotAcpKey(profile);
+
+    // The harness registers ACP tool access, and the caller gets `close` only
+    // on return, so a throw from here on must end the run itself.
+    try {
+      const harness = this.createHarnessForProfile(
+        profile,
+        profile.model,
+        userId ?? undefined,
+        acpKey,
+        { context: toolContext, tools }
+      );
+
+      const chat = createAgentChatSession(harness, {
+        channel: policy.channel,
+        deliveryChannel: input.deliveryChannel,
+        enableToolLoop: policy.tools !== null,
+        initialHistory,
+        soul: soulActive,
+        systemPrompt: withTurnInstructions(systemPrompt, policy.instructions),
+        toolContext,
+        tools,
+        userContext,
+        userLanguage,
+        userTimezone,
+      });
+
+      return { chat, close: () => endOneShotAcp(acpKey), initialHistory };
+    } catch (error) {
+      endOneShotAcp(acpKey);
+      throw error;
+    }
   }
 
   /**
@@ -1897,7 +2330,7 @@ export class AgentService {
 
         if (step.status !== "completed" || result === null) {
           const value =
-            REPLAYABLE_AUTOMATION_TOOLS.has(step.toolName) &&
+            REPLAYABLE_TOOL_NAMES.has(step.toolName) &&
             tools.some((item) => item.name === step.toolName)
               ? await executeToolCall(
                   tools,
@@ -1954,11 +2387,7 @@ export class AgentService {
   ): Promise<ToolDefinition[]> {
     const profile = await this.requireExecutionProfile(orgId, profileId);
 
-    const tools = await this.resolveProfileTools(profile, {
-      includeAutomationTools: false,
-      includeSkillManageTools: false,
-      includeTodoTools: false,
-    });
+    const tools = await this.resolveProfileTools(profile, "plugin_workflow");
 
     return partitionTools(tools).localTools;
   }
@@ -1999,7 +2428,6 @@ export class AgentService {
       orgId,
       orgRole: "member",
       profileId: context.profileId,
-      recordToolOutputSavings: this.savingsRecorderFor(orgId),
       recordTurnUsage: this.turnUsageRecorderFor(orgId),
       workflowId: context.workflowId,
       workflowRunId: context.runId,
@@ -2017,50 +2445,174 @@ export class AgentService {
       throw new Error("Provider is not configured.");
     }
 
-    const profile = await this.requireExecutionProfile(orgId, profileId);
-
-    const { systemPrompt, soulActive } = await this.resolveProfileSystemPrompt(
+    const { chat, close } = await this.openOneShotChat("plugin_summarize", {
       orgId,
       profileId,
-      profile.systemPrompt,
-      "member"
-    );
-
-    const userTimezone = await this.getUserTimezone();
-    const userContext = await this.loadUserContextForUser(orgId, undefined);
-    const harness = this.createHarnessForProfile(profile);
-
-    const userMessage = [
-      "Workflow receipts (only source of truth — do not invent values):",
-      "```json",
-      JSON.stringify(receiptBag, null, 2),
-      "```",
-      "",
-      prompt.trim(),
-    ].join("\n");
-
-    const session = createAgentChatSession(harness, {
-      channel: "automation",
-      enableToolLoop: false,
-      soul: soulActive,
-      systemPrompt,
-      toolContext: buildToolExecutionContext({
-        assertCanStartLlmTurn: this.llmTurnQuotaCheckerFor(orgId),
-        orgId,
-        orgRole: "member",
-        profileId,
-        recordToolOutputSavings: this.savingsRecorderFor(orgId),
-        recordTurnUsage: this.turnUsageRecorderFor(orgId),
-      }),
-      tools: [],
-      userContext,
-      userTimezone,
     });
 
-    return session.sendStream(userMessage, { onChunk() {} }, { signal });
+    try {
+      const userMessage = [
+        "Workflow receipts (only source of truth — do not invent values):",
+        "```json",
+        JSON.stringify(receiptBag, null, 2),
+        "```",
+        "",
+        prompt.trim(),
+      ].join("\n");
+
+      return await chat.sendStream(userMessage, { onChunk() {} }, { signal });
+    } finally {
+      close();
+    }
   }
 
-  async runSubAgentPrompt(input: SubAgentRunInput): Promise<SubAgentRunResult> {
+  /**
+   * Sends a saved case's input once to its profile's current config. Tools
+   * outside the read-only list refuse instead of running. Throws only when the
+   * run is refused; a run that fails, ends early or gives no reply resolves
+   * with `error`.
+   */
+  async runRegressionCase(input: {
+    input: string;
+    orgId: string;
+    profileId: string;
+    /** The caller's request; it ends the run when the caller goes away. */
+    signal?: AbortSignal;
+    userId: string;
+  }): Promise<
+    { error: string; output: null } | { error: null; output: string }
+  > {
+    // The deadline and the caller's signal cover setup too, so a hung tool or
+    // prompt lookup cannot hold the request and the case lock open.
+    const timeout = AbortSignal.timeout(REGRESSION_RERUN_TIMEOUT_MS);
+    const signals = { caller: input.signal, timeout };
+
+    const signal = input.signal
+      ? AbortSignal.any([input.signal, timeout])
+      : timeout;
+
+    // Setup or a harness that ignores the signal is not waited for.
+    const aborted = new Promise<never>((_, reject) => {
+      if (signal.aborted) {
+        reject(signal.reason);
+      }
+
+      signal.addEventListener("abort", () => reject(signal.reason), {
+        once: true,
+      });
+    });
+
+    // The loser of a race settles later with no one listening.
+    aborted.catch(() => undefined);
+
+    // This refuses an ACP agent profile first, which needs no provider.
+    const opening = this.openOneShotChat("regression_rerun", {
+      orgId: input.orgId,
+      profileId: input.profileId,
+      userId: input.userId,
+    });
+
+    // A chat that opens after the run gave up still ends its ACP access.
+    opening.then(
+      ({ close }) => {
+        if (signal.aborted) {
+          close();
+        }
+      },
+      (error) => {
+        if (signal.aborted) {
+          console.error("Regression rerun setup failed after it ended:", error);
+        }
+      }
+    );
+
+    let opened: Awaited<typeof opening>;
+
+    try {
+      opened = await Promise.race([opening, aborted]);
+    } catch (error) {
+      // Setup refused the run, as for an ACP profile or a missing profile.
+      if (!signal.aborted) {
+        throw error;
+      }
+
+      return { error: regressionRerunError(error, signals), output: null };
+    }
+
+    const { chat, close } = opened;
+
+    if (!this._providerConfigured) {
+      close();
+      throw new AirinApiError("Provider is not configured.", 409);
+    }
+
+    try {
+      const sent = chat.sendStream(input.input, { onChunk() {} }, { signal });
+
+      sent.catch(() => undefined);
+
+      const reply = (await Promise.race([sent, aborted])).trim();
+
+      // No reply is no answer to judge, so the run is stored as failed.
+      if (!reply) {
+        return { error: "The rerun ended with no reply.", output: null };
+      }
+
+      return { error: null, output: reply };
+    } catch (error) {
+      return { error: regressionRerunError(error, signals), output: null };
+    } finally {
+      close();
+    }
+  }
+
+  runSubAgentPrompt(input: SubAgentRunInput): Promise<SubAgentRunResult> {
+    return this.runOneShotTurn(input, "sub_agent", () => []);
+  }
+
+  /** Cross-profile A2A hop; uses the same one-shot path as sub_agent. */
+  runSendToBotPrompt(input: SubAgentRunInput): Promise<SubAgentRunResult> {
+    return this.runOneShotTurn(input, "sub_agent", () => []);
+  }
+
+  /** One member's turn in an agent group chat; `signal` stops it mid-reply. */
+  runGroupTurn(input: GroupTurnRunInput): Promise<SubAgentRunResult> {
+    return this.runOneShotTurn(input, "group_member", (turnActive) => [
+      {
+        ...groupMemoryTool,
+        async run(
+          toolInput: Parameters<typeof groupMemoryTool.run>[0],
+          context: ToolContext
+        ) {
+          // The reply is already saved, so a late write would lose its notice.
+          if (!turnActive()) {
+            throw new Error("This group turn has ended.");
+          }
+
+          const result = await groupMemoryTool.run(toolInput, context);
+
+          if (result.change) {
+            input.onGroupMemoryChange?.(result.change);
+          }
+
+          return result;
+        },
+      },
+    ]);
+  }
+
+  /**
+   * A single tool-using turn outside a chat session, for a sub-agent or a group
+   * member. It ends on a reply, on the timeout, or when `input.signal` aborts,
+   * which rejects with the abort reason.
+   */
+  private async runOneShotTurn(
+    input: SubAgentRunInput &
+      Partial<Pick<GroupTurnRunInput, "sharedDir" | "signal">>,
+    kind: "group_member" | "sub_agent",
+    /** Extra tools for this kind of turn, told whether the turn still runs. */
+    extraTools: (turnActive: () => boolean) => ToolDefinition[]
+  ): Promise<SubAgentRunResult> {
     const startedAt = Date.now();
 
     if (!this._providerConfigured) {
@@ -2075,126 +2627,117 @@ export class AgentService {
 
     const timeoutMs = clampSubAgentTimeout(input.timeoutMs);
 
-    const profile = await this.requireExecutionProfile(
-      input.orgId,
-      input.profileId
-    );
+    // Tools may refuse work once the turn has ended, as with a provider that
+    // ignores the abort and keeps calling them.
+    let turnActive = true;
 
-    const tools = await this.resolveProfileTools(profile, {
-      includeAutomationTools: false,
-      includeQuestionTools: false,
-      includeSubAgentTool: false,
-      includeTodoTools: false,
+    const { chat, close } = await this.openOneShotChat(kind, {
+      context: {
+        agentDepth: input.agentDepth,
+        clientOrigin: input.clientOrigin,
+        sessionId: input.sessionId,
+        sharedDir: input.sharedDir,
+      },
+      extraTools: extraTools(() => turnActive),
+      orgId: input.orgId,
+      orgRole: input.orgRole,
+      profileId: input.profileId,
       userId: input.userId,
     });
 
-    const { systemPrompt, soulActive } = await this.resolveProfileSystemPrompt(
-      input.orgId,
-      input.profileId,
-      profile.systemPrompt,
-      input.orgRole
-    );
+    const timeout = AbortSignal.timeout(timeoutMs);
+    let reply: string;
 
-    const childSystemPrompt = [
-      systemPrompt.trim(),
-      "",
-      "You are running as a focused sub-agent delegated from a parent conversation.",
-      "Complete the assigned task and return a clear final answer.",
-      "Do not spawn sub-agents.",
-    ].join("\n");
+    // Everything after the chat exists sits in this try, so a throwing
+    // activity callback still ends the ACP run and clears its tool access.
+    try {
+      const prompt = buildSubAgentPrompt(task, input.context);
+      let sawPlanning = false;
+      let sawWriting = false;
 
-    const userTimezone = await this.getUserTimezone();
+      const emitActivity = (label: string) => {
+        input.onActivity?.(label);
+      };
 
-    const userContext = await this.loadUserContextForUser(
-      input.orgId,
-      input.userId
-    );
+      emitActivity("Starting…");
 
-    const harness = this.createHarnessForProfile(
-      profile,
-      profile.model,
-      input.userId
-    );
+      const signal = input.signal
+        ? AbortSignal.any([input.signal, timeout])
+        : timeout;
 
-    const prompt = buildSubAgentPrompt(task, input.context);
+      const sent = chat.sendStream(
+        prompt,
+        {
+          onChunk: (chunk) => {
+            input.onText?.(chunk);
 
-    const session = createAgentChatSession(harness, {
-      channel: "subagent",
-      enableToolLoop: true,
-      soul: soulActive,
-      systemPrompt: childSystemPrompt,
-      toolContext: buildToolExecutionContext({
-        agentDepth: input.agentDepth,
-        ...this.knowledgeToolContext(input.orgId, input.profileId),
-        assertCanStartLlmTurn: this.llmTurnQuotaCheckerFor(input.orgId),
-        clientOrigin: input.clientOrigin,
-        orgId: input.orgId,
-        orgRole: input.orgRole,
-        profileId: input.profileId,
-        recordToolOutputSavings: this.savingsRecorderFor(input.orgId),
-        recordTurnUsage: this.turnUsageRecorderFor(input.orgId),
-        sessionId: input.sessionId,
-        userId: input.userId,
-      }),
-      tools,
-      userContext,
-      userTimezone,
-    });
+            if (sawWriting) {
+              return;
+            }
 
-    let sawPlanning = false;
-    let sawWriting = false;
+            sawWriting = true;
+            emitActivity("Writing answer…");
+          },
+          onThinking: () => {
+            if (sawPlanning) {
+              return;
+            }
 
-    const emitActivity = (label: string) => {
-      input.onActivity?.(label);
-    };
-
-    emitActivity("Starting…");
-
-    const sendPromise = session
-      .sendStream(prompt, {
-        onChunk: () => {
-          if (sawWriting) {
-            return;
-          }
-
-          sawWriting = true;
-          emitActivity("Writing answer…");
+            sawPlanning = true;
+            emitActivity("Planning…");
+          },
+          onToolStart: (event) => {
+            emitActivity(formatToolActivityLabel(event.tool, event.input));
+          },
         },
-        onThinking: () => {
-          if (sawPlanning) {
-            return;
-          }
+        { signal }
+      );
 
-          sawPlanning = true;
-          emitActivity("Planning…");
-        },
-        onToolStart: (event) => {
-          emitActivity(formatToolActivityLabel(event.tool, event.input));
-        },
-      })
-      .then((reply) => ({
-        kind: "success" as const,
-        reply: reply.trim(),
-      }));
+      // A harness that ignores the signal is not waited for.
+      const aborted = new Promise<never>((_, reject) => {
+        if (signal.aborted) {
+          reject(signal.reason);
+        }
 
-    const timeoutPromise = new Promise<{ kind: "timeout" }>((resolve) => {
-      setTimeout(() => resolve({ kind: "timeout" }), timeoutMs);
-    });
+        signal.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        });
+      });
 
-    const outcome = await Promise.race([sendPromise, timeoutPromise]);
-    const durationMs = Date.now() - startedAt;
+      // The loser of the race below settles later with no one listening.
+      sent.catch(() => undefined);
+      aborted.catch(() => undefined);
 
-    if (outcome.kind === "timeout") {
+      // A stopped or timed-out turn's ACP process is stopped here too, not left running.
+      reply = (await Promise.race([sent, aborted])).trim();
+    } catch (error) {
+      if (!timeout.aborted) {
+        // A Stop is not a failure.
+        if (!input.signal?.aborted) {
+          console.error(
+            `[${kind}] fail org=${input.orgId} profile=${input.profileId} durationMs=${Date.now() - startedAt} reason=error`,
+            error
+          );
+        }
+
+        throw error;
+      }
+
       console.info(
-        `[sub_agent] timeout org=${input.orgId} profile=${input.profileId} durationMs=${durationMs}`
+        `[${kind}] timeout org=${input.orgId} profile=${input.profileId} durationMs=${Date.now() - startedAt}`
       );
 
       return buildSubAgentResult("timeout", "", "Sub-agent timed out.");
+    } finally {
+      turnActive = false;
+      close();
     }
 
-    if (!outcome.reply) {
+    const durationMs = Date.now() - startedAt;
+
+    if (!reply) {
       console.info(
-        `[sub_agent] fail org=${input.orgId} profile=${input.profileId} durationMs=${durationMs} reason=empty_reply`
+        `[${kind}] fail org=${input.orgId} profile=${input.profileId} durationMs=${durationMs} reason=empty_reply`
       );
 
       return buildSubAgentResult(
@@ -2205,10 +2748,10 @@ export class AgentService {
     }
 
     console.info(
-      `[sub_agent] success org=${input.orgId} profile=${input.profileId} durationMs=${durationMs}`
+      `[${kind}] success org=${input.orgId} profile=${input.profileId} durationMs=${durationMs}`
     );
 
-    return buildSubAgentResult("success", outcome.reply);
+    return buildSubAgentResult("success", reply);
   }
 
   async runAutomation(automationId: string) {
@@ -2217,6 +2760,16 @@ export class AgentService {
     }
 
     return this.automationRunner.run(automationId);
+  }
+
+  startAutomationFromWebhook(
+    ...args: Parameters<AutomationRunner["startFromWebhook"]>
+  ) {
+    if (!this.automationRunner) {
+      throw new Error("Automation runner is not configured.");
+    }
+
+    return this.automationRunner.startFromWebhook(...args);
   }
 
   get providerConfigured(): boolean {
@@ -2245,11 +2798,6 @@ export class AgentService {
       user: userId ? { id: userId } : undefined,
     });
 
-    const sharedCapabilityRevision = await this.capabilityRevisionForProfile(
-      orgId,
-      resolvedProfileId
-    );
-
     const sessionId = nanoid();
     const modelOverride = this.normalizeSessionModelOverride(options?.model);
     const cognito = options?.cognito;
@@ -2258,11 +2806,14 @@ export class AgentService {
       agentQuestionnaire: null,
       agentTodos: [],
       channel,
+      codingWorkspaceRoot: options?.codingWorkspaceRoot ?? null,
       createdAt: new Date().toISOString(),
       id: sessionId,
       model: modelOverride,
+      parentSessionId: options?.parentSessionId ?? null,
       profileId: resolvedProfileId,
-      title: null,
+      thinkingEffort: options?.thinkingEffort ?? null,
+      title: options?.title ?? null,
       userId: userId ?? null,
     };
 
@@ -2281,46 +2832,123 @@ export class AgentService {
       );
     }
 
-    const session = await this.buildChatSession(
-      channel,
-      orgId,
-      resolvedProfileId,
-      sessionId,
-      modelOverride,
-      userId ?? null,
-      options?.orgRole,
-      options?.isPlatformAdmin,
-      options?.codingWorkspaceRoot,
-      cognito ? {} : undefined
-    );
-
+    // A stored chat is built on its first use, from this row.
     if (cognito) {
-      await this.ephemeralSessions.set({
-        attachmentIds: new Set(),
-        lastActiveAt: Date.now(),
-        record,
-        session,
-        sharedCapabilityRevision,
-      });
-
-      return sessionId;
+      await this.sessions.openCognito(record, orgId);
     }
 
-    this.sessions.set(sessionId, {
-      channel,
-      pluginRevision: await this.pluginCapabilityRevision(orgId),
-      profileId: resolvedProfileId,
-      session,
-      sharedCapabilityRevision,
-    });
-
     return sessionId;
+  }
+
+  /**
+   * A chat a sub_agent run happens in, nested under the chat that started it
+   * so the user can open and continue it. One level deep, like sub_agent.
+   */
+  async createChildSession(
+    parentSessionId: string,
+    orgId: string,
+    title: string,
+    access: Pick<CreateSessionOptions, "isPlatformAdmin" | "orgRole">
+  ): Promise<string> {
+    if (this.sessions.isCognito(parentSessionId)) {
+      throw new AirinApiError("A cognito chat cannot start other chats.", 400);
+    }
+
+    const parent = await this.getSessionRecordForOrg(parentSessionId, orgId);
+
+    if (!parent) {
+      throw new AirinApiError("Session not found.", 404);
+    }
+
+    if (sessionKind(parent) === "child") {
+      throw new AirinApiError(
+        "A chat started from another chat cannot start more chats.",
+        400
+      );
+    }
+
+    await this.assertChildSessionRoom(parentSessionId);
+
+    const inherited = inheritFrom(parent, "child");
+
+    // Web even under a Telegram or Discord chat: no bot chat is bound to the
+    // child, so the user opens it from Recents.
+    return await this.createSession(
+      orgId,
+      "web",
+      inherited.profileId,
+      inherited.userId,
+      {
+        ...access,
+        codingWorkspaceRoot: inherited.codingWorkspaceRoot ?? undefined,
+        model: inherited.model,
+        parentSessionId,
+        thinkingEffort: inherited.thinkingEffort,
+        title,
+      }
+    );
+  }
+
+  /**
+   * Branches and closed chats do not count: the cap is on open sub_agent
+   * chats, so a closed one must also fit before it opens again.
+   */
+  private async assertChildSessionRoom(parentSessionId: string): Promise<void> {
+    const openChildren = (
+      await this.db.listChildSessions(parentSessionId)
+    ).filter((child) => sessionKind(child) === "child" && !child.closedAt);
+
+    if (openChildren.length >= MAX_CHILD_SESSIONS) {
+      throw new AirinApiError(
+        `This chat already has ${MAX_CHILD_SESSIONS} open chats.`,
+        400
+      );
+    }
+  }
+
+  /**
+   * Any other chat belongs to the user who started it. A chat that sub_agent
+   * started under a shared chat is shared too, though it is a web chat.
+   * Platform admins may open any chat for support; everyone else gets the
+   * same 404 as a missing session, so holding another user's session id
+   * reveals nothing.
+   */
+  private async assertSessionOwner(
+    record: StoredSessionRecord,
+    access: ChatProfileAccess
+  ): Promise<void> {
+    if (
+      access.isPlatformAdmin ||
+      isSharedHistory(record) ||
+      (access.user && record.userId === access.user.id)
+    ) {
+      return;
+    }
+
+    if (await this.isChildOfSharedChat(record)) {
+      return;
+    }
+
+    throw new AirinApiError("Session not found", 404);
+  }
+
+  /** The caller already scoped `record` to the org; its parent is in it too. */
+  private async isChildOfSharedChat(
+    record: StoredSessionRecord
+  ): Promise<boolean> {
+    const parent =
+      record.parentSessionId && sessionKind(record) === "child"
+        ? await this.db.getSession(record.parentSessionId)
+        : null;
+
+    return parent !== null && isSharedHistory(parent);
   }
 
   async assertSessionProfileAccess(
     sessionId: string,
     orgId: string,
-    access: ChatProfileAccess
+    access: ChatProfileAccess,
+    options: { localClient?: boolean } = {}
   ): Promise<void> {
     const record = await this.getSessionRecordForOrg(sessionId, orgId);
 
@@ -2330,17 +2958,57 @@ export class AgentService {
         await this.requireProfile(orgId, record.profileId),
         access
       );
+      await this.assertSessionOwner(record, access);
+
+      // Only the local CLI can set this folder, so only it can run tools there.
+      if (options.localClient === false && record.codingWorkspaceRoot) {
+        throw new AirinApiError(
+          "This chat runs in a local folder. Continue it from the CLI.",
+          403
+        );
+      }
     }
   }
 
-  async readChatImageAttachment(
+  /** Throws 403 when the caller cannot use the profile in chat. */
+  async assertProfileChatAccess(
+    orgId: string,
+    profileId: string,
+    access: ChatProfileAccess
+  ): Promise<void> {
+    this.assertChatProfileAccess(
+      await this.requireProfile(orgId, profileId),
+      access
+    );
+  }
+
+  /**
+   * Whether saving this session as a case would move a private chat out of its
+   * owner's hands. Shared messaging history stays team-visible.
+   */
+  async sessionHistoryPrivacy(
+    record: StoredSessionRecord
+  ): Promise<{ isPrivate: boolean; ownerUserId: string | null }> {
+    if (isSharedHistory(record) || (await this.isChildOfSharedChat(record))) {
+      return { isPrivate: false, ownerUserId: null };
+    }
+
+    return { isPrivate: true, ownerUserId: record.userId ?? null };
+  }
+
+  async readChatAttachment(
     orgId: string,
     attachmentId: string,
-    access: ChatProfileAccess
+    access: ChatProfileAccess,
+    options: { preview?: boolean; render?: "markdown" } = {}
   ): Promise<LoadedAttachmentBytes | null> {
     const record = await this.db.getAttachment(attachmentId);
 
-    if (!record || record.orgId !== orgId || record.kind !== "image") {
+    if (
+      !record ||
+      record.orgId !== orgId ||
+      (record.kind !== "image" && record.kind !== "document")
+    ) {
       return null;
     }
 
@@ -2349,10 +3017,48 @@ export class AgentService {
       access
     );
 
-    return createAttachmentLoader(this.db, {
+    const sessionRecord = record.sessionId
+      ? await this.getSessionRecordForOrg(record.sessionId, orgId)
+      : this.sessions.cognitoByAttachment(attachmentId);
+
+    if (!sessionRecord) {
+      return null;
+    }
+
+    await this.assertSessionOwner(sessionRecord, access);
+
+    const renderWord =
+      options.render === "markdown" &&
+      (isDocxFile(record.filename ?? "", record.mediaType) ||
+        isLegacyDocFile(record.filename ?? "", record.mediaType));
+
+    if (options.preview && !renderWord && record.sizeBytes > 8 * 1024 * 1024) {
+      throw new AirinApiError(
+        "This file exceeds the 8 MB preview limit. Download it instead.",
+        413
+      );
+    }
+
+    const attachment = await createAttachmentLoader(this.db, {
       orgId,
       profileId: record.profileId,
     })(attachmentId);
+
+    if (attachment && renderWord) {
+      const markdown = await convertDocxToMarkdown(
+        Buffer.from(attachment.bytes)
+      );
+
+      const bytes = Buffer.from(markdown, "utf8");
+
+      if (bytes.byteLength > 8 * 1024 * 1024) {
+        throw new AirinApiError("Preview exceeds the byte limit.", 413);
+      }
+
+      return { ...attachment, bytes, mediaType: "text/markdown" };
+    }
+
+    return attachment;
   }
 
   private assertChatProfileAccess(
@@ -2361,12 +3067,9 @@ export class AgentService {
   ): void {
     if (
       profile.isSuper &&
-      (access.excludeSuperBot || !canAccessSuperBotProfile(access))
+      (access.excludeSuperAirin || !canAccessSuperAirinProfile(access))
     ) {
-      throw new NakamaApiError(
-        "Super Bot is only available to org admins.",
-        403
-      );
+      throw new AirinApiError("Airin is only available to org admins.", 403);
     }
 
     if (
@@ -2374,7 +3077,7 @@ export class AgentService {
       !access.isPlatformAdmin &&
       profile.ownerUserId !== access.user?.id
     ) {
-      throw new NakamaApiError("This agent is private.", 403);
+      throw new AirinApiError("This agent is private.", 403);
     }
   }
 
@@ -2387,7 +3090,7 @@ export class AgentService {
     entry: EphemeralSession
   ): Promise<void> {
     entry.session.clear();
-    this.superBotSessionState.clearSession(entry.record.id);
+    this.superAirinSessionState.clearSession(entry.record.id);
     this.agentTodoState.clearSession(entry.record.id);
     this.agentQuestionnaireState.clearSession(entry.record.id);
 
@@ -2405,52 +3108,6 @@ export class AgentService {
       );
       await this.db.deleteAttachment(attachment.id);
     }
-  }
-
-  /**
-   * A model change needs a new provider, which means a new session object. The
-   * conversation only exists in the old one, so it is carried across by hand.
-   */
-  private async rebuildEphemeralSession(
-    entry: EphemeralSession,
-    orgId: string,
-    model: string | null
-  ): Promise<boolean> {
-    const channel = parseAgentChannel(entry.record.channel);
-
-    if (!channel) {
-      return false;
-    }
-
-    const { isPlatformAdmin, orgRole } = await this.resolveSessionAccess(
-      orgId,
-      entry.record.userId
-    );
-
-    const sharedCapabilityRevision = await this.capabilityRevisionForProfile(
-      orgId,
-      entry.record.profileId
-    );
-
-    const session = await this.buildChatSession(
-      channel,
-      orgId,
-      entry.record.profileId,
-      entry.record.id,
-      model,
-      entry.record.userId ?? null,
-      orgRole,
-      isPlatformAdmin,
-      undefined,
-      { initialHistory: [...entry.session.getHistory()] }
-    );
-
-    entry.record.model = model;
-    entry.session = session;
-    entry.sharedCapabilityRevision = sharedCapabilityRevision;
-    await this.ephemeralSessions.set(entry);
-
-    return true;
   }
 
   /**
@@ -2509,6 +3166,7 @@ export class AgentService {
     contextUsage: ChatContextUsage | null;
     model: string | null;
     profileId: string;
+    thinkingEffort: ThinkingEffort | null;
   } | null> {
     const record = await this.getSessionRecordForOrg(sessionId, orgId);
 
@@ -2525,12 +3183,12 @@ export class AgentService {
     // Live history is the only history a cognito session has, so it answers
     // here whether or not a turn is in flight.
     if (
-      this.ephemeralSessions.has(sessionId) ||
+      this.sessions.isCognito(sessionId) ||
       (!options?.persistedOnly && sessionTurnRegistry.isActive(sessionId))
     ) {
       const liveSession =
-        this.ephemeralSessions.get(sessionId)?.session ??
-        (await this.resolveSession(sessionId, orgId));
+        this.sessions.peek(sessionId) ??
+        (await this.sessions.get(sessionId, orgId));
 
       if (liveSession) {
         const history = liveSession.getHistory();
@@ -2550,18 +3208,19 @@ export class AgentService {
           messages: [...history],
           model: record.model,
           profileId: record.profileId,
+          thinkingEffort: record.thinkingEffort ?? null,
         };
       }
     }
 
     const storedMessages = await this.db.listMessagesForSession(sessionId);
-    const cached = this.sessions.get(sessionId)?.session;
+    const cached = this.sessions.peek(sessionId);
 
     const contextUsage = options?.persistedOnly
       ? null
       : cached
         ? cached.getContextUsage()
-        : ((await this.resolveSession(sessionId, orgId))?.getContextUsage() ??
+        : ((await this.sessions.get(sessionId, orgId))?.getContextUsage() ??
           null);
 
     return {
@@ -2576,13 +3235,19 @@ export class AgentService {
       messages: storedMessages.map((message) => message.payload as ChatMessage),
       model: record.model,
       profileId: record.profileId,
+      thinkingEffort: record.thinkingEffort ?? null,
     };
   }
 
+  /**
+   * A branch belongs to the user who made it, so it shows in their Recents
+   * even when the chat it came from belongs to someone else.
+   */
   async branchSession(
     sessionId: string,
     messageIndex: number,
-    orgId: string
+    orgId: string,
+    userId?: string
   ): Promise<BranchSessionResponse | null> {
     const record = await this.getSessionRecordForOrg(sessionId, orgId);
 
@@ -2591,7 +3256,7 @@ export class AgentService {
     }
 
     if (!Number.isInteger(messageIndex) || messageIndex < 0) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "messageIndex must be a non-negative integer.",
         400
       );
@@ -2600,7 +3265,7 @@ export class AgentService {
     const sourceMessages = await this.db.listMessagesForSession(sessionId);
 
     if (messageIndex >= sourceMessages.length) {
-      throw new NakamaApiError("messageIndex is out of bounds.", 400);
+      throw new AirinApiError("messageIndex is out of bounds.", 400);
     }
 
     const nextSessionId = nanoid();
@@ -2610,17 +3275,19 @@ export class AgentService {
       ? `${sourceTitle} (Branch)`
       : "Untitled (Branch)";
 
-    await this.db.upsertSession({
+    const branchRecord: StoredSessionRecord = {
+      ...inheritFrom(record, "branch"),
       agentQuestionnaire: null,
       agentTodos: [],
-      channel: record.channel,
+      branchMessageIndex: messageIndex,
       createdAt: new Date().toISOString(),
       id: nextSessionId,
-      model: record.model,
-      profileId: record.profileId,
+      parentSessionId: sessionId,
       title: null,
-      userId: record.userId ?? null,
-    });
+      userId: userId ?? record.userId ?? null,
+    };
+
+    await this.db.upsertSession(branchRecord);
 
     await copySessionHistoryArchive(this.db, orgId, sessionId, nextSessionId);
     await this.db.replaceMessagesForSession(
@@ -2634,40 +3301,11 @@ export class AgentService {
     );
     await this.db.updateSessionTitle(nextSessionId, branchTitle);
 
-    const channel = parseAgentChannel(record.channel);
-
-    if (!channel) {
-      throw new Error("Session channel is invalid.");
-    }
-
-    const { orgId: profileOrgId } = await this.requireProfileRecord(
-      record.profileId
-    );
-
-    const { isPlatformAdmin: branchIsPlatformAdmin, orgRole: branchOrgRole } =
-      await this.resolveSessionAccess(profileOrgId, record.userId);
-
-    const session = await this.buildChatSession(
-      channel,
-      profileOrgId,
-      record.profileId,
-      nextSessionId,
-      record.model,
-      record.userId ?? null,
-      branchOrgRole,
-      branchIsPlatformAdmin,
-      undefined,
-      undefined
-    );
-
-    this.sessions.set(nextSessionId, {
-      channel,
-      pluginRevision: await this.pluginCapabilityRevision(profileOrgId),
-      profileId: record.profileId,
-      session,
-    });
-
-    return { sessionId: nextSessionId };
+    return {
+      // A source the client could load has a valid channel.
+      channel: parseAgentChannel(branchRecord.channel) ?? "web",
+      sessionId: nextSessionId,
+    };
   }
 
   async listSessions(
@@ -2693,6 +3331,10 @@ export class AgentService {
         // One row past the page tells whether another page follows.
         limit: page ? page.limit + 1 : undefined,
         query,
+        sharedChannels: SHARED_HISTORY_CHANNELS,
+        // Everyone, admins included, lists only their own chats. A caller
+        // with no user has none.
+        userId: access.user?.id ?? "",
       }
     );
 
@@ -2736,17 +3378,24 @@ export class AgentService {
   scheduleSessionTitleGeneration(sessionId: string): void {
     // A cognito session has no row to title, and generating one would spend a
     // turn summarising a conversation that is meant to leave no trace.
-    if (this.ephemeralSessions.has(sessionId)) {
+    if (this.sessions.isCognito(sessionId)) {
       return;
     }
 
     this.sessionTitleService.scheduleSessionTitleGeneration(sessionId);
   }
 
+  generateSessionTitle(
+    profileId: string,
+    messages: readonly ChatMessage[]
+  ): Promise<string | null> {
+    return this.sessionTitleService.titleFor(profileId, messages);
+  }
+
   schedulePostTurnSkillReview(sessionId: string): void {
     // The review writes skill suggestions, which is exactly the write-back a
     // cognito session promises not to do.
-    if (this.ephemeralSessions.has(sessionId)) {
+    if (this.sessions.isCognito(sessionId)) {
       return;
     }
 
@@ -2764,14 +3413,24 @@ export class AgentService {
       return false;
     }
 
-    if (await this.ephemeralSessions.delete(sessionId)) {
+    if (this.sessions.isCognito(sessionId)) {
+      await this.sessions.end(sessionId);
+
       return true;
     }
 
+    // Chats sub_agent started here go with it, as on close. Left behind, they
+    // lose their parent and with it the sharing a shared parent gives them.
+    // A branch stays: it is its own chat.
+    for (const child of await this.db.listChildSessions(sessionId)) {
+      if (sessionKind(child) === "child") {
+        await this.purgeSession(child.id, orgId);
+      }
+    }
+
     discardInFlightSessionWrites(sessionId);
-    this.sessions.get(sessionId)?.session.clear();
-    this.sessions.delete(sessionId);
-    this.superBotSessionState.clearSession(sessionId);
+    await this.sessions.end(sessionId);
+    this.superAirinSessionState.clearSession(sessionId);
     this.agentTodoState.clearSession(sessionId);
     this.agentQuestionnaireState.clearSession(sessionId);
     await deleteSessionHistoryArchive(orgId, sessionId);
@@ -2791,100 +3450,14 @@ export class AgentService {
     return true;
   }
 
-  async resolveSession(
+  /**
+   * Changes the settings a chat is built with. It waits for the running turn,
+   * because the next turn needs a chat built with the new settings.
+   */
+  async updateSessionRunSettings(
     sessionId: string,
     orgId: string,
-    forNewTurn = false
-  ): Promise<AgentChatSession | null> {
-    const record = await this.getSessionRecordForOrg(sessionId, orgId);
-
-    if (!record) {
-      return null;
-    }
-
-    if (forNewTurn && record.model) {
-      this.normalizeSessionModelOverride(record.model);
-    }
-
-    const ephemeral = this.ephemeralSessions.get(sessionId);
-    const stored = this.sessions.get(sessionId);
-
-    if (sessionTurnRegistry.isActive(sessionId) && !forNewTurn) {
-      const active = ephemeral?.session ?? stored?.session;
-
-      if (active) {
-        return active;
-      }
-    }
-
-    const sharedCapabilityRevision = await this.capabilityRevisionForProfile(
-      orgId,
-      record.profileId
-    );
-
-    if (ephemeral) {
-      if (
-        (ephemeral.sharedCapabilityRevision ?? "") !==
-          sharedCapabilityRevision &&
-        !(await this.rebuildEphemeralSession(ephemeral, orgId, record.model))
-      ) {
-        throw new NakamaApiError("Session refresh failed. Try again.", 503);
-      }
-
-      return ephemeral.session;
-    }
-
-    const pluginRevision = await this.pluginCapabilityRevision(orgId);
-
-    if (
-      stored &&
-      stored.pluginRevision === pluginRevision &&
-      (stored.sharedCapabilityRevision ?? "") === sharedCapabilityRevision
-    ) {
-      return stored.session;
-    }
-
-    const channel = parseAgentChannel(record.channel);
-
-    if (!channel) {
-      return null;
-    }
-
-    const { orgId: profileOrgId } = await this.requireProfileRecord(
-      record.profileId
-    );
-
-    const { isPlatformAdmin: resumeIsPlatformAdmin, orgRole: resumeOrgRole } =
-      await this.resolveSessionAccess(profileOrgId, record.userId);
-
-    const session = await this.buildChatSession(
-      channel,
-      profileOrgId,
-      record.profileId,
-      sessionId,
-      record.model,
-      record.userId ?? null,
-      resumeOrgRole,
-      resumeIsPlatformAdmin,
-      undefined,
-      undefined
-    );
-
-    this.sessions.set(sessionId, {
-      channel,
-      pluginRevision,
-      profileId: record.profileId,
-      session,
-      sharedCapabilityRevision,
-    });
-
-    return session;
-  }
-
-  async updateSessionModel(
-    sessionId: string,
-    orgId: string,
-    model: string | null
+    changes: Partial<SessionRunSettings>
   ): Promise<boolean> {
     const record = await this.getSessionRecordForOrg(sessionId, orgId);
 
@@ -2895,36 +3468,57 @@ export class AgentService {
     const turn = sessionTurnRegistry.beginTurn(sessionId);
 
     if (!turn.started) {
-      throw new NakamaApiError(
-        "Wait for the current response before changing models.",
+      throw new AirinApiError(
+        "Wait for the current response before changing chat settings.",
         409
       );
     }
 
     try {
-      const normalizedModel = this.normalizeSessionModelOverride(model);
+      const next: Partial<SessionRunSettings> = {};
 
-      if (record.model === normalizedModel) {
+      if (changes.model !== undefined) {
+        const model = this.normalizeSessionModelOverride(changes.model);
+
+        if (model !== record.model) {
+          next.model = model;
+        }
+      }
+
+      if (
+        changes.thinkingEffort !== undefined &&
+        changes.thinkingEffort !== (record.thinkingEffort ?? null)
+      ) {
+        next.thinkingEffort = changes.thinkingEffort;
+      }
+
+      if (next.model === undefined && next.thinkingEffort === undefined) {
         return true;
       }
 
-      const ephemeral = this.ephemeralSessions.get(sessionId);
+      if (this.sessions.isCognito(sessionId)) {
+        await this.sessions.runSettingsChanged(sessionId, orgId, next);
 
-      if (ephemeral) {
-        return await this.rebuildEphemeralSession(
-          ephemeral,
-          orgId,
-          normalizedModel
-        );
+        return true;
       }
 
-      const updated = await this.db.updateSessionModel(
-        sessionId,
-        normalizedModel
-      );
+      let updated = true;
 
-      if (updated) {
-        this.sessions.delete(sessionId);
+      try {
+        if (next.model !== undefined) {
+          updated = await this.db.updateSessionModel(sessionId, next.model);
+        }
+
+        if (updated && next.thinkingEffort !== undefined) {
+          updated = await this.db.updateSessionThinkingEffort(
+            sessionId,
+            next.thinkingEffort
+          );
+        }
+      } finally {
+        // One write can land before the next fails. The chat is dropped either
+        // way, so the next turn is built from the stored row.
+        await this.sessions.runSettingsChanged(sessionId, orgId, next);
       }
 
       return updated;
@@ -2932,6 +3526,70 @@ export class AgentService {
       sessionTurnRegistry.cancelTurn(sessionId);
     }
   }
+
+  /**
+   * Takes a chat out of Recents and stops its running turn. Search and its
+   * link still reach it, and its next message brings it back.
+   */
+  async closeSession(
+    sessionId: string,
+    orgId: string,
+    access: ChatProfileAccess
+  ): Promise<boolean> {
+    if (this.sessions.isCognito(sessionId)) {
+      throw new AirinApiError("An incognito chat cannot be closed.", 400);
+    }
+
+    const record = await this.getSessionRecordForOrg(sessionId, orgId);
+
+    if (!record) {
+      return false;
+    }
+
+    this.assertChatProfileAccess(
+      await this.requireProfile(orgId, record.profileId),
+      access
+    );
+
+    // Everyone on the agent can read a messaging-app chat, but stopping its
+    // turn hits the person who started it, so closing needs the owner or an admin.
+    // A sub_agent chat under it is a web chat in every member's Recents, so
+    // any member may close that one.
+    if (
+      !(
+        access.isPlatformAdmin ||
+        access.orgRole === "admin" ||
+        (access.user && record.userId === access.user.id) ||
+        (await this.isChildOfSharedChat(record))
+      )
+    ) {
+      throw new AirinApiError("Session not found", 404);
+    }
+
+    const closedAt = new Date().toISOString();
+
+    // Write first: a row the update cannot reach must keep its turn running.
+    if (!(await this.db.updateSessionClosedAt(sessionId, closedAt))) {
+      return false;
+    }
+
+    sessionTurnRegistry.stopTurn(sessionId);
+
+    // Chats sub_agent started here go with it, or Recents keeps them without
+    // their parent. A branch has a parent too but stays: it is its own chat.
+    for (const child of await this.db.listChildSessions(sessionId)) {
+      if (
+        sessionKind(child) === "child" &&
+        !child.closedAt &&
+        (await this.db.updateSessionClosedAt(child.id, closedAt))
+      ) {
+        sessionTurnRegistry.stopTurn(child.id);
+      }
+    }
+
+    return true;
+  }
+
   async renameSession(
     sessionId: string,
     orgId: string,
@@ -2960,36 +3618,74 @@ export class AgentService {
     return this.db.updateSessionPinned(sessionId, pinned);
   }
 
-  async beginSessionTurn(
-    sessionId: string,
-    orgId: string
-  ): Promise<boolean | null> {
+  async detachSession(sessionId: string, orgId: string): Promise<boolean> {
     const record = await this.getSessionRecordForOrg(sessionId, orgId);
 
     if (!record) {
-      return null;
-    }
-
-    const turn = sessionTurnRegistry.beginTurn(sessionId);
-
-    if (!turn.started) {
       return false;
     }
 
-    try {
-      await this.resolveSharedAgentProfile(orgId, record.profileId);
+    // Its parent is what shares it; without one, members lose it.
+    if (await this.isChildOfSharedChat(record)) {
+      throw new AirinApiError(
+        "A chat started from a shared chat cannot leave it.",
+        400
+      );
+    }
 
-      if (
-        this.sessions.has(sessionId) ||
-        this.ephemeralSessions.has(sessionId)
-      ) {
-        await this.resolveSession(sessionId, orgId, true);
+    return this.db.updateSessionParent(sessionId, null);
+  }
+
+  async setSessionOrder(
+    orgId: string,
+    profileId: string,
+    access: ChatProfileAccess,
+    sessionIds: string[]
+  ): Promise<void> {
+    const userId = access.user?.id;
+
+    if (!userId || new Set(sessionIds).size !== sessionIds.length) {
+      throw new AirinApiError("Invalid session order.", 400);
+    }
+
+    const { sessions } = await this.listSessions(
+      orgId,
+      profileId,
+      ["web", ...SHARED_HISTORY_CHANNELS],
+      access
+    );
+
+    const visibleIds = new Set(sessions.map((session) => session.id));
+
+    if (sessionIds.some((id) => !visibleIds.has(id))) {
+      throw new AirinApiError("Invalid session order.", 400);
+    }
+
+    await this.db.setSessionOrder(userId, sessionIds);
+  }
+
+  /** Runs once a turn holds the session's lock, before its chat is fetched. */
+  private async prepareTurn(
+    record: StoredSessionRecord,
+    orgId: string
+  ): Promise<void> {
+    if (record.closedAt) {
+      if (record.parentSessionId && sessionKind(record) === "child") {
+        await this.assertChildSessionRoom(record.parentSessionId);
       }
 
-      return true;
-    } catch (error) {
-      sessionTurnRegistry.cancelTurn(sessionId);
-      throw error;
+      await this.db.updateSessionClosedAt(record.id, null);
+    }
+
+    await this.resolveSharedAgentProfile(orgId, record.profileId);
+
+    // A held chat may be out of date; one not held is built fresh anyway.
+    if (this.sessions.peek(record.id)) {
+      if (record.model) {
+        this.normalizeSessionModelOverride(record.model);
+      }
+
+      await this.sessions.get(record.id, orgId, { forNewTurn: true });
     }
   }
 
@@ -3002,7 +3698,8 @@ export class AgentService {
 
     // Clearing a cognito session is the same as ending it: there is no
     // durable copy to keep the id pointing at.
-    if (await this.ephemeralSessions.delete(sessionId)) {
+    if (this.sessions.isCognito(sessionId)) {
+      await this.sessions.end(sessionId);
       await this.agentQuestionnaireState.clear(sessionId);
 
       return true;
@@ -3013,8 +3710,7 @@ export class AgentService {
     // database instead of showing what the turn wrote after the clear. The
     // turn lock is left alone and is released when the turn ends.
     discardInFlightSessionWrites(sessionId);
-    this.sessions.get(sessionId)?.session.clear();
-    this.sessions.delete(sessionId);
+    await this.sessions.end(sessionId);
 
     await deleteSessionHistoryArchive(orgId, sessionId);
     await this.db.deleteMessagesForSession(sessionId);
@@ -3070,8 +3766,7 @@ export class AgentService {
     orgId: string,
     profile: StoredProfileRecord
   ): Promise<void> {
-    const tools = await this.resolveProfileTools(profile, {
-      includeMemoryWriteTools: true,
+    const tools = await this.resolveProfileTools(profile, "acp_draft", {
       userId: null,
     });
 
@@ -3130,7 +3825,7 @@ export class AgentService {
     const profile = await this.requireProfile(orgId, profileId);
 
     if (await this.db.getSharedAgentInstance(orgId, profileId)) {
-      throw new NakamaApiError("Shared agent configuration is read-only.", 403);
+      throw new AirinApiError("Shared agent configuration is read-only.", 403);
     }
 
     await this.registerAcpDraftTools(orgId, profile);
@@ -3162,7 +3857,7 @@ export class AgentService {
     options: { force?: boolean } = {},
     orgId: string
   ): Promise<CompactionResponse | null> {
-    const session = await this.resolveSession(sessionId, orgId);
+    const session = await this.sessions.get(sessionId, orgId);
 
     if (!session) {
       return null;
@@ -3189,6 +3884,7 @@ export class AgentService {
   async discoverModels(
     request: DiscoverModelsRequest
   ): Promise<ModelsResponse> {
+    await this.refreshManagedProviderKeys();
     const providerId = request.providerId?.trim();
 
     if (providerId) {
@@ -3203,7 +3899,7 @@ export class AgentService {
       const apiKey = request.apiKey?.trim() ?? "";
 
       if (!apiKey) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "API key is required to discover Fireworks models.",
           400
         );
@@ -3243,6 +3939,41 @@ export class AgentService {
       };
     }
 
+    if (request.provider === "cloudflare") {
+      const apiKey = request.apiKey?.trim() ?? "";
+      const baseUrl = resolveCloudflareAccountInput(request.baseUrl ?? "");
+
+      if (!(apiKey && baseUrl)) {
+        throw new AirinApiError(
+          "An API key and account ID are required to discover Cloudflare models.",
+          400
+        );
+      }
+
+      const entries = await fetchCloudflareWorkersAiModels(baseUrl, apiKey);
+
+      const probeInstance = {
+        apiKey,
+        baseUrl,
+        createdAt: new Date(0).toISOString(),
+        customModels: entries,
+        id: "discover",
+        label: "Cloudflare Worker AI",
+        type: "cloudflare" as const,
+      };
+
+      return {
+        baseUrl,
+        catalog: AVAILABLE_MODELS,
+        currentProviderId: null,
+        customModels: entries,
+        displayName: null,
+        models: getModelsForProviderInstance(probeInstance),
+        provider: "cloudflare",
+        providers: [],
+      };
+    }
+
     const isNetra = request.provider === "netra";
 
     const baseUrl = isNetra
@@ -3252,14 +3983,14 @@ export class AgentService {
     const apiKey = request.apiKey?.trim() ?? "";
 
     if (isNetra && !apiKey) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "API key is required to discover Netra models.",
         400
       );
     }
 
     if (!baseUrl) {
-      throw new NakamaApiError("baseUrl or providerId is required.", 400);
+      throw new AirinApiError("baseUrl or providerId is required.", 400);
     }
 
     const entries = isNetra
@@ -3317,14 +4048,10 @@ export class AgentService {
     );
 
     if (!instance) {
-      throw new NakamaApiError("Provider not found.", 404);
+      throw new AirinApiError("Provider not found.", 404);
     }
 
-    if (
-      instance.type === "ollama" ||
-      instance.type === "openai_compatible" ||
-      instance.type === "netra"
-    ) {
+    if (instance.type === "ollama" || isDiscoveryModelProvider(instance.type)) {
       const hostMode =
         instance.type === "ollama"
           ? (overrides?.hostMode ?? resolveOllamaHostMode(instance))
@@ -3333,19 +4060,19 @@ export class AgentService {
       const apiKey =
         overrides?.apiKey?.trim() ||
         instance.apiKey.trim() ||
-        (instance.type === "ollama" || instance.type === "netra"
-          ? readEnvValue(
+        (instance.type === "openai_compatible"
+          ? ""
+          : readEnvValue(
               process.env,
               apiKeyEnvVarForProvider(instance.type) ?? ""
-            ) || ""
-          : "");
+            ) || "");
 
       if (
         instance.type === "ollama" &&
         ollamaRequiresApiKey(hostMode!) &&
         !apiKey.trim()
       ) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Add an API key before discovering Ollama Cloud models.",
           400
         );
@@ -3357,18 +4084,16 @@ export class AgentService {
         instance.baseUrl?.trim() ||
         (instance.type === "ollama"
           ? defaultOllamaBaseUrl(hostMode!)
-          : instance.type === "netra"
-            ? defaultDiscoveryBaseUrl("netra")
-            : "");
+          : (defaultDiscoveryBaseUrl(instance.type) ?? ""));
 
       if (!baseUrl) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "A base URL is required to discover models.",
           400
         );
       }
 
-      const entries =
+      const fetchedEntries =
         instance.type === "ollama"
           ? await fetchOllamaModels(baseUrl, apiKey)
           : instance.type === "netra"
@@ -3380,6 +4105,18 @@ export class AgentService {
                 name: entry.name,
               }))
             : await fetchRemoteOpenAIModels(baseUrl, apiKey);
+
+      const entries =
+        instance.type === "command_code"
+          ? fetchedEntries.map((entry) =>
+              entry.supportsVision === undefined
+                ? {
+                    ...entry,
+                    supportsVision: commandCodeModelSupportsVision(entry.id),
+                  }
+                : entry
+            )
+          : fetchedEntries;
 
       const remoteInstance = { ...instance, baseUrl, customModels: entries };
       const models = getModelsForProviderInstance(remoteInstance);
@@ -3403,7 +4140,7 @@ export class AgentService {
         "";
 
       if (!apiKey.trim()) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Add an API key before discovering Fireworks models.",
           400
         );
@@ -3420,6 +4157,45 @@ export class AgentService {
         displayName: instance.label,
         models,
         provider: "fireworks",
+        providers: [],
+      };
+    }
+
+    if (instance.type === "cloudflare") {
+      const apiKey =
+        overrides?.apiKey?.trim() ||
+        instance.apiKey.trim() ||
+        readEnvValue(
+          process.env,
+          apiKeyEnvVarForProvider("cloudflare") ?? ""
+        ) ||
+        "";
+
+      const accountId = readEnvValue(process.env, "CLOUDFLARE_ACCOUNT_ID");
+
+      const baseUrl =
+        overrides?.baseUrl ||
+        instance.baseUrl?.trim() ||
+        (accountId ? cloudflareBaseUrlFromAccountId(accountId) : "");
+
+      if (!(apiKey && baseUrl)) {
+        throw new AirinApiError(
+          "Add an API key and account ID before discovering Cloudflare models.",
+          400
+        );
+      }
+
+      const entries = await fetchCloudflareWorkersAiModels(baseUrl, apiKey);
+      const remoteInstance = { ...instance, customModels: entries };
+
+      return {
+        baseUrl,
+        catalog: AVAILABLE_MODELS,
+        currentProviderId: providerId,
+        customModels: entries,
+        displayName: instance.label,
+        models: getModelsForProviderInstance(remoteInstance),
+        provider: "cloudflare",
         providers: [],
       };
     }
@@ -3451,7 +4227,7 @@ export class AgentService {
       let oauth = readChatgptOAuthFromInstance(instance);
 
       if (!oauth) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Sign in with ChatGPT before discovering models.",
           400
         );
@@ -3480,17 +4256,14 @@ export class AgentService {
     }
 
     if (instance.type !== "openai") {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Remote model discovery is not supported for ${instance.type}.`,
         400
       );
     }
 
     if (!instance.apiKey.trim()) {
-      throw new NakamaApiError(
-        "Add an API key before discovering models.",
-        400
-      );
+      throw new AirinApiError("Add an API key before discovering models.", 400);
     }
 
     const baseUrl = instance.baseUrl?.trim() || "https://api.openai.com/v1";
@@ -3516,13 +4289,68 @@ export class AgentService {
     };
   }
 
+  /** Asks the provider if a typed key works, before anything is saved. */
+  async checkProviderKey(request: {
+    apiKey: string;
+    baseUrl?: string;
+    type: ProviderInstance["type"];
+  }): Promise<CheckProviderResponse> {
+    return {
+      // SAFETY: checkApiKey reads only type, apiKey, baseUrl and label.
+      status: await checkApiKey({
+        apiKey: request.apiKey.trim(),
+        baseUrl: request.baseUrl?.trim() || undefined,
+        createdAt: "",
+        id: "unsaved",
+        label: request.type,
+        type: request.type,
+      } as ProviderInstance),
+    };
+  }
+
+  /** Asks the provider if the saved key still works. */
+  async checkProvider(providerId: string): Promise<CheckProviderResponse> {
+    await this.refreshManagedProviderKeys();
+    const instance = findProviderInstance(this.userConfig, providerId);
+
+    if (!instance) {
+      throw new AirinApiError("Provider not found.", 404);
+    }
+
+    return { status: await checkApiKey(instance) };
+  }
+
   async listProviders(): Promise<ListProvidersResponse> {
+    await this.refreshManagedProviderKeys();
     const providers = this.userConfig?.providers ?? [];
 
     return {
       defaultProviderId: this.userConfig?.defaultProviderId ?? null,
-      providers: providers.map((instance) =>
-        toProviderInstanceSummary(instance, countModelsForInstance(instance))
+      providers: await Promise.all(
+        providers.map(async (instance) => {
+          const envNames = providerSecretEnvNames(instance.id, instance.type);
+
+          const status = await this.managedSecrets?.status(
+            "global",
+            `provider:${instance.id}`,
+            envNames
+          );
+
+          return {
+            ...toProviderInstanceSummary(
+              instance,
+              countModelsForInstance(instance)
+            ),
+            // Enough to tell keys apart, never enough to use one.
+            // oxlint-disable-next-line anti-slop/no-conditional-empty-object-spread -- The field must stay absent when no full key is saved.
+            ...(instance.apiKey.length >= 12
+              ? { apiKeyEnding: instance.apiKey.slice(-4) }
+              : {}),
+            savedSecretAvailable: status?.savedAvailable ?? false,
+            secretEnvName: status?.envName ?? envNames[0],
+            secretSource: status?.source ?? ("missing" as const),
+          };
+        })
       ),
     };
   }
@@ -3530,65 +4358,16 @@ export class AgentService {
   async createProvider(
     request: CreateProviderRequest
   ): Promise<CreateProviderResponse> {
+    if (request.apiKey?.trim()) {
+      throw new AirinApiError(
+        "Save the API key through the secret settings API.",
+        400
+      );
+    }
+
     const existing = this.userConfig?.providers ?? [];
     const instance = buildProviderInstanceFromCreateRequest(request, existing);
     const model = resolveInitialModel(instance, request.model);
-
-    if (instance.type === "netra") {
-      if (model !== NETRA_AGENT_MODEL_ID) {
-        throw new NakamaApiError(
-          "This Netra model needs a verified tool-turn test.",
-          400
-        );
-      }
-
-      let discovered: Awaited<ReturnType<typeof fetchNetraModels>> | null =
-        null;
-
-      try {
-        discovered = await fetchNetraModels(instance.apiKey);
-      } catch (error) {
-        if (error instanceof NakamaApiError && error.status === 400) {
-          throw error;
-        }
-
-        // The exact ID can still work when model discovery is unavailable.
-        const provider = createProviderForInstance(instance, model);
-
-        if (!provider) {
-          throw new NakamaApiError(
-            "Netra provider could not be initialized.",
-            400
-          );
-        }
-
-        await provider.generateChat({
-          messages: [{ content: "Reply OK.", role: "user" }],
-          system: "Reply OK.",
-        });
-      }
-
-      if (discovered && !discovered.some((entry) => entry.id === model)) {
-        throw new NakamaApiError(
-          "The selected Netra model is not available to this API key.",
-          400
-        );
-      }
-    }
-
-    if (instance.type === "gemini") {
-      const provider = createProviderForInstance(instance, model);
-
-      if (!provider) {
-        throw new Error("Gemini provider could not be initialized.");
-      }
-
-      await provider.generateText({
-        format: "text",
-        prompt: "Reply with OK.",
-        system: "Reply with OK.",
-      });
-    }
 
     const providers = [...existing, instance];
     const isFirst = providers.length === 1;
@@ -3631,6 +4410,13 @@ export class AgentService {
     providerId: string,
     request: UpdateProviderRequest
   ): Promise<UpdateProviderResponse> {
+    if (request.apiKey?.trim()) {
+      throw new AirinApiError(
+        "Save the API key through the secret settings API.",
+        400
+      );
+    }
+
     return providerPublicationLock.withLock("providers", async () => {
       if (!this.userConfig) {
         throw new Error("Provider is not configured.");
@@ -3664,6 +4450,24 @@ export class AgentService {
     });
   }
 
+  /** Makes this provider the one new chats use when nothing else is set. */
+  async setDefaultProvider(
+    providerId: string
+  ): Promise<DeleteProviderResponse> {
+    return providerPublicationLock.withLock("providers", async () => {
+      if (!findProviderInstance(this.userConfig, providerId)) {
+        throw new AirinApiError("Provider not found.", 404);
+      }
+
+      const config = { ...this.userConfig!, defaultProviderId: providerId };
+      await saveUserConfig(config);
+      this.userConfig = config;
+      this.refreshProviderConfig();
+
+      return { defaultProviderId: providerId };
+    });
+  }
+
   async deleteProvider(providerId: string): Promise<DeleteProviderResponse> {
     return providerPublicationLock.withLock("providers", async () => {
       if (!this.userConfig) {
@@ -3693,6 +4497,7 @@ export class AgentService {
 
       await saveUserConfig(config);
       this.userConfig = config;
+      await this.managedSecrets?.delete("global", `provider:${providerId}`);
       this.refreshProviderConfig();
       await this.unpublishProviderModels(providerId);
 
@@ -3777,6 +4582,7 @@ export class AgentService {
   async getModels(
     options: { source?: "catalog" | "remote" } = {}
   ): Promise<ModelsResponse> {
+    await this.refreshManagedProviderKeys();
     const active = getActiveProviderInstance(this.userConfig);
     const currentProviderId = this.userConfig?.defaultProviderId ?? null;
     const configuredProviders = this.userConfig?.providers ?? [];
@@ -3962,14 +4768,200 @@ export class AgentService {
     const provider = createProviderFromActiveConfig(this.userConfig);
     this._providerConfigured =
       isProviderConfigured(this.userConfig) && provider !== null;
-    this.sessions.clear();
+    this.sessions.invalidateAll();
+  }
+
+  private async refreshManagedProviderKeys(): Promise<void> {
+    if (!this.managedSecrets) {
+      return;
+    }
+
+    const fingerprint = await this.managedSecrets.fingerprint();
+
+    if (
+      this.secretFingerprint !== null &&
+      fingerprint !== this.secretFingerprint
+    ) {
+      this.sessions.invalidateAll();
+      this.composioService?.reloadConfiguration();
+    }
+
+    this.secretFingerprint = fingerprint;
+
+    if (!this.userConfig) {
+      return;
+    }
+
+    const providers = await Promise.all(
+      this.userConfig.providers.map(async (instance) => ({
+        ...instance,
+        apiKey:
+          (
+            await this.managedSecrets!.resolve(
+              "global",
+              `provider:${instance.id}`,
+              providerSecretEnvNames(instance.id, instance.type)
+            )
+          ).value ?? "",
+      }))
+    );
+
+    if (
+      providers.some(
+        (instance, index) =>
+          instance.apiKey !== this.userConfig!.providers[index]?.apiKey
+      )
+    ) {
+      this.userConfig = { ...this.userConfig, providers };
+      this.refreshProviderConfig();
+    }
+  }
+
+  async setProviderSecret(
+    providerId: string,
+    apiKey: string
+  ): Promise<UpdateProviderResponse> {
+    if (!apiKey?.trim()) {
+      throw new AirinApiError("Enter an API key.", 400);
+    }
+
+    const current = findProviderInstance(this.userConfig, providerId);
+
+    if (!(current && this.managedSecrets)) {
+      throw new AirinApiError("Provider not found.", 404);
+    }
+
+    const envNames = providerSecretEnvNames(providerId, current.type);
+
+    if (
+      (
+        await this.managedSecrets.resolve(
+          "global",
+          `provider:${providerId}`,
+          envNames
+        )
+      ).source === "environment"
+    ) {
+      throw new AirinApiError("This key is managed by the environment.", 409);
+    }
+
+    const updated = applyProviderInstanceUpdate(current, { apiKey });
+    const model = resolveInitialModel(updated, undefined);
+
+    if (updated.type === "netra") {
+      // The full list, so a model added by hand is checked too.
+      let discovered: Awaited<
+        ReturnType<typeof fetchRemoteOpenAIModels>
+      > | null = null;
+
+      try {
+        discovered = await fetchRemoteOpenAIModels(
+          defaultDiscoveryBaseUrl("netra")!,
+          updated.apiKey
+        );
+      } catch (error) {
+        if (error instanceof AirinApiError && error.status === 400) {
+          throw error;
+        }
+
+        const provider = createProviderForInstance(updated, model);
+
+        if (!provider) {
+          throw new AirinApiError(
+            "Netra provider could not be initialized.",
+            400
+          );
+        }
+
+        await provider.generateChat({
+          messages: [{ content: "Reply OK.", role: "user" }],
+          system: "Reply OK.",
+        });
+      }
+
+      if (discovered && !discovered.some((entry) => entry.id === model)) {
+        throw new AirinApiError(
+          "The selected Netra model is not available to this API key.",
+          400
+        );
+      }
+    }
+
+    if (updated.type === "gemini") {
+      const provider = createProviderForInstance(updated, model);
+
+      if (!provider) {
+        throw new Error("Gemini provider could not be initialized.");
+      }
+
+      await provider.generateText({
+        format: "text",
+        prompt: "Reply with OK.",
+        system: "Reply with OK.",
+      });
+    }
+
+    await rejectRefusedApiKey(updated);
+
+    await this.managedSecrets.save(
+      "global",
+      `provider:${providerId}`,
+      updated.apiKey
+    );
+    this.userConfig = {
+      ...this.userConfig!,
+      providers: this.userConfig!.providers.map((instance) =>
+        instance.id === providerId ? updated : instance
+      ),
+    };
+    this.refreshProviderConfig();
+
+    return {
+      provider: {
+        ...toProviderInstanceSummary(updated, countModelsForInstance(updated)),
+        secretSource: "settings",
+      },
+    };
+  }
+
+  async manageProviderSecret(
+    providerId: string,
+    action: "clear" | "use-stored"
+  ): Promise<UpdateProviderResponse> {
+    const current = findProviderInstance(this.userConfig, providerId);
+
+    if (!(current && this.managedSecrets)) {
+      throw new AirinApiError("Provider not found.", 404);
+    }
+
+    const envNames = providerSecretEnvNames(providerId, current.type);
+
+    if (action === "clear") {
+      await this.managedSecrets.delete("global", `provider:${providerId}`);
+    } else {
+      await this.managedSecrets.useStored(
+        "global",
+        `provider:${providerId}`,
+        envNames
+      );
+    }
+
+    await this.refreshManagedProviderKeys();
+    const providers = await this.listProviders();
+
+    return {
+      provider: providers.providers.find(
+        (provider) => provider.id === providerId
+      )!,
+    };
   }
 
   /** After a data-root restore, reload provider config and clear in-memory session state. */
   async reloadAfterDataRestore(): Promise<void> {
     this.userConfig = await loadUserConfig();
+    await this.refreshManagedProviderKeys();
     this.refreshProviderConfig();
-    this.ephemeralSessions.clear();
+    this.sessions.invalidateAll({ cognito: true });
     this.composioService?.reloadConfiguration();
     this.visionSettingsPromise = null;
     this.transcriptionSettingsPromise = null;
@@ -3985,6 +4977,30 @@ export class AgentService {
     return this.profileService.getProfile(orgId, profileId);
   }
 
+  /**
+   * The fields an access check reads, from one row lookup. A guard uses it so
+   * an unknown id and a hidden agent cost the same, and the full detail loads
+   * only after access passes.
+   */
+  async getProfileAccess(
+    orgId: string,
+    profileId: string
+  ): Promise<{
+    isSuper: boolean;
+    ownerUserId: string | null;
+    sharedWithTeam: boolean;
+  } | null> {
+    const profile = await this.db.getProfileForOrg(profileId, orgId);
+
+    return profile
+      ? {
+          isSuper: profile.isSuper,
+          ownerUserId: profile.ownerUserId ?? null,
+          sharedWithTeam: profile.sharedWithTeam !== false,
+        }
+      : null;
+  }
+
   async createProfile(
     orgId: string,
     request: CreateProfileRequest,
@@ -3993,16 +5009,16 @@ export class AgentService {
     return this.profileService.createProfile(orgId, request, owner);
   }
 
-  async createProfileWithSuperBot(
+  async createProfileWithSuperAirin(
     orgId: string,
-    request: CreateProfileWithSuperBotRequest
+    request: CreateProfileWithSuperAirinRequest
   ): Promise<ProfileResponse> {
-    const superBot = (await this.db.listProfilesForOrg(orgId)).find(
+    const superAirin = (await this.db.listProfilesForOrg(orgId)).find(
       (profile) => profile.isSuper
     );
 
-    if (!superBot) {
-      throw new Error("Super Bot is not available in this organization.");
+    if (!superAirin) {
+      throw new Error("Airin is not available in this organization.");
     }
 
     const nameLine = request.name
@@ -4013,7 +5029,7 @@ export class AgentService {
 
     await this.runAutomationPrompt(
       orgId,
-      superBot.id,
+      superAirin.id,
       [
         "Create one new agent for the request below. Do not ask for confirmation. Call create_profile exactly once with name and soulFiles (SOUL.md and INSTRUCTIONS.md), then stop.",
         nameLine,
@@ -4042,7 +5058,7 @@ export class AgentService {
     );
 
     if (!createdProfileId) {
-      throw new Error("Super Bot did not create an agent.");
+      throw new Error("Airin did not create an agent.");
     }
 
     return this.profileService.getProfile(orgId, createdProfileId);
@@ -4062,11 +5078,7 @@ export class AgentService {
     );
 
     if (request.model !== undefined) {
-      for (const [sessionId, record] of this.sessions.entries()) {
-        if (record.profileId === profileId) {
-          this.sessions.delete(sessionId);
-        }
-      }
+      this.sessions.invalidateProfile(profileId);
     }
 
     return response;
@@ -4083,11 +5095,7 @@ export class AgentService {
       request
     );
 
-    for (const [sessionId, record] of this.sessions) {
-      if (record.profileId === profileId) {
-        this.sessions.delete(sessionId);
-      }
-    }
+    this.sessions.invalidateProfile(profileId);
 
     return result;
   }
@@ -4095,12 +5103,7 @@ export class AgentService {
   async deleteProfile(orgId: string, profileId: string): Promise<void> {
     await this.profileService.deleteProfile(orgId, profileId);
 
-    for (const [sessionId, record] of this.sessions) {
-      if (record.profileId === profileId) {
-        record.session.clear();
-        this.sessions.delete(sessionId);
-      }
-    }
+    this.sessions.invalidateProfile(profileId, { clear: true });
   }
 
   async listTools(orgId: string): Promise<ListToolsResponse> {
@@ -4125,7 +5128,12 @@ export class AgentService {
   }
 
   async deleteTool(toolId: string): Promise<void> {
-    return this.profileService.deleteTool(toolId);
+    const tool = await this.db.getTool(toolId);
+    await this.profileService.deleteTool(toolId);
+
+    if (tool?.orgId) {
+      await this.managedSecrets?.delete(tool.orgId, `tool:${toolId}`);
+    }
   }
 
   async runToolPlayground<T>(
@@ -4146,7 +5154,7 @@ export class AgentService {
     const record = await this.db.getTool(toolId);
 
     if (!record) {
-      throw new NakamaApiError("Tool not found.", 404);
+      throw new AirinApiError("Tool not found.", 404);
     }
 
     const profileId = await this.resolvePlaygroundProfileId(
@@ -4226,6 +5234,44 @@ export class AgentService {
     );
 
     return { parameters };
+  }
+
+  /**
+   * Setup steps for the user's goal: toolkits to connect, skills to give the
+   * agent, business context to write. Reads USER.md, so it also works after a
+   * memory import that left "Help with" empty.
+   */
+  async getSetupChecklist(
+    orgId: string,
+    userId: string,
+    profileId: string
+  ): Promise<SetupChecklistResponse> {
+    await this.getProfile(orgId, profileId);
+
+    const [userContext, toolkits, skills, assignedSkills, orgMemory] =
+      await Promise.all([
+        this.db.getUserContext(orgId, userId),
+        // Composio is optional and remote: no key or no network means no
+        // toolkit steps, not a failed checklist.
+        this.composioService?.listToolkits(orgId, userId).catch(() => null) ??
+          null,
+        this.listSkills(orgId),
+        this.skillsService?.listSkillsForProfile(profileId) ?? [],
+        this.getOrgMemoryService().getMemory(orgId),
+      ]);
+
+    const candidates = listSetupChecklistCandidates({
+      assignedSkillIds: assignedSkills.map((skill) => skill.id),
+      catalog: toolkits?.catalog ?? [],
+      orgMemory,
+      skills: skills.skills,
+      userConnections: toolkits?.userConnections ?? [],
+    });
+
+    return buildSetupChecklist(
+      { candidates, userContext },
+      { provider: createProviderFromActiveConfig(this.userConfig, process.env) }
+    );
   }
 
   async listProfileTools(
@@ -4329,6 +5375,13 @@ export class AgentService {
       skillId,
       versionId,
       meta
+    );
+  }
+
+  async installSkillPythonPackages(orgId: string, skillId: string) {
+    return this.requireSkillsService().installSkillPythonPackages(
+      orgId,
+      skillId
     );
   }
 
@@ -4626,7 +5679,7 @@ export class AgentService {
       key !== "memory" &&
       (await this.db.getSharedAgentInstance(orgId, profileId))
     ) {
-      throw new NakamaApiError("Shared agent configuration is read-only.", 403);
+      throw new AirinApiError("Shared agent configuration is read-only.", 403);
     }
 
     const field = soulFieldFromKey(key);
@@ -4671,14 +5724,68 @@ export class AgentService {
     );
   }
 
+  /**
+   * `createdByUserId` limits the list to the files that user saved, for a member
+   * who cannot manage the agent. Paging then applies to that shorter list.
+   */
   async listProfileArtifacts(
     orgId: string,
     profileId: string,
-    options: ListArtifactsOptions = {}
+    options: ListArtifactsOptions = {},
+    createdByUserId?: string
   ): Promise<ListArtifactsResponse> {
     await this.requireProfile(orgId, profileId);
 
-    return listArtifacts(orgId, profileId, options);
+    const listed = await listArtifacts(
+      orgId,
+      profileId,
+      createdByUserId ? { folder: options.folder } : options
+    );
+
+    const owners = new Map(
+      (await this.db.listArtifactRecords(orgId, profileId)).map((record) => [
+        record.filename,
+        record,
+      ])
+    );
+
+    const artifacts = listed.artifacts.map((artifact) => {
+      const owner = owners.get(artifact.filename);
+
+      return owner
+        ? {
+            ...artifact,
+            createdBy: {
+              channel: owner.channel,
+              createdAt: owner.createdAt,
+              userId: owner.userId,
+              userName: owner.userName,
+            },
+          }
+        : artifact;
+    });
+
+    if (!createdByUserId) {
+      return { ...listed, artifacts };
+    }
+
+    const own = artifacts.filter(
+      (artifact) => artifact.createdBy?.userId === createdByUserId
+    );
+
+    if (options.limit === undefined) {
+      return { ...listed, artifacts: own, total: own.length };
+    }
+
+    const offset = options.offset ?? 0;
+
+    return {
+      ...listed,
+      artifacts: own.slice(offset, offset + options.limit),
+      limit: options.limit,
+      offset,
+      total: own.length,
+    };
   }
 
   async readProfileArtifact(
@@ -4688,9 +5795,15 @@ export class AgentService {
     options: {
       headOnly?: boolean;
       render?: "markdown";
-    } = {}
+    } = {},
+    createdByUserId?: string
   ) {
-    await this.requireProfile(orgId, profileId);
+    await this.requireArtifactCreator(
+      orgId,
+      profileId,
+      filename,
+      createdByUserId
+    );
 
     return readArtifactFile({
       filename,
@@ -4705,9 +5818,15 @@ export class AgentService {
     orgId: string,
     profileId: string,
     filename: string,
-    content: string
+    content: string,
+    createdByUserId?: string
   ): Promise<UpdateArtifactResponse> {
-    await this.requireProfile(orgId, profileId);
+    await this.requireArtifactCreator(
+      orgId,
+      profileId,
+      filename,
+      createdByUserId
+    );
 
     return writeArtifactFile({ content, filename, orgId, profileId });
   }
@@ -4715,11 +5834,46 @@ export class AgentService {
   async deleteProfileArtifact(
     orgId: string,
     profileId: string,
-    filename: string
+    filename: string,
+    createdByUserId?: string
   ): Promise<DeleteArtifactResponse> {
+    await this.requireArtifactCreator(
+      orgId,
+      profileId,
+      filename,
+      createdByUserId
+    );
+
+    const deleted = await deleteArtifactFile({ filename, orgId, profileId });
+
+    await this.db.deleteArtifactRecord(orgId, profileId, deleted.filename);
+
+    return deleted;
+  }
+
+  /** With a `createdByUserId`, 403 unless that user saved this artifact. */
+  async requireArtifactCreator(
+    orgId: string,
+    profileId: string,
+    filename: string,
+    createdByUserId?: string
+  ): Promise<void> {
     await this.requireProfile(orgId, profileId);
 
-    return deleteArtifactFile({ filename, orgId, profileId });
+    if (!createdByUserId) {
+      return;
+    }
+
+    // Check the file the path reaches, in the form the record stores.
+    const name = await resolveArtifactName({ filename, orgId, profileId });
+
+    const record = name
+      ? await this.db.getArtifactRecord(orgId, profileId, name)
+      : null;
+
+    if (record?.userId !== createdByUserId) {
+      throw new AirinApiError("Forbidden", 403);
+    }
   }
 
   async getUserContext(
@@ -4880,11 +6034,12 @@ export class AgentService {
     sessionId: string,
     orgId: string
   ): Promise<StoredSessionRecord | null> {
-    // Cognito sessions have no row, so the map answers first. Everything that
-    // reaches a session funnels through here, which is why the rest of the
-    // file needs no branch of its own.
-    const ephemeral = this.ephemeralSessions.get(sessionId);
-    const record = ephemeral?.record ?? (await this.db.getSession(sessionId));
+    // Cognito sessions have no row, so the runtime answers first. Everything
+    // that reaches a session funnels through here, which is why the rest of
+    // the file needs no branch of its own.
+    const record =
+      this.sessions.cognitoRecord(sessionId) ??
+      (await this.db.getSession(sessionId));
 
     if (!record) {
       return null;
@@ -4913,7 +6068,7 @@ export class AgentService {
     }
 
     if (await this.db.getSharedAgentInstance(orgId, profileId)) {
-      throw new NakamaApiError("Shared agent is unavailable.", 503);
+      throw new AirinApiError("Shared agent is unavailable.", 503);
     }
 
     return null;
@@ -4966,7 +6121,7 @@ export class AgentService {
     }
 
     if (new Set(records.map((record) => record.name)).size !== records.length) {
-      throw new NakamaApiError("Conflicting tool names are assigned.", 409);
+      throw new AirinApiError("Conflicting tool names are assigned.", 409);
     }
 
     const team = await this.db.getOrganizationById(orgId);
@@ -4982,7 +6137,7 @@ export class AgentService {
       parent.parentOrgId ||
       foreign.some((record) => record.orgId !== parent.id)
     ) {
-      throw new NakamaApiError("Tool is unavailable.", 404);
+      throw new AirinApiError("Tool is unavailable.", 404);
     }
 
     const catalog = await this.db.listOrgSharedResources(parent.id);
@@ -4994,7 +6149,7 @@ export class AgentService {
       );
 
       if (!detail) {
-        throw new NakamaApiError("Tool is unavailable.", 404);
+        throw new AirinApiError("Tool is unavailable.", 404);
       }
 
       return detail.id;
@@ -5010,22 +6165,10 @@ export class AgentService {
     const profile = await this.db.getProfileForOrg(profileId, orgId);
 
     if (!profile) {
-      throw new NakamaApiError("Profile not found.", 404);
+      throw new AirinApiError("Profile not found.", 404);
     }
 
     return profile;
-  }
-
-  private async requireProfileRecord(
-    profileId: string
-  ): Promise<StoredProfileRecord & { orgId: string }> {
-    const profile = await this.db.getProfile(profileId);
-
-    if (!profile?.orgId) {
-      throw new Error("Profile not found.");
-    }
-
-    return { ...profile, orgId: profile.orgId };
   }
 
   private async resolveSessionProfile(
@@ -5047,26 +6190,34 @@ export class AgentService {
     );
   }
 
+  /** The profile's tools plus the platform groups this kind of turn gets. */
   private async resolveProfileTools(
     profile: StoredProfileRecord,
+    kind: TurnKind,
     options: {
       actorRole?: "admin" | "member" | null;
-      includeAutomationTools?: boolean;
-      includeTodoTools?: boolean;
-      includeQuestionTools?: boolean;
-      includeSubAgentTool?: boolean;
-      includeSkillManageTools?: boolean;
-      /** False in a cognito session: proposing org memory is a write-back. */
-      includeMemoryWriteTools?: boolean;
+      /** A session's channel; it decides skill_manage for chats. */
+      channel?: AgentChannel;
+      /** An automation's limit; only the listed items stay. */
+      toolLimit?: AutomationToolLimit;
       userId?: string | null;
     } = {}
   ): Promise<ToolDefinition[]> {
+    const policy = turnPolicy(kind, options.channel).tools;
+
+    if (!policy) {
+      return [];
+    }
+
+    const limit = options.toolLimit;
+
     const shared = profile.orgId
       ? await this.resolveSharedAgentProfile(profile.orgId, profile.id)
       : null;
 
-    const storedTools =
-      shared?.assignedTools ?? (await this.db.listToolsForProfile(profile.id));
+    const storedTools = (
+      shared?.assignedTools ?? (await this.db.listToolsForProfile(profile.id))
+    ).filter((record) => !limit || limit.toolIds.includes(record.id));
 
     const publishedTools = profile.orgId
       ? await this.publishedToolRevisionForRecords(profile.orgId, storedTools)
@@ -5142,7 +6293,7 @@ export class AgentService {
               context.orgId !== profile.orgId ||
               context.profileId !== profile.id
             ) {
-              throw new NakamaApiError("Tool is unavailable.", 404);
+              throw new AirinApiError("Tool is unavailable.", 404);
             }
 
             const current = await this.resolveSharedAgentProfile(
@@ -5151,7 +6302,7 @@ export class AgentService {
             );
 
             if (shared && !current) {
-              throw new NakamaApiError("Tool is unavailable.", 404);
+              throw new AirinApiError("Tool is unavailable.", 404);
             }
 
             const currentRecords =
@@ -5169,7 +6320,7 @@ export class AgentService {
 
             // A new handler needs a new approval policy before execution.
             if (!assigned || assigned.handlerType !== record.handlerType) {
-              throw new NakamaApiError("Tool is unavailable.", 404);
+              throw new AirinApiError("Tool is unavailable.", 404);
             }
 
             const [definition] = await resolveProfileStoredTools(
@@ -5192,7 +6343,7 @@ export class AgentService {
             );
 
             if (!definition) {
-              throw new NakamaApiError("Tool is unavailable.", 404);
+              throw new AirinApiError("Tool is unavailable.", 404);
             }
 
             return definition.run(
@@ -5207,27 +6358,65 @@ export class AgentService {
       }
     }
 
-    const includeAutomationTools = options.includeAutomationTools ?? true;
-    const includeTodoTools = options.includeTodoTools ?? true;
-    const includeQuestionTools = options.includeQuestionTools ?? true;
-    const includeSubAgentTool = options.includeSubAgentTool ?? true;
-
-    // Default follows interactive automation-tool gate; messaging channels pass false.
-    const includeSkillManageTools =
-      options.includeSkillManageTools ?? includeAutomationTools;
-
     let resolved = [...tools];
 
+    // A skill or a custom tool picks its own name, so only a platform handler
+    // is trusted by name.
+    const readOnlyTools = new Set(
+      tools.filter((tool) =>
+        storedTools.some(
+          (record) =>
+            record.name === tool.name &&
+            record.handlerType === "builtin" &&
+            READ_ONLY_TOOL_NAMES.has(tool.name)
+        )
+      )
+    );
+
     if (this.mcpService) {
-      const mcpServers =
+      const mcpServers = (
         shared?.assignedMcpServers ??
-        (await this.db.listMcpServersForProfile(profile.id));
+        (await this.db.listMcpServersForProfile(profile.id))
+      ).filter((server) => !limit || limit.mcpServerIds.includes(server.id));
 
       const orgId = profile.orgId;
 
       if (!orgId) {
         throw new Error("Profile organization is missing.");
       }
+
+      const discoveryAccess =
+        policy.mcpDiscovery &&
+        process.env.AIRIN_MCP_TOOL_DISCOVERY === "1" &&
+        !profile.acpAgent
+          ? async (
+              serverId: string,
+              toolName: string,
+              context: ToolContext
+            ) => {
+              requireToolOrgMember(context);
+
+              if (
+                context.orgId !== orgId ||
+                context.profileId !== profile.id ||
+                !(await this.db.getProfileForOrg(profile.id, orgId))
+              ) {
+                return false;
+              }
+
+              const current = shared
+                ? ((await this.resolveSharedAgentProfile(orgId, profile.id))
+                    ?.assignedMcpServers ?? [])
+                : await this.db.listMcpServersForProfile(profile.id);
+
+              return current.some(
+                (server) =>
+                  server.id === serverId &&
+                  server.enabled &&
+                  server.cachedTools.some((tool) => tool.name === toolName)
+              );
+            }
+          : undefined;
 
       const mcpTools = shared
         ? mcpServers.flatMap((server) =>
@@ -5236,7 +6425,8 @@ export class AgentService {
               this.mcpService!,
               this.db,
               orgId,
-              profile.id
+              profile.id,
+              discoveryAccess
             ).map<ToolDefinition>((tool) => ({
               ...tool,
               run: async (input, context) => {
@@ -5247,7 +6437,7 @@ export class AgentService {
                   context.orgId !== orgId ||
                   context.profileId !== profile.id
                 ) {
-                  throw new NakamaApiError("Tool is unavailable.", 404);
+                  throw new AirinApiError("Tool is unavailable.", 404);
                 }
 
                 const current = await this.resolveSharedAgentProfile(
@@ -5266,11 +6456,12 @@ export class AgentService {
                     this.mcpService!,
                     this.db,
                     orgId,
-                    profile.id
+                    profile.id,
+                    discoveryAccess
                   ).find((item) => item.name === tool.name);
 
                 if (!definition) {
-                  throw new NakamaApiError("Tool is unavailable.", 404);
+                  throw new AirinApiError("Tool is unavailable.", 404);
                 }
 
                 return definition.run(
@@ -5288,10 +6479,17 @@ export class AgentService {
             this.mcpService,
             this.db,
             orgId,
-            profile.id
+            profile.id,
+            discoveryAccess
           );
 
       resolved = [...resolved, ...mcpTools];
+
+      for (const tool of mcpTools) {
+        if (tool.readOnly) {
+          readOnlyTools.add(tool);
+        }
+      }
     }
 
     if (this.composioService && this.mcpClientManager && options.userId) {
@@ -5301,19 +6499,44 @@ export class AgentService {
         throw new Error("Profile organization is missing.");
       }
 
+      const composio = this.composioService;
+
+      const composioService = {
+        connectToolkit: composio.connectToolkit.bind(composio),
+        getAssignedToolkitRecords: async (
+          ...args: Parameters<typeof composio.getAssignedToolkitRecords>
+        ) =>
+          (await composio.getAssignedToolkitRecords(...args)).filter(
+            ({ orgToolkit }) =>
+              !limit ||
+              limit.composioToolkits.includes(
+                orgToolkit.toolkitSlug.toLowerCase()
+              )
+          ),
+        getProfileSessionEndpoint:
+          composio.getProfileSessionEndpoint.bind(composio),
+        isAvailable: composio.isAvailable.bind(composio),
+      };
+
       resolved = [
         ...resolved,
         ...(await buildComposioConnectTools(
           orgId,
           options.userId,
           profile.id,
-          this.composioService
+          composioService,
+          {
+            // The web tool is always offered, so a profile with no tools of
+            // its own keeps the assigned-only tool and stays tool-free.
+            channel:
+              limit || resolved.length === 0 ? undefined : options.channel,
+          }
         )),
         ...(await buildComposioToolDefinitions(
           orgId,
           options.userId,
           profile.id,
-          this.composioService,
+          composioService,
           this.mcpClientManager
         )),
       ];
@@ -5326,20 +6549,15 @@ export class AgentService {
     // print a fake tool call as plain text instead of doing the work.
     const hasOwnTools = resolved.length > 0;
 
-    if (
-      hasOwnTools &&
-      includeAutomationTools &&
-      profile.automationsEnabled !== false &&
-      this.automationTools.length > 0
-    ) {
+    if (hasOwnTools && policy.automation && this.automationTools.length > 0) {
       resolved = [...resolved, ...this.automationTools];
     }
 
-    if (hasOwnTools && includeTodoTools && this.todoTools.length > 0) {
+    if (hasOwnTools && policy.todo && this.todoTools.length > 0) {
       resolved = [...resolved, ...this.todoTools];
     }
 
-    if (hasOwnTools && includeQuestionTools && this.questionTools.length > 0) {
+    if (hasOwnTools && policy.question && this.questionTools.length > 0) {
       resolved = [...resolved, ...this.questionTools];
     }
 
@@ -5350,15 +6568,32 @@ export class AgentService {
         throw new Error("Profile organization is missing.");
       }
 
-      const skillTools = await this.skillsService.loadToolsForProfile(
-        orgId,
-        profile.id
-      );
+      // A limit lists only tools, MCP servers, and connectors, so it leaves
+      // out skill tools.
+      const skillTools = limit
+        ? []
+        : await this.skillsService.loadToolsForProfile(orgId, profile.id);
 
       resolved = [...resolved, ...skillTools];
 
+      if (await this.skillsService.hasModelLoadableSkills(orgId, profile.id)) {
+        resolved = [
+          ...resolved,
+          createLoadSkillTool({
+            extraContext: (skill, context) =>
+              this.formatSkillHostContext(
+                profile,
+                skill.name,
+                context.codingWorkspaceRoot
+              ),
+            recordUsage: kind !== "cognito",
+            skillsService: this.skillsService,
+          }),
+        ];
+      }
+
       // Interactive web/cli only: messaging, automation, task, and subagent omit this.
-      if (hasOwnTools && includeSkillManageTools) {
+      if (hasOwnTools && policy.skillManage) {
         const assignedSkills = await this.skillsService.listSkillsForProfile(
           profile.id
         );
@@ -5380,67 +6615,135 @@ export class AgentService {
       }
     }
 
-    if (profile.isSuper) {
-      resolved = [...resolved, ...this.superBotTools];
+    // Airin and org memory tools are not in the picker, so a limit
+    // leaves them out too.
+    if (!limit && profile.isSuper) {
+      resolved = [
+        ...resolved,
+        ...this.superAirinTools.filter(
+          (tool) =>
+            tool.name !== "create_group" || profile.groupsEnabled !== false
+        ),
+      ];
+    } else if (
+      !limit &&
+      this.skillsService &&
+      (await this.skillsService.listSkillsForProfile(profile.id)).some(
+        (skill) => skill.name === "create-plugin"
+      )
+    ) {
+      // Any agent given create-plugin hands its draft to the same admin review.
+      resolved = [
+        ...resolved,
+        ...this.superAirinTools.filter(
+          (tool) => tool.name === "submit_plugin_draft"
+        ),
+      ];
     }
 
-    if (hasOwnTools) {
+    if (hasOwnTools && !limit) {
       resolved = [...resolved, ...this.orgMemoryTools];
+
+      for (const tool of this.orgMemoryTools) {
+        if (READ_ONLY_TOOL_NAMES.has(tool.name)) {
+          readOnlyTools.add(tool);
+        }
+      }
     }
 
-    if (options.includeMemoryWriteTools === false) {
+    if (!policy.memoryWrite) {
       resolved = resolved.filter(
         (tool) => tool.name !== PROPOSE_ORG_MEMORY_TOOL_NAME
       );
     }
 
-    if (!includeSubAgentTool) {
+    // A sub-agent resolves the agent's full set, so a limit turns it off.
+    if (!policy.subAgent || limit) {
       resolved = resolved.filter((tool) => tool.name !== SUB_AGENT_TOOL_NAME);
+    }
+
+    // Cross-profile A2A: inject on any non-limited, non-read-only turn. The
+    // tool itself caps nesting with MAX_SEND_TO_BOT_DEPTH.
+    if (limit || policy.readOnly) {
+      resolved = resolved.filter((tool) => tool.name !== SEND_TO_BOT_TOOL_NAME);
+    } else if (
+      this.serverTools.sendToBot &&
+      !resolved.some((tool) => tool.name === SEND_TO_BOT_TOOL_NAME)
+    ) {
+      resolved = [...resolved, this.serverTools.sendToBot];
     }
 
     if (
       guarded &&
       new Set(resolved.map((tool) => tool.name)).size !== resolved.length
     ) {
-      throw new NakamaApiError("Conflicting tool names are assigned.", 409);
+      throw new AirinApiError("Conflicting tool names are assigned.", 409);
     }
 
-    return resolved;
+    return policy.readOnly
+      ? refuseToolsOutside(resolved, readOnlyTools)
+      : resolved;
   }
 
   private async buildChatSession(
-    channel: AgentChannel,
-    orgId: string,
-    profileId: string,
-    sessionId: string,
-    modelOverride: string | null,
-    userId?: string | null,
-    orgRole?: OrgRole | null,
-    isPlatformAdmin?: boolean,
-    codingWorkspaceRoot?: string,
-    cognito?: CognitoSessionOptions
+    record: StoredSessionRecord,
+    {
+      channel,
+      initialHistory: cognitoHistory,
+      isPlatformAdmin,
+      kind,
+      orgId,
+      orgRole,
+    }: ChatBuildContext
   ): Promise<AgentChatSession> {
+    const { id: sessionId, model: modelOverride, profileId, userId } = record;
+    const cognito = kind === "cognito";
+    await this.refreshManagedProviderKeys();
     await this.ensureVisionSettingsLoaded();
     const profile = await this.requireExecutionProfile(orgId, profileId);
-    // skill_manage writes skills and expands /learn, both of which outlive the
-    // chat, so a cognito session never gets it whatever the channel allows.
-    const includeSkillManageTools = !cognito && SKILL_MANAGE_CHANNELS[channel];
+
+    const selectedModel = modelOverride
+      ? this.normalizeSessionModelOverride(modelOverride)
+      : profile.model;
+
+    // Netra limits come from a network lookup, so start it now and let it
+    // run while the tools, prompt, and history load.
+    const compactionLookup = this.resolveCompactionConfig(
+      profile,
+      selectedModel
+    );
+
+    // Keep a failure for the await below, not as an unhandled rejection.
+    compactionLookup.catch(() => undefined);
+
+    // A stored CLI folder can be moved or deleted after the chat started.
+    // Then the chat goes back to the profile workspace.
+    const { codingWorkspaceRoot } = record;
+
+    const codingRoot =
+      codingWorkspaceRoot && existsSync(codingWorkspaceRoot)
+        ? codingWorkspaceRoot
+        : undefined;
+
+    // The kind decides the platform tools and prompt lines: a child chat gets
+    // the in-memory sub-agent's limits, a cognito chat no skill_manage.
+    const policy = turnPolicy(kind, channel);
 
     const pluginOrgRole =
       channel === "telegram" ||
       channel === "whatsapp" ||
       channel === "discord" ||
-      channel === "slack"
+      channel === "slack" ||
+      channel === "teams"
         ? "member"
         : orgRole;
 
-    let tools = await this.resolveProfileTools(profile, {
+    let tools = await this.resolveProfileTools(profile, kind, {
       actorRole:
         pluginOrgRole === "admin" || pluginOrgRole === "member"
           ? pluginOrgRole
           : undefined,
-      includeMemoryWriteTools: !cognito,
-      includeSkillManageTools,
+      channel,
       userId,
     });
 
@@ -5469,37 +6772,40 @@ export class AgentService {
       false
     );
 
-    // Per-org override for the tool-output optimiser. Undefined leaves the
-    // decision to the server's env var, so an operator who never opened the UI
-    // keeps whatever they configured.
-    const tokenOptimizerEnabled = (await this.db.getWorkspaceSettings())
-      ?.tokenOptimizerEnabled;
-
-    const resolvedSystemPrompt = profile.isSuper
-      ? `${systemPrompt.trim()}\n\n${SUPER_BOT_TOOL_AUTHORING_RULES}`
+    const basePrompt = profile.isSuper
+      ? `${systemPrompt.trim()}\n\n${SUPER_AIRIN_TOOL_AUTHORING_RULES}\n\n${SUPER_AIRIN_TEAM_RULES}`
       : systemPrompt;
+
+    const resolvedSystemPrompt = withTurnInstructions(
+      basePrompt,
+      policy.instructions
+    );
 
     // A cognito session has nothing stored to load. On a model change it is
     // handed the live history instead, so the conversation survives the
     // rebuild that a new provider needs.
     const initialHistory = cognito
-      ? (cognito.initialHistory ?? [])
+      ? (cognitoHistory ?? [])
       : await loadSessionHistory(this.db, sessionId);
 
     const userTimezone = await this.getUserTimezone();
+    const userLanguage = await this.getUserLanguage();
     const userContext = await this.loadUserContextForUser(orgId, userId);
 
-    const selectedModel = modelOverride
-      ? this.normalizeSessionModelOverride(modelOverride)
-      : profile.model;
+    const compaction = await compactionLookup;
 
-    const compaction = this.resolveCompactionConfig(profile, selectedModel);
+    const workspaceThinking = this.resolveWorkspaceThinkingDefaults();
 
     const harness = this.createHarnessForProfile(
       profile,
       selectedModel,
       userId,
-      `${orgId}:${sessionId}`
+      `${orgId}:${sessionId}`,
+      undefined,
+      {
+        ...workspaceThinking,
+        effort: record.thinkingEffort ?? workspaceThinking.effort,
+      }
     );
 
     // Part of the "no tools" contract: session-history and channel-artifact
@@ -5524,7 +6830,7 @@ export class AgentService {
 
     const trackEphemeralAttachment = cognito
       ? (attachmentId: string) =>
-          this.ephemeralSessions.trackAttachment(sessionId, attachmentId)
+          this.sessions.trackAttachment(sessionId, attachmentId)
       : undefined;
 
     const saveAttachment: SaveInlineAttachment = trackEphemeralAttachment
@@ -5544,24 +6850,33 @@ export class AgentService {
     const hasSkillManage = tools.some((tool) => tool.name === "skill_manage");
 
     const toolContext = buildToolExecutionContext({
+      agentDepth: policy.agentDepth,
       assertCanStartLlmTurn: this.llmTurnQuotaCheckerFor(orgId),
       channel,
       ...this.knowledgeToolContext(orgId, profileId),
-      codingWorkspaceRoot,
+      codingWorkspaceRoot: codingRoot,
+      forbidArtifactFileWrites: tools.some(
+        (tool) => tool.name === SAVE_ARTIFACT_TOOL_NAME
+      ),
       forbidMemoryWrites: cognito ? true : undefined,
       forbidProfileSkillMarkdownWrites: hasSkillManage,
       isPlatformAdmin: isPlatformAdmin || undefined,
       loadAttachment,
       onSkillCatalogChange: () => {
-        this.sessions.delete(sessionId);
+        this.sessions.invalidateSession(sessionId);
+      },
+      openTodosReminder: async () => {
+        const plan = await this.agentTodoState.formatForPrompt(sessionId);
+
+        return plan
+          ? `${plan}\n\nYour task plan still has open todos. Continue the work with tools, or set each remaining todo to completed or cancelled with todo_write before you give the final reply.`
+          : null;
       },
       orgId,
       orgRole: orgRole ?? undefined,
       profileId,
-      recordToolOutputSavings: this.savingsRecorderFor(orgId),
       recordTurnUsage: this.turnUsageRecorderFor(orgId),
       sessionId,
-      tokenOptimizerEnabled: tokenOptimizerEnabled ?? undefined,
       trackEphemeralAttachment,
       userId: userId ?? undefined,
     });
@@ -5573,7 +6888,7 @@ export class AgentService {
 
     const session = createAgentChatSession(harness, {
       archiveHistory: (history) => {
-        if (this.sessions.get(sessionId)?.session !== persistedSession) {
+        if (this.sessions.peek(sessionId) !== persistedSession) {
           throw new Error("Session changed during compaction. Try again.");
         }
 
@@ -5610,7 +6925,7 @@ export class AgentService {
         const visionSelection = resolveVisionProviderSelection(this.userConfig);
 
         if (!visionSelection) {
-          throw new NakamaApiError(VISION_MODEL_REQUIRED_MESSAGE, 400);
+          throw new AirinApiError(VISION_MODEL_REQUIRED_MESSAGE, 400);
         }
 
         let visionProvider = createProviderForInstance(
@@ -5628,7 +6943,7 @@ export class AgentService {
         );
 
         if (!visionProvider) {
-          throw new NakamaApiError(VISION_MODEL_REQUIRED_MESSAGE, 400);
+          throw new AirinApiError(VISION_MODEL_REQUIRED_MESSAGE, 400);
         }
 
         if (this.llmUsageTracker) {
@@ -5651,15 +6966,16 @@ export class AgentService {
 
         return replaceImagePartsWithDescriptions(forVision, descriptions);
       },
-      rehydrateMessagesForProvider: async (messages) => {
+      rehydrateMessagesForProvider: async (messages, rehydrateOptions) => {
         const rehydrated = await rehydrateAttachmentMessages(
           messages,
-          loadAttachment
+          loadAttachment,
+          rehydrateOptions
         );
 
         // Expand /learn only for the provider. History stays raw so skill
         // matching, the web UI, and later turns keep the short command.
-        if (includeSkillManageTools && hasSkillManage) {
+        if (policy.tools?.skillManage && hasSkillManage) {
           return expandLearnInLastUserMessage(rehydrated);
         }
 
@@ -5694,6 +7010,12 @@ export class AgentService {
           parts.push(todoContext.trim());
         }
 
+        // Channels send questionnaire answers as text; tell the model this
+        // turn continues the task, so it does not end without a reply.
+        if (findAgentQuestionnaireAnswers(context?.userMessage ?? "")) {
+          parts.push(QUESTIONNAIRE_ANSWERS_CONTEXT);
+        }
+
         if (this.composioService && userId) {
           const composioContext =
             await this.composioService.formatProfileConnectionsContext(
@@ -5716,44 +7038,54 @@ export class AgentService {
           parts.push(imageMentionContext);
         }
 
-        if (this.skillsService && context?.userMessage?.trim()) {
-          const skillContext =
-            await this.skillsService.formatMatchedSkillsForPrompt(
-              orgId,
-              profileId,
-              context.userMessage,
-              {
-                appendContext: async (matched) => {
-                  const parts: string[] = [];
+        const explicitSkill =
+          this.skillsService && context?.userMessage?.trim()
+            ? await this.skillsService.findExplicitSkillForMessage(
+                orgId,
+                profileId,
+                context.userMessage,
+                !cognito
+              )
+            : null;
 
-                  if (
-                    profile.isSuper &&
-                    matched.some((skill) => skill.name === "create-profile")
-                  ) {
-                    parts.push(
-                      await this.formatProfileAuthoringToolContext(orgId)
-                    );
-                  }
+        if (explicitSkill) {
+          parts.push(composeLoadedSkillPrompt(explicitSkill));
 
-                  if (matched.some((skill) => skill.name === "coding-agent")) {
-                    parts.push(
-                      await this.formatCodingDelegationContext(
-                        orgId,
-                        profileId,
-                        codingWorkspaceRoot
-                      )
-                    );
-                  }
+          const hostContext = await this.formatSkillHostContext(
+            profile,
+            explicitSkill.name,
+            codingRoot
+          );
 
-                  return parts.filter(Boolean).join("\n\n");
-                },
-                recordUsage: !cognito,
-                usageContext: skillUsageContext,
-              }
+          if (hostContext) {
+            parts.push(hostContext);
+          }
+        } else if (this.skillsService) {
+          // Without this the request is dropped silently and the agent answers
+          // as if the skill ran. Only a message that starts with `/skill` is a
+          // command: "use skill based routing" is prose, not a skill named
+          // "based".
+          const message = context?.userMessage?.trim() ?? "";
+
+          const requestedSkill = /^\/skill\s/i.test(message)
+            ? extractExplicitSkillName(message)
+            : null;
+
+          if (requestedSkill) {
+            // An assigned skill can still fail to load (turned off, or its
+            // files are gone), and "add it" is the wrong advice for that.
+            const assigned = (
+              await this.skillsService.listSkillSummariesForProfile(
+                orgId,
+                profileId
+              )
+            ).some((skill) => skill.name === requestedSkill);
+
+            parts.push(
+              assigned
+                ? `The user asked for the skill "${requestedSkill}". It is assigned to this agent, but it did not load. Say so first, and tell the user an admin can check it in Agent → Skills. Then answer without it.`
+                : `The user asked for the skill "${requestedSkill}", but it is not assigned to this agent, so it is not loaded. Say so first, and tell the user an admin can add it in Agent → Skills → Add skill. Then answer without it.`
             );
-
-          if (skillContext.trim()) {
-            parts.push(skillContext.trim());
           }
         }
 
@@ -5764,6 +7096,7 @@ export class AgentService {
       toolContext,
       tools,
       userContext,
+      userLanguage,
       userTimezone,
     });
 
@@ -5775,12 +7108,39 @@ export class AgentService {
 
     const persistedSession = wrapPersistedSession(sessionId, session, this.db, {
       onBeginTurn: (id) => {
-        this.superBotSessionState.beginTurn(id);
+        this.superAirinSessionState.beginTurn(id);
         void this.agentQuestionnaireState.clear(id);
       },
     });
 
     return persistedSession;
+  }
+
+  /** Live host facts that the create-profile and coding-agent skills need. */
+  private async formatSkillHostContext(
+    profile: StoredProfileRecord,
+    skillName: string,
+    codingWorkspaceRoot: string | undefined
+  ): Promise<string> {
+    const orgId = profile.orgId;
+
+    if (!orgId) {
+      return "";
+    }
+
+    if (profile.isSuper && skillName === "create-profile") {
+      return await this.formatProfileAuthoringToolContext(orgId);
+    }
+
+    if (skillName === "coding-agent") {
+      return await this.formatCodingDelegationContext(
+        orgId,
+        profile.id,
+        codingWorkspaceRoot
+      );
+    }
+
+    return "";
   }
 
   private async formatProfileAuthoringToolContext(
@@ -5901,7 +7261,7 @@ export class AgentService {
       return [
         "# Coding Agent Harness",
         `${harness.name} is installed (\`${harness.command}\`) but is not ready yet.`,
-        "Check Settings → Provider for passthrough compatibility, or retry after the CLI finishes installing.",
+        "Check Settings → AI Providers (/settings/providers) for passthrough compatibility, or retry after the CLI finishes installing.",
       ].join("\n");
     }
   }
@@ -5989,15 +7349,23 @@ export class AgentService {
     profile: StoredProfileRecord,
     selectedModel: string | null = profile.model,
     userId?: string | null,
-    acpSessionKey?: string
+    acpSessionKey?: string,
+    acpTools?: { context: ToolContext; tools: ToolDefinition[] },
+    thinking: ThinkingSettings = this.resolveWorkspaceThinkingDefaults()
   ): AgentDependencies {
     if (profile.acpAgent && profile.orgId) {
+      const sessionKey = acpSessionKey ?? `${profile.id}:${randomUUID()}`;
+
+      // A chat registers its tools under its own key later. A one-shot run
+      // passes them here: an unregistered key leaves the agent's MCP connect
+      // hanging for 30s.
+      if (acpTools) {
+        setAcpToolAccess(sessionKey, acpTools.tools, acpTools.context);
+      }
+
       // ACP agents run their own model loop, so the profile's LLM provider is unused.
       const provider = createAcpProvider(
-        acpOptionsForProfile(
-          profile,
-          acpSessionKey ?? `${profile.id}:${randomUUID()}`
-        )
+        acpOptionsForProfile(profile, sessionKey)
       );
 
       return this.createHarness({
@@ -6006,7 +7374,7 @@ export class AgentService {
         profileId: profile.id,
         provider,
         providerInstance: null,
-        thinking: this.resolveWorkspaceThinkingDefaults(),
+        thinking,
         userId,
       });
     }
@@ -6024,7 +7392,7 @@ export class AgentService {
         profileId: profile.id,
         provider: null,
         providerInstance: null,
-        thinking: this.resolveWorkspaceThinkingDefaults(),
+        thinking,
       });
     }
 
@@ -6058,7 +7426,7 @@ export class AgentService {
       profileId: profile.id,
       provider: resolvedProvider,
       providerInstance: resolved.instance,
-      thinking: this.resolveWorkspaceThinkingDefaults(),
+      thinking,
       userId,
     });
   }
@@ -6084,7 +7452,7 @@ export class AgentService {
     if (
       !(resolved && modelExistsOnInstance(resolved.instance, resolved.modelId))
     ) {
-      throw new NakamaApiError("Select a configured model.", 400);
+      throw new AirinApiError("Select a configured model.", 400);
     }
 
     return `${resolved.instance.id}::${resolved.modelId}`;
@@ -6117,10 +7485,10 @@ export class AgentService {
     throw new Error("No profile available for playground execution.");
   }
 
-  private resolveCompactionConfig(
+  private async resolveCompactionConfig(
     profile: StoredProfileRecord,
     selectedModel: string | null = profile.model
-  ): CompactionConfig | undefined {
+  ): Promise<CompactionConfig | undefined> {
     // An ACP agent cannot write the summary that compaction asks a provider for.
     if (profile.acpAgent) {
       return;
@@ -6136,11 +7504,35 @@ export class AgentService {
       return;
     }
 
-    return resolveModelLimits(
-      resolved.instance.type,
-      resolved.model,
-      resolved.instance.customModels
+    const { instance, model } = resolved;
+
+    const limits = resolveModelLimits(
+      instance.type,
+      model,
+      instance.customModels
     );
+
+    if (instance.type !== "netra") {
+      return limits;
+    }
+
+    // Netra is not in the static catalog. A limit saved on the model wins,
+    // then the one Netra reports, so compaction matches the real window.
+    const saved = findCustomModel(instance.customModels, model);
+
+    const reported = await fetchNetraModelLimits(
+      readApiKeyForInstance(instance, process.env) ?? "",
+      model
+    );
+
+    return {
+      contextWindow:
+        saved?.contextWindow ?? reported.contextWindow ?? limits.contextWindow,
+      maxOutputTokens:
+        saved?.maxOutputTokens ??
+        reported.maxOutputTokens ??
+        NETRA_MAX_OUTPUT_TOKENS,
+    };
   }
 
   private resolveWorkspaceThinkingDefaults(): ThinkingSettings {
@@ -6165,21 +7557,37 @@ function acpOptionsForProfile(
   sessionKey: string
 ): AcpProviderOptions {
   if (!profile.acpAgent) {
-    throw new NakamaApiError("This profile does not use an ACP agent.", 400);
+    throw new AirinApiError("This profile does not use an ACP agent.", 400);
   }
 
   if (!profile.orgId) {
-    throw new NakamaApiError("Profile has no organization.", 400);
+    throw new AirinApiError("Profile has no organization.", 400);
   }
 
   return {
     agent: profile.acpAgent,
     cwd: getProfileSoulDir(profile.orgId, profile.id),
     initialSettings: profile.acpSettings ?? {},
-    // Every ACP session gets the Nakama tools, including ones created by a settings call.
+    // Every ACP session gets the Airin tools, including ones created by a settings call.
     mcpServers: [acpMcpServerFor(sessionKey)],
     sessionKey,
   };
+}
+
+/**
+ * A one-shot run (automation, sub-agent, plugin summary) gets its own ACP
+ * agent. Its key is never reused, so the agent is stopped when the run ends
+ * instead of idling for ten minutes.
+ */
+function oneShotAcpKey(profile: StoredProfileRecord): string | undefined {
+  return profile.acpAgent ? `${profile.id}:${randomUUID()}` : undefined;
+}
+
+function endOneShotAcp(sessionKey: string | undefined): void {
+  if (sessionKey) {
+    stopAcpSession(sessionKey);
+    clearAcpToolAccess(sessionKey);
+  }
 }
 
 /** Key for the agent that holds a profile's draft settings until its first chat starts. */
@@ -6193,19 +7601,39 @@ function parseAutomationToolArguments(serialized: string): AgentJsonRecord {
   return agentJsonRecordSchema.parse(parsed);
 }
 
-// parallelSafe means concurrent calls are allowed. It does not mean a tool has no side effects.
-const REPLAYABLE_AUTOMATION_TOOLS = new Set([
-  "knowledge_base_search",
-  "list_artifacts",
-  "list_profile_sessions",
-  "omni_retrieve",
-  "read_file",
-  "read_profile_session",
-  "read_session_history",
-  "search_files",
-  "web_fetch",
-  "web_search",
-]);
+// The rerun request keeps its socket open, so this is the only deadline.
+const REGRESSION_RERUN_TIMEOUT_MS = 10 * 60_000;
+
+/**
+ * What a member sees when a started rerun fails. Provider and tool errors can
+ * hold keys, hosts or paths, so no error message passes through. A provider's
+ * HTTP error is a AirinApiError too, with the provider's raw body as its text.
+ */
+function regressionRerunError<ErrorValue>(
+  error: ErrorValue,
+  signals: { caller?: AbortSignal; timeout: AbortSignal }
+): string {
+  if (signals.timeout.aborted) {
+    return `The rerun timed out after ${REGRESSION_RERUN_TIMEOUT_MS / 60_000} minutes.`;
+  }
+
+  if (signals.caller?.aborted) {
+    return "The rerun was cancelled.";
+  }
+
+  if (error instanceof ProviderStreamInterruptedError) {
+    return MODEL_CONNECTION_CLOSED_MESSAGE;
+  }
+
+  // Providers map their own 429 to 502, so a 429 is the org's LLM quota.
+  if (error instanceof AirinApiError && error.status === 429) {
+    return "The monthly LLM quota is reached.";
+  }
+
+  console.error("Regression rerun failed:", error);
+
+  return "The rerun failed. An admin can find the cause in the server log.";
+}
 
 function warnStepWrite(error: Error | string): void {
   console.warn(
@@ -6225,14 +7653,17 @@ function clampSubAgentTimeout(timeoutMs: number | undefined): number {
 function toSessionSummary(session: StoredSessionSummaryRecord): SessionSummary {
   return {
     active: sessionTurnRegistry.isActive(session.id),
+    branchMessageIndex: session.branchMessageIndex,
     // The query returns only the channels it was asked for, all of them valid.
     channel: parseAgentChannel(session.channel) ?? "web",
     createdAt: session.createdAt,
     id: session.id,
     messageCount: session.messageCount,
+    parentSessionId: session.parentSessionId,
     pinned: session.pinned,
     preview: session.preview,
     profileId: session.profileId,
+    sortPosition: session.sortPosition,
     title: session.title,
     updatedAt: session.updatedAt,
   };
@@ -6277,5 +7708,5 @@ function decodeSessionCursor(cursor: string): SessionCursor {
     // Not base64url JSON, so it is not one of ours either.
   }
 
-  throw new NakamaApiError("Invalid cursor.", 400);
+  throw new AirinApiError("Invalid cursor.", 400);
 }

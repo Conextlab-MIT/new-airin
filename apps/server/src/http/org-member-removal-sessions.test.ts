@@ -6,7 +6,7 @@ import {
   loginUserSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-member-removal-sessions-test-");
+setupTestConfigDir("airin-member-removal-sessions-test-");
 
 describe("removing an org member", () => {
   test("revokes the removed member's browser sessions", async () => {

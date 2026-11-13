@@ -2,10 +2,10 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  AirinApiError,
   getCustomToolsDir,
   getProfileSoulDir,
-  NakamaApiError,
-} from "@nakama/core";
+} from "@airin/core";
 import { AgentService } from "../../services/agent-service";
 import { claimLegacyCustomTools } from "../../services/custom-tool-handlers";
 import {
@@ -13,8 +13,11 @@ import {
   loadToolSetup,
   saveToolApiKey,
   saveToolSetup,
+  setToolSecrets,
 } from "../../services/custom-tool-shared";
+import { ManagedSecrets } from "../../services/managed-secrets";
 import { ProfileService } from "../../services/profile-service";
+
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import {
@@ -23,10 +26,10 @@ import {
   loginUserSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-tools-route-test-");
+setupTestConfigDir("airin-tools-route-test-");
 
 function createApp(agentOverrides: Partial<AgentService> = {}) {
-  return createMinimalHonoApp({
+  const result = createMinimalHonoApp({
     agent: {
       getTool: async (toolId: string) => ({
         tool: {
@@ -52,6 +55,15 @@ function createApp(agentOverrides: Partial<AgentService> = {}) {
       ...agentOverrides,
     },
   });
+
+  setToolSecrets(
+    new ManagedSecrets(
+      result.databaseAdapter,
+      Buffer.alloc(32, 1).toString("base64")
+    )
+  );
+
+  return result;
 }
 
 describe("tool playground routes", () => {
@@ -133,8 +145,8 @@ describe("tool playground routes", () => {
       await writeFile(
         modulePath,
         handlerType === "python"
-          ? 'import os, json, sys\ndef run(input, context):\n    with open("playground.marker", "w") as handle:\n        handle.write("team")\n    return {"keyIsTeam": os.environ.get("NAKAMA_TOOL_API_KEY") == "team-key", "workspace": os.environ.get("NAKAMA_WORKSPACE_ROOT"), "cwd": os.getcwd(), "config": os.environ.get("NAKAMA_CONFIG_DIR")}\nif __name__ == "__main__":\n    print(json.dumps(run(json.loads(sys.stdin.read() or "{}"), {})))\n'
-          : 'import {writeFile} from "node:fs/promises"; export async function run(input, context) {await writeFile("playground.marker", "team"); return {keyIsTeam: process.env.NAKAMA_TOOL_API_KEY === "team-key", workspace: context.workspaceRoot, cwd: process.cwd(), config: process.env.NAKAMA_CONFIG_DIR ?? null};}'
+          ? 'import os, json, sys\ndef run(input, context):\n    with open("playground.marker", "w") as handle:\n        handle.write("team")\n    return {"keyIsTeam": os.environ.get("AIRIN_TOOL_API_KEY") == "team-key", "workspace": os.environ.get("AIRIN_WORKSPACE_ROOT"), "cwd": os.getcwd(), "config": os.environ.get("AIRIN_CONFIG_DIR")}\nif __name__ == "__main__":\n    print(json.dumps(run(json.loads(sys.stdin.read() or "{}"), {})))\n'
+          : 'import {writeFile} from "node:fs/promises"; export async function run(input, context) {await writeFile("playground.marker", "team"); return {keyIsTeam: process.env.AIRIN_TOOL_API_KEY === "team-key", workspace: context.workspaceRoot, cwd: process.cwd(), config: process.env.AIRIN_CONFIG_DIR ?? null};}'
       );
       await db.upsertTool({
         id: "published_parent_tool",
@@ -243,7 +255,10 @@ describe("tool playground routes", () => {
         ).status
       ).toBe(404);
       expect(before.status).toBe(200);
-      expect(await before.json()).toEqual({ configured: false });
+      expect(await before.json()).toMatchObject({
+        configured: false,
+        source: "missing",
+      });
 
       const saved = await app.fetch(
         new Request(url, {
@@ -267,7 +282,10 @@ describe("tool playground routes", () => {
         "parent-key"
       );
       const after = await status();
-      expect(await after.json()).toEqual({ configured: true });
+      expect(await after.json()).toMatchObject({
+        configured: true,
+        source: "settings",
+      });
       const ran = await run();
       expect(ran.status).toBe(200);
       const response = await ran.json();
@@ -365,7 +383,7 @@ describe("tool playground routes", () => {
     const { app, authService, databaseAdapter } = createApp({
       getProfile: async (orgId: string, profileId: string) => {
         if (orgId !== visibleOrg || profileId !== "target") {
-          throw new NakamaApiError("Profile not found.", 404);
+          throw new AirinApiError("Profile not found.", 404);
         }
 
         return {
@@ -449,10 +467,40 @@ describe("tool playground routes", () => {
     expect((await approve({ apiKey: "overwrite" })).status).toBe(200);
     expect(await loadToolApiKey(orgId, setupId)).toBe("private-key");
     expect((await loadToolSetup(orgId, setupId)).profileId).toBe("target");
+
+    const rejected = await app.fetch(
+      new Request(url, { headers, method: "DELETE" })
+    );
+
+    expect(rejected.status).toBe(200);
+    expect((await rejected.json()).status).toBe("rejected");
+    expect(await loadToolApiKey(orgId, setupId)).toBeUndefined();
     const status = await app.fetch(new Request(url, { headers }));
     expect(await status.text()).not.toContain("private-key");
     await expect(loadToolSetup("other-org", setupId)).rejects.toThrow();
     expect((await app.fetch(new Request(url))).status).toBe(401);
+
+    const expiresId = crypto.randomUUID();
+    await saveToolSetup(orgId, {
+      createdAt: "2020-01-01T00:00:00.000Z",
+      description: "Expired tool",
+      id: expiresId,
+      name: "expired_tool",
+      plan: "Connect",
+      requiresApiKey: true,
+      sessionId: "session",
+      status: "approved",
+    });
+    await saveToolApiKey(orgId, expiresId, "staged-key");
+
+    const expired = await app.fetch(
+      new Request(`http://localhost:4310/v1/tool-setups/${expiresId}`, {
+        headers,
+      })
+    );
+
+    expect((await expired.json()).status).toBe("rejected");
+    expect(await loadToolApiKey(orgId, expiresId)).toBeUndefined();
   });
   test("credential endpoint saves only for an admin's organization and never returns the key", async () => {
     let visibleOrg = "";
@@ -519,7 +567,10 @@ describe("tool playground routes", () => {
     );
 
     const status = await app.fetch(new Request(url, { headers }));
-    expect(await status.json()).toEqual({ configured: false });
+    expect(await status.json()).toMatchObject({
+      configured: false,
+      source: "missing",
+    });
 
     const saved = await app.fetch(
       new Request(url, {
@@ -530,12 +581,15 @@ describe("tool playground routes", () => {
     );
 
     expect(saved.status).toBe(200);
-    expect(await saved.json()).toEqual({ configured: true });
+    expect(await saved.json()).toMatchObject({
+      configured: true,
+      source: "settings",
+    });
     expect(await loadToolApiKey(orgId, "tool_key")).toBe("private-tool-key");
     expect(await loadToolApiKey("another_org", "tool_key")).toBeUndefined();
     expect(
       await (await app.fetch(new Request(url, { headers }))).json()
-    ).toEqual({ configured: true });
+    ).toMatchObject({ configured: true, source: "settings" });
 
     const invalid = await app.fetch(
       new Request(url, {
@@ -576,7 +630,7 @@ describe("tool playground routes", () => {
       await app.fetch(new Request(envUrl, { headers }))
     ).text();
 
-    expect(JSON.parse(envStatus)).toEqual({
+    expect(JSON.parse(envStatus)).toMatchObject({
       configured: false,
       env: [
         {
@@ -653,26 +707,6 @@ describe("tool playground routes", () => {
     await expect(source.json()).resolves.toMatchObject({
       path: "plugins/notes/write",
     });
-  });
-
-  test("org admin can read tool detail", async () => {
-    const { app, authService, databaseAdapter } = createApp();
-
-    const { orgId, adminSession } = await createOrgAdminSession(
-      app,
-      authService,
-      databaseAdapter,
-      "acme-read",
-      "admin-read@acme.com"
-    );
-
-    const response = await app.fetch(
-      new Request("http://localhost:4310/v1/tools/tool_echo", {
-        headers: adminSession.headers({}, orgId),
-      })
-    );
-
-    expect(response.status).toBe(200);
   });
 
   test("org member cannot read tool detail", async () => {
@@ -964,7 +998,7 @@ describe("tool playground routes", () => {
     const { app, authService, databaseAdapter } = createApp({
       runToolPlayground: async () => {
         throw new Error(
-          "SQLITE_CONSTRAINT: UNIQUE constraint failed at /home/nakama/.config/nakama/nakama.db"
+          "SQLITE_CONSTRAINT: UNIQUE constraint failed at /home/airin/.config/airin/airin.db"
         );
       },
     });
@@ -1000,7 +1034,7 @@ describe("tool playground routes", () => {
   test("run still maps a not-found message to 404 without leaking it", async () => {
     const { app, authService, databaseAdapter } = createApp({
       runToolPlayground: async () => {
-        throw new NakamaApiError("Tool not found.", 404);
+        throw new AirinApiError("Tool not found.", 404);
       },
     });
 

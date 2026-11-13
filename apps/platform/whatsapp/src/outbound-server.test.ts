@@ -2,21 +2,25 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WHATSAPP_OUTBOUND_TOKEN_HEADER } from "@nakama/core";
-import { createWhatsAppOutboundAdapter } from "@nakama/core/channels/whatsapp-outbound";
+import { WHATSAPP_OUTBOUND_TOKEN_HEADER } from "@airin/core";
+import { createWhatsAppOutboundAdapter } from "@airin/core/channels/whatsapp-outbound";
 import {
   loadWhatsAppConfigFile,
   saveWhatsAppConfig,
   syncWhatsAppOwnerPairing,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 import { startWhatsAppOutboundServer } from "./outbound-server";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 let configDir = "";
 
 afterEach(async () => {
-  process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+  if (originalConfigDir === undefined) {
+    delete process.env.AIRIN_CONFIG_DIR;
+  } else {
+    process.env.AIRIN_CONFIG_DIR = originalConfigDir;
+  }
 
   if (configDir) {
     await rm(configDir, { force: true, recursive: true });
@@ -27,8 +31,8 @@ afterEach(async () => {
 // Each server gets its own port: two on the default would leave the second
 // request answered by the first, already-stopped, server.
 async function startPairedServer(port: number) {
-  configDir = await mkdtemp(join(tmpdir(), "nakama-whatsapp-outbound-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  configDir = await mkdtemp(join(tmpdir(), "airin-whatsapp-outbound-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
   await mkdir(join(configDir, "whatsapp"), { recursive: true });
   await writeFile(
     join(configDir, "whatsapp", "config.ini"),
@@ -64,8 +68,8 @@ async function post(port: number, headers: Record<string, string>) {
 
 describe("whatsapp outbound server", () => {
   test("routes two organizations through separate ports, tokens, and recipients", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-wa-org-outbound-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-wa-org-outbound-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const sent: string[] = [];
     const servers: Array<{ port: number; stop: () => void }> = [];
 
@@ -169,7 +173,7 @@ describe("whatsapp outbound server", () => {
     const { sent, server } = await startPairedServer(43_122);
 
     try {
-      const { loadWhatsAppConfigFile } = await import("@nakama/core");
+      const { loadWhatsAppConfigFile } = await import("@airin/core");
       const token = (await loadWhatsAppConfigFile())?.outboundToken ?? "";
 
       expect(token).toHaveLength(64);

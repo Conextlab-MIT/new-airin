@@ -19,8 +19,8 @@ describe("database reopen after restore", () => {
   // The ENOENT that follows such a timeout is afterEach removing the temp dir
   // underneath the timed-out body, not a second fault.
   test("reopen reads the replacement sqlite file at the same path", async () => {
-    rootDir = await mkdtemp(join(tmpdir(), "nakama-db-reopen-"));
-    const databaseUrl = `file:${join(rootDir, "sqlite", "nakama.sqlite")}`;
+    rootDir = await mkdtemp(join(tmpdir(), "airin-db-reopen-"));
+    const databaseUrl = `file:${join(rootDir, "sqlite", "airin.sqlite")}`;
     const now = new Date().toISOString();
 
     const database = await createDatabase(databaseUrl);
@@ -42,7 +42,7 @@ describe("database reopen after restore", () => {
     await mkdir(stagedSqliteDir, { recursive: true });
 
     const staged = await createDatabase(
-      `file:${join(stagedSqliteDir, "nakama.sqlite")}`
+      `file:${join(stagedSqliteDir, "airin.sqlite")}`
     );
 
     await staged.adapter.createUser({
@@ -78,10 +78,10 @@ describe("database reopen after restore", () => {
   }, 30_000);
 
   test("release frees the sqlite file so its directory can move, then reopen recovers", async () => {
-    rootDir = await mkdtemp(join(tmpdir(), "nakama-db-release-"));
+    rootDir = await mkdtemp(join(tmpdir(), "airin-db-release-"));
 
     const database = await createDatabase(
-      `file:${join(rootDir, "sqlite", "nakama.sqlite")}`
+      `file:${join(rootDir, "sqlite", "airin.sqlite")}`
     );
 
     expect(await database.adapter.countHumanUsers()).toBe(0);

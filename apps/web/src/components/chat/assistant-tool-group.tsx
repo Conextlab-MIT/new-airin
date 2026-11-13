@@ -1,17 +1,42 @@
-import { Button } from "@nakama/ui/button";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@airin/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
   AiBrain01Icon,
+  AlertCircleIcon,
   ArrowDown01Icon,
   ArrowRight01Icon,
   Audit02Icon,
   BookOpen01Icon,
+  Brain02Icon,
+  BubbleChatQuestionIcon,
+  CheckListIcon,
   ComputerTerminal01Icon,
+  Delete02Icon,
+  FileEditIcon,
+  FileExportIcon,
+  FileSearchIcon,
+  FlashIcon,
+  Globe02Icon,
+  ImageAdd01Icon,
+  Mail01Icon,
   McpServerIcon,
+  Plug01Icon,
   PropertySearchIcon,
+  PuzzleIcon,
+  Robot01Icon,
   Rotate02Icon,
+  Search01Icon,
+  SearchList01Icon,
   TaskEdit01Icon,
+  Tick02Icon,
 } from "hugeicons-react";
 import type { MouseEvent, ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -24,10 +49,12 @@ import {
 import {
   type AssistantTurnSegment,
   formatLocalCitations,
+  groupFileSteps,
   type LocalFileCitation,
   toolGroupElapsedSeconds,
 } from "@/components/chat/assistant-tool-group.shared";
 import { ImageGenerationToolRow } from "@/components/chat/ImageGenerationToolRow";
+import { InlineHtmlFrame } from "@/components/chat/inline-html-frame";
 import { ThinkingReasoning } from "@/components/chat/ThinkingReasoning";
 import thinkingStyles from "@/components/chat/ThinkingReasoning.module.css";
 import { WebFetchToolRow } from "@/components/chat/WebFetchToolRow";
@@ -38,12 +65,17 @@ import { WorkspaceFilePreview } from "@/components/chat/workspace-file-preview";
 import { CodingAgentCommandLogo } from "@/components/coding-agent-logos";
 import { PluginSurface } from "@/components/PluginSurface";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { useOwnerSimpleUi } from "@/context/owner-simple-ui-context";
 import { useAuth } from "@/context/use-auth";
 import { useTheme } from "@/context/use-theme";
 import { useOrgPlugins } from "@/hooks/use-plugins";
 import { useRafCoalescedValue } from "@/hooks/use-raf-coalesced-value";
 import { isArtifactMetaSidecarTool } from "@/lib/chat-artifacts";
-import { buildNewChatPath, type ChatListItem } from "@/lib/chat-history";
+import {
+  buildChatPath,
+  buildNewChatPath,
+  type ChatListItem,
+} from "@/lib/chat-history";
 import {
   formatSubAgentSubtitle,
   formatSubAgentTitle,
@@ -54,6 +86,7 @@ import {
   isSubAgentTool,
   isToolResultError,
   parseSubAgentResult,
+  splitToolResultImages,
 } from "@/lib/chat-stream";
 import {
   isGenerateImageTool,
@@ -70,6 +103,8 @@ import {
 import { isRunWorkflowTool } from "@/lib/chat-stream-workflow";
 import { client, formatError } from "@/lib/client";
 import { formatElapsedSeconds, useElapsedSeconds } from "@/lib/elapsed-time";
+import { splitInlineHtmlBlocks } from "@/lib/inline-html-blocks";
+import { groupPath } from "@/lib/navigation";
 import { findPluginTool } from "@/lib/plugin-runtime";
 import { splitStreamingMarkdown } from "@/lib/streaming-markdown-seal";
 
@@ -80,6 +115,7 @@ export function AssistantTurnSegmentView({
   profileId,
   onOpenFileCitation,
   onRetryMessage,
+  onSwitchModel,
   retryDisabled = false,
 }: {
   segment: AssistantTurnSegment;
@@ -88,6 +124,7 @@ export function AssistantTurnSegmentView({
   profileId?: string | null;
   onOpenFileCitation?: (path: string) => void;
   onRetryMessage?: (message: ChatListItem) => void;
+  onSwitchModel?: () => void;
   retryDisabled?: boolean;
 }) {
   if (segment.kind === "work") {
@@ -113,17 +150,106 @@ export function AssistantTurnSegmentView({
         ) : null}
         <AssistantTextContent
           message={segment.message}
+          modelLabel={modelLabel}
           onOpenFileCitation={onOpenFileCitation}
           onRetry={
             segment.message.failed && onRetryMessage
               ? () => onRetryMessage(segment.message)
               : undefined
           }
+          onSwitchModel={onSwitchModel}
           profileId={profileId}
           retryDisabled={retryDisabled}
         />
       </MessageContent>
     </Message>
+  );
+}
+
+function FailedTurnNotice({
+  error,
+  modelLabel,
+  onRetry,
+  onSwitchModel,
+  retryDisabled,
+}: {
+  error: string;
+  modelLabel?: string | null;
+  onRetry?: () => void;
+  onSwitchModel?: () => void;
+  retryDisabled: boolean;
+}) {
+  const [detailsOpen, setDetailsOpen] = useState(true);
+
+  return (
+    <div className="flex w-full min-w-0 items-start gap-3" role="alert">
+      <span className="mt-px flex size-7 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+        <AlertCircleIcon aria-hidden className="size-4" />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <p className="font-medium text-sm">
+            The reply stopped before it finished
+          </p>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            Something went wrong while writing the reply. Retry, or switch to
+            another model.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {onRetry ? (
+            <Button
+              className="h-9 rounded-[10px] bg-foreground px-3.5 text-background hover:bg-foreground/85"
+              disabled={retryDisabled}
+              onClick={onRetry}
+              type="button"
+            >
+              <Rotate02Icon aria-hidden className="size-3.5" />
+              Retry
+            </Button>
+          ) : null}
+          {onSwitchModel ? (
+            <Button
+              className="h-9 rounded-[10px] px-3.5"
+              disabled={retryDisabled}
+              onClick={onSwitchModel}
+              type="button"
+              variant="outline"
+            >
+              Switch model
+            </Button>
+          ) : null}
+          <Button
+            aria-expanded={detailsOpen}
+            className="h-9 rounded-[10px] px-2.5 text-muted-foreground"
+            onClick={() => setDetailsOpen((open) => !open)}
+            type="button"
+            variant="ghost"
+          >
+            Details
+            <ArrowDown01Icon
+              aria-hidden
+              className={cn(
+                "size-3.5 transition-transform",
+                detailsOpen && "rotate-180"
+              )}
+            />
+          </Button>
+        </div>
+        {detailsOpen ? (
+          <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-xl border border-border bg-muted/40 px-3.5 py-3 text-[13px] leading-normal">
+            <dt className="text-muted-foreground">Error</dt>
+            <dd className="break-words font-mono">{error}</dd>
+            {modelLabel ? (
+              <>
+                <dt className="text-muted-foreground">Model</dt>
+                <dd>{modelLabel}</dd>
+              </>
+            ) : null}
+          </dl>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -142,15 +268,19 @@ function StreamingPlainTail({ text }: { text: string }) {
 
 function AssistantTextContent({
   message,
+  modelLabel,
   profileId,
   onOpenFileCitation,
   onRetry,
+  onSwitchModel,
   retryDisabled = false,
 }: {
   message: ChatListItem;
+  modelLabel?: string | null;
   profileId?: string | null;
   onOpenFileCitation?: (path: string) => void;
   onRetry?: () => void;
+  onSwitchModel?: () => void;
   retryDisabled?: boolean;
 }) {
   const { user } = useAuth();
@@ -186,47 +316,50 @@ function AssistantTextContent({
 
   if (message.failed) {
     return (
-      <div
-        className="flex w-full min-w-0 flex-col gap-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2.5"
-        role="alert"
-      >
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-destructive text-xs">Failed</span>
-          <p className="text-destructive/90 text-sm leading-relaxed">
-            {content || "The model did not respond."}
-          </p>
-        </div>
-        {onRetry ? (
-          <Button
-            className="w-fit border-destructive/30 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive"
-            disabled={retryDisabled}
-            onClick={onRetry}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <Rotate02Icon aria-hidden className="size-3.5" />
-            Retry
-          </Button>
-        ) : null}
-      </div>
+      <FailedTurnNotice
+        error={content || "The model did not respond."}
+        modelLabel={modelLabel}
+        onRetry={onRetry}
+        onSwitchModel={onSwitchModel}
+        retryDisabled={retryDisabled}
+      />
     );
   }
 
   // oxlint-disable react-doctor/click-events-have-key-events react-doctor/no-static-element-interactions -- Citation anchors receive native keyboard clicks; this wrapper only delegates them.
   if (!streaming) {
-    const { markdown, citations } = formatLocalCitations(
-      content,
-      citedProfileId
-    );
+    const parts = splitInlineHtmlBlocks(content);
 
     return (
       <div
         className="flex w-full min-w-0 flex-col gap-0"
         onClick={openCitation}
       >
-        <MessageResponse>{markdown || "…"}</MessageResponse>
-        <LocalCitationFooter citations={citations} />
+        {parts.map((part) => {
+          if (part.type === "html") {
+            return (
+              <InlineHtmlFrame
+                html={part.html}
+                key={`html-${part.html.length}:${part.html.slice(0, 48)}`}
+              />
+            );
+          }
+
+          const { markdown, citations } = formatLocalCitations(
+            part.text,
+            citedProfileId
+          );
+
+          return (
+            <div
+              className="flex w-full min-w-0 flex-col gap-0"
+              key={`md-${part.text.length}:${part.text.slice(0, 48)}`}
+            >
+              <MessageResponse>{markdown || "…"}</MessageResponse>
+              <LocalCitationFooter citations={citations} />
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -353,6 +486,43 @@ function PluginToolRow({ message }: { message: ChatListItem }) {
   );
 }
 
+function ToolResultImage({
+  className,
+  src,
+}: {
+  className?: string;
+  src: string;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger
+        aria-label="Zoom image"
+        className="max-w-full cursor-zoom-in rounded-md"
+      >
+        <img
+          alt="Tool result"
+          className={cn(
+            "max-w-full rounded-md border border-border",
+            className
+          )}
+          src={src}
+        />
+      </DialogTrigger>
+      <DialogContent
+        className="data-closed:zoom-out-100 data-open:zoom-in-100 w-[min(90vw,1600px)] max-w-[calc(100vw-2rem)] bg-transparent p-0 ring-0 sm:max-w-[calc(100vw-2rem)]"
+        overlayClassName="bg-black/70 supports-backdrop-filter:backdrop-blur-none"
+      >
+        <DialogTitle className="sr-only">Tool result image</DialogTitle>
+        <img
+          alt="Tool result"
+          className="h-auto max-h-[calc(100dvh-4rem)] w-full rounded-lg object-contain"
+          src={src}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AssistantWorkGroup({
   active,
   thinking,
@@ -367,21 +537,44 @@ function AssistantWorkGroup({
   profileId?: string | null;
 }) {
   const visibleTools = tools.filter(
-    (tool) => !isArtifactMetaSidecarTool(tool) && tool.tool !== "create_profile"
+    (tool) =>
+      !isArtifactMetaSidecarTool(tool) &&
+      tool.tool !== "create_profile" &&
+      tool.tool !== "create_group"
   );
 
   if (visibleTools.length === 0 && !thinking && !active) {
     return null;
   }
 
+  const images = visibleTools.flatMap((tool) =>
+    toolItemImages(tool).images.map((src, index) => ({
+      key: `${tool.id}-${index}`,
+      src,
+    }))
+  );
+
   return (
-    <OtherWorkGroup
-      active={active}
-      modelLabel={modelLabel}
-      profileId={profileId}
-      thinking={thinking}
-      tools={visibleTools}
-    />
+    <>
+      <OtherWorkGroup
+        active={active}
+        modelLabel={modelLabel}
+        profileId={profileId}
+        thinking={thinking}
+        tools={visibleTools}
+      />
+      {images.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {images.map(({ key, src }) => (
+            <ToolResultImage
+              className="max-h-40 object-contain"
+              key={key}
+              src={src}
+            />
+          ))}
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -426,17 +619,86 @@ function OtherWorkGroup({
         tools.length === 0 && !active ? thinking.thinkingDurationMs : undefined
       }
       toolCount={tools.length}
+      toolLabel={singleToolLabel(tools)}
     >
-      {tools.map((tool, index) => (
-        <TimelineStep isLast={index === tools.length - 1} key={tool.id}>
-          <ToolRow
-            message={tool}
-            modelLabel={modelLabel}
-            profileId={profileId}
-          />
-        </TimelineStep>
-      ))}
+      <ToolStepList
+        modelLabel={modelLabel}
+        profileId={profileId}
+        quiet={!(active || thinking.thinking?.trim())}
+        tools={tools}
+      />
     </ThinkingReasoning>
+  );
+}
+
+/** One finished tool call reads as its action, e.g. "Read report.xls". */
+function singleToolLabel(tools: ChatListItem[]): ReactNode {
+  const [tool] = tools;
+
+  return tools.length === 1 && tool ? (
+    <SingleToolLabel message={tool} />
+  ) : undefined;
+}
+
+function SingleToolLabel({ message }: { message: ChatListItem }) {
+  const label = formatToolActionLabel(
+    message.tool,
+    message.toolInput,
+    message.toolResult
+  );
+
+  const split = label.indexOf(" ");
+  const failed = toolItemFailed(message);
+
+  return (
+    <>
+      {failed ? null : (
+        <Tick02Icon
+          aria-hidden
+          className="mr-1.5 inline size-3.5 align-[-2px] text-emerald-600 dark:text-emerald-400"
+        />
+      )}
+      <span
+        className={
+          failed ? "text-red-600 dark:text-red-400" : thinkingStyles.verb
+        }
+      >
+        {split > 0 ? label.slice(0, split) : label}
+      </span>
+      {split > 0 ? label.slice(split) : null}
+    </>
+  );
+}
+
+/** A plain tool row can fold into the header plus one quiet output line. */
+function isQuietTool(message: ChatListItem): boolean {
+  return !(
+    message.tool?.startsWith("plugin_") ||
+    isRunWorkflowTool(message.tool) ||
+    isDedicatedTool(message) ||
+    toolItemImages(message).images.length > 0
+  );
+}
+
+function QuietToolOutput({ message }: { message: ChatListItem }) {
+  const output =
+    message.toolStatus === "done"
+      ? formatToolResult(message.tool, toolItemImages(message).rest)
+      : null;
+
+  if (!output) {
+    return null;
+  }
+
+  return (
+    <pre
+      className={cn(
+        "ml-5 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-muted-foreground text-xs leading-relaxed",
+        toolItemFailed(message, output) && "text-red-600 dark:text-red-400"
+      )}
+    >
+      {output}
+    </pre>
   );
 }
 
@@ -459,6 +721,7 @@ function toolActivityLabel(tool: string | undefined): string {
   }
 }
 
+// oxlint-disable-next-line react-doctor/no-high-complexity-react-function -- Tool-only work stream branches by tool status and layout mode.
 function ToolOnlyWorkGroup({
   isWorkActive,
   tools,
@@ -470,18 +733,21 @@ function ToolOnlyWorkGroup({
   modelLabel?: string | null;
   profileId?: string | null;
 }) {
-  const [open, setOpen] = useState(isWorkActive);
+  const ownerSimple = useOwnerSimpleUi();
+  const [open, setOpen] = useState(() => !ownerSimple && isWorkActive);
   const [wasWorkActive, setWasWorkActive] = useState(isWorkActive);
   const elapsedSeconds = useWorkDuration(isWorkActive, tools);
 
   if (wasWorkActive !== isWorkActive) {
     setWasWorkActive(isWorkActive);
-    setOpen(isWorkActive);
+    setOpen(ownerSimple ? false : isWorkActive);
   }
 
   const done = !isWorkActive;
   const expanded = open;
   const toolLabel = `${tools.length} ${tools.length === 1 ? "step" : "steps"}`;
+  const [only] = tools;
+  const quietOnly = done && tools.length === 1 && only && isQuietTool(only);
   const runningTool = tools.findLast((tool) => tool.toolStatus === "running");
 
   return (
@@ -499,18 +765,25 @@ function ToolOnlyWorkGroup({
       >
         {done ? (
           <span className={thinkingStyles.label}>
-            <span className={thinkingStyles.verb}>{toolLabel}</span>
-            {elapsedSeconds === null
-              ? null
-              : ` · ${formatElapsedSeconds(elapsedSeconds)}`}
+            {singleToolLabel(tools) ?? (
+              <span className={thinkingStyles.verb}>{toolLabel}</span>
+            )}
+            {elapsedSeconds === null ? null : (
+              <span className={cn(tools.length === 1 && thinkingStyles.verb)}>
+                {` · ${formatElapsedSeconds(elapsedSeconds)}`}
+              </span>
+            )}
           </span>
         ) : (
           <span className={cn(thinkingStyles.label, thinkingStyles.shimmer)}>
-            {runningTool ? toolActivityLabel(runningTool.tool) : "Working…"}
-            {` · ${toolLabel}`}
-            {elapsedSeconds === null
+            {ownerSimple
+              ? "Working…"
+              : runningTool
+                ? toolActivityLabel(runningTool.tool)
+                : "Working…"}
+            {ownerSimple
               ? null
-              : ` · ${formatElapsedSeconds(elapsedSeconds)}`}
+              : ` · ${toolLabel}${elapsedSeconds === null ? "" : ` · ${formatElapsedSeconds(elapsedSeconds)}`}`}
           </span>
         )}
         <svg
@@ -542,23 +815,108 @@ function ToolOnlyWorkGroup({
           <div
             className={cn(
               thinkingStyles.timeline,
-              thinkingStyles.timelineWithTools
+              !quietOnly && thinkingStyles.timelineWithTools
             )}
           >
             <div className={thinkingStyles.tools}>
-              {tools.map((tool, index) => (
-                <TimelineStep isLast={index === tools.length - 1} key={tool.id}>
-                  <ToolRow
-                    message={tool}
-                    modelLabel={modelLabel}
-                    profileId={profileId}
-                  />
-                </TimelineStep>
-              ))}
+              <ToolStepList
+                modelLabel={modelLabel}
+                profileId={profileId}
+                quiet={done}
+                tools={tools}
+              />
             </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ToolStepList({
+  tools,
+  modelLabel,
+  profileId,
+  quiet = false,
+}: {
+  tools: ChatListItem[];
+  modelLabel?: string | null;
+  profileId?: string | null;
+  /** The header already names the one tool, so show only its output. */
+  quiet?: boolean;
+}) {
+  const [only] = tools;
+
+  if (quiet && tools.length === 1 && only && isQuietTool(only)) {
+    return <QuietToolOutput message={only} />;
+  }
+
+  const steps = groupFileSteps(tools);
+
+  return steps.map((step, index) => {
+    const isLast = index === steps.length - 1;
+
+    if (step.kind === "files") {
+      return (
+        <TimelineStep isLast={isLast} key={step.tools[0]?.id}>
+          <FileGroupRow tools={step.tools} />
+        </TimelineStep>
+      );
+    }
+
+    return (
+      <TimelineStep isLast={isLast} key={step.tool.id}>
+        <ToolRow
+          message={step.tool}
+          modelLabel={modelLabel}
+          profileId={profileId}
+        />
+      </TimelineStep>
+    );
+  });
+}
+
+function fileGroupVerb(tool: string | undefined, isRunning: boolean) {
+  if (tool === "write_file") {
+    return isRunning ? "Writing" : "Wrote";
+  }
+
+  if (tool === "edit_file") {
+    return isRunning ? "Editing" : "Edited";
+  }
+
+  return isRunning ? "Reading" : "Read";
+}
+
+function FileGroupRow({ tools }: { tools: ChatListItem[] }) {
+  const [open, setOpen] = useState(false);
+  const tool = tools[0]?.tool;
+
+  const verb = fileGroupVerb(
+    tool,
+    tools.some((item) => item.toolStatus === "running")
+  );
+
+  // A failed read or write must show while the group is closed.
+  const failed = tools.filter((item) => toolItemFailed(item)).length;
+
+  return (
+    <div>
+      <CollapsibleTrigger
+        className="pl-0"
+        label={`${verb} ${tools.length} files${failed ? `, ${failed} failed` : ""}`}
+        labelClassName={failed ? "text-red-600 dark:text-red-400" : undefined}
+        onToggle={() => setOpen((current) => !current)}
+        open={open}
+        tool={tool}
+      />
+      {open ? (
+        <div className="mt-2 ml-[7px] flex flex-col gap-2 border-border border-l pl-5">
+          {tools.map((item) => (
+            <ToolTimelineItem key={item.id} message={item} nested />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -670,7 +1028,13 @@ function DedicatedToolRow({
     return <ToolTimelineItem message={message} />;
   }
 
-  return <SubAgentToolRow message={message} modelLabel={modelLabel} />;
+  return (
+    <SubAgentToolRow
+      message={message}
+      modelLabel={modelLabel}
+      profileId={profileId}
+    />
+  );
 }
 
 export function ProfileCreatedCard({
@@ -700,6 +1064,30 @@ export function ProfileCreatedCard({
         variant="outline"
       >
         Start conversation
+        <ArrowRight01Icon aria-hidden className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+export function GroupCreatedCard({
+  group,
+}: {
+  group: { id: string; name: string };
+}) {
+  return (
+    <div className="flex w-fit max-w-full items-center gap-3 rounded-xl bg-muted/40 p-3">
+      <p className="min-w-0 truncate font-medium text-foreground text-sm">
+        {group.name}
+      </p>
+      <Button
+        className="min-h-10 shrink-0 rounded-lg transition-transform active:scale-[0.96]"
+        render={<Link to={groupPath(group.id)} />}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        Open group
         <ArrowRight01Icon aria-hidden className="size-4" />
       </Button>
     </div>
@@ -801,7 +1189,7 @@ function SubAgentOutputSection({
       <div className="pl-6">
         <button
           aria-expanded={expanded}
-          className="flex w-full items-center gap-1 text-left text-muted-foreground text-sm transition-colors hover:text-foreground"
+          className="flex w-fit max-w-full items-center gap-1 text-left text-muted-foreground text-sm transition-colors hover:text-foreground"
           onClick={onToggle}
           type="button"
         >
@@ -834,12 +1222,56 @@ function SubAgentOutputSection({
   return null;
 }
 
+/** The chat a sub_agent run went to, with its live state while a background run is still answering. */
+function SubAgentChatLink({
+  background,
+  profileId,
+  sessionId,
+}: {
+  background: boolean;
+  profileId: string;
+  sessionId: string;
+}) {
+  // A background child keeps answering after the tool returns, so poll until it ends.
+  const { data } = useQuery({
+    enabled: background,
+    queryFn: () => client.getSessionStatus(sessionId),
+    queryKey: ["session-status", sessionId],
+    refetchInterval: (query) =>
+      query.state.status === "error" || query.state.data?.active === false
+        ? false
+        : 3000,
+  });
+
+  return (
+    <div className="flex items-center gap-3 pl-6">
+      <Button
+        className="min-h-10 shrink-0 rounded-lg transition-transform active:scale-[0.96]"
+        render={<Link to={buildChatPath(profileId, sessionId)} />}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        Open chat
+        <ArrowRight01Icon aria-hidden className="size-4" />
+      </Button>
+      {data ? (
+        <span className="text-muted-foreground text-sm">
+          {data.active ? "Answering…" : "Finished"}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function SubAgentToolRow({
   message,
   modelLabel,
+  profileId,
 }: {
   message: ChatListItem;
   modelLabel?: string | null;
+  profileId?: string | null;
 }) {
   const isRunning = message.toolStatus === "running";
   const elapsedSeconds = useElapsedSeconds(isRunning, message.createdAt);
@@ -886,6 +1318,13 @@ function SubAgentToolRow({
           output={output}
         />
       )}
+      {parsed?.sessionId && profileId ? (
+        <SubAgentChatLink
+          background={message.toolInput?.background === true}
+          profileId={profileId}
+          sessionId={parsed.sessionId}
+        />
+      ) : null}
     </div>
   );
 }
@@ -954,13 +1393,32 @@ function SubAgentMark({
   );
 }
 
+/** Old sessions keep image bytes in the result; new ones send them apart. */
+function toolItemImages(message: ChatListItem) {
+  if (message.toolStatus !== "done") {
+    return { images: [] satisfies string[], rest: null };
+  }
+
+  const { images, rest } = splitToolResultImages(message.toolResult);
+
+  return {
+    images: [
+      ...images.map((image) => `data:${image.mimeType};base64,${image.data}`),
+      ...(message.toolImages ?? []).map((image) => image.url),
+    ],
+    rest,
+  };
+}
+
 function ToolTimelineOutput({
   command,
+  hasImages,
   isError,
   isRunning,
   output,
 }: {
   command: string | null;
+  hasImages: boolean;
   isError: boolean;
   isRunning: boolean;
   output: string | null;
@@ -983,7 +1441,7 @@ function ToolTimelineOutput({
     );
   }
 
-  if (command) {
+  if (command || hasImages) {
     return null;
   }
 
@@ -996,12 +1454,14 @@ function ToolTimelineOutput({
 
 function ToolTimelineDetails({
   command,
+  images,
   isError,
   isRunning,
   output,
   query,
 }: {
   command: string | null;
+  images: string[];
   isError: boolean;
   isRunning: boolean;
   output: string | null;
@@ -1015,8 +1475,12 @@ function ToolTimelineDetails({
       {query ? (
         <DetailBlock content={query} label="Query" tone="command" />
       ) : null}
+      {images.map((image) => (
+        <ToolResultImage className="max-h-96" key={image} src={image} />
+      ))}
       <ToolTimelineOutput
         command={command}
+        hasImages={images.length > 0}
         isError={isError}
         isRunning={isRunning}
         output={output}
@@ -1025,7 +1489,37 @@ function ToolTimelineDetails({
   );
 }
 
-function ToolTimelineItem({ message }: { message: ChatListItem }) {
+function toolItemFailed(
+  message: ChatListItem,
+  output = message.toolStatus === "done"
+    ? formatToolResult(message.tool, toolItemImages(message).rest)
+    : null
+): boolean {
+  return (
+    message.toolStatus === "done" &&
+    isToolResultError(message.toolResult, output)
+  );
+}
+
+/** Rows inside a file group show only the file name. */
+function toolTimelineLabel(message: ChatListItem, nested: boolean): string {
+  const fileName = nested
+    ? readString(message.toolInput?.path)?.split("/").at(-1)
+    : undefined;
+
+  return (
+    fileName ||
+    formatToolActionLabel(message.tool, message.toolInput, message.toolResult)
+  );
+}
+
+function ToolTimelineItem({
+  message,
+  nested = false,
+}: {
+  message: ChatListItem;
+  nested?: boolean;
+}) {
   const isRunning = message.toolStatus === "running";
 
   const command =
@@ -1033,56 +1527,133 @@ function ToolTimelineItem({ message }: { message: ChatListItem }) {
       ? formatToolCommand(message.tool, message.toolInput)
       : null;
 
+  const { images, rest } = toolItemImages(message);
+
   const output =
-    message.toolStatus === "done"
-      ? formatToolResult(message.tool, message.toolResult)
-      : null;
+    message.toolStatus === "done" ? formatToolResult(message.tool, rest) : null;
 
   const queryValue = message.toolInput?.query;
   const query = readString(queryValue);
 
-  const isError =
-    message.toolStatus === "done" &&
-    isToolResultError(message.toolResult, output);
+  const isError = toolItemFailed(message, output);
 
-  const hasDetails = Boolean(isRunning || command || query || output);
+  const hasDetails = Boolean(
+    isRunning || command || query || output || images.length > 0
+  );
+
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // Mount details on first open, then keep them so close can animate too.
+  const [detailsMounted, setDetailsMounted] = useState(false);
+
+  function toggleDetails(next: boolean) {
+    setDetailsMounted(true);
+    setDetailsOpen(next);
+  }
 
   return (
     <div>
-      <CollapsibleTrigger
-        className="pl-0"
-        command={command}
-        disabled={!hasDetails}
-        label={formatToolActionLabel(message.tool, message.toolInput)}
-        labelClassName={isError ? "text-red-600 dark:text-red-400" : undefined}
-        onToggle={() => {
-          if (hasDetails) {
-            setDetailsOpen((current) => !current);
-          }
-        }}
-        open={detailsOpen}
-        tool={message.tool}
-      />
-      {detailsOpen && hasDetails ? (
-        <ToolTimelineDetails
+      <div className="flex items-center gap-3">
+        <CollapsibleTrigger
+          className="pl-0"
           command={command}
-          isError={isError}
-          isRunning={isRunning}
-          output={output}
-          query={query}
+          disabled={!hasDetails}
+          hideIcon={nested}
+          label={toolTimelineLabel(message, nested)}
+          labelClassName={
+            isError ? "text-red-600 dark:text-red-400" : undefined
+          }
+          onToggle={() => {
+            if (hasDetails) {
+              toggleDetails(!detailsOpen);
+            }
+          }}
+          open={detailsOpen}
+          tool={message.tool}
         />
+        {images[0] ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  className={cn(
+                    "ml-auto shrink-0 transition-[opacity,visibility] duration-200",
+                    detailsOpen && "invisible opacity-0"
+                  )}
+                  onClick={() => toggleDetails(true)}
+                  type="button"
+                >
+                  <img
+                    alt="Tool result"
+                    className="h-8 w-12 rounded border border-border object-cover"
+                    src={images[0]}
+                  />
+                </button>
+              }
+            />
+            <TooltipContent
+              className="max-w-none bg-transparent p-0 [&>*:last-child]:hidden"
+              side="left"
+            >
+              <img
+                alt="Tool result preview"
+                className="max-h-80 w-96 max-w-[60vw] rounded-md border border-border bg-background object-contain shadow-lg"
+                src={images[0]}
+              />
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
+      {detailsMounted && hasDetails ? (
+        <div
+          className={cn(
+            "grid starting:grid-rows-[0fr] starting:opacity-0 transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+            detailsOpen
+              ? "grid-rows-[1fr] opacity-100"
+              : "grid-rows-[0fr] opacity-0"
+          )}
+          inert={!detailsOpen}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <ToolTimelineDetails
+              command={command}
+              images={images}
+              isError={isError}
+              isRunning={isRunning}
+              output={output}
+              query={query}
+            />
+          </div>
+        </div>
       ) : null}
     </div>
   );
 }
 
 const TOOL_ICONS = new Map<string, typeof AiBrain01Icon>([
+  ["archive-profile-memory", Brain02Icon],
+  ["ask_user_question", BubbleChatQuestionIcon],
   ["bash", ComputerTerminal01Icon],
+  ["composio__connect_account", Plug01Icon],
+  ["composio__invoke_action", FlashIcon],
+  ["composio__search_actions", SearchList01Icon],
+  ["delete_file", Delete02Icon],
   ["edit_file", TaskEdit01Icon],
+  ["email", Mail01Icon],
+  ["generate_image", ImageAdd01Icon],
   ["knowledge_base_search", PropertySearchIcon],
+  ["load_skill", PuzzleIcon],
   ["read_file", BookOpen01Icon],
+  ["ripgrep", FileSearchIcon],
+  ["save_artifact", FileExportIcon],
   ["search_files", Audit02Icon],
+  ["skill_manage", PuzzleIcon],
+  ["sub_agent", Robot01Icon],
+  ["todo_write", CheckListIcon],
+  ["update-profile-memory", Brain02Icon],
+  ["update_profile_memory", Brain02Icon],
+  ["web_fetch", Globe02Icon],
+  ["web_search", Search01Icon],
+  ["write_file", FileEditIcon],
 ]);
 
 function CollapsibleTrigger({
@@ -1093,9 +1664,11 @@ function CollapsibleTrigger({
   disabled = false,
   className,
   command,
+  hideIcon = false,
   tool,
 }: {
   command?: string | null;
+  hideIcon?: boolean;
   open: boolean;
   onToggle: () => void;
   label: string;
@@ -1117,28 +1690,28 @@ function CollapsibleTrigger({
     <button
       aria-expanded={disabled ? undefined : open}
       className={cn(
-        "flex w-full min-w-0 items-center gap-1.5 text-left text-muted-foreground text-sm transition-colors hover:text-foreground disabled:cursor-default disabled:hover:text-muted-foreground",
+        "flex w-fit min-w-0 max-w-full items-center gap-1.5 text-left text-muted-foreground text-sm transition-colors hover:text-foreground disabled:cursor-default disabled:hover:text-muted-foreground",
         className
       )}
       disabled={disabled}
       onClick={onToggle}
       type="button"
     >
-      <span
-        aria-hidden="true"
-        className="relative z-10 flex h-5 w-3.5 shrink-0 items-center justify-center bg-background"
-      >
-        <CodingAgentCommandLogo
-          className="size-3.5 text-foreground"
-          command={command ?? ""}
-          fallback={
-            <ToolIcon className="size-3.5 text-muted-foreground opacity-50" />
-          }
-        />
-      </span>
-      <span className={cn("min-w-0 flex-1 truncate", labelClassName)}>
-        {label}
-      </span>
+      {hideIcon ? null : (
+        <span
+          aria-hidden="true"
+          className="relative z-10 flex h-5 w-3.5 shrink-0 items-center justify-center bg-background"
+        >
+          <CodingAgentCommandLogo
+            className="size-3.5 text-foreground"
+            command={command ?? ""}
+            fallback={
+              <ToolIcon className="size-3.5 text-muted-foreground opacity-50" />
+            }
+          />
+        </span>
+      )}
+      <span className={cn("min-w-0 truncate", labelClassName)}>{label}</span>
       {disabled ? null : (
         <ArrowDown01Icon
           aria-hidden

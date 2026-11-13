@@ -1,38 +1,35 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { UserConfig } from "@nakama/core";
+import type { UserConfig } from "@airin/core";
 import type {
   DatabaseAdapter,
   StoredCodingAgentHarnessKind,
   StoredCodingAgentHarnessProbeCache,
   StoredCodingAgentHarnessRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import {
   isCodingAgentProviderPassthroughEnabled,
   mergeWorkspaceSettings,
-} from "@nakama/db";
+} from "@airin/db";
 import {
   ensureProcessPath,
   getToolExecutionEnv,
 } from "../lib/ensure-process-path";
 import {
   buildGlobalPackageInstallPlan,
-  CLI_SIGTERM_GRACE_MS,
   detectNpmOrBun,
   probeCliVersion,
+  resolveCliSigtermGraceMs,
 } from "./cli-package-install";
 import { buildHarnessNonInteractiveArgs } from "./coding-agent-command";
 import {
   formatModelForHarness,
-  mapNakamaProviderToPi,
+  mapAirinProviderToPi,
   mergeCodingAgentSpawnEnv,
   resolveCodingAgentSpawnBundle,
 } from "./coding-agent-spawn-env";
 import { killProcessTree } from "./custom-tool-subprocess";
-
-/** How long a timed-out child gets to honour SIGTERM before it is killed. */
-const SIGTERM_GRACE_MS = CLI_SIGTERM_GRACE_MS;
 
 export interface CodingAgentHarnessStatus
   extends StoredCodingAgentHarnessRecord {
@@ -656,7 +653,7 @@ function harnessNativeLoginMessage(
     return `${harness.name} is installed. Uses harness login on this server (\`${login}\`).`;
   }
 
-  return `${harness.name} is installed. Uses host Cursor auth (no Nakama provider passthrough).`;
+  return `${harness.name} is installed. Uses host Cursor auth (no Airin provider passthrough).`;
 }
 
 export function getCodingHarnessInstallCommand(
@@ -707,7 +704,7 @@ async function probeHarnessLight(
     ready: false,
     statusMessage:
       routing.error ??
-      `${harness.name} is installed but provider passthrough is not active. Check Settings → Provider.`,
+      `${harness.name} is installed but provider passthrough is not active. Check Settings → AI Providers (/settings/providers).`,
   };
 }
 
@@ -753,11 +750,11 @@ async function probeHarnessExec(
       };
 
   const tempDir = await mkdtemp(
-    path.join(tmpdir(), "nakama-coding-agent-probe-")
+    path.join(tmpdir(), "airin-coding-agent-probe-")
   );
 
   const piProvider = routing.providerType
-    ? mapNakamaProviderToPi(routing.providerType, routing.baseUrl)
+    ? mapAirinProviderToPi(routing.providerType, routing.baseUrl)
     : null;
 
   const piModel =
@@ -794,7 +791,7 @@ async function probeHarnessExec(
         nextStep: null,
         ready: true,
         statusMessage: passthrough
-          ? `${harness.name} is installed and ready via Nakama provider passthrough.`
+          ? `${harness.name} is installed and ready via Airin provider passthrough.`
           : harnessNativeLoginMessage(harness),
       };
     }
@@ -813,8 +810,8 @@ async function probeHarnessExec(
         statusMessage: passthrough
           ? (routing.error ??
             (combinedOutput
-              ? `${harness.name} could not authenticate with the configured Nakama provider. ${summarizeProbeOutput(combinedOutput)} Check Settings → Provider.`
-              : `${harness.name} could not authenticate with the configured Nakama provider. Check Settings → Provider.`))
+              ? `${harness.name} could not authenticate with the configured Airin provider. ${summarizeProbeOutput(combinedOutput)} Check Settings → AI Providers (/settings/providers).`
+              : `${harness.name} could not authenticate with the configured Airin provider. Check Settings → AI Providers (/settings/providers).`))
           : combinedOutput
             ? `${harness.name} could not authenticate with harness login. ${summarizeProbeOutput(combinedOutput)} ${nativeHint}`
             : `${harness.name} could not authenticate with harness login. ${nativeHint}`,
@@ -885,7 +882,7 @@ async function runProbeCommand(
         void killProcessTree(child, "SIGTERM");
         killTimeoutId = setTimeout(() => {
           void killProcessTree(child, "SIGKILL");
-        }, SIGTERM_GRACE_MS);
+        }, resolveCliSigtermGraceMs());
       }
 
       // Resolve here rather than waiting for `close`: a child that ignores

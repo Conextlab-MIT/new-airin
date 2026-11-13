@@ -1,16 +1,17 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   type InstallPluginPackageResponse,
   type InvokePluginActionResponse,
   type ListOrgPluginsResponse,
   type ListPluginReleasesResponse,
   type ListPluginUpdatesResponse,
-  NakamaApiError,
   type OrgPluginDetail,
   type PluginContributionChangePreview,
   type PluginExecutionActor,
   type PluginPackagePreviewResponse,
-} from "@nakama/core";
+  type PluginUsageResponse,
+} from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
   PluginHostError,
@@ -103,11 +104,35 @@ export function registerPluginRoutes(
     })
     .openapi("InstallPluginPackageRequest");
 
+  const localDraftSchema = z
+    .object({
+      orgId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+      profileId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+      draftId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+    })
+    .strict();
+
+  const localApprovalSchema = localDraftSchema
+    .extend({
+      expectedDigest: z.string().regex(/^[a-f0-9]{64}$/),
+      expectedRevision: z.number().int().nonnegative().nullable(),
+    })
+    .strict();
+
+  const localFileSchema = localDraftSchema
+    .extend({
+      offset: z.number().int().nonnegative().optional(),
+      expectedDigest: z.string().regex(/^[a-f0-9]{64}$/),
+      path: z.string().min(1).max(240),
+    })
+    .strict();
+
   const openapiBag = (name: string) => z.object({}).passthrough().openapi(name);
   const previewResponseSchema = openapiBag("PluginPackagePreviewResponse");
   const installResponseSchema = openapiBag("InstallPluginPackageResponse");
   const listReleasesSchema = openapiBag("ListPluginReleasesResponse");
   const listUpdatesSchema = openapiBag("ListPluginUpdatesResponse");
+  const usageSchema = openapiBag("PluginUsageResponse");
   const listOrgPluginsSchema = openapiBag("ListOrgPluginsResponse");
   const orgPluginSchema = openapiBag("OrgPluginDetail");
 
@@ -284,6 +309,16 @@ export function registerPluginRoutes(
   pluginPath({
     extra: { 403: errorResponse },
     method: "get",
+    ok: jsonOk(usageSchema, "Organizations and agents using the plugin"),
+    operationId: "getPluginUsage",
+    path: "/v1/platform/plugins/{pluginId}/usage",
+    request: { params: pluginIdParam },
+    summary: "List organizations and agents that still use a plugin",
+    tags: platform,
+  });
+  pluginPath({
+    extra: { 403: errorResponse },
+    method: "get",
     ok: jsonOk(listUpdatesSchema, "Registry versions not approved yet"),
     operationId: "listPluginUpdates",
     path: "/v1/platform/plugins/updates",
@@ -429,7 +464,7 @@ export function registerPluginRoutes(
     );
 
     if (!parsed.success) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Package name and exact version are required.",
         400
       );
@@ -444,6 +479,76 @@ export function registerPluginRoutes(
     }
   });
 
+  for (const [path, schema] of [
+    ["preview-local", localDraftSchema],
+    ["install-local", localApprovalSchema],
+    ["local-file", localFileSchema],
+  ] as const) {
+    pluginPath({
+      path: `/v1/platform/plugins/${path}`,
+      method: "post",
+      operationId: path.replace(/-([a-z])/g, (_, letter: string) =>
+        letter.toUpperCase()
+      ),
+      summary: `Review or install a local plugin draft: ${path}`,
+      tags: platform,
+      request: { body: schema },
+      ok: jsonOk(openapiBag(`LocalPlugin_${path}`), "Local plugin result"),
+      extra: {
+        400: errorResponse,
+        403: errorResponse,
+        404: errorResponse,
+        409: errorResponse,
+      },
+    });
+  }
+
+  app.post("/v1/platform/plugins/preview-local", async (c) => {
+    const auth = requirePlatformAdminFromContext(c);
+    const input = await readJson(c.req.raw, localDraftSchema);
+
+    try {
+      return json(
+        await requirePluginService(options).previewLocalPlugin(input, {
+          id: auth.user.id,
+          isPlatformAdmin: auth.isPlatformAdmin,
+        })
+      );
+    } catch (error) {
+      throwPluginHttpError(error);
+    }
+  });
+  app.post("/v1/platform/plugins/local-file", async (c) => {
+    const auth = requirePlatformAdminFromContext(c);
+    const input = await readJson(c.req.raw, localFileSchema);
+
+    try {
+      return json(
+        await requirePluginService(options).readLocalPluginFile(input, {
+          id: auth.user.id,
+          isPlatformAdmin: auth.isPlatformAdmin,
+        })
+      );
+    } catch (error) {
+      throwPluginHttpError(error);
+    }
+  });
+  app.post("/v1/platform/plugins/install-local", async (c) => {
+    const auth = requirePlatformAdminFromContext(c);
+    const input = await readJson(c.req.raw, localApprovalSchema);
+
+    try {
+      return json({
+        install: await requirePluginService(options).installLocalPlugin(input, {
+          id: auth.user.id,
+          isPlatformAdmin: auth.isPlatformAdmin,
+        }),
+      });
+    } catch (error) {
+      throwPluginHttpError(error);
+    }
+  });
+
   app.post("/v1/platform/plugins/releases", async (c) => {
     requirePlatformAdminFromContext(c);
     const plugins = requirePluginService(options);
@@ -453,7 +558,7 @@ export function registerPluginRoutes(
     );
 
     if (!parsed.success) {
-      throw new NakamaApiError("Preview approval is required.", 400);
+      throw new AirinApiError("Preview approval is required.", 400);
     }
 
     try {
@@ -490,6 +595,17 @@ export function registerPluginRoutes(
 
     return json<ListPluginUpdatesResponse>({
       updates: await plugins.listPluginUpdates(),
+    });
+  });
+
+  app.get("/v1/platform/plugins/:pluginId/usage", async (c) => {
+    requirePlatformAdminFromContext(c);
+    const plugins = requirePluginService(options);
+
+    return json<PluginUsageResponse>({
+      orgs: await plugins.listPluginUsage(
+        decodeURIComponent(c.req.param("pluginId"))
+      ),
     });
   });
 
@@ -530,7 +646,7 @@ export function registerPluginRoutes(
     );
 
     if (!detail) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     return json<OrgPluginDetail>(detail);
@@ -607,7 +723,7 @@ export function registerPluginRoutes(
     const targetVersion = c.req.query("targetVersion")?.trim();
 
     if (!targetVersion) {
-      throw new NakamaApiError("targetVersion is required", 400);
+      throw new AirinApiError("targetVersion is required", 400);
     }
 
     try {
@@ -683,7 +799,7 @@ export function registerPluginRoutes(
       body.orgId !== orgId ||
       body.pluginId !== pluginId
     ) {
-      throw new NakamaApiError("Confirmation does not match", 400);
+      throw new AirinApiError("Confirmation does not match", 400);
     }
 
     try {
@@ -743,7 +859,7 @@ async function servePluginUi(
   const pathOrgId = decodeURIComponent(c.req.param("orgId"));
 
   if (pathOrgId !== orgId) {
-    throw new NakamaApiError("Organization context conflict", 400);
+    throw new AirinApiError("Organization context conflict", 400);
   }
 
   const plugins = requirePluginService(options);
@@ -752,7 +868,7 @@ async function servePluginUi(
   const asset = await plugins.resolveEnabledUiAsset(orgId, pluginId, assetPath);
 
   if (!asset) {
-    throw new NakamaApiError("Not found", 404);
+    throw new AirinApiError("Not found", 404);
   }
 
   if (assetPath === "" && !c.req.path.endsWith("/")) {
@@ -770,7 +886,7 @@ async function servePluginUi(
 
 function requirePluginService(options: ServerOptions): PluginService {
   if (!options.pluginService) {
-    throw new NakamaApiError("Plugin service not configured", 500);
+    throw new AirinApiError("Plugin service not configured", 500);
   }
 
   return options.pluginService;
@@ -782,7 +898,7 @@ function pluginActor(
   const role = auth.orgRole;
 
   if (role !== "admin" && role !== "member") {
-    throw new NakamaApiError("Forbidden", 403);
+    throw new AirinApiError("Forbidden", 403);
   }
 
   return { id: auth.user.id, role };
@@ -822,6 +938,7 @@ function contentTypeFor(filePath: string, isDocument: boolean): string {
 
 const PLUGIN_ERROR_STATUS = new Map(
   Object.entries({
+    action_failed: 422,
     archive_too_large: 413,
     busy: 429,
     digest_mismatch: 400,
@@ -847,8 +964,8 @@ const PLUGIN_ERROR_STATUS = new Map(
 
 function throwPluginHttpError<T>(error: T): never {
   if (error instanceof PluginHostError) {
-    throw new NakamaApiError(
-      error.code,
+    throw new AirinApiError(
+      error.code === "action_failed" ? error.message : error.code,
       PLUGIN_ERROR_STATUS.get(error.code) ?? 409
     );
   }

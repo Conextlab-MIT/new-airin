@@ -1,8 +1,6 @@
 node_modules
 **/node_modules
 **/dist
-# This package is installed directly from GitHub, without consumer build scripts.
-!packages/telegram-manager/dist/
 coverage
 .DS_Store
 .env
@@ -22,10 +20,12 @@ data/logs/*
 !.agents/skills/adhd-pr-description/**
 !.agents/skills/eli5/
 !.agents/skills/eli5/**
-!.agents/skills/lean-pr-review/
-!.agents/skills/lean-pr-review/**
-!.agents/skills/browser-video-proof/
-!.agents/skills/browser-video-proof/**
+!.agents/skills/verify-bs/
+!.agents/skills/verify-bs/**
+!.agents/skills/record-demo/
+!.agents/skills/record-demo/**
+!.agents/skills/release/
+!.agents/skills/release/**
 apps/data/*
 .cursor/
 docs/plans/*
@@ -43,3 +43,7 @@ tmp-repro-setup-auth.mjs
 .vscode/
 # jscpd duplication report
 .jscpd-report/
+airin-secrets.env
+.idea
+ecosystem.config.js
+ecosystem.config.cjs

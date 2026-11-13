@@ -3,7 +3,7 @@ import {
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
+} from "@airin/ui/input-group";
 import { ViewIcon, ViewOffIcon } from "hugeicons-react";
 import { DiscordSettingsPairingSection } from "@/components/discord-settings-pairing-section";
 import {
@@ -16,7 +16,7 @@ import {
 } from "@/components/integration-settings.shared";
 import { WorkerActionBar } from "@/components/WorkerActionBar";
 
-const DISCORD_SETUP_GUIDE_URL = "https://ahmadrosid.github.io/nakama/discord";
+const DISCORD_SETUP_GUIDE_URL = "https://ahmadrosid.github.io/airin/discord";
 
 const DISCORD_DEVELOPER_PORTAL_URL =
   "https://discord.com/developers/applications";

@@ -12,20 +12,20 @@ import {
   runReadFile,
   runWriteFile,
   uploadKnowledgeBaseDocument,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { MemoryBackendService } from "./memory-backend-service";
 import { OrgMemoryService } from "./org-memory-service";
 
 const directories: string[] = [];
 
-const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 afterEach(async () => {
   if (previousConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+    process.env.AIRIN_CONFIG_DIR = previousConfigDir;
   }
 
   await Promise.all(
@@ -38,7 +38,7 @@ afterEach(async () => {
 async function setup() {
   const configDir = await mkdtemp(join(tmpdir(), "memory-backend-"));
   directories.push(configDir);
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  process.env.AIRIN_CONFIG_DIR = configDir;
   const db = createInMemoryDatabaseAdapter();
 
   const documents = new Map<

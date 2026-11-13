@@ -1,7 +1,7 @@
 import type {
   DiscordWorkerStatus,
   SystemStatusResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/use-auth";
 import { useChannelProfileId } from "@/hooks/use-app-queries";
@@ -27,6 +27,8 @@ function normalizeSystemStatus(
     discordWorker: status.discordWorker ?? DEFAULT_DISCORD_WORKER_STATUS,
     // An older server has no Slack bridge; show it as not connected.
     slackWorker: status.slackWorker ?? DEFAULT_DISCORD_WORKER_STATUS,
+    // Nor a Teams bridge.
+    teamsWorker: status.teamsWorker ?? DEFAULT_DISCORD_WORKER_STATUS,
   };
 }
 

@@ -1,6 +1,6 @@
-import type { PasskeyCredentialResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
+import type { PasskeyCredentialResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
 import {
   ConfirmDialog,
   Dialog,
@@ -9,9 +9,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { toast } from "@airin/ui/toast";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
 import { MfaCodeInput } from "@/components/MfaCodeInput";
@@ -69,7 +69,7 @@ function MfaSettingsContent({
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="font-medium text-foreground text-sm">
-              Multi Factor Authentication
+              Multi-factor authentication
             </p>
             <p className="text-muted-foreground text-xs">
               Choose a passkey or authenticator app to protect this account.

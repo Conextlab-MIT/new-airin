@@ -1,7 +1,7 @@
 import type {
   NotificationDestinationSummary,
   TelegramNotificationDestinationConfig,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
 export function maskWebhookApiKey(apiKey: string): string {
   const trimmed = apiKey.trim();
@@ -22,7 +22,7 @@ export function buildNotificationWebhookUrl(
   return `${base}${webhookPath}`;
 }
 
-export function formatTelegramDestinationLabel(
+function formatTelegramDestinationLabel(
   telegram: TelegramNotificationDestinationConfig
 ): string {
   if (telegram.topicId) {

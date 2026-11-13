@@ -1,5 +1,5 @@
-import type { ProfileSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ProfileSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -7,15 +7,15 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@nakama/ui/command";
+} from "@airin/ui/command";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { cn } from "@airin/ui/utils";
 import { CheckmarkCircle02Icon, UserGroupIcon } from "hugeicons-react";
 import { useState } from "react";
 

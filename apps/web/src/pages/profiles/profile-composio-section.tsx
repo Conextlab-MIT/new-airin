@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import { Delete02Icon } from "hugeicons-react";
 import { ComposioToolkitAssignPicker } from "@/components/ComposioToolkitAssignPicker";
 import type { RemoveAssignmentTarget } from "@/pages/profiles/profiles-page.shared";
@@ -27,7 +27,7 @@ export function ProfileComposioSection({
     <div className="pt-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-normal text-muted-foreground/55 text-sm">
+          <h3 className="font-medium text-muted-foreground text-sm">
             Composio toolkits
           </h3>
           {assignedComposioToolkits.length > 0 ? (

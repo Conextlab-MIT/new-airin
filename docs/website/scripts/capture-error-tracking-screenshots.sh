@@ -4,12 +4,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 source "$(dirname "$0")/capture-common.sh"
 SCREENSHOT_DIR="$(cd "$(dirname "$0")/.." && pwd)/public/screenshots"
-TEMP_CONFIG="/tmp/nakama-docs-error-tracking-screenshots-$$"
-COOKIE_JAR="/tmp/nakama-docs-error-tracking-cookies-$$.txt"
+TEMP_CONFIG="/tmp/airin-docs-error-tracking-screenshots-$$"
+COOKIE_JAR="/tmp/airin-docs-error-tracking-cookies-$$.txt"
 PORT=4317
 INGEST_PORT=4318
 BASE_URL="http://127.0.0.1:${PORT}"
-SESSION=nakama-docs-error-tracking-screenshots
+SESSION=airin-docs-error-tracking-screenshots
 SERVER_PID=""
 INGEST_PID=""
 VIEWPORT_WIDTH=1280
@@ -38,11 +38,11 @@ ensure_current_web_build "$ROOT"
 # A Sentry-compatible ingest that accepts anything, so the test event in the
 # second shot reports a real delivery rather than a mocked-out success.
 bun -e "Bun.serve({port:${INGEST_PORT},fetch:()=>new Response('{}',{status:200})})" \
-  > /tmp/nakama-docs-error-tracking-ingest.log 2>&1 &
+  > /tmp/airin-docs-error-tracking-ingest.log 2>&1 &
 INGEST_PID=$!
 
-NAKAMA_CONFIG_DIR="$TEMP_CONFIG" NAKAMA_PORT="$PORT" \
-  bun run "$ROOT/apps/server/src/index.ts" > /tmp/nakama-docs-error-tracking-server.log 2>&1 &
+AIRIN_CONFIG_DIR="$TEMP_CONFIG" AIRIN_PORT="$PORT" \
+  bun run "$ROOT/apps/server/src/index.ts" > /tmp/airin-docs-error-tracking-server.log 2>&1 &
 SERVER_PID=$!
 
 # Bound on the clock, not on a retry count: curl against a closed port fails
@@ -50,7 +50,7 @@ SERVER_PID=$!
 deadline=$(( $(date +%s) + 90 ))
 until curl -sf "${BASE_URL}/health" >/dev/null 2>&1; do
   if [[ "$(date +%s)" -gt "$deadline" ]]; then
-    tail -20 /tmp/nakama-docs-error-tracking-server.log
+    tail -20 /tmp/airin-docs-error-tracking-server.log
     exit 1
   fi
   sleep 0.25
@@ -64,26 +64,26 @@ curl -sf -c "$COOKIE_JAR" -X POST "${BASE_URL}/v1/auth/setup" \
     \"webPublicUrl\": \"${BASE_URL}\"
   }" >/dev/null
 
-CSRF_VAL=$(awk '$6=="nakama_csrf"{print $7}' "$COOKIE_JAR")
-SESSION_VAL=$(awk '$6=="nakama_session"{print $7}' "$COOKIE_JAR")
+CSRF_VAL=$(awk '$6=="airin_csrf"{print $7}' "$COOKIE_JAR")
+SESSION_VAL=$(awk '$6=="airin_session"{print $7}' "$COOKIE_JAR")
 
 # Without a provider the SetupGuard redirects every page to the setup wizard, so
-# the control center never renders. The key is a placeholder and is never used.
+# the Settings hub never renders. The key is a placeholder and is never used.
 curl -sf -b "$COOKIE_JAR" -X POST "${BASE_URL}/v1/providers" \
   -H 'Content-Type: application/json' \
   -H "X-CSRF-Token: ${CSRF_VAL}" \
   -d '{"type":"openai","apiKey":"sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","model":"gpt-4o-mini"}' >/dev/null
 
 $AB --session "$SESSION" close 2>/dev/null || true
-$AB --session "$SESSION" cookies set nakama_session "$SESSION_VAL" \
+$AB --session "$SESSION" cookies set airin_session "$SESSION_VAL" \
   --url "${BASE_URL}/" --httpOnly --sameSite Lax
-$AB --session "$SESSION" cookies set nakama_csrf "$CSRF_VAL" \
+$AB --session "$SESSION" cookies set airin_csrf "$CSRF_VAL" \
   --url "${BASE_URL}/" --sameSite Lax
 
 # ---------------------------------------------------------------------------
 # Shot 1: no DSN saved. The badge reads Off and nothing is sent.
 # ---------------------------------------------------------------------------
-$AB --session "$SESSION" open "${BASE_URL}/customize/connections/error-tracking"
+$AB --session "$SESSION" open "${BASE_URL}/settings/connections/error-tracking"
 $AB --session "$SESSION" wait 2500
 $AB --session "$SESSION" set viewport "$VIEWPORT_WIDTH" 620
 $AB --session "$SESSION" set media light

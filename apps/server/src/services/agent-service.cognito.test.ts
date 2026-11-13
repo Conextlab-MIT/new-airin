@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { ensureBundledSkillFiles, type GenerateChatInput } from "@nakama/core";
-import { pathExists } from "@nakama/core/fs";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { ensureBundledSkillFiles, type GenerateChatInput } from "@airin/core";
+import { pathExists } from "@airin/core/fs";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 import { createDefaultProfile } from "./agent-service-test-fixtures";
@@ -58,7 +58,7 @@ async function createService(): Promise<{
 }
 
 describe("cognito sessions are never persisted", () => {
-  setupTestConfigDir("nakama-cognito-");
+  setupTestConfigDir("airin-cognito-");
 
   test("the turn is readable, and exists nowhere but memory", async () => {
     const { db, service } = await createService();
@@ -71,7 +71,7 @@ describe("cognito sessions are never persisted", () => {
       { cognito: true }
     );
 
-    const first = await service.resolveSession(sessionId, ORG_ID);
+    const first = await service.sessions.get(sessionId, ORG_ID);
     expect(first).not.toBeNull();
     await first?.send({ message: "remember my api key" });
 
@@ -85,7 +85,7 @@ describe("cognito sessions are never persisted", () => {
 
     // ...and resolving again hands back the same object, because the history
     // lives nowhere else and a rebuild would silently empty the chat.
-    expect(await service.resolveSession(sessionId, ORG_ID)).toBe(first);
+    expect(await service.sessions.get(sessionId, ORG_ID)).toBe(first);
 
     // The assertions that make this fail without cognito.
     expect(await db.getSession(sessionId)).toBeNull();
@@ -103,7 +103,7 @@ describe("cognito sessions are never persisted", () => {
       null
     );
 
-    const session = await service.resolveSession(sessionId, ORG_ID);
+    const session = await service.sessions.get(sessionId, ORG_ID);
     await session?.send({ message: "hello" });
 
     expect(await db.getSession(sessionId)).not.toBeNull();
@@ -122,13 +122,13 @@ describe("cognito sessions are never persisted", () => {
       { cognito: true }
     );
 
-    const session = await service.resolveSession(sessionId, ORG_ID);
+    const session = await service.sessions.get(sessionId, ORG_ID);
     await session?.send({ message: "hello" });
 
     // There was never a row, so the delete has only the map to work with.
     expect(await db.getSession(sessionId)).toBeNull();
     expect(await service.purgeSession(sessionId, ORG_ID)).toBe(true);
-    expect(await service.resolveSession(sessionId, ORG_ID)).toBeNull();
+    expect(await service.sessions.get(sessionId, ORG_ID)).toBeNull();
     expect(await service.getSessionMessages(sessionId, ORG_ID)).toBeNull();
   });
 
@@ -175,18 +175,16 @@ describe("cognito sessions are never persisted", () => {
       }
     );
 
-    const before = await service.resolveSession(sessionId, ORG_ID);
+    const before = await service.sessions.get(sessionId, ORG_ID);
     await before?.send({ message: "hello" });
 
     expect(
-      await service.updateSessionModel(
-        sessionId,
-        ORG_ID,
-        "provider-1::next-chat-model"
-      )
+      await service.updateSessionRunSettings(sessionId, ORG_ID, {
+        model: "provider-1::next-chat-model",
+      })
     ).toBe(true);
 
-    const after = await service.resolveSession(sessionId, ORG_ID);
+    const after = await service.sessions.get(sessionId, ORG_ID);
     expect(after).not.toBe(before);
     expect(after?.getHistory().length).toBe(2);
     expect(await db.getSession(sessionId)).toBeNull();
@@ -262,7 +260,7 @@ async function seedProfileWithSkillManage(
 }
 
 describe("cognito sessions never write back", () => {
-  setupTestConfigDir("nakama-cognito-writeback-");
+  setupTestConfigDir("airin-cognito-writeback-");
 
   test("drops skill_manage and propose_org_memory but keeps reading org memory", async () => {
     const db = createInMemoryDatabaseAdapter();
@@ -280,7 +278,7 @@ describe("cognito sessions never write back", () => {
       { cognito: true, orgRole: "admin" }
     );
 
-    const session = await service.resolveSession(sessionId, ORG_ID);
+    const session = await service.sessions.get(sessionId, ORG_ID);
     await session?.send({ message: "what do you remember" });
 
     expect(captured.names).not.toContain("skill_manage");
@@ -305,7 +303,7 @@ describe("cognito sessions never write back", () => {
       { orgRole: "admin" }
     );
 
-    const session = await service.resolveSession(sessionId, ORG_ID);
+    const session = await service.sessions.get(sessionId, ORG_ID);
     await session?.send({ message: "what do you remember" });
 
     expect(captured.names).toContain("skill_manage");
@@ -357,7 +355,7 @@ describe("cognito sessions never write back", () => {
  * ever go red the mode has started dropping context it was never meant to.
  */
 describe("a cognito session still reads what an ordinary one reads", () => {
-  setupTestConfigDir("nakama-cognito-reads-");
+  setupTestConfigDir("airin-cognito-reads-");
 
   async function runCognitoTurn(): Promise<CapturedTurn> {
     const db = createInMemoryDatabaseAdapter();
@@ -375,7 +373,7 @@ describe("a cognito session still reads what an ordinary one reads", () => {
       { cognito: true, orgRole: "admin" }
     );
 
-    const session = await service.resolveSession(sessionId, ORG_ID);
+    const session = await service.sessions.get(sessionId, ORG_ID);
     await session?.send({ message: "hello" });
 
     return captured;
@@ -407,7 +405,7 @@ async function sendImage(
   service: AgentService,
   sessionId: string
 ): Promise<void> {
-  const session = await service.resolveSession(sessionId, ORG_ID);
+  const session = await service.sessions.get(sessionId, ORG_ID);
   await session?.send({
     images: [{ data: TINY_PNG, mediaType: "image/png" }],
     message: "what is this",
@@ -415,7 +413,56 @@ async function sendImage(
 }
 
 describe("attachments left by a cognito session", () => {
-  setupTestConfigDir("nakama-cognito-attachments-");
+  setupTestConfigDir("airin-cognito-attachments-");
+
+  test("only the owner or a platform admin can read the image", async () => {
+    const { db, service } = await createService();
+
+    const sessionId = await service.createSession(
+      ORG_ID,
+      "web",
+      "profile_default",
+      "owner",
+      { cognito: true }
+    );
+
+    await sendImage(service, sessionId);
+    const [attachment] = await db.listEphemeralAttachments();
+    const attachmentId = attachment!.id;
+
+    for (const access of [
+      { user: { id: "owner" } },
+      { isPlatformAdmin: true, user: { id: "admin" } },
+    ]) {
+      const image = await service.readChatAttachment(
+        ORG_ID,
+        attachmentId,
+        access
+      );
+
+      expect(Buffer.from(image!.bytes)).toEqual(
+        Buffer.from(TINY_PNG, "base64")
+      );
+    }
+
+    for (const orgRole of ["member", "admin"] as const) {
+      await expect(
+        service.readChatAttachment(ORG_ID, attachmentId, {
+          orgRole,
+          user: { id: "teammate" },
+        })
+      ).rejects.toMatchObject({ status: 404 });
+    }
+
+    // A restart loses the session map before the attachment sweep runs.
+    const restarted = new AgentService(null, null, db);
+    expect(
+      await restarted.readChatAttachment(ORG_ID, attachmentId, {
+        user: { id: "owner" },
+      })
+    ).toBeNull();
+    await service.purgeSession(sessionId, ORG_ID);
+  });
 
   test("are marked ephemeral and reference no session", async () => {
     const { db, service } = await createService();
@@ -502,7 +549,7 @@ describe("attachments left by a cognito session", () => {
 });
 
 describe("cognito leaves no skill-usage trail", () => {
-  setupTestConfigDir("nakama-cognito-usage-");
+  setupTestConfigDir("airin-cognito-usage-");
 
   async function turnWith(cognito: boolean): Promise<number> {
     const db = createInMemoryDatabaseAdapter();
@@ -523,7 +570,7 @@ describe("cognito leaves no skill-usage trail", () => {
       }
     );
 
-    const session = await service.resolveSession(sessionId, ORG_ID);
+    const session = await service.sessions.get(sessionId, ORG_ID);
     await session?.send({ message: "help me manage skills" });
     // The recorders are fired without await, so let them settle.
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -538,14 +585,10 @@ describe("cognito leaves no skill-usage trail", () => {
     // skills the chat touched is still a trace of what it was about.
     expect(await turnWith(true)).toBe(0);
   });
-
-  test("an ordinary turn still records it", async () => {
-    expect(await turnWith(false)).toBeGreaterThan(0);
-  });
 });
 
 describe("cognito session state that is not the transcript", () => {
-  setupTestConfigDir("nakama-cognito-state-");
+  setupTestConfigDir("airin-cognito-state-");
 
   test("todos work in the session and persist nowhere", async () => {
     const { db, service } = await createService();

@@ -1,13 +1,13 @@
-import type { ProfileSummary } from "@nakama/core/contract";
+import type { ProfileSummary } from "@airin/core/contract";
 
-export function findSuperBotProfile(
+export function findSuperAirinProfile(
   profiles: ProfileSummary[]
 ): ProfileSummary | undefined {
   return profiles.find((profile) => profile.isSuper);
 }
 
-/** Profile id to open for Super Bot chat CTAs, or null when none exists. */
-export function resolveSuperBotChatProfileId(
+/** Profile id to open for Airin chat CTAs, or null when none exists. */
+export function resolveSuperAirinChatProfileId(
   profiles: Array<Pick<ProfileSummary, "id" | "isSuper">>
 ): string | null {
   return profiles.find((profile) => profile.isSuper)?.id ?? null;
@@ -19,6 +19,20 @@ export function isProfileOwner(
   userId: string | undefined
 ): boolean {
   return Boolean(userId) && profile?.ownerUserId === userId;
+}
+
+/** True when the user can change the agent's tools. Shared agents are read-only. */
+export function canManageAgent(
+  profile: { ownerUserId?: string | null; sharedAgent?: unknown } | undefined,
+  user: { id?: string; isPlatformAdmin?: boolean } | null | undefined,
+  isOrgAdmin: boolean
+): boolean {
+  return (
+    Boolean(profile && !profile.sharedAgent) &&
+    (isOrgAdmin ||
+      user?.isPlatformAdmin === true ||
+      isProfileOwner(profile, user?.id))
+  );
 }
 
 export function findDefaultProfile(

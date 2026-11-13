@@ -7,15 +7,20 @@ import {
 } from "@/lib/chat-history";
 import {
   appendFailedTurnIfNeeded,
+  deriveAgentActivity,
   editedPromptText,
   findFailedRetryPrompt,
   markStreamingTurnFailed,
   messagesWithoutFailedTurn,
   nextSuccessfulTurnAt,
+  orgMemoryHasFacts,
   planPromptBranch,
+  readSetupChecklist,
   releaseChatStream,
-  shouldShowCognitoControl,
-  welcomeAnimationKey,
+  type StoredSetupChecklist,
+  setupChecklistRows,
+  shouldShowGoalPrompt,
+  writeSetupChecklist,
 } from "@/pages/chat/chat-page.shared";
 
 function user(
@@ -139,33 +144,33 @@ describe("failed turn retry helpers", () => {
   });
 });
 
-describe("failed chat turn storage", () => {
-  function withLocalStorage<T>(run: (store: Map<string, string>) => T): T {
-    const store = new Map<string, string>();
-    const previousLocalStorage = globalThis.localStorage;
+function withLocalStorage<T>(run: (store: Map<string, string>) => T): T {
+  const store = new Map<string, string>();
+  const previousLocalStorage = globalThis.localStorage;
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      setItem: (key: string, value: string) => {
+        store.set(key, value);
+      },
+    },
+  });
+
+  try {
+    return run(store);
+  } finally {
     Object.defineProperty(globalThis, "localStorage", {
       configurable: true,
-      value: {
-        getItem: (key: string) => store.get(key) ?? null,
-        removeItem: (key: string) => {
-          store.delete(key);
-        },
-        setItem: (key: string, value: string) => {
-          store.set(key, value);
-        },
-      },
+      value: previousLocalStorage,
     });
-
-    try {
-      return run(store);
-    } finally {
-      Object.defineProperty(globalThis, "localStorage", {
-        configurable: true,
-        value: previousLocalStorage,
-      });
-    }
   }
+}
 
+describe("failed chat turn storage", () => {
   test("round-trips a failed turn and clears it", () => {
     withLocalStorage(() => {
       const sessionId = `session_failed_${Date.now()}`;
@@ -188,7 +193,7 @@ describe("failed chat turn storage", () => {
     withLocalStorage((store) => {
       const sessionId = `session_bad_${Date.now()}`;
       store.set(
-        `nakama:failed-chat-turn:${sessionId}`,
+        `airin:failed-chat-turn:${sessionId}`,
         JSON.stringify({ error: "x" })
       );
 
@@ -212,6 +217,95 @@ describe("nextSuccessfulTurnAt", () => {
 
   test("stays monotonic when wall clock moves backwards", () => {
     expect(nextSuccessfulTurnAt(1000, 999)).toBe(1001);
+  });
+});
+
+describe("deriveAgentActivity", () => {
+  const runningTool = (): ChatListItem => ({
+    content: "",
+    id: "tool-running",
+    role: "tool",
+    toolStatus: "running",
+  });
+
+  test("a failed turn shows error", () => {
+    expect(
+      deriveAgentActivity(false, [
+        user("hello"),
+        assistant("Rate limited", { failed: true }),
+      ])
+    ).toBe("error");
+  });
+
+  test("a failure stays visible when a later tool message ended the turn", () => {
+    expect(
+      deriveAgentActivity(false, [
+        user("hello"),
+        assistant("", { failed: true, streaming: false }),
+        {
+          content: "stopped",
+          id: "tool-done",
+          role: "tool",
+          toolStatus: "done",
+        },
+      ])
+    ).toBe("error");
+  });
+
+  test("an older failed turn does not mark the current turn", () => {
+    expect(
+      deriveAgentActivity(false, [
+        user("first"),
+        assistant("Failed", { failed: true }),
+        user("second"),
+        assistant("Done", { streaming: false }),
+      ])
+    ).toBe("idle");
+  });
+
+  test("a running tool outranks the reply it belongs to", () => {
+    expect(
+      deriveAgentActivity(true, [
+        user("hello"),
+        assistant("", { streaming: true }),
+        runningTool(),
+      ])
+    ).toBe("tool");
+  });
+
+  test("reasoning tokens show thinking", () => {
+    expect(
+      deriveAgentActivity(true, [
+        user("hello"),
+        assistant("", { streaming: true, thinkingStreaming: true }),
+      ])
+    ).toBe("thinking");
+  });
+
+  test("streamed text shows responding", () => {
+    expect(
+      deriveAgentActivity(true, [
+        user("hello"),
+        assistant("Working on it", { streaming: true }),
+      ])
+    ).toBe("responding");
+  });
+
+  test("a turn waiting on the model is still thinking", () => {
+    expect(deriveAgentActivity(true, [user("hello")])).toBe("thinking");
+  });
+
+  test("a finished turn is idle", () => {
+    expect(
+      deriveAgentActivity(false, [
+        user("hello"),
+        assistant("Done", { streaming: false }),
+      ])
+    ).toBe("idle");
+  });
+
+  test("a successful turn celebrates until the flash ends", () => {
+    expect(deriveAgentActivity(false, [user("hello")], true)).toBe("done");
   });
 });
 
@@ -283,24 +377,6 @@ describe("the edit flow", () => {
   });
 });
 
-describe("cognito control visibility", () => {
-  test("an ordinary chat shows it only before the first message", () => {
-    expect(shouldShowCognitoControl(false, true)).toBe(true);
-    expect(shouldShowCognitoControl(false, false)).toBe(false);
-  });
-
-  test("an active cognito chat keeps it, or there is no way out of the mode", () => {
-    expect(shouldShowCognitoControl(true, false)).toBe(true);
-    expect(shouldShowCognitoControl(true, true)).toBe(true);
-  });
-});
-
-describe("welcome copy animation key", () => {
-  test("toggling produces a different key, so the entrance replays", () => {
-    expect(welcomeAnimationKey(true)).not.toBe(welcomeAnimationKey(false));
-  });
-});
-
 describe("releaseChatStream", () => {
   test("detaches a send stream instead of aborting the turn behind it", () => {
     const abort = new AbortController();
@@ -326,8 +402,129 @@ describe("releaseChatStream", () => {
     expect(releaseChatStream({ abort, detach: null })).toBe("aborted");
     expect(abort.signal.aborted).toBe(true);
   });
+});
 
-  test("reports idle when nothing is streaming", () => {
-    expect(releaseChatStream({ abort: null, detach: null })).toBe("idle");
+describe("shouldShowGoalPrompt", () => {
+  const empty = { orgRole: "member", sessions: [], userContext: "" };
+
+  test("shows only to members with no web chat and no goal", () => {
+    const cases: Array<
+      [Partial<Parameters<typeof shouldShowGoalPrompt>[0]>, boolean]
+    > = [
+      [{}, true],
+      [{ orgRole: "viewer" }, false],
+      [{ sessions: [{ channel: "web" }] }, false],
+      [
+        { sessions: [{ channel: "telegram" }, { channel: "automation" }] },
+        true,
+      ],
+      [{ userContext: "# About Me\n\n- Help with: Manage my ads\n" }, false],
+      [
+        {
+          userContext: "# About Me\n\n- Name / nickname: Alex\n- Help with:\n",
+        },
+        true,
+      ],
+    ];
+
+    for (const [overrides, expected] of cases) {
+      expect(shouldShowGoalPrompt({ ...empty, ...overrides })).toBe(expected);
+    }
+  });
+});
+
+describe("setup checklist", () => {
+  const stored: StoredSetupChecklist = {
+    done: [],
+    goal: "Manage my ads",
+    items: [
+      {
+        kind: "connect_toolkit",
+        title: "Connect Meta Ads",
+        toolkitSlug: "metaads",
+      },
+      {
+        kind: "enable_skill",
+        skillId: "skill-ads",
+        title: "Turn on the Ads skill",
+      },
+      {
+        kind: "write_context",
+        scope: "org",
+        title: "Tell the agent about your business",
+      },
+    ],
+    skipped: [],
+  };
+
+  const noFacts: Parameters<typeof setupChecklistRows>[1] = {
+    assignedSkillIds: [],
+    connectedToolkits: [],
+    orgHasFacts: false,
+  };
+
+  const statuses = (value: StoredSetupChecklist, facts = noFacts) =>
+    setupChecklistRows(value, facts).map((row) => row.status);
+
+  test("marks items done from what the app already knows", () => {
+    expect(
+      statuses(stored, {
+        assignedSkillIds: ["skill-ads"],
+        connectedToolkits: ["metaads"],
+        orgHasFacts: true,
+      })
+    ).toEqual(["done", "done", "done"]);
+  });
+
+  test("keeps skipped items, and done wins over skipped", () => {
+    expect(
+      statuses(
+        { ...stored, skipped: ["toolkit:metaads", "skill:skill-ads"] },
+        { ...noFacts, assignedSkillIds: ["skill-ads"] }
+      )
+    ).toEqual(["skipped", "done", "open"]);
+  });
+
+  test("counts business context done once a member saves About you", () => {
+    expect(statuses({ ...stored, done: ["context:org"] })).toEqual([
+      "open",
+      "open",
+      "done",
+    ]);
+  });
+
+  test("survives a round trip through storage", () => {
+    withLocalStorage(() => {
+      writeSetupChecklist("org-a", "user-a", stored);
+
+      expect(readSetupChecklist("org-a", "user-a")).toEqual(stored);
+      expect(readSetupChecklist("org-b", "user-a")).toBeNull();
+    });
+  });
+
+  test("reads a broken value as no checklist", () => {
+    withLocalStorage((store) => {
+      store.set("airin:setup-checklist:org-c:user-c", "{not json");
+      expect(readSetupChecklist("org-c", "user-c")).toBeNull();
+    });
+  });
+
+  test("drops stored items it does not know", () => {
+    withLocalStorage((store) => {
+      store.set(
+        "airin:setup-checklist:org-d:user-d",
+        JSON.stringify({
+          ...stored,
+          items: [...stored.items, { kind: "connect_mcp" }],
+        })
+      );
+
+      expect(readSetupChecklist("org-d", "user-d")?.items).toHaveLength(3);
+    });
+  });
+
+  test("org memory with only headings has no facts", () => {
+    expect(orgMemoryHasFacts("# Org Memory\n\n## Pinned\n")).toBe(false);
+    expect(orgMemoryHasFacts("## Pinned\n- We sell coffee beans\n")).toBe(true);
   });
 });

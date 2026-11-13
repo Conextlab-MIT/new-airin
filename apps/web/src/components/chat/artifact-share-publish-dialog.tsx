@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   ConfirmDialog,
   Dialog,
@@ -7,10 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { CheckmarkCircle01Icon, Copy01Icon } from "hugeicons-react";
 import { useState } from "react";
 import type { PublishIntent } from "@/components/chat/use-artifact-share-controls";
@@ -212,7 +212,7 @@ function ArtifactShareRecoverView({
         <DialogTitle>Share link not saved here</DialogTitle>
         <DialogDescription>
           This artifact is published, but this browser does not have the link.
-          Nakama only shows the full URL once at publish time and stores a hash
+          Airin only shows the full URL once at publish time and stores a hash
           on the server, so it cannot be looked up again later. Rotate the link
           to mint a new URL — the previous link will stop working.
         </DialogDescription>

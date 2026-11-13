@@ -1,6 +1,16 @@
 import { Database } from "bun:sqlite";
 import { createHash, randomUUID } from "node:crypto";
-import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import {
+  lstat,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
@@ -9,11 +19,13 @@ import {
   buildToolExecutionContext,
   derivePluginToolName,
   ensureDir,
+  getAirinVersion,
   getOrgPluginDatabasePath,
   getOrgPluginDataDir,
   getPluginReleaseDir,
   getPluginStagingRootDir,
   getPluginsRootDir,
+  getProfileSoulDir,
   type OrgPluginDetail,
   PLUGIN_MANIFEST_API_VERSION,
   PLUGIN_MANIFEST_FILENAME,
@@ -25,22 +37,27 @@ import {
   type PluginManifest,
   type PluginReleaseSummary,
   type PluginUiContribution,
+  type PluginUsageOrg,
   pathExists,
   resolvePluginReleaseEntry,
   validatePluginJsonInstance,
   validatePluginManifest,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
+  InstallLocalPluginRequest,
+  LocalPluginDraftRequest,
+  LocalPluginPreviewResponse,
   PluginPackageRequest,
   PluginRevisionRequest,
   PluginUpdateSummary,
-} from "@nakama/core/contract";
+  ReadLocalPluginFileRequest,
+} from "@airin/core/contract";
 import type {
   DatabaseAdapter,
   StoredOrgPluginRecord,
   StoredSkillRecord,
   StoredToolRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import * as pacote from "pacote";
 import { Parser } from "tar";
 import { z } from "zod";
@@ -60,6 +77,34 @@ const MAX_PATH_BYTES = 240;
 const pluginJsonSchema = z.json();
 
 type PluginJsonValue = z.infer<typeof pluginJsonSchema>;
+
+const pluginRunnerOutputSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), result: pluginJsonSchema }),
+  z.object({ error: z.string(), ok: z.literal(false) }),
+]);
+
+const MAX_ACTION_ERROR_CHARS = 500;
+
+// Plugin authors write these messages for people, so they can leak a host
+// path from a template string. Redact absolute paths and cap the length.
+const ABSOLUTE_PATH_PATTERN =
+  /(?<=^|[\s"'(=])(?:file:\/\/)?(?:[A-Za-z]:)?[\\/](?:[^\s\\/:"'`]+[\\/])+[^\s\\/:"'`]*/g;
+
+function safeActionErrorMessage(message: string): string {
+  const cleaned = message
+    .replace(ABSOLUTE_PATH_PATTERN, "[path]")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "Plugin action failed.";
+  }
+
+  return cleaned.length > MAX_ACTION_ERROR_CHARS
+    ? `${cleaned.slice(0, MAX_ACTION_ERROR_CHARS - 1)}…`
+    : cleaned;
+}
 
 export class PluginHostError extends Error {
   constructor(
@@ -105,11 +150,17 @@ interface InspectedPackage {
   files: Map<string, Uint8Array>;
   integrity: string;
   manifest: PluginManifest;
+  source?: PluginReleaseSummary["source"];
 }
 
 const installLocks = new Map<string, Promise<unknown>>();
 
 const officialInstallLocks = new Map<string, Promise<unknown>>();
+
+// A local install writes under the config tree that holds the draft, so a
+// second install's draft read would see changed ancestors. Installs in one org
+// read and publish one at a time.
+const localInstallLocks = new Map<string, Promise<unknown>>();
 
 // Shipped composition, rather than package author/id claims, grants official status.
 const OFFICIAL_PLUGINS = new Map<
@@ -118,11 +169,12 @@ const OFFICIAL_PLUGINS = new Map<
 >([
   ["workflows", { requiresHost: true, setupAction: "import_legacy" }],
   ["supermemory", { requiresHost: true }],
+  ["data-view", { requiresHost: true }],
 ]);
 
 const lifecycleLocks = new Map<string, Promise<unknown>>();
 
-const BUN_BIN = process.env.NAKAMA_BUN_BIN ?? "bun";
+const BUN_BIN = process.env.AIRIN_BUN_BIN ?? "bun";
 
 const PLUGIN_RUNNER_PATH = fileURLToPath(
   new URL("./plugin-runner.js", import.meta.url)
@@ -177,6 +229,7 @@ const pluginWorkerManagers = new Set<
 >();
 
 type PluginLifecycleTestHooks = {
+  beforeLocalFileRead?: (path: string) => Promise<void>;
   afterMigrationBeforePublish?: () => Promise<void>;
   afterPublishBeforeFinalize?: () => Promise<void>;
 };
@@ -235,7 +288,7 @@ let exportPending = false;
 
 let activeMutations = 0;
 
-const MIGRATION_LEDGER_TABLE = "_nakama_plugin_migrations";
+const MIGRATION_LEDGER_TABLE = "_airin_plugin_migrations";
 
 const DEFAULT_DRAIN_TIMEOUT_MS = 6000;
 
@@ -414,6 +467,276 @@ export class PluginService {
     return toPreview(inspected);
   }
 
+  async previewLocalPlugin(
+    draft: LocalPluginDraftRequest,
+    actor: { id: string; isPlatformAdmin: boolean }
+  ): Promise<LocalPluginPreviewResponse> {
+    this.assertLocalPluginApprover(actor);
+    const inspected = await this.inspectLocalPlugin(draft);
+
+    const install = await this.db.getOrgPlugin(
+      draft.orgId,
+      inspected.manifest.id
+    );
+
+    return {
+      ...toPreview(inspected),
+      draft,
+      expectedRevision: install?.revision ?? null,
+      files: [...inspected.files].map(([path, data]) => ({
+        path,
+        size: data.byteLength,
+      })),
+    };
+  }
+
+  /** An agent's handoff: validates its own draft without approving it. */
+  async describeLocalPlugin(draft: LocalPluginDraftRequest) {
+    const inspected = await this.inspectLocalPlugin(draft);
+
+    return { ...toPreview(inspected), fileCount: inspected.files.size };
+  }
+
+  async readLocalPluginFile(
+    request: ReadLocalPluginFileRequest,
+    actor: { id: string; isPlatformAdmin: boolean }
+  ) {
+    this.assertLocalPluginApprover(actor);
+    const inspected = await this.inspectLocalPlugin(request);
+
+    if (inspected.digest !== request.expectedDigest) {
+      throw new PluginHostError("digest_mismatch");
+    }
+
+    const file = inspected.files.get(request.path);
+
+    if (!file) {
+      throw new PluginHostError("not_found");
+    }
+
+    // Review never serves code as an executable browser response.
+    const offset = request.offset ?? 0;
+
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      offset > file.byteLength
+    ) {
+      throw new PluginHostError("invalid_input");
+    }
+
+    const end = Math.min(offset + 1024 * 1024, file.byteLength);
+
+    return {
+      content: Buffer.from(file.subarray(offset, end)).toString("base64"),
+      encoding: "base64" as const,
+      nextOffset: end < file.byteLength ? end : null,
+      path: request.path,
+    };
+  }
+
+  async installLocalPlugin(
+    request: InstallLocalPluginRequest,
+    actor: { id: string; isPlatformAdmin: boolean }
+  ) {
+    this.assertLocalPluginApprover(actor);
+
+    return withKeyedLock(
+      localInstallLocks,
+      `${this.configDir}:${request.orgId}`,
+      async () => {
+        const inspected = await this.inspectLocalPlugin(request);
+
+        if (inspected.digest !== request.expectedDigest) {
+          throw new PluginHostError("digest_mismatch");
+        }
+
+        const pluginId = inspected.manifest.id;
+
+        return withKeyedLock(
+          officialInstallLocks,
+          `${this.configDir}:${request.orgId}:${pluginId}`,
+          async () => {
+            let install = await this.db.getOrgPlugin(request.orgId, pluginId);
+
+            if ((install?.revision ?? null) !== request.expectedRevision) {
+              throw new PluginHostError("stale_revision");
+            }
+
+            if (
+              install &&
+              !["disabled", "enabled", "retained"].includes(
+                install.lifecycleState
+              )
+            ) {
+              throw new PluginHostError("invalid_state");
+            }
+
+            const shouldEnable = install?.lifecycleState === "enabled";
+            await withPluginMutation(() =>
+              withKeyedLock(
+                installLocks,
+                `${pluginId}@${inspected.manifest.version}`,
+                () =>
+                  withKeyedLock(stagingLocks, "staging", () =>
+                    this.publishInspectedPackage(inspected)
+                  )
+              )
+            );
+
+            if (!install || install.lifecycleState === "retained") {
+              return this.addOrgPlugin(
+                request.orgId,
+                pluginId,
+                inspected.manifest.version
+              );
+            }
+
+            if (install.lifecycleState === "enabled") {
+              install = await this.disableOrgPlugin(
+                request.orgId,
+                pluginId,
+                install.revision
+              );
+            }
+
+            if (install.selectedVersion !== inspected.manifest.version) {
+              install = await this.updateOrgPlugin(
+                request.orgId,
+                pluginId,
+                inspected.manifest.version,
+                install.revision
+              );
+            }
+
+            return shouldEnable
+              ? this.enableOrgPlugin(request.orgId, pluginId, install.revision)
+              : install;
+          }
+        );
+      }
+    );
+  }
+
+  private assertLocalPluginApprover(actor: { isPlatformAdmin: boolean }) {
+    if (!actor.isPlatformAdmin) {
+      throw new PluginHostError("forbidden");
+    }
+  }
+
+  private async inspectLocalPlugin(
+    draft: LocalPluginDraftRequest
+  ): Promise<InspectedPackage> {
+    for (const id of [draft.orgId, draft.profileId, draft.draftId]) {
+      if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) {
+        throw new PluginHostError("unsafe_path");
+      }
+    }
+
+    const org = await this.db.getOrganizationById(draft.orgId);
+    const profile = await this.db.getProfile(draft.profileId);
+
+    if (!org || org.archivedAt || !profile || profile.orgId !== draft.orgId) {
+      throw new PluginHostError("not_found");
+    }
+
+    const workspace = getProfileSoulDir(
+      draft.orgId,
+      draft.profileId,
+      this.configDir
+    );
+
+    const directory = join(workspace, "plugin-drafts", draft.draftId);
+
+    const files = await readLocalPluginFiles(
+      this.configDir,
+      directory,
+      true
+    ).catch((error) => {
+      if (error instanceof PluginHostError) {
+        throw error;
+      }
+
+      throw new PluginHostError("unsafe_path");
+    });
+
+    let manifest: unknown;
+    let packageJson: z.infer<typeof localPackageSchema>;
+
+    try {
+      manifest = JSON.parse(
+        Buffer.from(files.get(PLUGIN_MANIFEST_FILENAME) ?? []).toString()
+      );
+      packageJson = localPackageSchema.parse(
+        JSON.parse(Buffer.from(files.get("package.json") ?? []).toString())
+      );
+    } catch {
+      throw new PluginHostError("invalid_manifest");
+    }
+
+    const validated = validatePluginManifest(manifest);
+
+    if (!validated.ok) {
+      throw invalidLocalManifest(validated.code);
+    }
+
+    const { id, minAirinVersion } = validated.manifest;
+
+    // HTTP maps only the code; the reason lets the agent fix its own draft.
+    const failures: Array<[boolean, string]> = [
+      [
+        packageJson.version !== validated.manifest.version,
+        "package_version_mismatch",
+      ],
+      [id !== draft.draftId, "id_must_match_draft_folder"],
+      [
+        getAirinVersion() === "dev" ||
+          !Bun.semver.satisfies(getAirinVersion(), `>=${minAirinVersion}`),
+        "unsupported_airin_version",
+      ],
+      [OFFICIAL_PLUGINS.has(id) || id === "google-meet", "official_plugin_id"],
+      [
+        [
+          packageJson.dependencies,
+          packageJson.optionalDependencies,
+          packageJson.peerDependencies,
+        ].some((dependencies) => Object.keys(dependencies ?? {}).length > 0),
+        "package_dependencies",
+      ],
+    ];
+
+    const failure = failures.find(([failed]) => failed);
+
+    if (failure) {
+      throw invalidLocalManifest(failure[1]);
+    }
+
+    assertReferencedFilesExist(validated.manifest, files);
+
+    if (
+      (validated.manifest.workers?.length ?? 0) > 0 &&
+      !this.options.workerManager
+    ) {
+      throw new PluginHostError("package_unavailable");
+    }
+
+    const version = `${validated.manifest.version.split("+")[0]}+dev.${digestLocalFiles(files).slice(0, 12)}`;
+    validated.manifest.version = version;
+
+    for (const name of ["package.json", PLUGIN_MANIFEST_FILENAME]) {
+      const metadata = JSON.parse(Buffer.from(files.get(name)!).toString());
+      files.set(name, Buffer.from(JSON.stringify({ ...metadata, version })));
+    }
+
+    return {
+      digest: digestLocalFiles(files),
+      files,
+      integrity: "local",
+      manifest: validated.manifest,
+      source: "local",
+    };
+  }
+
   async listOfficialPlugins() {
     if (!this.options.officialPackagesDir) {
       return [];
@@ -467,7 +790,9 @@ export class PluginService {
           if (
             !(
               install &&
-              ["enabled", "disabled"].includes(install.lifecycleState)
+              ["enabled", "disabled", "retained"].includes(
+                install.lifecycleState
+              )
             )
           ) {
             throw new PluginHostError("invalid_state");
@@ -563,7 +888,7 @@ export class PluginService {
     pluginId: string,
     developmentSnapshot = false
   ): Promise<InspectedPackage> {
-    // This allowlist is shipped with Nakama; package metadata cannot grant official status.
+    // This allowlist is shipped with Airin; package metadata cannot grant official status.
     if (!(OFFICIAL_PLUGINS.has(pluginId) && this.options.officialPackagesDir)) {
       throw new PluginHostError("not_found");
     }
@@ -646,6 +971,7 @@ export class PluginService {
       files,
       integrity: "bundled",
       manifest: validated.manifest,
+      source: "official",
     };
   }
 
@@ -809,7 +1135,9 @@ export class PluginService {
     orgId: string,
     pluginId: string,
     actionKey: string
-  ): Promise<PluginManifest["actions"][number] | null> {
+  ): Promise<
+    (PluginManifest["actions"][number] & { pluginDescription: string }) | null
+  > {
     const install = await this.db.getOrgPlugin(orgId, pluginId);
 
     if (
@@ -831,7 +1159,9 @@ export class PluginService {
       (item) => item.key === actionKey && item.exposeAsTool
     );
 
-    return action ?? null;
+    return action && release
+      ? { ...action, pluginDescription: release.manifest.description }
+      : null;
   }
 
   async previewPluginContributionChanges(
@@ -1356,6 +1686,52 @@ export class PluginService {
     pluginId?: string
   ): Promise<PluginReleaseSummary[]> {
     return this.db.listPluginReleases(pluginId);
+  }
+
+  /** Every organization that holds this plugin, with the agents there that use it. */
+  async listPluginUsage(pluginId: string): Promise<PluginUsageOrg[]> {
+    const installs = (await this.db.listOrgPlugins()).filter(
+      (install) => install.pluginId === pluginId
+    );
+
+    if (installs.length === 0) {
+      return [];
+    }
+
+    const profiles = await this.db.listProfiles();
+
+    return Promise.all(
+      installs.map(async (install) => {
+        const organization = await this.db.getOrganizationById(install.orgId);
+        const agents: PluginUsageOrg["agents"] = [];
+
+        for (const profile of profiles) {
+          if (profile.orgId !== install.orgId) {
+            continue;
+          }
+
+          const [tools, skills] = await Promise.all([
+            this.db.listToolsForProfile(profile.id),
+            this.db.listSkillsForProfile(profile.id),
+          ]);
+
+          if (
+            [...tools, ...skills].some((item) => item.pluginId === pluginId)
+          ) {
+            agents.push({ id: profile.id, name: profile.name });
+          }
+        }
+
+        return {
+          agents,
+          lifecycleState: install.lifecycleState,
+          name: organization?.name ?? install.orgId,
+          orgId: install.orgId,
+          revision: install.revision,
+          selectedVersion: install.selectedVersion,
+        };
+      })
+    );
   }
 
   /**
@@ -1885,9 +2261,35 @@ export class PluginService {
             : undefined,
       },
       workspaceRoot: input.context.workspaceRoot,
+    }).catch((error) => {
+      // Plugin code that runs past its deadline failed like plugin code that
+      // throws: it is not a server bug. A deadline hit while the host still
+      // owed the plugin an answer is a host failure and keeps the 500 path.
+      if (
+        error instanceof Error &&
+        "timedOut" in error &&
+        "waitingOnHost" in error &&
+        !error.waitingOnHost
+      ) {
+        // The stderr tail is for the operator; members get the reason only.
+        console.warn(error.message);
+
+        throw new PluginHostError("action_failed", `${input.label} timed out.`);
+      }
+
+      throw error;
     });
 
-    return pluginJsonSchema.parse(result);
+    const output = pluginRunnerOutputSchema.parse(result);
+
+    if (!output.ok) {
+      throw new PluginHostError(
+        "action_failed",
+        safeActionErrorMessage(output.error)
+      );
+    }
+
+    return output.result;
   }
 
   private withOrgPluginMutation<T>(
@@ -2062,6 +2464,7 @@ export class PluginService {
     const db = new Database(databasePath);
 
     try {
+      db.exec("PRAGMA synchronous = EXTRA");
       ensureMigrationLedger(db);
       const applied = readAppliedMigrations(db);
       assertMigrationCompatibility(applied, migrations);
@@ -2342,6 +2745,15 @@ export class PluginService {
     }
 
     if (existing?.digest === digest && (await pathExists(releaseDir))) {
+      if (
+        inspected.source === "local" &&
+        digestLocalFiles(
+          await readLocalPluginFiles(this.configDir, releaseDir, false)
+        ) !== digest
+      ) {
+        throw new PluginHostError("digest_mismatch");
+      }
+
       await writePluginReleaseIntegrity(
         manifest.id,
         manifest.version,
@@ -2388,6 +2800,7 @@ export class PluginService {
         digest,
         manifest,
         pluginId: manifest.id,
+        source: inspected.source ?? "npm",
         version: manifest.version,
       });
 
@@ -2455,6 +2868,10 @@ function isUiReleasePath(
   return relativePath === assetsDir || relativePath.startsWith(`${assetsDir}/`);
 }
 
+function invalidLocalManifest(reason: string): PluginHostError {
+  return new PluginHostError("invalid_manifest", `invalid_manifest: ${reason}`);
+}
+
 function toPreview(inspected: InspectedPackage): PluginPackagePreview {
   return {
     contributions: {
@@ -2477,6 +2894,16 @@ const packageNameSchema = z
   .max(214)
   .regex(/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/);
 
+const localPackageSchema = z
+  .object({
+    dependencies: z.record(z.string(), z.string()).optional(),
+    name: packageNameSchema,
+    optionalDependencies: z.record(z.string(), z.string()).optional(),
+    peerDependencies: z.record(z.string(), z.string()).optional(),
+    version: z.string(),
+  })
+  .loose();
+
 const REGISTRY_OPTIONS = {
   allowDirectory: "none",
   allowFile: "none",
@@ -2494,7 +2921,7 @@ const REGISTRY_OPTIONS = {
  * to nothing else.
  */
 function registryOptions() {
-  const token = process.env.NAKAMA_PLUGIN_NPM_TOKEN?.trim();
+  const token = process.env.AIRIN_PLUGIN_NPM_TOKEN?.trim();
 
   if (!token) {
     return REGISTRY_OPTIONS;
@@ -2716,6 +3143,214 @@ async function readNpmPackage(
   return files;
 }
 
+function digestLocalFiles(files: Map<string, Uint8Array>): string {
+  const hash = createHash("sha256");
+
+  for (const [name, data] of [...files].sort(([a], [b]) =>
+    a.localeCompare(b)
+  )) {
+    hash.update(JSON.stringify([name, data.byteLength])).update(data);
+  }
+
+  return hash.digest("hex");
+}
+
+async function readLocalPluginFiles(
+  configDir: string,
+  directory: string,
+  isDraft: boolean
+) {
+  const files = new Map<string, Uint8Array>();
+  const directories = new Map<string, Awaited<ReturnType<typeof lstat>>>();
+  let count = 0;
+  let size = 0;
+  const base = await realpath(configDir);
+  const prefix = relative(configDir, directory).split(sep);
+  let ancestor = configDir;
+
+  async function checkDirectory(path: string) {
+    const info = await lstat(path);
+
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw new PluginHostError("unsafe_path");
+    }
+
+    const canonical = await realpath(path);
+
+    if (canonical !== base && !canonical.startsWith(base + sep)) {
+      throw new PluginHostError("unsafe_path");
+    }
+
+    directories.set(path, info);
+  }
+
+  await checkDirectory(configDir);
+
+  for (const segment of prefix) {
+    ancestor = join(ancestor, segment);
+    await checkDirectory(ancestor);
+  }
+
+  async function collect(current: string, depth: number) {
+    if (depth > 24) {
+      throw new PluginHostError("expansion_limit");
+    }
+
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      count += 1;
+
+      if (count > MAX_FILES) {
+        throw new PluginHostError("expansion_limit");
+      }
+
+      const path = join(current, entry.name);
+      const name = relative(directory, path).split(sep).join("/");
+
+      if (
+        Buffer.byteLength(name) > MAX_PATH_BYTES ||
+        normalizeArchivePath(name) !== name
+      ) {
+        throw new PluginHostError("unsafe_path");
+      }
+
+      if (
+        isDraft &&
+        current === directory &&
+        ![
+          "package.json",
+          PLUGIN_MANIFEST_FILENAME,
+          "src",
+          "actions",
+          "ui",
+          "skills",
+          "migrations",
+          "workers",
+        ].includes(entry.name)
+      ) {
+        continue;
+      }
+
+      const before = await lstat(path);
+
+      if (
+        before.isSymbolicLink() ||
+        !(before.isDirectory() || before.isFile())
+      ) {
+        throw new PluginHostError("unsafe_path");
+      }
+
+      if (
+        isDraft &&
+        before.isDirectory() &&
+        ["node_modules", ".git", "cache", "caches", "logs"].includes(entry.name)
+      ) {
+        continue;
+      }
+
+      if (before.isDirectory()) {
+        await checkDirectory(path);
+        await collect(path, depth + 1);
+        continue;
+      }
+
+      if (before.nlink !== 1 || before.size > MAX_FILE_BYTES) {
+        throw new PluginHostError("expansion_limit");
+      }
+
+      size += before.size;
+
+      if (size > MAX_UNCOMPRESSED_BYTES) {
+        throw new PluginHostError("expansion_limit");
+      }
+
+      await pluginLifecycleTestHooks.beforeLocalFileRead?.(path);
+
+      const handle = await open(
+        path,
+        // biome-ignore lint/suspicious/noBitwiseOperators: POSIX open flags must be combined.
+        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
+      );
+
+      try {
+        const opened = await handle.stat();
+
+        if (
+          !opened.isFile() ||
+          opened.nlink !== 1 ||
+          opened.ino !== before.ino ||
+          opened.dev !== before.dev ||
+          opened.size !== before.size ||
+          opened.mtimeMs !== before.mtimeMs
+        ) {
+          throw new PluginHostError("unsafe_path");
+        }
+
+        // Read only the approved size, even if another process grows the file.
+        const data = Buffer.alloc(opened.size);
+        let offset = 0;
+
+        while (offset < data.length) {
+          const read = await handle.read(
+            data,
+            offset,
+            data.length - offset,
+            offset
+          );
+
+          if (!read.bytesRead) {
+            throw new PluginHostError("digest_mismatch");
+          }
+
+          offset += read.bytesRead;
+        }
+
+        const after = await handle.stat();
+        const selected = await lstat(path);
+
+        if (
+          after.size !== opened.size ||
+          after.mtimeMs !== opened.mtimeMs ||
+          after.ctimeMs !== opened.ctimeMs ||
+          selected.ino !== opened.ino ||
+          selected.dev !== opened.dev ||
+          selected.isSymbolicLink()
+        ) {
+          throw new PluginHostError("digest_mismatch");
+        }
+
+        files.set(name, data);
+      } finally {
+        await handle.close();
+      }
+    }
+  }
+
+  await collect(directory, 0);
+
+  for (const [path, before] of directories) {
+    const after = await lstat(path);
+
+    if (
+      !after.isDirectory() ||
+      after.isSymbolicLink() ||
+      before.ino !== after.ino ||
+      before.dev !== after.dev ||
+      before.mtimeMs !== after.mtimeMs ||
+      before.ctimeMs !== after.ctimeMs
+    ) {
+      throw new PluginHostError("digest_mismatch");
+    }
+
+    const canonical = await realpath(path);
+
+    if (canonical !== base && !canonical.startsWith(base + sep)) {
+      throw new PluginHostError("unsafe_path");
+    }
+  }
+
+  return files;
+}
+
 function normalizeArchivePath(name: string): string {
   if (
     !name ||
@@ -2878,6 +3513,16 @@ export async function quarantineInvalidPluginReleases(
       }
 
       const version = entry.name.slice(0, -".integrity".length);
+      const integrityPath = join(pluginDir, entry.name);
+      const releaseDir = getPluginReleaseDir(plugin.name, version, configDir);
+
+      if (!(await pathExists(releaseDir))) {
+        // An orphan marker (restored from an export whose release dir was
+        // empty) has nothing to hash; hashing it crashes restore finalization.
+        await rm(integrityPath, { force: true });
+        quarantined.push(`${plugin.name}@${version}`);
+        continue;
+      }
 
       if (
         await pluginReleaseIntegrityMatches(plugin.name, version, configDir)
@@ -2885,12 +3530,8 @@ export async function quarantineInvalidPluginReleases(
         continue;
       }
 
-      const releaseDir = getPluginReleaseDir(plugin.name, version, configDir);
-
-      if (await pathExists(releaseDir)) {
-        await rename(releaseDir, `${releaseDir}.unavailable`);
-        quarantined.push(`${plugin.name}@${version}`);
-      }
+      await rename(releaseDir, `${releaseDir}.unavailable`);
+      quarantined.push(`${plugin.name}@${version}`);
     }
   }
 
@@ -3143,6 +3784,7 @@ function applyPluginMigrations(
   const db = new Database(databasePath);
 
   try {
+    db.exec("PRAGMA synchronous = EXTRA");
     ensureMigrationLedger(db);
     const applied = readAppliedMigrations(db);
     assertMigrationCompatibility(applied, migrations);

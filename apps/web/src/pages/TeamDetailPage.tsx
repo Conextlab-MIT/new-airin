@@ -1,11 +1,10 @@
-import { Tabs } from "@base-ui/react/tabs";
 import type {
   OrgRole,
   OrgUsageLeader,
   OrgUsageSummaryResponse,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card } from "@nakama/ui/card";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card } from "@airin/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -13,9 +12,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
+import { Tabs } from "@base-ui/react/tabs";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown01Icon, Tick02Icon } from "hugeicons-react";
 import { type FormEvent, type ReactNode, useRef, useState } from "react";
@@ -775,7 +775,7 @@ function DeleteTeamDialog({
           <DialogTitle>Delete team?</DialogTitle>
           <DialogDescription>
             {teamName} will disappear from the switcher and chat. Members,
-            profiles, and files stay on disk. Nakama cannot restore it.
+            profiles, and files stay on disk. Airin cannot restore it.
           </DialogDescription>
         </DialogHeader>
         {error && (

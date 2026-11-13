@@ -1,0 +1,523 @@
+import type { McpRegistryServer, McpServerSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { buttonVariants } from "@airin/ui/button-variants";
+import { DialogTitle } from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Add01Icon,
+  ArrowLeft01Icon,
+  CheckmarkCircle02Icon,
+  Key01Icon,
+  Search01Icon,
+  Tick02Icon,
+} from "hugeicons-react";
+import { type ReactNode, useEffect, useState } from "react";
+import { POPULAR_SERVERS } from "@/components/soul-tools/mcp-tab/popular-mcp-servers";
+import type { McpServerKind } from "@/components/soul-tools/mcp-tab/use-mcp-server-dialog-state";
+import { useAuth } from "@/context/use-auth";
+import { useMcpServerDetailQuery } from "@/hooks/use-app-queries";
+import { client, formatError } from "@/lib/client";
+import { queryKeys } from "@/lib/query-keys";
+
+export type PopularServer = (typeof POPULAR_SERVERS)[number];
+
+/** The OAuth callback connects the server on its own, so its status is re-read until it lands. */
+const SIGN_IN_POLL_INTERVAL_MS = 3000;
+
+function AppLogo({
+  name,
+  preset,
+  size = "md",
+}: {
+  name: string;
+  preset?: PopularServer;
+  size?: "md" | "lg";
+}) {
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        "flex shrink-0 items-center justify-center bg-muted font-semibold text-foreground/80",
+        size === "lg"
+          ? "size-16 rounded-2xl text-xl"
+          : "size-9 rounded-lg text-sm"
+      )}
+    >
+      {preset ? (
+        <svg
+          className={size === "lg" ? "size-8" : "size-5"}
+          fill="currentColor"
+          viewBox={preset.viewBox}
+        >
+          <path d={preset.path} />
+        </svg>
+      ) : (
+        name.charAt(0).toUpperCase()
+      )}
+    </div>
+  );
+}
+
+function BackButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button
+      className="-ml-2 self-start text-muted-foreground"
+      onClick={onClick}
+      size="sm"
+      type="button"
+      variant="ghost"
+    >
+      <ArrowLeft01Icon aria-hidden />
+      All apps
+    </Button>
+  );
+}
+
+type AppCard = {
+  description: string;
+  key: string;
+  name: string;
+  onPick: () => void;
+  preset?: PopularServer;
+  ready: boolean;
+};
+
+/** Popular apps first, then the org's own. Apps the org has add in one click; the rest connect. */
+function appCards({
+  onAssign,
+  onConnect,
+  popular,
+  registered,
+}: {
+  onAssign?: (serverId: string) => void;
+  onConnect: (preset: PopularServer) => void;
+  popular: readonly PopularServer[];
+  registered: McpServerSummary[];
+}): AppCard[] {
+  const ready: AppCard[] = onAssign
+    ? registered.map((server) => {
+        const preset = POPULAR_SERVERS.find(
+          (item) => item.name.toLowerCase() === server.name.toLowerCase()
+        );
+
+        return {
+          description:
+            preset?.description ??
+            `${server.toolCount} tool${server.toolCount === 1 ? "" : "s"}`,
+          key: server.id,
+          name: preset?.name ?? server.name,
+          onPick: () => onAssign(server.id),
+          preset,
+          ready: true,
+        };
+      })
+    : [];
+
+  const connect = popular.map((preset) => ({
+    description: preset.description,
+    key: preset.toolkit,
+    name: preset.name,
+    onPick: () => onConnect(preset),
+    preset,
+    ready: false,
+  }));
+
+  const rank = (card: AppCard) => {
+    const index = card.preset ? POPULAR_SERVERS.indexOf(card.preset) : -1;
+
+    return index === -1 ? POPULAR_SERVERS.length : index;
+  };
+
+  return [...ready, ...connect].sort((a, b) => rank(a) - rank(b));
+}
+
+function AppCardButton({ busy, card }: { busy: boolean; card: AppCard }) {
+  return (
+    <button
+      aria-label={
+        card.ready ? `Add ${card.name} to agent` : `Connect ${card.name}`
+      }
+      className="flex h-full w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/50 disabled:opacity-50"
+      disabled={busy}
+      onClick={card.onPick}
+      type="button"
+    >
+      <AppLogo name={card.name} preset={card.preset} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-medium text-foreground text-sm">
+          {card.name}
+        </span>
+        <span className="truncate text-muted-foreground text-xs">
+          {card.description}
+        </span>
+      </span>
+      {card.ready ? (
+        <span className="inline-flex shrink-0 items-center gap-1 font-medium text-emerald-700 text-xs dark:text-emerald-400">
+          <Tick02Icon aria-hidden className="size-3.5" />
+          Ready
+        </span>
+      ) : (
+        <span className="shrink-0 font-medium text-primary text-xs">
+          Connect
+        </span>
+      )}
+    </button>
+  );
+}
+
+function RegistryServerCardButton({
+  busy,
+  onSelect,
+  server,
+}: {
+  busy: boolean;
+  onSelect: (server: McpRegistryServer) => void;
+  server: McpRegistryServer;
+}) {
+  return (
+    <button
+      aria-label={`Add ${server.name} from registry`}
+      className="flex h-full w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/50 disabled:opacity-50"
+      disabled={busy}
+      onClick={() => onSelect(server)}
+      type="button"
+    >
+      <div
+        aria-hidden
+        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted font-semibold text-foreground/80 text-sm"
+      >
+        {server.name.charAt(0).toUpperCase()}
+      </div>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-medium text-foreground text-sm">
+          {server.name}
+        </span>
+        <span className="truncate text-muted-foreground text-xs">
+          {server.description || server.remotes[0]?.url || "Remote MCP server"}
+        </span>
+      </span>
+      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[0.6875rem] text-muted-foreground uppercase">
+        {server.transport}
+      </span>
+    </button>
+  );
+}
+
+type AppFilter = "all" | "ready" | "new";
+
+function matchesFilter(card: AppCard, filter: AppFilter): boolean {
+  if (filter === "all") {
+    return true;
+  }
+
+  return filter === "ready" ? card.ready : !card.ready;
+}
+
+function AppFilterChips({
+  counts,
+  filter,
+  onChange,
+}: {
+  counts: { new: number; ready: number };
+  filter: AppFilter;
+  onChange: (filter: AppFilter) => void;
+}) {
+  const chips = [
+    { id: "all", label: "All" },
+    { id: "ready", label: `In your org ${counts.ready}` },
+    { id: "new", label: `New ${counts.new}` },
+  ] as const satisfies readonly { id: AppFilter; label: string }[];
+
+  return (
+    <div
+      aria-label="Show apps"
+      className="flex shrink-0 gap-1 rounded-lg bg-muted p-1"
+      role="group"
+    >
+      {chips.map((chip) => (
+        <button
+          aria-pressed={filter === chip.id}
+          className={cn(
+            "h-7 whitespace-nowrap rounded-md px-3 font-medium text-muted-foreground text-xs transition-colors hover:text-foreground",
+            filter === chip.id && "bg-background text-foreground shadow-xs"
+          )}
+          key={chip.id}
+          onClick={() => onChange(chip.id)}
+          type="button"
+        >
+          {chip.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function McpAppPicker({
+  busy,
+  onAssign,
+  onConnect,
+  onCustom,
+  onQueryChange,
+  onSelectRegistry,
+  popular,
+  query,
+  registered,
+}: {
+  busy: boolean;
+  onAssign?: (serverId: string) => void;
+  onConnect: (preset: PopularServer) => void;
+  onCustom: () => void;
+  onQueryChange: (value: string) => void;
+  onSelectRegistry?: (server: McpRegistryServer) => void;
+  popular: readonly PopularServer[];
+  query: string;
+  registered: McpServerSummary[];
+}) {
+  const [filter, setFilter] = useState<AppFilter>("all");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const { user } = useAuth();
+  const isPlatformAdmin = user?.isPlatformAdmin === true;
+  const isSearchingRegistry = isPlatformAdmin && debouncedQuery.length >= 2;
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const registryResults = useQuery({
+    enabled: isSearchingRegistry,
+    queryFn: () => client.searchMcpRegistry(debouncedQuery),
+    queryKey: queryKeys.mcp.registry(debouncedQuery),
+    staleTime: 60_000,
+  });
+
+  const needle = query.trim().toLowerCase();
+
+  const searched = appCards({
+    onAssign,
+    onConnect,
+    popular,
+    registered,
+  }).filter((card) => card.name.toLowerCase().includes(needle));
+
+  const counts = {
+    new: searched.filter((card) => !card.ready).length,
+    ready: searched.filter((card) => card.ready).length,
+  };
+
+  // Chips only help when the list holds both kinds of app.
+  const showChips = counts.new > 0 && counts.ready > 0;
+
+  const cards = searched.filter(
+    (card) => !showChips || matchesFilter(card, filter)
+  );
+
+  const registryServers = isSearchingRegistry
+    ? (registryResults.data?.servers ?? [])
+    : [];
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-col gap-4 px-6 pt-6">
+        <DialogTitle className="pr-8 text-xl">Connect an app</DialogTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-48 flex-1">
+            <Search01Icon
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              aria-label="Search apps"
+              className="pr-9 pl-9"
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search apps or registry"
+              type="search"
+              value={query}
+            />
+            {isSearchingRegistry && registryResults.isFetching ? (
+              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground">
+                <Spinner className="size-4" />
+              </span>
+            ) : null}
+          </div>
+          {showChips ? (
+            <AppFilterChips
+              counts={counts}
+              filter={filter}
+              onChange={setFilter}
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {isSearchingRegistry && registryResults.error ? (
+        <div
+          className="mx-6 mt-3 rounded-md bg-destructive/10 px-3 py-2 text-destructive text-sm"
+          role="alert"
+        >
+          {formatError(registryResults.error)}
+        </div>
+      ) : null}
+
+      <ul className="grid min-h-0 flex-1 auto-rows-min gap-2 overflow-y-auto px-6 py-5 sm:grid-cols-2">
+        {cards.map((card) => (
+          <li key={card.key}>
+            <AppCardButton busy={busy} card={card} />
+          </li>
+        ))}
+        {registryServers.map((server) => (
+          <li key={`${server.name}-${server.remotes[0]?.url}`}>
+            <RegistryServerCardButton
+              busy={busy}
+              onSelect={(item) => onSelectRegistry?.(item)}
+              server={server}
+            />
+          </li>
+        ))}
+        <li>
+          <button
+            className="flex h-full w-full items-center gap-3 rounded-lg border border-border border-dashed px-3 py-2.5 text-left text-muted-foreground text-sm transition-colors hover:bg-muted/50 hover:text-foreground"
+            onClick={onCustom}
+            type="button"
+          >
+            <span
+              aria-hidden
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted"
+            >
+              <Add01Icon className="size-4" />
+            </span>
+            <span className="font-medium">Add a custom connection</span>
+          </button>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+const SIGN_IN_CHOICES = [
+  { id: "http", label: "API key" },
+  { id: "signin", label: "Sign in" },
+  { id: "stdio", label: "Command" },
+] as const satisfies readonly { id: McpServerKind; label: string }[];
+
+export function McpCustomConnection({
+  children,
+  kind,
+  onBack,
+  onKindChange,
+}: {
+  children: ReactNode;
+  kind: McpServerKind;
+  onBack: () => void;
+  onKindChange: (kind: McpServerKind) => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-6">
+      <BackButton onClick={onBack} />
+      <DialogTitle className="text-xl">Add a custom connection</DialogTitle>
+
+      <div
+        aria-label="How does it sign in?"
+        className="segmented-control grid grid-cols-3 border-0 bg-muted sm:w-full"
+        role="tablist"
+      >
+        {SIGN_IN_CHOICES.map((choice) => (
+          <button
+            aria-selected={kind === choice.id}
+            className="segmented-control-item min-h-10 px-2 sm:flex-1"
+            data-active={kind === choice.id || undefined}
+            key={choice.id}
+            onClick={() => onKindChange(choice.id)}
+            role="tab"
+            type="button"
+          >
+            {choice.id === "http" ? (
+              <Key01Icon
+                aria-hidden
+                className={cn("size-4", kind === "http" && "text-primary")}
+              />
+            ) : null}
+            {choice.label}
+          </button>
+        ))}
+      </div>
+
+      {children}
+    </div>
+  );
+}
+
+export function McpSignInPending({
+  name,
+  onDone,
+  opened,
+  serverId,
+  url,
+}: {
+  name: string;
+  onDone: () => void;
+  opened: boolean;
+  serverId: string;
+  url: string;
+}) {
+  const queryClient = useQueryClient();
+
+  const { data: server } = useMcpServerDetailQuery(serverId, {
+    refetchInterval: SIGN_IN_POLL_INTERVAL_MS,
+  });
+
+  const connected = server?.status === "connected";
+
+  function finish() {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.profiles.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.mcp.all });
+    onDone();
+  }
+
+  if (connected) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+        <CheckmarkCircle02Icon
+          aria-hidden
+          className="size-14 text-emerald-600 dark:text-emerald-400"
+        />
+        <DialogTitle className="text-xl">{name} is connected</DialogTitle>
+        <Button className="min-w-40" onClick={finish} size="lg" type="button">
+          Done
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 p-6 text-center">
+      <AppLogo name={name} size="lg" />
+      <DialogTitle className="text-xl">Finish signing in to {name}</DialogTitle>
+      <p className="max-w-sm text-muted-foreground text-sm">
+        Approve access in the {name} tab. This window updates by itself.
+      </p>
+      <a
+        className={cn(
+          buttonVariants({
+            size: "lg",
+            variant: opened ? "outline" : "default",
+          }),
+          "min-w-56"
+        )}
+        href={url}
+        rel="noreferrer"
+        target="_blank"
+      >
+        {opened ? `Open ${name} again` : `Open ${name}`}
+      </a>
+      <p className="flex items-center gap-2 text-muted-foreground text-sm">
+        <Spinner className="size-4" />
+        Waiting for approval
+      </p>
+    </div>
+  );
+}

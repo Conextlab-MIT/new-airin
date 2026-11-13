@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { Plug01Icon } from "hugeicons-react";
 import { useState } from "react";
 
@@ -37,5 +37,28 @@ export function ComposioToolkitLogo({
       )}
       <span className="sr-only">{name}</span>
     </span>
+  );
+}
+
+export function ComposioCustomAuthSteps({ name }: { name: string }) {
+  return (
+    <>
+      <ol className="list-decimal space-y-2 pl-5 text-sm">
+        <li>Open the Composio project for this API key.</li>
+        <li>
+          Create a custom auth config for {name}. Enter the credentials that
+          Composio requests.
+        </li>
+        <li>Return here and try Connect again.</li>
+      </ol>
+      <a
+        className="text-sm underline underline-offset-3"
+        href="https://next.docs.composio.dev/docs/auth-configuration/custom-auth-configs"
+        rel="noreferrer"
+        target="_blank"
+      >
+        View setup guide
+      </a>
+    </>
   );
 }

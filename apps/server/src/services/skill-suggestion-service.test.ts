@@ -2,11 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NakamaApiError } from "@nakama/core";
-import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+import { AirinApiError } from "@airin/core";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
 import { SkillProposalService } from "./skill-proposal-service";
 import { SkillSuggestionService } from "./skill-suggestion-service";
 import { SkillsService } from "./skills-service";
@@ -35,12 +32,12 @@ describe("SkillSuggestionService", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-suggestions-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-suggestions-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("createSuggestion inserts a pending row without writing to disk", async () => {
@@ -230,6 +227,33 @@ describe("SkillSuggestionService", () => {
     ).rejects.toThrow(/bundled/i);
   });
 
+  test("createSuggestion refuses a patch whose old_string cannot apply", async () => {
+    const db = createInMemoryDatabaseAdapter();
+    const profile = await seedOrg(db, { orgSkillsWriteApproval: false });
+    const { skills, suggestions } = buildServices(db);
+
+    await skills.createSkill(ORG_ID, {
+      body: "Run the deploy checklist before shipping.",
+      description: "Notes about deploy process.",
+      name: "deploy-notes",
+      profileId: profile.id,
+    });
+
+    await expect(
+      suggestions.createSuggestion({
+        orgId: ORG_ID,
+        outcome: {
+          action: "patch",
+          name: "deploy-notes",
+          newString: "replacement",
+          oldString: "Notes about depl\u2026",
+        },
+        profileId: profile.id,
+      })
+    ).rejects.toMatchObject({ name: "AirinApiError", status: 409 });
+    expect(await suggestions.listSuggestions(ORG_ID)).toEqual([]);
+  });
+
   test("cross-org suggestion id returns 404 on apply", async () => {
     const db = createInMemoryDatabaseAdapter();
     const profile = await seedOrg(db);
@@ -247,7 +271,7 @@ describe("SkillSuggestionService", () => {
 
     await expect(
       suggestions.applySuggestion("org_other", created.id, "admin_user")
-    ).rejects.toBeInstanceOf(NakamaApiError);
+    ).rejects.toBeInstanceOf(AirinApiError);
     await expect(
       suggestions.applySuggestion("org_other", created.id, "admin_user")
     ).rejects.toMatchObject({ status: 404 });

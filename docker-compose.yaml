@@ -1,21 +1,53 @@
 services:
-  nakama:
-    image: ghcr.io/ahmadrosid/nakama:latest
+  airin:
+    # Set AIRIN_VERSION (e.g. 0.4.57) to pin a release; a rollback is the previous number.
+    image: ghcr.io/ahmadrosid/airin:${AIRIN_VERSION:-latest}
     ports:
       - "4310:4310"
+    env_file:
+      - airin-secrets.env
     environment:
-      - NAKAMA_CONFIG_DIR=/nakama/data
+      - AIRIN_CONFIG_DIR=/airin/data
+      # Daily encrypted export, newest 7 kept. Must stay outside the data volume.
+      - AIRIN_BACKUP_DIR=/airin/backups
+      # Where the Update button leaves requests for the updater service below.
+      - AIRIN_UPDATER_DIR=/airin/updates
       # Optional: skip the browser setup wizard on first boot.
       # All three must be set together or none at all.
-      # - NAKAMA_SEED_ADMIN_EMAIL=admin@example.com
-      # - NAKAMA_SEED_ADMIN_NAME=Admin
-      # - NAKAMA_SEED_ADMIN_PASSWORD=changeme123
+      # - AIRIN_SEED_ADMIN_EMAIL=admin@example.com
+      # - AIRIN_SEED_ADMIN_NAME=Admin
+      # - AIRIN_SEED_ADMIN_PASSWORD=changeme123
       # Optional: public URL for OAuth callbacks and shared links.
       # Set this when running behind a reverse proxy.
-      # - NAKAMA_WEB_PUBLIC_URL=https://nakama.example.com
+      # - AIRIN_WEB_PUBLIC_URL=https://airin.example.com
     volumes:
-      - nakama-data:/nakama/data
+      - airin-data:/airin/data
+      - airin-backups:/airin/backups
+      - airin-updates:/airin/updates
+    restart: unless-stopped
+
+  # Optional: the Update button in Settings. Turn it on with
+  # COMPOSE_PROFILES=updater in .env. It holds the Docker socket, which is root
+  # on this host, so it opens no port and only upgrades the airin service.
+  updater:
+    image: docker:29-cli
+    profiles: ["updater"]
+    environment:
+      # The docker:cli image defaults to tcp://docker:2375.
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AIRIN_IMAGE=ghcr.io/ahmadrosid/airin:${AIRIN_VERSION:-latest}
+    # The script ships inside the Airin image, so it updates with Airin.
+    entrypoint:
+      - sh
+      - -c
+      - docker run --rm --entrypoint cat "$$AIRIN_IMAGE" /app/scripts/airin-updater.sh > /tmp/updater.sh && exec sh /tmp/updater.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/compose
+      - airin-updates:/updates
     restart: unless-stopped
 
 volumes:
-  nakama-data:
+  airin-data:
+  airin-backups:
+  airin-updates:

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import {
   ensureServerRunning,
   stopSpawnedServer,
-} from "@nakama/core/ensure-server";
+} from "@airin/core/ensure-server";
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -24,7 +24,7 @@ try {
     cwd: webRoot,
     env: {
       ...process.env,
-      NAKAMA_SERVER_URL: serverUrl,
+      AIRIN_SERVER_URL: serverUrl,
     },
     stderr: "inherit",
     stdin: "inherit",

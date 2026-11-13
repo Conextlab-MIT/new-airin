@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { Card } from "@nakama/ui/card";
-import { Input } from "@nakama/ui/input";
+import { Button } from "@airin/ui/button";
+import { Card } from "@airin/ui/card";
+import { Input } from "@airin/ui/input";
 import { useRef, useState } from "react";
 import type { SetupAccountDraft } from "@/components/setup-wizard/setup-wizard.shared";
 import { useAuth } from "@/context/use-auth";

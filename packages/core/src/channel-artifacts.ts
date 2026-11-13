@@ -2,7 +2,7 @@ import { z } from "zod";
 import { inferArtifactMimeType } from "./artifact-mime";
 import type { ChatMessage } from "./contract";
 
-const ARTIFACT_META_SUFFIX = ".nakama-meta.json";
+const ARTIFACT_META_SUFFIX = ".airin-meta.json";
 
 const ARTIFACTS_SEGMENT = "/artifacts/";
 
@@ -65,7 +65,9 @@ function parseToolResult(content: string): JsonObject | null {
 }
 
 function isWriteFileToolName(name: string): boolean {
-  return name === "write_file" || name === "write_docx";
+  return (
+    name === "write_file" || name === "write_docx" || name === "save_artifact"
+  );
 }
 
 function isGenerateImageToolName(name: string): boolean {
@@ -115,7 +117,7 @@ function isUnderArtifactsDir(resolvedPath: string): boolean {
 function isArtifactMetaRelativePath(relativePath: string): boolean {
   return (
     relativePath.endsWith(ARTIFACT_META_SUFFIX) ||
-    relativePath.includes(".nakama-meta")
+    relativePath.includes(".airin-meta")
   );
 }
 
@@ -123,7 +125,7 @@ function isArtifactMetaResolvedPath(resolvedPath: string): boolean {
   return (
     isUnderArtifactsDir(resolvedPath) &&
     (resolvedPath.endsWith(ARTIFACT_META_SUFFIX) ||
-      resolvedPath.includes(".nakama-meta"))
+      resolvedPath.includes(".airin-meta"))
   );
 }
 

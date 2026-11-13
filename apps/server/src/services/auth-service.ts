@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
-const SALT_ROUNDS = 10;
+// `bun test` sets NODE_ENV=test. bcrypt's lowest cost keeps test logins fast.
+const SALT_ROUNDS = process.env.NODE_ENV === "test" ? 4 : 10;
 
 const SESSION_EXPIRY_DAYS = 7;
 
@@ -27,6 +28,8 @@ export class AuthService {
   }
 
   hashToken(token: string): string {
+    // Inputs are random server tokens (32 bytes or nanoid(32)), not passwords,
+    // so a fast hash is right. Changing it would void every stored hash.
     return createHash("sha256").update(token).digest("base64url");
   }
 }

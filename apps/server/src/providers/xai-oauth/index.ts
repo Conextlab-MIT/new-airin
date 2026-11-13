@@ -6,7 +6,7 @@ import type {
   ProviderClient,
   StreamChatHandlers,
   XaiOAuthCredentials,
-} from "@nakama/core";
+} from "@airin/core";
 import { generateOpenAIResponsesChat } from "../openai/responses";
 import {
   resolveXaiOAuthCredentials,
@@ -41,6 +41,7 @@ export function createXaiProvider(options: XaiProviderOptions): ProviderClient {
       input,
       label: "Grok",
       model,
+      provider: "xai_oauth",
       stream: Boolean(handlers),
       supportsThinking:
         model.startsWith("grok-4.6") ||

@@ -1,4 +1,4 @@
-import { type DatabaseAdapter, seedOrgDefaultProfile } from "@nakama/db";
+import { type DatabaseAdapter, seedOrgDefaultProfile } from "@airin/db";
 
 export const ORG_ID = "org_test";
 

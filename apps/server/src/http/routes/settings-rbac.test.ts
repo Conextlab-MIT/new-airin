@@ -1,14 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import type { OrgRole } from "@nakama/core";
+import type {
+  ListProvidersResponse,
+  ModelsResponse,
+  OrgRole,
+} from "@airin/core";
 import {
   loadWhatsAppConfigFile,
   syncWhatsAppOwnerPairing,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 import {
   getWhatsAppWorkerStatus,
   writeWhatsAppQrCode,
-} from "@nakama/core/whatsapp-worker";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core/whatsapp-worker";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import type { ServerOptions } from "../context";
@@ -19,7 +23,7 @@ import {
   seedOrgAdmin,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-settings-rbac-test-");
+setupTestConfigDir("airin-settings-rbac-test-");
 
 type SystemStatusStub = Pick<ServerOptions["systemStatus"], "getStatus">;
 
@@ -196,6 +200,13 @@ const INSTALL_WRITES: { body?: unknown; method: string; path: string }[] = [
     path: "/v1/providers/provider_1",
   },
   { method: "DELETE", path: "/v1/providers/provider_1" },
+  { method: "POST", path: "/v1/providers/provider_1/check" },
+  { method: "POST", path: "/v1/providers/provider_1/default" },
+  {
+    body: { apiKey: "sk-test", type: "openai" },
+    method: "POST",
+    path: "/v1/providers/check-key",
+  },
   {
     body: { apiKey: "sk-test", provider: "openai" },
     method: "PUT",
@@ -235,6 +246,11 @@ const INSTALL_WRITES: { body?: unknown; method: string; path: string }[] = [
   },
   { method: "POST", path: "/v1/settings/email/test" },
   { method: "POST", path: "/v1/settings/agent-browser/install" },
+  {
+    body: { apiKey: "kernel-key", provider: "kernel" },
+    method: "PUT",
+    path: "/v1/settings/agent-browser",
+  },
   {
     body: { providerPassthroughEnabled: false },
     method: "PUT",
@@ -304,9 +320,48 @@ function createApp(systemStatus?: SystemStatusStub) {
       deleteProvider: record("deleteProvider"),
       discoverModels: record("discoverModels"),
       getProfile: async (_orgId: string, profileId: string) => ({
-        profile: { id: "default", isSuper: profileId === "super_bot" },
+        profile: { id: "default", isSuper: profileId === "super_airin" },
+      }),
+      getProfileAccess: async (_orgId: string, profileId: string) => ({
+        isSuper: profileId === "super_airin",
+        ownerUserId: null,
+      }),
+      getModels: async () => ({
+        baseUrl: "https://operator-upstream.example.com/v1",
+        currentProviderId: "provider_1",
+        customModels: [{ id: "internal-model", name: "Internal" }],
+        displayName: "Operator Plan",
+        models: [],
+        provider: "openai_compatible",
+        providers: [
+          {
+            baseUrl: "https://operator-upstream.example.com/v1",
+            createdAt: "now",
+            hasApiKey: true,
+            id: "provider_1",
+            label: "Operator Plan",
+            modelCount: 3,
+            type: "openai_compatible",
+          },
+        ],
       }),
       listProfiles: async () => ({ profiles: [{ id: "default" }] }),
+      listProviders: async () => ({
+        defaultProviderId: "provider_1",
+        providers: [
+          {
+            baseUrl: "https://operator-upstream.example.com/v1",
+            createdAt: "now",
+            hasApiKey: true,
+            hostMode: null,
+            id: "provider_1",
+            label: "Operator Plan",
+            modelCount: 3,
+            type: "openai_compatible",
+            wireApi: "responses",
+          },
+        ],
+      }),
       sendErrorTrackingTest: record("sendErrorTrackingTest"),
       setComposioSettings: record("setComposioSettings"),
       setDiscordSettings: record("setDiscordSettings"),
@@ -315,6 +370,7 @@ function createApp(systemStatus?: SystemStatusStub) {
       setTelegramSettings: record("setTelegramSettings"),
       setThinkingSettings: record("setThinkingSettings"),
       setTranscriptionSettings: record("setTranscriptionSettings"),
+      setUserLanguage: record("setUserLanguage"),
       setUserTimezone: record("setUserTimezone"),
       setVisionSettings: record("setVisionSettings"),
       setWebSearchSettings: record("setWebSearchSettings"),
@@ -428,13 +484,13 @@ describe("install-wide settings writes require a platform admin", () => {
   });
 
   for (const channel of ["telegram", "discord", "whatsapp"]) {
-    test(`an admin cannot connect ${channel} to Super Bot`, async () => {
+    test(`an admin cannot connect ${channel} to Airin`, async () => {
       const { app, calls, session } = await login("admin", true);
 
       const response = await callRoute(app, session, {
         body: { botToken: "token" },
         method: "PUT",
-        path: `/v1/settings/${channel}?profileId=super_bot`,
+        path: `/v1/settings/${channel}?profileId=super_airin`,
       });
 
       expect(response.status).toBe(400);
@@ -630,7 +686,399 @@ describe("usage by agent and user is for admins only", () => {
       });
 
       expect(response.status).toBe(200);
-      expect(requested).toEqual([{ includeUsageByActor: expected }]);
+      expect(requested).toMatchObject([{ includeUsageByActor: expected }]);
     });
   }
+});
+
+describe("the install-wide provider inventory read is scoped by role", () => {
+  test("a plain member gets the identifying fields only", async () => {
+    const { app, session } = await login("member");
+
+    const response = await callRoute(app, session, {
+      method: "GET",
+      path: "/v1/providers",
+    });
+
+    expect(response.status).toBe(200);
+
+    // SAFETY: This test controls the fixture shape at this boundary.
+    const body = (await response.json()) as ListProvidersResponse;
+
+    expect(body.defaultProviderId).toBe("provider_1");
+    expect(body.providers).toEqual([
+      {
+        createdAt: "now",
+        id: "provider_1",
+        label: "Operator Plan",
+        modelCount: 3,
+        type: "openai_compatible",
+      },
+    ]);
+  });
+
+  test("a platform admin gets the full summary", async () => {
+    const { app, session } = await login("member", true);
+
+    const response = await callRoute(app, session, {
+      method: "GET",
+      path: "/v1/providers",
+    });
+
+    expect(response.status).toBe(200);
+
+    // SAFETY: This test controls the fixture shape at this boundary.
+    const body = (await response.json()) as ListProvidersResponse;
+
+    expect(body.providers[0]).toMatchObject({
+      baseUrl: "https://operator-upstream.example.com/v1",
+      hasApiKey: true,
+      id: "provider_1",
+    });
+  });
+});
+
+describe("profile detail and history reads follow the chat list visibility", () => {
+  const PROFILES_ORG_ID = "org_profile_read";
+
+  async function seedProfilesFixture() {
+    const db = createInMemoryDatabaseAdapter();
+
+    const agent = new AgentService(null, null, db);
+
+    const { app, authService } = createMinimalHonoApp({
+      agent,
+      databaseAdapter: db,
+    });
+
+    await seedOrgAdmin(db, {
+      authService,
+      email: "owner@profile.test",
+      orgId: PROFILES_ORG_ID,
+      password: PASSWORD,
+      userId: "user_owner",
+    });
+
+    const now = new Date().toISOString();
+
+    for (const [userId, email] of [
+      ["user_member", "member@profile.test"],
+      ["user_other", "other@profile.test"],
+    ] as const) {
+      await db.createUser({
+        createdAt: now,
+        email,
+        id: userId,
+        passwordHash: await authService.hashPassword(PASSWORD),
+        updatedAt: now,
+      });
+      await db.upsertOrgMember({
+        createdAt: now,
+        orgId: PROFILES_ORG_ID,
+        role: "member",
+        userId,
+      });
+    }
+
+    const base = {
+      createdAt: now,
+      model: "openrouter/auto",
+      orgId: PROFILES_ORG_ID,
+      systemPrompt: "You are helpful.",
+      updatedAt: now,
+    };
+
+    await db.upsertProfile({
+      ...base,
+      id: "shared_agent",
+      isSuper: false,
+      name: "Shared Agent",
+      ownerUserId: "user_other",
+      sharedWithTeam: true,
+    });
+    await db.upsertProfile({
+      ...base,
+      id: "default_bot",
+      isDefault: true,
+      isSuper: false,
+      name: "Default Bot",
+    });
+    await db.upsertProfile({
+      ...base,
+      id: "private_agent",
+      isSuper: false,
+      name: "Private Agent",
+      ownerUserId: "user_other",
+      sharedWithTeam: false,
+    });
+    await db.upsertProfile({
+      ...base,
+      id: "super_bot",
+      isSuper: true,
+      name: "Super Bot",
+    });
+    await db.upsertProfile({
+      ...base,
+      id: "member_agent",
+      isSuper: false,
+      name: "Member Agent",
+      ownerUserId: "user_member",
+      sharedWithTeam: false,
+    });
+
+    const member = await loginUserSession(
+      app,
+      "member@profile.test",
+      PASSWORD,
+      PROFILES_ORG_ID
+    );
+
+    return { agent, app, db, member };
+  }
+
+  test("a member reads the detail of a shared agent", async () => {
+    const { app, member } = await seedProfilesFixture();
+
+    const response = await callRoute(app, member, {
+      method: "GET",
+      path: "/v1/profiles/shared_agent",
+    });
+
+    expect(response.status).toBe(200);
+
+    // SAFETY: This test controls the fixture shape at this boundary.
+    const body = (await response.json()) as { profile: { id: string } };
+
+    expect(body.profile.id).toBe("shared_agent");
+  });
+
+  test("a member reads the detail of the org default agent", async () => {
+    const { app, member } = await seedProfilesFixture();
+
+    const response = await callRoute(app, member, {
+      method: "GET",
+      path: "/v1/profiles/default_bot",
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  test("a member reads the detail of their own agent", async () => {
+    const { app, member } = await seedProfilesFixture();
+
+    const response = await callRoute(app, member, {
+      method: "GET",
+      path: "/v1/profiles/member_agent",
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  test("a hidden agent and an unknown id get the same answer", async () => {
+    const { app, member } = await seedProfilesFixture();
+
+    const hidden = await callRoute(app, member, {
+      method: "GET",
+      path: "/v1/profiles/private_agent",
+    });
+
+    const unknown = await callRoute(app, member, {
+      method: "GET",
+      path: "/v1/profiles/does_not_exist",
+    });
+
+    expect(hidden.status).toBe(403);
+    expect(unknown.status).toBe(hidden.status);
+    expect(await unknown.json()).toEqual(await hidden.json());
+  });
+
+  test("a member cannot read Airin's detail", async () => {
+    const { app, member } = await seedProfilesFixture();
+
+    const response = await callRoute(app, member, {
+      method: "GET",
+      path: "/v1/profiles/super_bot",
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  test("raw MCP errors go only to admins, the prompt only to owners and admins", async () => {
+    const { app, db, member } = await seedProfilesFixture();
+    const now = new Date().toISOString();
+
+    await db.upsertMcpServer({
+      cachedTools: [],
+      config: { url: "https://mcp.example.test" },
+      createdAt: now,
+      enabled: true,
+      id: "mcp_broken",
+      lastError: "fetch failed: https://mcp.example.test/v1?key=raw",
+      name: "Broken MCP",
+      orgId: PROFILES_ORG_ID,
+      status: "error",
+      transport: "http",
+      updatedAt: now,
+    });
+    await db.assignMcpServerToProfile("shared_agent", "mcp_broken");
+
+    const owner = await loginUserSession(
+      app,
+      "other@profile.test",
+      PASSWORD,
+      PROFILES_ORG_ID
+    );
+
+    const admin = await loginUserSession(
+      app,
+      "owner@profile.test",
+      PASSWORD,
+      PROFILES_ORG_ID
+    );
+
+    type DetailBody = {
+      profile: {
+        mcpServers: Array<{ lastError: string | null; status: string }>;
+        systemPrompt: string;
+      };
+    };
+
+    const read = async (session: typeof member) => {
+      const response = await callRoute(app, session, {
+        method: "GET",
+        path: "/v1/profiles/shared_agent",
+      });
+
+      expect(response.status).toBe(200);
+
+      // SAFETY: This test controls the fixture shape at this boundary.
+      return ((await response.json()) as DetailBody).profile;
+    };
+
+    const memberView = await read(member);
+
+    expect(memberView.mcpServers).toEqual([
+      expect.objectContaining({ lastError: null, status: "error" }),
+    ]);
+    expect(memberView.systemPrompt).toBe("");
+
+    const ownerView = await read(owner);
+
+    expect(ownerView.mcpServers).toEqual([
+      expect.objectContaining({ lastError: null, status: "error" }),
+    ]);
+    expect(ownerView.systemPrompt).toBe("You are helpful.");
+
+    const adminView = await read(admin);
+
+    expect(adminView.mcpServers[0]?.lastError).toContain("fetch failed");
+    expect(adminView.systemPrompt).toBe("You are helpful.");
+
+    // Routes that answer with the updated detail use the same rule.
+    const update = await callRoute(app, owner, {
+      body: { name: "Shared Agent 2" },
+      method: "PUT",
+      path: "/v1/profiles/shared_agent",
+    });
+
+    expect(update.status).toBe(200);
+
+    // SAFETY: This test controls the fixture shape at this boundary.
+    const updated = (await update.json()) as DetailBody;
+
+    expect(updated.profile.mcpServers[0]?.lastError).toBeNull();
+  });
+
+  test("a member cannot read the change history of a shared agent", async () => {
+    const { app, member } = await seedProfilesFixture();
+
+    const response = await callRoute(app, member, {
+      method: "GET",
+      path: "/v1/profiles/shared_agent/history",
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  test("a member reads the change history of their own agent", async () => {
+    const { app, member } = await seedProfilesFixture();
+
+    const response = await callRoute(app, member, {
+      method: "GET",
+      path: "/v1/profiles/member_agent/history",
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  test("a failed profile lookup is not reported as Forbidden", async () => {
+    const { app, agent, member } = await seedProfilesFixture();
+
+    agent.getProfileAccess = () => Promise.reject(new Error("database down"));
+
+    const response = await callRoute(app, member, {
+      method: "GET",
+      path: "/v1/profiles/shared_agent",
+    });
+
+    expect(response.status).toBe(500);
+  });
+
+  test("a failed profile lookup on an owner route is not reported as Forbidden", async () => {
+    const { app, agent, member } = await seedProfilesFixture();
+
+    agent.getProfileAccess = () => Promise.reject(new Error("database down"));
+
+    const response = await callRoute(app, member, {
+      body: { name: "Renamed" },
+      method: "PUT",
+      path: "/v1/profiles/member_agent",
+    });
+
+    expect(response.status).toBe(500);
+  });
+});
+
+describe("the model list read is scoped by role", () => {
+  test("a plain member does not see the provider endpoint or key status", async () => {
+    const { app, session } = await login("member");
+
+    const response = await callRoute(app, session, {
+      method: "GET",
+      path: "/v1/models",
+    });
+
+    expect(response.status).toBe(200);
+
+    // SAFETY: This test controls the fixture shape at this boundary.
+    const body = (await response.json()) as ModelsResponse;
+
+    expect(body.baseUrl).toBeUndefined();
+    expect(body.customModels).toBeUndefined();
+    expect(body.currentProviderId).toBe("provider_1");
+    expect(body.providers).toEqual([
+      {
+        createdAt: "now",
+        id: "provider_1",
+        label: "Operator Plan",
+        modelCount: 3,
+        type: "openai_compatible",
+      },
+    ]);
+  });
+
+  test("a platform admin gets the full model response", async () => {
+    const { app, session } = await login("member", true);
+
+    const response = await callRoute(app, session, {
+      method: "GET",
+      path: "/v1/models",
+    });
+
+    // SAFETY: This test controls the fixture shape at this boundary.
+    const body = (await response.json()) as ModelsResponse;
+
+    expect(body.baseUrl).toBe("https://operator-upstream.example.com/v1");
+    expect(body.providers[0]).toMatchObject({ hasApiKey: true });
+  });
 });

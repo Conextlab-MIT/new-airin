@@ -1,8 +1,8 @@
-import type { CodingHarnessSettingsResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { cn } from "@nakama/ui/utils";
+import type { CodingHarnessSettingsResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { cn } from "@airin/ui/utils";
 import { CheckmarkCircle01Icon, Copy01Icon } from "hugeicons-react";
 import { useEffect, useState } from "react";
 import { CodingAgentLogo } from "@/components/coding-agent-logos";
@@ -79,7 +79,7 @@ function AgentRow({
 }: {
   command: string;
   name: string;
-  method: "command" | "host" | "nakama";
+  method: "command" | "host" | "airin";
 }) {
   return (
     <li className="flex items-center gap-3 px-4 py-3.5">
@@ -96,7 +96,7 @@ function AgentRow({
         </>
       ) : (
         <span className="min-w-0 flex-1 text-right text-muted-foreground text-xs">
-          {method === "nakama" ? "Nakama keys" : "Always host login"}
+          {method === "airin" ? "Airin keys" : "Always host login"}
         </span>
       )}
     </li>
@@ -168,14 +168,14 @@ export function CodingAgentsSettingsCard() {
 
       <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3.5 text-card-foreground">
         <div className="min-w-0 space-y-0.5">
-          <p className="font-medium text-foreground text-sm">Use Nakama keys</p>
+          <p className="font-medium text-foreground text-sm">Use Airin keys</p>
           <p className="text-pretty text-muted-foreground text-xs leading-relaxed">
             Give Codex, Claude Code, OpenCode, and pi the keys already set up
             here. Cursor always uses the host login.
           </p>
         </div>
         <Switch
-          aria-label="Use Nakama keys"
+          aria-label="Use Airin keys"
           checked={passthrough}
           className="relative after:absolute after:top-1/2 after:left-1/2 after:size-10 after:-translate-x-1/2 after:-translate-y-1/2"
           disabled={!canManageSettings || saving || !settings}
@@ -195,7 +195,7 @@ export function CodingAgentsSettingsCard() {
             <AgentRow
               command={item.command}
               key={item.command}
-              method={passthrough ? "nakama" : "command"}
+              method={passthrough ? "airin" : "command"}
               name={item.name}
             />
           ))}

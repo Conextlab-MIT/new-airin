@@ -1,3 +1,7 @@
+import { timingSafeEqual } from "node:crypto";
+import type { McpHttpConfig } from "@airin/core";
+import { nanoid } from "@airin/core";
+import type { StoredMcpServerRecord } from "@airin/db";
 import {
   discoverOAuthProtectedResourceMetadata,
   type OAuthClientProvider,
@@ -12,10 +16,8 @@ import {
   OAuthClientInformationFullSchema,
   OAuthTokensSchema,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
-import type { McpHttpConfig } from "@nakama/core";
-import { nanoid } from "@nakama/core";
-import type { StoredMcpServerRecord } from "@nakama/db";
 import { z } from "zod";
+import { fetchMcpRemote } from "./mcp-fetch";
 
 /**
  * OAuth grant for one HTTP MCP server. It lives inside the server's config
@@ -72,7 +74,7 @@ export async function serverAdvertisesOAuth(url: string): Promise<boolean> {
       url,
       undefined,
       (input, init) =>
-        fetch(input, {
+        fetchMcpRemote(input, {
           ...init,
           signal: AbortSignal.timeout(OAUTH_PROBE_TIMEOUT_MS),
         })
@@ -87,7 +89,7 @@ export async function serverAdvertisesOAuth(url: string): Promise<boolean> {
 /**
  * The client half of the MCP authorization spec, persisted per server record.
  *
- * Nakama is not the user agent, so `redirectToAuthorization` records the URL
+ * Airin is not the user agent, so `redirectToAuthorization` records the URL
  * instead of following it: the operator opens it in their own browser and the
  * provider lands back on the callback route.
  */
@@ -112,7 +114,7 @@ export class McpServerOAuthProvider implements OAuthClientProvider {
 
   get clientMetadata(): OAuthClientMetadata {
     return {
-      client_name: "Nakama",
+      client_name: "Airin",
       grant_types: ["authorization_code", "refresh_token"],
       redirect_uris: [this.redirectUrl],
       response_types: ["code"],
@@ -204,7 +206,14 @@ export class McpServerOAuthProvider implements OAuthClientProvider {
 
   /** The stored `state` is single use: it is spent by the callback. */
   matchesPendingState(state: string): boolean {
-    return Boolean(this.grant.state) && this.grant.state === state;
+    const pending = Buffer.from(this.grant.state ?? "");
+    const given = Buffer.from(state);
+
+    return (
+      pending.length > 0 &&
+      pending.length === given.length &&
+      timingSafeEqual(pending, given)
+    );
   }
 
   private async update(patch: Partial<McpOAuthGrant>): Promise<void> {

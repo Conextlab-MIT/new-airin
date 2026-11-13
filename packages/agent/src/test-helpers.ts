@@ -2,7 +2,7 @@ import type {
   ChatCompletionResult,
   GenerateChatInput,
   ProviderClient,
-} from "@nakama/core";
+} from "@airin/core";
 
 export function createCapturingProvider(
   response: ChatCompletionResult,

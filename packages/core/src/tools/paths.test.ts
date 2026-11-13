@@ -2,11 +2,32 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { MAX_HTML_ARTIFACT_BYTES } from "../artifact-mime";
 import { guardFilePath, PathGuardError } from "./paths";
 
 describe("guardFilePath", () => {
+  test("HTML aliases cannot bypass the limit through a different extension", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "airin-html-alias-"));
+
+    try {
+      const options = { cwd: root, maxFileBytes: MAX_HTML_ARTIFACT_BYTES * 2 };
+      await Bun.write(path.join(root, "page.html"), "page");
+      await symlink(path.join(root, "page.html"), path.join(root, "alias.txt"));
+      await expect(
+        guardFilePath("alias.txt", null, MAX_HTML_ARTIFACT_BYTES + 1, options)
+      ).rejects.toMatchObject({ code: "TOO_LARGE" });
+      await Bun.write(path.join(root, "page.txt"), "page");
+      await symlink(path.join(root, "page.txt"), path.join(root, "alias.html"));
+      await expect(
+        guardFilePath("alias.html", null, MAX_HTML_ARTIFACT_BYTES + 1, options)
+      ).rejects.toMatchObject({ code: "TOO_LARGE" });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   test("allows a new directory beneath a symlinked parent without allowing siblings", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "nakama-new-tools-"));
+    const root = await mkdtemp(path.join(tmpdir(), "airin-new-tools-"));
 
     try {
       const data = path.join(root, "data");
@@ -29,7 +50,7 @@ describe("guardFilePath", () => {
   });
 
   test("checks the real cwd and preserves valid directory aliases", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "nakama-cwd-"));
+    const root = await mkdtemp(path.join(tmpdir(), "airin-cwd-"));
 
     try {
       const workspace = path.join(root, "workspace");
@@ -58,13 +79,31 @@ describe("guardFilePath", () => {
 
       for (const cwd of [outside, path.join(workspace, "escape")]) {
         await expect(
-          guardFilePath(
-            path.join(workspace, "notes.md"),
-            cwd,
-            undefined,
-            options
-          )
+          guardFilePath("notes.md", cwd, undefined, options)
         ).rejects.toBeInstanceOf(PathGuardError);
+
+        // An absolute path does not use cwd, so a stray cwd cannot fail it.
+        const result = await guardFilePath(
+          path.join(workspace, "notes.md"),
+          cwd,
+          undefined,
+          options
+        );
+
+        expect(result.resolved).toBe(
+          path.join(await realpath(workspace), "notes.md")
+        );
+      }
+
+      for (const cwd of [undefined, workspace, outside]) {
+        for (const target of [
+          path.join(outside, "notes.md"),
+          path.join(workspace, "escape", "notes.md"),
+        ]) {
+          await expect(
+            guardFilePath(target, cwd, undefined, options)
+          ).rejects.toBeInstanceOf(PathGuardError);
+        }
       }
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -81,7 +120,7 @@ describe("guardFilePath", () => {
   });
 
   test("resolves relative paths under an explicit workspace", async () => {
-    const workspaceRoot = await mkdtemp(path.join(tmpdir(), "nakama-guard-"));
+    const workspaceRoot = await mkdtemp(path.join(tmpdir(), "airin-guard-"));
     const realWorkspace = await realpath(workspaceRoot);
 
     const guarded = await guardFilePath("SOUL.md", null, undefined, {
@@ -94,7 +133,7 @@ describe("guardFilePath", () => {
   test.skipIf(process.platform !== "win32")(
     "refuses NTFS alternate data stream names on Windows",
     async () => {
-      const workspace = await mkdtemp(path.join(tmpdir(), "nakama-guard-ads-"));
+      const workspace = await mkdtemp(path.join(tmpdir(), "airin-guard-ads-"));
 
       try {
         for (const attempt of [
@@ -129,7 +168,7 @@ describe("guardFilePath", () => {
     "keeps ':' as an ordinary file name character on POSIX",
     async () => {
       const workspace = await mkdtemp(
-        path.join(tmpdir(), "nakama-guard-colon-")
+        path.join(tmpdir(), "airin-guard-colon-")
       );
 
       try {

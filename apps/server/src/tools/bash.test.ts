@@ -12,7 +12,8 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getProfileSoulDir, PathGuardError } from "@nakama/core";
+import { getProfileSoulDir, PathGuardError } from "@airin/core";
+import { removeTestDir } from "../test-config-dir";
 import { resolveHostBash, runBash } from "./bash";
 
 describe("host Bash discovery", () => {
@@ -141,7 +142,7 @@ describe("bash tool", () => {
   let workspaceRoot = "";
 
   test("coding-agent commands preserve quoted arguments in a workspace with spaces", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama bash "));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin bash "));
 
     const result = await runBash(
       {
@@ -160,34 +161,14 @@ describe("bash tool", () => {
 
   afterEach(async () => {
     if (workspaceRoot) {
-      // Bun 1.4 parses rm's maxRetries/retryDelay but does not apply them.
-      for (let attempt = 0; ; attempt++) {
-        try {
-          await rm(workspaceRoot, { force: true, recursive: true });
-          break;
-        } catch (error) {
-          if (
-            process.platform !== "win32" ||
-            attempt >= 5 ||
-            !["EBUSY", "EPERM", "ENOTEMPTY"].includes(
-              // SAFETY: Bun file-system busy errors expose Node's standard errno code.
-              (error as NodeJS.ErrnoException).code ?? ""
-            )
-          ) {
-            throw error;
-          }
-
-          await Bun.sleep(100 * (attempt + 1));
-        }
-      }
-
+      await removeTestDir(workspaceRoot);
       workspaceRoot = "";
     }
   });
 
   for (const mode of ["abort", "timeout"] as const) {
     test(`${mode} stops shell descendants and finishes the tool`, async () => {
-      workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+      workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
       // A native child reports its own Windows PID, without MSYS fork/exec IDs.
       await writeFile(
         path.join(workspaceRoot, "child.cjs"),
@@ -197,8 +178,8 @@ describe("bash tool", () => {
 
       const pending = runBash(
         {
-          command: '"$NAKAMA_TEST_BUN" child.cjs & wait',
-          env: { NAKAMA_TEST_BUN: process.execPath },
+          command: '"$AIRIN_TEST_BUN" child.cjs & wait',
+          env: { AIRIN_TEST_BUN: process.execPath },
           // The clock starts at spawn. On Windows the shell and the child can
           // need more than 500 ms to start, and then no PID is ever written.
           timeoutMs:
@@ -270,7 +251,7 @@ describe("bash tool", () => {
   }
 
   test("returns after shell exit when a quiet descendant holds the pipes", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
 
     const pending = runBash(
       {
@@ -305,7 +286,7 @@ describe("bash tool", () => {
   }, 10_000);
 
   test("drains active descendant output after the shell exits", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
     // Spawning Git Bash's sleep.exe can exceed the 100 ms idle grace on Windows.
     // Keep output in one native process and let it start before the shell exits.
     await writeFile(
@@ -322,8 +303,8 @@ const timer = setInterval(() => {
     const result = await runBash(
       {
         command:
-          '"$NAKAMA_TEST_BUN" output.cjs & while [ ! -f ready ]; do sleep 0.01; done; exit 0',
-        env: { NAKAMA_TEST_BUN: process.execPath },
+          '"$AIRIN_TEST_BUN" output.cjs & while [ ! -f ready ]; do sleep 0.01; done; exit 0',
+        env: { AIRIN_TEST_BUN: process.execPath },
       },
       { orgId: "org_test", profileId: "profile_test" },
       { backend: "host", workspaceRoot }
@@ -337,7 +318,7 @@ const timer = setInterval(() => {
   });
 
   test("does not spawn a command after cancellation", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
     const controller = new AbortController();
     controller.abort();
     await expect(
@@ -355,7 +336,7 @@ const timer = setInterval(() => {
   });
 
   test("kills the shell when the turn is cancelled", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
 
     const controller = new AbortController();
     const startedAt = Date.now();
@@ -379,7 +360,7 @@ const timer = setInterval(() => {
   });
 
   test("force kills a shell that traps SIGTERM after cancellation", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
     const pidPath = path.join(workspaceRoot, "trapped.pid");
     const controller = new AbortController();
 
@@ -421,7 +402,7 @@ const timer = setInterval(() => {
   }, 10_000);
 
   test("runs commands in the profile workspace by default", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
 
     const result = await runBash(
       { command: process.platform === "win32" ? "pwd -W" : "pwd" },
@@ -437,9 +418,9 @@ const timer = setInterval(() => {
   });
 
   test("ordinary commands resolve the profile workspace without an override", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
-    const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = workspaceRoot;
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
+    const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = workspaceRoot;
 
     try {
       const profileWorkspace = getProfileSoulDir("org_test", "profile_test");
@@ -465,15 +446,15 @@ const timer = setInterval(() => {
       }
     } finally {
       if (previousConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+        process.env.AIRIN_CONFIG_DIR = previousConfigDir;
       }
     }
   });
 
   test("ordinary commands use the active user workspace from context", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-user-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-user-"));
 
     const result = await runBash(
       { command: process.platform === "win32" ? "pwd -W" : "pwd" },
@@ -492,7 +473,7 @@ const timer = setInterval(() => {
   });
 
   test("CLI commands use the launch directory without coding-agent mode", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
 
     const context = {
       channel: "cli" as const,
@@ -531,10 +512,10 @@ const timer = setInterval(() => {
   });
 
   test("coding-agent workspace selection respects explicit overrides", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
 
     const codingWorkspaceRoot = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-coding-workspace-")
+      path.join(os.tmpdir(), "airin-coding-workspace-")
     );
 
     const codingResult = await runBash(
@@ -569,7 +550,7 @@ const timer = setInterval(() => {
   });
 
   test("supports cwd within the profile workspace", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
     const nestedDir = path.join(workspaceRoot, "nested");
     await mkdir(nestedDir, { recursive: true });
 
@@ -589,7 +570,7 @@ const timer = setInterval(() => {
   });
 
   test("rejects cwd outside the profile workspace", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
 
     await expect(
       runBash(
@@ -610,7 +591,7 @@ const timer = setInterval(() => {
   });
 
   test("accepts delegation-scale timeouts up to 30 minutes", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
 
     const result = await runBash(
       { command: "echo ok", timeoutMs: 30 * 60_000 },
@@ -623,7 +604,7 @@ const timer = setInterval(() => {
   });
 
   test("merges explicit env vars into the spawned shell process", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
 
     const result = await runBash(
       {
@@ -642,16 +623,16 @@ const timer = setInterval(() => {
   test.skipIf(process.platform === "win32")(
     "finds a CLI the server can see when the login profile rebuilds PATH",
     async () => {
-      workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+      workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
       const binDir = path.join(workspaceRoot, "bin");
       const home = path.join(workspaceRoot, "home");
       await mkdir(binDir);
       await mkdir(home);
       await writeFile(
-        path.join(binDir, "nakama-fake-cli"),
+        path.join(binDir, "airin-fake-cli"),
         "#!/bin/sh\necho found\n"
       );
-      await chmod(path.join(binDir, "nakama-fake-cli"), 0o755);
+      await chmod(path.join(binDir, "airin-fake-cli"), 0o755);
       // Debian's /etc/profile does this, and the Docker image is Debian.
       await writeFile(
         path.join(home, ".bash_profile"),
@@ -662,7 +643,7 @@ const timer = setInterval(() => {
 
       try {
         const result = await runBash(
-          { command: "nakama-fake-cli", env: { HOME: home } },
+          { command: "airin-fake-cli", env: { HOME: home } },
           { orgId: "org_test", profileId: "profile_test" },
           { workspaceRoot }
         );
@@ -676,7 +657,7 @@ const timer = setInterval(() => {
   );
 
   test("summarizes Cursor stream-json for coding-agent runs and saves a full log", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
     const agentPath = path.join(workspaceRoot, "agent");
 
     const stream = [
@@ -728,7 +709,7 @@ const timer = setInterval(() => {
   });
 
   test("keep-tails long plain coding-agent stdout instead of head-truncating", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
     const agentPath = path.join(workspaceRoot, "agent");
     const body = `${"n".repeat(40_000)}TAIL_MARKER_OK`;
     await writeFile(
@@ -755,7 +736,7 @@ const timer = setInterval(() => {
   // `/bin/bash -lc` sources BASH_ENV before it runs the command, so an env key
   // the model chose is arbitrary code execution unless it is stripped.
   test("drops env keys that hijack the shell before the command runs", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
     const hijackPath = path.join(workspaceRoot, "hijack.sh");
     await writeFile(hijackPath, "echo HIJACKED\n", "utf8");
 
@@ -779,7 +760,7 @@ const timer = setInterval(() => {
   });
 
   test("prunes coding-agent logs to the newest 10 and leaves other artifacts", async () => {
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "nakama-bash-"));
+    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "airin-bash-"));
     const logDir = path.join(workspaceRoot, "artifacts", "coding-agent-runs");
     await mkdir(logDir, { recursive: true });
     await writeFile(path.join(logDir, "keep-me.txt"), "user file", "utf8");
@@ -815,4 +796,252 @@ const timer = setInterval(() => {
     expect(remaining).not.toContain("old-00.log");
     expect(logs.some((name) => !name.startsWith("old-"))).toBe(true);
   });
+});
+
+describe("bash tool Airin state guard", () => {
+  let configDir = "";
+  let previousConfigDir: string | undefined;
+  let profileWorkspace = "";
+  const context = { orgId: "org_test", profileId: "profile_test" };
+
+  afterEach(async () => {
+    if (previousConfigDir === undefined) {
+      delete process.env.AIRIN_CONFIG_DIR;
+    } else {
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
+    }
+
+    if (configDir) {
+      await rm(configDir, { force: true, recursive: true });
+      configDir = "";
+    }
+  });
+
+  async function setupConfigDir(prefix = "airin-guard-"): Promise<void> {
+    previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    configDir = await realpath(await mkdtemp(path.join(os.tmpdir(), prefix)));
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    profileWorkspace = getProfileSoulDir("org_test", "profile_test");
+    await mkdir(profileWorkspace, { recursive: true });
+    await mkdir(path.join(configDir, "data", "sqlite"), { recursive: true });
+    await writeFile(path.join(configDir, "local-auth-token"), "tc_local_x\n");
+    await writeFile(path.join(configDir, "config.ini"), "api_key=secret\n");
+    await writeFile(path.join(configDir, "data", "sqlite", "airin.sqlite"), "");
+    await writeFile(
+      path.join(configDir, "orgs", "org_test", "workflow-data.sqlite"),
+      ""
+    );
+  }
+
+  test("refuses commands that read Airin secrets or server databases", async () => {
+    await setupConfigDir();
+    const root = configDir.replaceAll("\\", "/");
+    const marker = path.join(profileWorkspace, "ran.txt").replaceAll("\\", "/");
+
+    const commands = [
+      `cat ${root}/local-auth-token`,
+      `curl -s -H "Authorization: Bearer $(cat ${root}/local-auth-token)" http://127.0.0.1:4310/v1/profiles`,
+      `sqlite3 ${root}/data/sqlite/airin.sqlite "select * from users"`,
+      `cat "$AIRIN_CONFIG_DIR/config.ini" | sed 's/key=.*/key=***/'`,
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: shell syntax under test
+      "sqlite3 ${AIRIN_CONFIG_DIR}/orgs/org_test/workflow-data.sqlite .tables",
+      `find ${root} -name '*.sqlite'`,
+      "cd ../../.. && sqlite3 orgs/org_test/workflow-data.sqlite .tables",
+    ];
+
+    for (const command of commands) {
+      await expect(
+        runBash({ command: `${command}; touch ${marker}` }, context, {
+          backend: "host",
+        })
+      ).rejects.toThrow();
+    }
+
+    expect(await readdir(profileWorkspace)).not.toContain("ran.txt");
+  });
+
+  test("refuses glob-obfuscated paths into Airin state", async () => {
+    await setupConfigDir();
+    const root = configDir.replaceAll("\\", "/");
+    const parent = path.dirname(root).replaceAll("\\", "/");
+    const dirName = path.basename(root);
+    const head = dirName.slice(0, -1);
+    const last = dirName.slice(-1);
+    // Non-secret leaf: the secret-name pattern cannot refuse these on its own,
+    // so only the glob pass can stop them.
+    const leaf = "orgs/org_test/workflow-data.sqlite";
+    const marker = path.join(profileWorkspace, "ran.txt").replaceAll("\\", "/");
+
+    const commands = [
+      // `?`/`*` in the config dir name, e.g. `~/.nak?ma/...` in production
+      `cat ${parent}/${head}*/${leaf}`,
+      `cat ${parent}/${head}?/${leaf}`,
+      // glob inside a variable assignment
+      `d=${parent}/${head}*/; cat $d/${leaf}`,
+      // glob on the orgs component of the state dir
+      "cat $AIRIN_CONFIG_DIR/or*/x",
+      `ls ${parent}/${head}*/or*`,
+      // bracket expression, the form the first pass skipped
+      `cat ${parent}/${head}[${last}]/${leaf}`,
+      // bracket classes: literal `]` at start, and POSIX character classes
+      `cat ${parent}/${head}[]${last}]/${leaf}`,
+      `cat ${parent}/${head}[[:alnum:]]/${leaf}`,
+      // glob after a variable reference
+      `d=${parent}/${head}; cat $d*/${leaf}`,
+      `d=${parent}/${head}[${last}]; cat $d/${leaf}`,
+      // brace list whose first alternative is the real config dir
+      `cat ${parent}/${head}{${last},q}/${leaf}`,
+      // brace sequences: single-element sequences
+      `cat ${parent}/${head}{${last}..${last}}/${leaf}`,
+      // brace expansion cap: excessive combinations throw refusal rather than stalling
+      "echo {0..9}{0..9}{0..9}{0..9}",
+      // `..` climb that lands back on the state dir
+      `cat ${root}/orgs/org_test/profiles/p1/../../../../${head}*/${leaf}`,
+    ];
+
+    for (const command of commands) {
+      await expect(
+        runBash({ command: `${command}; touch ${marker}` }, context, {
+          backend: "host",
+        })
+      ).rejects.toThrow();
+    }
+
+    expect(await readdir(profileWorkspace)).not.toContain("ran.txt");
+  });
+
+  test("refuses a POSIX space class that matches a space in the state dir", async () => {
+    await setupConfigDir("airin guard-");
+    const root = configDir.replaceAll("\\", "/");
+    const parent = path.dirname(root);
+    const rest = path.basename(root).slice("airin ".length);
+    const marker = path.join(profileWorkspace, "ran.txt").replaceAll("\\", "/");
+    const leaf = "orgs/org_test/workflow-data.sqlite";
+
+    await expect(
+      runBash(
+        {
+          command: `cat ${parent}/airin[[:space:]]${rest}/${leaf}; touch ${marker}`,
+        },
+        context,
+        { backend: "host" }
+      )
+    ).rejects.toThrow();
+
+    expect(await readdir(profileWorkspace)).not.toContain("ran.txt");
+  });
+
+  test("still runs globs that stay inside the profile workspace", async () => {
+    await setupConfigDir();
+    await writeFile(path.join(profileWorkspace, "notes1.txt"), "one\n");
+    await writeFile(path.join(profileWorkspace, "report.md"), "md\n");
+    const workspace = profileWorkspace.replaceAll("\\", "/");
+
+    const matched = await runBash({ command: "cat notes?.txt" }, context, {
+      backend: "host",
+    });
+
+    expect(matched.stdout.trim()).toBe("one");
+
+    const listed = await runBash({ command: `ls ${workspace}/*.md` }, context, {
+      backend: "host",
+    });
+
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout).toContain("report.md");
+
+    // A relative multi-level glob resolves against the cwd, so it stays inside
+    // the workspace instead of drawing the OTHER_WORKSPACE refusal.
+    await mkdir(path.join(profileWorkspace, "reports", "q3"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(profileWorkspace, "reports", "q3", "summary.md"),
+      "q3\n"
+    );
+
+    const relative = await runBash(
+      { command: "cat reports/q?/summary.md" },
+      context,
+      { backend: "host" }
+    );
+
+    expect(relative.exitCode).toBe(0);
+    expect(relative.stdout.trim()).toBe("q3");
+  });
+
+  test("AIRIN_TENANT_BASH=0 refuses every channel but the CLI", async () => {
+    await setupConfigDir();
+    const previousTenantBash = process.env.AIRIN_TENANT_BASH;
+    process.env.AIRIN_TENANT_BASH = "0";
+
+    try {
+      await expect(
+        runBash({ command: "touch ran.txt" }, context, { backend: "host" })
+      ).rejects.toThrow(/AIRIN_TENANT_BASH=0/);
+      expect(await readdir(profileWorkspace)).not.toContain("ran.txt");
+
+      const cli = await runBash(
+        { command: "echo ok" },
+        { ...context, channel: "cli" },
+        { backend: "host" }
+      );
+
+      expect(cli.stdout.trim()).toBe("ok");
+    } finally {
+      if (previousTenantBash === undefined) {
+        delete process.env.AIRIN_TENANT_BASH;
+      } else {
+        process.env.AIRIN_TENANT_BASH = previousTenantBash;
+      }
+    }
+  });
+
+  test("still runs ordinary commands in the profile workspace", async () => {
+    await setupConfigDir();
+    await writeFile(path.join(profileWorkspace, "notes.md"), "hello notes\n");
+    const workspace = profileWorkspace.replaceAll("\\", "/");
+
+    const listing = await runBash({ command: "ls" }, context, {
+      backend: "host",
+    });
+
+    expect(listing.exitCode).toBe(0);
+    expect(listing.stdout).toContain("notes.md");
+
+    const read = await runBash(
+      { command: `cat notes.md && cat ${workspace}/notes.md` },
+      context,
+      { backend: "host" }
+    );
+
+    expect(read.exitCode).toBe(0);
+    expect(read.stdout).toBe("hello notes\nhello notes\n");
+
+    const ownDatabase = await runBash(
+      { command: `echo rows > ${workspace}/own.db && cat ${workspace}/own.db` },
+      context,
+      { backend: "host" }
+    );
+
+    expect(ownDatabase.exitCode).toBe(0);
+    expect(ownDatabase.stdout.trim()).toBe("rows");
+
+    const build = await runBash(
+      {
+        command:
+          "mkdir -p plugin-drafts/demo && cd plugin-drafts/demo && echo 'console.log(1)' > index.ts && bun build index.ts --outfile=dist/index.js",
+        timeoutMs: 60_000,
+      },
+      context,
+      { backend: "host" }
+    );
+
+    expect(build.exitCode).toBe(0);
+    expect(
+      await readdir(
+        path.join(profileWorkspace, "plugin-drafts", "demo", "dist")
+      )
+    ).toContain("index.js");
+  }, 60_000);
 });

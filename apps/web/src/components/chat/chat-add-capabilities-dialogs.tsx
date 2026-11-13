@@ -2,21 +2,36 @@ import type {
   CreateMcpServerRequest,
   ProfileSummary,
   ToolSetupPlan,
-} from "@nakama/core/contract";
-import { BASH_TOOL_ID } from "@nakama/core/tools/protected";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { BASH_TOOL_ID } from "@airin/core/tools/protected";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@airin/ui/input-group";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import {
+  Add01Icon,
+  Search01Icon,
+  Tick02Icon,
+  ViewIcon,
+  ViewOffIcon,
+} from "hugeicons-react";
+import { type FormEvent, useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { readRecord, readString } from "@/components/chat/web-search.shared";
+
 import { AddSkillDialog } from "@/components/SkillInstallDialog";
 import { McpServerDialog } from "@/components/soul-tools/mcp-tab/McpServerDialog";
 import { ToolAssignDialog } from "@/components/ToolAssignDialog";
@@ -42,8 +57,9 @@ import {
   useInstallSkillMutation,
 } from "@/hooks/use-resource-mutations";
 import { client, formatError } from "@/lib/client";
-import { toolPlaygroundPath } from "@/lib/navigation";
+import { pluginIcon, toolPlaygroundPath } from "@/lib/navigation";
 import { invalidateQueries } from "@/lib/query-client";
+import { PLUGIN_DESCRIPTIONS } from "@/pages/plugins/use-plugin-management";
 
 type ToolCredentialResult =
   | { type: "tool_setup_required"; orgId: string; setupId: string }
@@ -160,46 +176,21 @@ function ToolSetupCard({
   const locked = saving || disabled;
   const plan = setup.data;
 
-  if (!canManage) {
+  if (
+    !(canManage && plan) ||
+    plan.sessionId !== sessionId ||
+    plan.status === "ready" ||
+    plan.status === "rejected" ||
+    !profiles.data
+  ) {
     return (
-      <p className="text-muted-foreground text-sm">
-        Ask an admin to create and connect this tool.
-      </p>
-    );
-  }
-
-  if (!plan) {
-    return (
-      <p className="text-muted-foreground text-sm" role="status">
-        {setup.isError ? "Could not load tool setup." : "Loading tool setup…"}
-      </p>
-    );
-  }
-
-  if (plan.sessionId !== sessionId) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        Open the original chat to complete this tool setup.
-      </p>
-    );
-  }
-
-  if (plan.status === "ready") {
-    return (
-      <div className="w-full max-w-sm rounded-xl border bg-card p-4">
-        <p className="font-medium text-sm">{plan.name}</p>
-        <p className="text-sm" role="status">
-          Ready
-        </p>
-      </div>
-    );
-  }
-
-  if (!profiles.data) {
-    return (
-      <p className="text-muted-foreground text-sm" role="status">
-        {profiles.isError ? "Could not load agents." : "Loading agents…"}
-      </p>
+      <ToolSetupStatus
+        canManage={canManage}
+        plan={plan}
+        profilesError={profiles.isError}
+        sessionId={sessionId}
+        setupError={setup.isError}
+      />
     );
   }
 
@@ -260,7 +251,89 @@ function ToolSetupCard({
       <Button disabled={locked || !onContinue} type="submit">
         {saving ? "Building…" : buttonLabel}
       </Button>
+      <Button
+        disabled={locked || saving}
+        onClick={async () => {
+          setSaving(true);
+          setError(null);
+
+          try {
+            const rejected = await client
+              .forOrg(orgId)
+              .rejectToolSetup(setupId);
+
+            queryClient.setQueryData(queryKey, rejected);
+          } catch (error) {
+            setError(formatError(error));
+          } finally {
+            setSaving(false);
+          }
+        }}
+        type="button"
+        variant="outline"
+      >
+        Cancel setup
+      </Button>
     </form>
+  );
+}
+
+function ToolSetupStatus({
+  canManage,
+  plan,
+  profilesError,
+  sessionId,
+  setupError,
+}: {
+  canManage: boolean;
+  plan: ToolSetupPlan | undefined;
+  profilesError: boolean;
+  sessionId?: string;
+  setupError: boolean;
+}) {
+  if (!canManage) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        Ask an admin to create and connect this tool.
+      </p>
+    );
+  }
+
+  if (!plan) {
+    return (
+      <p className="text-muted-foreground text-sm" role="status">
+        {setupError ? "Could not load tool setup." : "Loading tool setup…"}
+      </p>
+    );
+  }
+
+  if (plan.sessionId !== sessionId) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        Open the original chat to complete this tool setup.
+      </p>
+    );
+  }
+
+  if (plan.status === "ready") {
+    return (
+      <div className="w-full max-w-sm rounded-xl border bg-card p-4">
+        <p className="font-medium text-sm">{plan.name}</p>
+        <p className="text-sm" role="status">
+          Ready
+        </p>
+      </div>
+    );
+  }
+
+  if (plan.status === "rejected") {
+    return <p className="text-muted-foreground text-sm">Tool setup closed.</p>;
+  }
+
+  return (
+    <p className="text-muted-foreground text-sm" role="status">
+      {profilesError ? "Could not load agents." : "Loading agents…"}
+    </p>
   );
 }
 
@@ -384,15 +457,62 @@ function ToolApiKeyForm({
     queryKey,
   });
 
+  async function manageKey(action: "clear" | "use-stored") {
+    setSaving(true);
+    setError(null);
+
+    try {
+      const next = await client
+        .forOrg(orgId)
+        .manageToolCredential(toolId, action);
+
+      queryClient.setQueryData(queryKey, next);
+      setOpen(false);
+    } catch {
+      setError("Could not change the API key.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (saving) {
+      return;
+    }
+
+    const form = event.currentTarget;
+    const apiKey = String(new FormData(form).get("apiKey") ?? "");
+    form.reset();
+    setSaving(true);
+    setError(null);
+
+    try {
+      const saved = await client
+        .forOrg(orgId)
+        .saveToolCredential(toolId, apiKey);
+
+      queryClient.setQueryData(queryKey, saved);
+      setOpen(false);
+    } catch {
+      setError("Could not save the API key. Enter it again to retry.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="flex w-full max-w-sm items-center justify-between gap-3 rounded-xl border bg-card p-4">
       <div className="min-w-0">
         <p className="truncate font-medium text-sm">{toolName}</p>
         <p className="text-muted-foreground text-xs" role="status">
           {canManage
-            ? status.data?.configured
-              ? "API key saved"
-              : "Connect API key"
+            ? status.data?.source === "environment"
+              ? `Managed by ${status.data.envName}`
+              : status.data?.configured
+                ? "API key saved"
+                : "Connect API key"
             : "Ask an admin to connect the API key"}
         </p>
       </div>
@@ -407,72 +527,139 @@ function ToolApiKeyForm({
           open={open}
         >
           <DialogTrigger render={<Button size="sm" variant="outline" />}>
-            {status.data?.configured ? "Replace key" : "Configure"}
+            {status.data?.source === "environment"
+              ? "View key source"
+              : status.data?.configured
+                ? "Replace key"
+                : "Configure"}
           </DialogTrigger>
           {open ? (
-            <DialogContent aria-describedby={undefined} className="sm:max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Connect {toolName}</DialogTitle>
-              </DialogHeader>
-              <form
-                className="space-y-4"
-                onSubmit={async (event) => {
-                  event.preventDefault();
-
-                  if (saving) {
-                    return;
-                  }
-
-                  const form = event.currentTarget;
-                  const apiKey = String(new FormData(form).get("apiKey") ?? "");
-                  form.reset();
-                  setSaving(true);
-                  setError(null);
-
-                  try {
-                    const saved = await client
-                      .forOrg(orgId)
-                      .saveToolCredential(toolId, apiKey);
-
-                    queryClient.setQueryData(queryKey, saved);
-                    setOpen(false);
-                  } catch {
-                    setError(
-                      "Could not save the API key. Enter it again to retry."
-                    );
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-              >
-                <div className="space-y-2">
-                  <label className="font-medium text-sm" htmlFor={inputId}>
-                    API key
-                  </label>
-                  <Input
-                    autoComplete="off"
-                    disabled={saving}
-                    id={inputId}
-                    maxLength={8192}
-                    name="apiKey"
-                    required
-                    type="password"
-                  />
-                </div>
-                {error ? (
-                  <p className="text-destructive text-sm" role="alert">
-                    {error}
-                  </p>
-                ) : null}
-                <Button disabled={saving} type="submit">
-                  {saving ? "Saving…" : "Save"}
-                </Button>
-              </form>
-            </DialogContent>
+            <ToolCredentialDialogContent
+              error={error}
+              inputId={inputId}
+              onManage={manageKey}
+              onSave={saveKey}
+              saving={saving}
+              status={status.data}
+              toolName={toolName}
+            />
           ) : null}
         </Dialog>
       ) : null}
     </div>
+  );
+}
+
+function ToolCredentialDialogContent({
+  error,
+  inputId,
+  onManage,
+  onSave,
+  saving,
+  status,
+  toolName,
+}: {
+  error: string | null;
+  inputId: string;
+  onManage: (action: "clear" | "use-stored") => Promise<void>;
+  onSave: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  saving: boolean;
+  status:
+    | Awaited<ReturnType<typeof client.getToolCredentialStatus>>
+    | undefined;
+  toolName: string;
+}) {
+  const [showKey, setShowKey] = useState(false);
+  const locked = saving || status?.source === "environment";
+
+  const displayName = toolName
+    .replaceAll(/[_-]+/g, " ")
+    .replaceAll(/\b\w/g, (letter) => letter.toUpperCase());
+
+  return (
+    <DialogContent
+      aria-describedby={undefined}
+      className="gap-5 p-6 sm:max-w-sm [&>[data-slot=dialog-close]]:top-4 [&>[data-slot=dialog-close]]:right-4"
+    >
+      <DialogHeader>
+        <DialogTitle>Connect {displayName}</DialogTitle>
+      </DialogHeader>
+      {status?.source === "environment" ? (
+        <p className="text-sm">
+          Managed by {status.envName}. Restart Airin after you change it.
+        </p>
+      ) : null}
+      <form className="space-y-5" onSubmit={onSave}>
+        <div className="space-y-2">
+          <label className="font-medium text-sm" htmlFor={inputId}>
+            API key
+          </label>
+          <InputGroup className="h-10">
+            <InputGroupInput
+              autoComplete="off"
+              className="font-mono"
+              disabled={locked}
+              id={inputId}
+              maxLength={8192}
+              name="apiKey"
+              required
+              type={showKey ? "text" : "password"}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                aria-label={showKey ? "Hide key" : "Show key"}
+                disabled={locked}
+                onClick={() => setShowKey((value) => !value)}
+                size="icon-sm"
+                type="button"
+              >
+                {showKey ? (
+                  <ViewOffIcon className="size-4" />
+                ) : (
+                  <ViewIcon className="size-4" />
+                )}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        </div>
+        {error ? (
+          <p className="text-destructive text-sm" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-2">
+          <DialogClose
+            disabled={saving}
+            render={<Button type="button" variant="outline" />}
+          >
+            Cancel
+          </DialogClose>
+          <Button disabled={locked} type="submit">
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </form>
+      {status?.savedAvailable && status.source === "missing" ? (
+        <Button
+          disabled={saving}
+          onClick={() => void onManage("use-stored")}
+          type="button"
+          variant="outline"
+        >
+          Use saved key
+        </Button>
+      ) : null}
+      {status?.source === "settings" ? (
+        <Button
+          disabled={saving}
+          onClick={() => void onManage("clear")}
+          type="button"
+          variant="outline"
+        >
+          Clear saved key
+        </Button>
+      ) : null}
+    </DialogContent>
   );
 }
 
@@ -562,34 +749,16 @@ export function ChatAddCapabilitiesDialogs({
         profileId,
         serverId: response.server.id,
       });
-      onMcpOpenChange(false);
+
+      if (!response.authorizationUrl) {
+        onMcpOpenChange(false);
+      }
+
+      return response;
     } catch (err) {
       const message = formatError(err);
       setError(message);
       throw new Error(message);
-    }
-  }
-
-  async function handleTestMcp(server: (typeof availableMcpServers)[number]) {
-    setError(null);
-
-    try {
-      const result = await client.testMcpServer({
-        config: server.transport === "http" ? { url: "" } : { command: "" },
-        name: server.name,
-        serverId: server.id,
-        transport: server.transport,
-      });
-
-      if (result.ok) {
-        setNotice(
-          `Connection successful. Found ${result.toolCount} tool${result.toolCount === 1 ? "" : "s"}.`
-        );
-      } else {
-        setError(result.error ?? "Connection test failed.");
-      }
-    } catch (err) {
-      setError(formatError(err));
     }
   }
 
@@ -629,8 +798,8 @@ export function ChatAddCapabilitiesDialogs({
           onMcpOpenChange(open);
         }}
         onSubmit={handleCreateMcp}
-        onTestConnection={(server) => void handleTestMcp(server)}
         open={mcpOpen}
+        profileId={profileId}
       />
       <ChatSkillDialog
         onOpenChange={onSkillOpenChange}
@@ -701,6 +870,10 @@ function ChatSkillDialog({
   );
 }
 
+function pluginDescription(plugin: { description?: string; pluginId: string }) {
+  return PLUGIN_DESCRIPTIONS.get(plugin.pluginId) || plugin.description;
+}
+
 function ChatPluginDialog({
   profileId,
   onOpenChange,
@@ -714,6 +887,7 @@ function ChatPluginDialog({
   const tools = useToolsQuery();
   const skills = useSkillsQuery();
   const save = useSavePluginAgentAccess();
+  const [query, setQuery] = useState("");
 
   if (!user?.isPlatformAdmin) {
     return null;
@@ -728,9 +902,15 @@ function ChatPluginDialog({
   const error =
     save.error || plugins.error || profile.error || tools.error || skills.error;
 
-  const enabled = (plugins.data ?? []).filter(
-    (plugin) => plugin.installed && plugin.lifecycleState === "enabled"
-  );
+  const needle = query.trim().toLowerCase();
+
+  const enabled = (plugins.data ?? [])
+    .filter((plugin) => plugin.installed && plugin.lifecycleState === "enabled")
+    .filter((plugin) =>
+      [plugin.name, pluginDescription(plugin)].some((text) =>
+        text?.toLowerCase().includes(needle)
+      )
+    );
 
   return (
     <Dialog
@@ -743,8 +923,22 @@ function ChatPluginDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add plugin</DialogTitle>
+          <DialogTitle>Plugins</DialogTitle>
         </DialogHeader>
+        <div className="relative">
+          <Search01Icon
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            aria-label="Search plugins"
+            className="pl-9"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search plugins"
+            type="search"
+            value={query}
+          />
+        </div>
         {error ? (
           <p className="text-destructive text-sm" role="alert">
             {formatError(error)}
@@ -753,7 +947,7 @@ function ChatPluginDialog({
         {loading ? (
           <p className="text-muted-foreground text-sm">Loading plugins…</p>
         ) : (
-          <ul className="max-h-80 divide-y divide-border overflow-auto">
+          <ul className="max-h-80 divide-y divide-border overflow-auto rounded-xl border border-border">
             {enabled.map((plugin) => {
               const assigned =
                 profile.data &&
@@ -762,37 +956,64 @@ function ChatPluginDialog({
                   tools: tools.data ?? [],
                 });
 
+              const Icon = pluginIcon(plugin.pluginId);
+              const description = pluginDescription(plugin);
+
               return (
                 <li
-                  className="flex items-center justify-between gap-3 py-3"
+                  className="flex items-center gap-3 px-4 py-3"
                   key={plugin.pluginId}
                 >
-                  <span className="font-medium text-sm">{plugin.name}</span>
-                  <Button
-                    disabled={
-                      !assigned ||
-                      assigned.full ||
-                      assigned.total === 0 ||
-                      save.isPending
-                    }
-                    onClick={() =>
-                      save.mutate({
-                        changes: { [profileId]: true },
-                        pluginId: plugin.pluginId,
-                      })
-                    }
-                    size="sm"
-                  >
-                    {assigned?.full ? "Enabled" : "Enable"}
-                  </Button>
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-foreground">
+                    <Icon
+                      aria-hidden="true"
+                      className="size-5"
+                      strokeWidth={1.75}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words font-medium text-sm">
+                      {plugin.name}
+                    </p>
+                    {description ? (
+                      <p className="line-clamp-1 break-words text-muted-foreground text-sm">
+                        {description}
+                      </p>
+                    ) : null}
+                  </div>
+                  {assigned?.full ? (
+                    <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 font-medium text-emerald-700 text-sm dark:text-emerald-400">
+                      <Tick02Icon aria-hidden="true" className="size-4" />
+                      Added
+                    </span>
+                  ) : (
+                    <Button
+                      aria-label={`Add ${plugin.name}`}
+                      className="shrink-0 rounded-full"
+                      disabled={
+                        !assigned || assigned.total === 0 || save.isPending
+                      }
+                      onClick={() =>
+                        save.mutate({
+                          changes: { [profileId]: true },
+                          pluginId: plugin.pluginId,
+                        })
+                      }
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Add01Icon aria-hidden="true" className="size-4" />
+                      Add
+                    </Button>
+                  )}
                 </li>
               );
             })}
           </ul>
         )}
         {!loading && enabled.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No enabled plugins available.
+          <p className="text-center text-muted-foreground text-sm">
+            {needle ? "No plugins match." : "No plugins available."}
           </p>
         ) : null}
       </DialogContent>

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentChatSession } from "@nakama/agent";
-import type { StoredSessionRecord } from "@nakama/db";
+import type { AgentChatSession } from "@airin/agent";
+import type { StoredSessionRecord } from "@airin/db";
 import {
   type EphemeralSession,
   EphemeralSessionStore,

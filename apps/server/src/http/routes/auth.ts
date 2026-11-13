@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { createRoute, z } from "@hono/zod-openapi";
 import {
   type AcceptOrgInviteResponse,
   type AuthUserResponse,
@@ -20,9 +19,10 @@ import {
   type SetupAuthRequest,
   saveUserWebPublicUrl,
   type UpdateAuthProfileRequest,
-} from "@nakama/core";
-import { DEMO_LOGIN_EMAIL, DEMO_LOGIN_HOST } from "@nakama/core/demo-login";
-import { ORG_ROLES } from "@nakama/db";
+} from "@airin/core";
+import { DEMO_LOGIN_EMAIL, DEMO_LOGIN_HOST } from "@airin/core/demo-login";
+import { ORG_ROLES } from "@airin/db";
+import { createRoute, z } from "@hono/zod-openapi";
 import type {
   AuthenticationResponseJSON,
   RegistrationResponseJSON,
@@ -1098,7 +1098,7 @@ export function registerAuthRoutes(app: HonoApp, options: ServerOptions): void {
         })
       ),
       rpID,
-      rpName: "Nakama",
+      rpName: "Airin",
       userDisplayName: user.name ?? user.email,
       userID: new TextEncoder().encode(user.id),
       userName: user.email,
@@ -1363,7 +1363,7 @@ export function registerAuthRoutes(app: HonoApp, options: ServerOptions): void {
 
     return json({
       secret,
-      uri: `otpauth://totp/Nakama:${account}?secret=${secret}&issuer=Nakama&algorithm=SHA1&digits=6&period=30`,
+      uri: `otpauth://totp/Airin:${account}?secret=${secret}&issuer=Airin&algorithm=SHA1&digits=6&period=30`,
     });
   });
 
@@ -1638,6 +1638,8 @@ export function registerAuthRoutes(app: HonoApp, options: ServerOptions): void {
       newPassword: body.newPassword,
       userId: auth.user.id,
     });
+    // A paired Meet browser is a credential too.
+    await options.googleMeetService?.revokeExtensionKeys(auth.user.id);
 
     const response = c.json({ ok: true }, 200);
     clearBrowserSessionCookies(response.headers);
@@ -1668,6 +1670,12 @@ export function registerAuthRoutes(app: HonoApp, options: ServerOptions): void {
       assertBrowserCsrf(c.req.raw, auth, authService);
     }
 
+    // Public routes skip the auth middleware. Keep a signed-in caller so the
+    // audit row names who asked for the reset.
+    if (auth) {
+      c.set("auth", auth);
+    }
+
     return json<RequestPasswordResetResponse>(
       await orgService.requestPasswordReset(body.email, allowManualToken)
     );
@@ -1684,7 +1692,11 @@ export function registerAuthRoutes(app: HonoApp, options: ServerOptions): void {
       resetPasswordSchema
     );
 
-    await orgService.resetPassword(body);
+    // The route is public, so the audit row has no caller to name. Tell it
+    // whose password changed.
+    const userId = await orgService.resetPassword(body);
+    c.set("auditResourceId", userId);
+    await options.googleMeetService?.revokeExtensionKeys(userId);
 
     return c.json({ ok: true }, 200);
   });
@@ -1846,6 +1858,7 @@ export function registerAuthRoutes(app: HonoApp, options: ServerOptions): void {
         expiresAt: record.expiresAt,
         id: record.id,
         lastUsedAt: record.lastUsedAt,
+        userAgent: record.userAgent ?? null,
       })),
     });
   });
@@ -1903,6 +1916,9 @@ export function registerAuthRoutes(app: HonoApp, options: ServerOptions): void {
     if (!user) {
       return errorResponse("User not found", 404);
     }
+
+    // Breach containment: webhook secrets the user made end with their sessions.
+    await databaseAdapter.deleteAutomationWebhookSecretsForUser(userId);
 
     const revoked = await databaseAdapter.revokeBrowserSessionsForUser(
       userId,

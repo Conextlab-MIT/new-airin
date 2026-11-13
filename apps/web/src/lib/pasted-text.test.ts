@@ -1,34 +1,57 @@
 import { describe, expect, test } from "bun:test";
+import type { MessageContentPart } from "@airin/core/contract";
+import type { FileUIPart } from "./ai-ui-types";
 import {
-  countWords,
-  createPastedTextFile,
-  isPastedTextDocument,
-  pastedTextFilename,
-  wordCountFromPastedFilename,
+  documentDisplayFromContentPart,
+  documentDisplayFromFilePart,
 } from "./pasted-text";
 
-describe("countWords", () => {
-  test("counts whitespace-separated tokens", () => {
-    expect(countWords("one two three")).toBe(3);
+describe("documentDisplayFromContentPart", () => {
+  test("carries the attachmentId through for a persisted document_ref", () => {
+    const part: MessageContentPart = {
+      attachmentId: "att_123",
+      filename: "spec.pdf",
+      mediaType: "application/pdf",
+      size: 1024,
+      type: "document_ref",
+    };
+
+    expect(documentDisplayFromContentPart(part)).toEqual({
+      attachmentId: "att_123",
+      filename: "spec.pdf",
+      mediaType: "application/pdf",
+    });
   });
 
-  test("normalizes Windows line endings", () => {
-    expect(countWords("a\r\nb\rc")).toBe(3);
-  });
+  test("builds a data: URL for an inline document", () => {
+    const part: MessageContentPart = {
+      data: "aGVsbG8=",
+      filename: "notes.txt",
+      mediaType: "text/plain",
+      type: "document",
+    };
 
-  test("returns 0 for empty text", () => {
-    expect(countWords("   \n\t  ")).toBe(0);
+    expect(documentDisplayFromContentPart(part)).toEqual({
+      filename: "notes.txt",
+      mediaType: "text/plain",
+      url: "data:text/plain;base64,aGVsbG8=",
+    });
   });
 });
 
-describe("createPastedTextFile", () => {
-  test("names file with word count", () => {
-    const text = Array.from({ length: 301 }, (_, i) => `word${i}`).join(" ");
-    const file = createPastedTextFile(text);
+describe("documentDisplayFromFilePart", () => {
+  test("carries the file's data: URL through", () => {
+    const file: FileUIPart = {
+      filename: "report.md",
+      mediaType: "text/markdown",
+      type: "file",
+      url: "data:text/markdown;base64,IyBUaXRsZQ==",
+    };
 
-    expect(file.type.startsWith("text/plain")).toBe(true);
-    expect(file.name).toBe(pastedTextFilename(301));
-    expect(isPastedTextDocument(file.name, file.type)).toBe(true);
-    expect(wordCountFromPastedFilename(file.name)).toBe(301);
+    expect(documentDisplayFromFilePart(file)).toEqual({
+      filename: "report.md",
+      mediaType: "text/markdown",
+      url: "data:text/markdown;base64,IyBUaXRsZQ==",
+    });
   });
 });

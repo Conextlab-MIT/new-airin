@@ -1,10 +1,12 @@
 import {
+  AirinApiError,
+  type ChatgptOAuthCredentials,
   findProviderInstance,
-  NakamaApiError,
   normalizeBaseUrl,
   type ProviderInstance,
+  readBoundedBody,
   type UserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import { isCompatibleModelId } from "../providers/compatible-models";
 import { readApiKeyForInstance } from "../providers/create";
 import {
@@ -13,10 +15,30 @@ import {
   isAllowedImageGenerationSelection,
   modelSupportsImageGeneration,
 } from "../providers/models";
+import {
+  generateImageWithChatgpt,
+  resolveChatgptImageGenerationSelection,
+  resolveDefaultChatgptImageGenerationSelection,
+} from "./image-generation-chatgpt";
 import { decodeStoredModelSelection } from "./provider-instance-helpers";
 
-export const IMAGE_MODEL_REQUIRED_MESSAGE =
-  "Configure an image generation model in Settings before generating images.";
+const IMAGE_MODEL_REQUIRED_MESSAGE =
+  "Configure an image generation model in Settings → AI Providers (/settings/providers#image-generation) before generating images.";
+
+/** Stored image model that turns image generation off. */
+const IMAGE_GENERATION_OFF = "off";
+
+const IMAGE_GENERATION_OFF_MESSAGE =
+  "Image generation is turned off. A platform admin can turn it on in Settings → AI Providers (/settings/providers#image-generation).";
+
+/** Why no image model resolved: turned off, or none set up. */
+export function imageGenerationUnavailableMessage(
+  userConfig: UserConfig | null | undefined
+): string {
+  return userConfig?.imageModel?.trim() === IMAGE_GENERATION_OFF
+    ? IMAGE_GENERATION_OFF_MESSAGE
+    : IMAGE_MODEL_REQUIRED_MESSAGE;
+}
 
 export const IMAGE_GENERATION_SIZES = [
   "1024x1024",
@@ -39,9 +61,16 @@ const DEFAULT_OPENAI_IMAGES_BASE_URL = "https://api.openai.com/v1";
  */
 const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
 
+/** One base64 PNG at the largest size is under 10 MB; this stops a runaway endpoint. */
+const MAX_IMAGE_RESPONSE_BYTES = 32 * 1024 * 1024;
+
+const MAX_IMAGE_ERROR_BODY_BYTES = 64 * 1024;
+
 export interface ResolvedImageGenerationSelection {
   apiKey: string;
   baseUrl: string;
+  /** Set for a ChatGPT subscription provider. */
+  chatgptOAuth?: ChatgptOAuthCredentials;
   instance: ProviderInstance;
   model: string;
   selection: string;
@@ -65,6 +94,16 @@ export interface GenerateImageInput {
   apiKey: string;
   /** Override OpenAI Images base URL (e.g. self-hosted compatible backend). Defaults to api.openai.com/v1. */
   baseUrl?: string;
+  /**
+   * ChatGPT subscription: `model` is a chat model that calls the hosted
+   * `image_generation` tool on the Codex Responses backend.
+   */
+  chatgpt?: {
+    /** The saved tokens now, which another call may have rotated. */
+    getOAuth?: () => ChatgptOAuthCredentials | null;
+    oauth: ChatgptOAuthCredentials;
+    onTokenRefresh?: (oauth: ChatgptOAuthCredentials) => Promise<void>;
+  };
   model?: string;
   prompt: string;
   /** The turn's cancel signal, so a stopped chat stops the download too. */
@@ -133,7 +172,7 @@ export function normalizeImageGenerationSize(
     return allowedSize;
   }
 
-  throw new NakamaApiError(
+  throw new AirinApiError(
     `Unsupported image size "${trimmed}". Allowed: ${IMAGE_GENERATION_SIZES.join(", ")}.`,
     400
   );
@@ -145,8 +184,13 @@ export function resolveImageGenerationSelection(
 ): ResolvedImageGenerationSelection | null {
   const imageModel = userConfig?.imageModel?.trim();
 
-  if (!imageModel) {
+  if (imageModel === IMAGE_GENERATION_OFF) {
     return null;
+  }
+
+  // Unset means "use the ChatGPT subscription when one is connected".
+  if (!imageModel) {
+    return resolveDefaultChatgptImageGenerationSelection(userConfig);
   }
 
   if (!isAllowedImageGenerationSelection(imageModel)) {
@@ -185,14 +229,14 @@ export function resolveImageGenerationSelection(
   const instance = preferred ?? openaiInstances[0] ?? null;
 
   if (!instance) {
-    throw new NakamaApiError(
-      "Image generation requires an OpenAI provider. Add one in Settings.",
+    throw new AirinApiError(
+      "Image generation requires an OpenAI provider. Add one in Settings → AI Providers (/settings/providers).",
       400
     );
   }
 
   if (!modelSupportsImageGeneration(IMAGE_GENERATION_MODEL_ID, instance.type)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Configured image generation model "${IMAGE_GENERATION_MODEL_ID}" is not supported.`,
       400
     );
@@ -201,7 +245,7 @@ export function resolveImageGenerationSelection(
   const apiKey = readApiKeyForInstance(instance, env)?.trim();
 
   if (!apiKey) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "OpenAI API key is missing. Configure an OpenAI provider or set OPENAI_API_KEY.",
       400
     );
@@ -236,6 +280,14 @@ function resolveCompatibleImageGenerationSelection(
     ? findProviderInstance(userConfig, decoded.providerId)
     : null;
 
+  if (decoded && instance?.type === "chatgpt") {
+    return resolveChatgptImageGenerationSelection(
+      instance,
+      decoded.modelId,
+      imageModel
+    );
+  }
+
   const baseUrl = instance?.baseUrl?.trim();
 
   if (
@@ -246,8 +298,8 @@ function resolveCompatibleImageGenerationSelection(
       isCompatibleModelId(decoded.modelId, instance.customModels)
     )
   ) {
-    throw new NakamaApiError(
-      "Configured image generation model is invalid. Update it in Settings.",
+    throw new AirinApiError(
+      "Configured image generation model is invalid. Update it in Settings → AI Providers (/settings/providers#image-generation).",
       400
     );
   }
@@ -255,7 +307,7 @@ function resolveCompatibleImageGenerationSelection(
   const apiKey = readApiKeyForInstance(instance, env)?.trim();
 
   if (!apiKey) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `API key is missing for provider "${instance.label}".`,
       400
     );
@@ -270,13 +322,35 @@ function resolveCompatibleImageGenerationSelection(
   };
 }
 
+export function imageGenerationDeadline(signal: AbortSignal | undefined) {
+  const deadline = AbortSignal.timeout(IMAGE_GENERATION_TIMEOUT_MS);
+
+  return {
+    rethrowTimeout: (cause: unknown): never => {
+      if (deadline.aborted && !signal?.aborted) {
+        throw new AirinApiError(
+          `Image generation timed out after ${IMAGE_GENERATION_TIMEOUT_MS / 1000}s waiting for the provider.`,
+          504
+        );
+      }
+
+      throw cause;
+    },
+    signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+  };
+}
+
 export async function generateImageWithOpenAI(
   input: GenerateImageInput
 ): Promise<GenerateImageResult> {
   const prompt = input.prompt?.trim();
 
   if (!prompt) {
-    throw new NakamaApiError("Image prompt is required.", 400);
+    throw new AirinApiError("Image prompt is required.", 400);
+  }
+
+  if (input.chatgpt) {
+    return generateImageWithChatgpt(input, input.chatgpt, prompt);
   }
 
   const model = input.model?.trim() || IMAGE_GENERATION_MODEL_ID;
@@ -284,7 +358,7 @@ export async function generateImageWithOpenAI(
   // api.openai.com serves only the allowlisted model; a custom base URL serves
   // whatever custom model the resolver picked for it.
   if (!input.baseUrl && model !== IMAGE_GENERATION_MODEL_ID) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Image generation model "${model}" is not supported.`,
       400
     );
@@ -294,24 +368,13 @@ export async function generateImageWithOpenAI(
   const apiKey = input.apiKey?.trim();
 
   if (!apiKey) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "OpenAI API key is missing. Configure an OpenAI provider or set OPENAI_API_KEY.",
       400
     );
   }
 
-  const deadline = AbortSignal.timeout(IMAGE_GENERATION_TIMEOUT_MS);
-
-  const rethrowTimeout = (cause: unknown): never => {
-    if (deadline.aborted && !input.signal?.aborted) {
-      throw new NakamaApiError(
-        `Image generation timed out after ${IMAGE_GENERATION_TIMEOUT_MS / 1000}s waiting for the provider.`,
-        504
-      );
-    }
-
-    throw cause;
-  };
+  const { rethrowTimeout, signal } = imageGenerationDeadline(input.signal);
 
   const response = await fetch(
     `${normalizeBaseUrl(input.baseUrl ?? DEFAULT_OPENAI_IMAGES_BASE_URL)}${OPENAI_IMAGES_GENERATIONS_PATH}`,
@@ -329,59 +392,37 @@ export async function generateImageWithOpenAI(
         "Content-Type": "application/json",
       },
       method: "POST",
-      signal: input.signal
-        ? AbortSignal.any([input.signal, deadline])
-        : deadline,
+      signal,
     }
   ).catch(rethrowTimeout);
 
   if (!response.ok) {
-    const body = await response.text().catch(rethrowTimeout);
-    throw new NakamaApiError(
-      `Image generation failed (${response.status}): ${body}`,
+    const detail = await readBoundedBody(response, MAX_IMAGE_ERROR_BODY_BYTES)
+      .then((bytes) => bytes.toString("utf8"))
+      .catch(rethrowTimeout);
+
+    throw new AirinApiError(
+      `Image generation failed (${response.status}): ${detail}`,
       502
     );
   }
 
-  const payload = parseOpenAIImageResponse(
-    await response.json().catch(rethrowTimeout)
+  const body = await readBoundedBody(response, MAX_IMAGE_RESPONSE_BYTES).catch(
+    rethrowTimeout
   );
+
+  const payload = parseOpenAIImageResponse(JSON.parse(body.toString("utf8")));
 
   const first = payload.data?.[0];
   const b64 = first?.b64_json?.trim();
 
   if (!b64) {
-    throw new NakamaApiError("Image generation returned no image data.", 502);
+    throw new AirinApiError("Image generation returned no image data.", 502);
   }
-
-  let bytes: Uint8Array;
-
-  try {
-    bytes = Uint8Array.from(Buffer.from(b64, "base64"));
-  } catch {
-    throw new NakamaApiError(
-      "Image generation returned invalid base64 data.",
-      502
-    );
-  }
-
-  if (bytes.length === 0) {
-    throw new NakamaApiError(
-      "Image generation returned empty image data.",
-      502
-    );
-  }
-
-  const mediaType =
-    payload.output_format === "jpeg"
-      ? "image/jpeg"
-      : payload.output_format === "webp"
-        ? "image/webp"
-        : "image/png";
 
   const result: GenerateImageResult = {
-    data: bytes,
-    mediaType,
+    data: decodeImageBase64(b64),
+    mediaType: imageMediaType(payload.output_format),
     model,
     size,
     usage: resolveImageGenerationTokens(prompt, size, payload.usage),
@@ -394,6 +435,33 @@ export async function generateImageWithOpenAI(
   }
 
   return result;
+}
+
+export function decodeImageBase64(b64: string): Uint8Array {
+  let bytes: Uint8Array;
+
+  try {
+    bytes = Uint8Array.from(Buffer.from(b64, "base64"));
+  } catch {
+    throw new AirinApiError(
+      "Image generation returned invalid base64 data.",
+      502
+    );
+  }
+
+  if (bytes.length === 0) {
+    throw new AirinApiError("Image generation returned empty image data.", 502);
+  }
+
+  return bytes;
+}
+
+export function imageMediaType(outputFormat: string | undefined): string {
+  if (outputFormat === "jpeg") {
+    return "image/jpeg";
+  }
+
+  return outputFormat === "webp" ? "image/webp" : "image/png";
 }
 
 function parseOpenAIImageResponse<T>(input: T): OpenAIImageResponse {
@@ -422,7 +490,7 @@ function parseOpenAIImageResponse<T>(input: T): OpenAIImageResponse {
   };
 }
 
-function readRecord<T>(value: T): Map<string, unknown> | undefined {
+export function readRecord<T>(value: T): Map<string, unknown> | undefined {
   if (!(value instanceof Object)) {
     return;
   }
@@ -430,14 +498,14 @@ function readRecord<T>(value: T): Map<string, unknown> | undefined {
   return new Map(Object.entries(value));
 }
 
-function readString<T>(value: T): string | undefined {
+export function readString<T>(value: T): string | undefined {
   // SAFETY: The object tag check confirms the value uses the string representation.
   return Object.prototype.toString.call(value) === "[object String]"
     ? (value as T & string)
     : undefined;
 }
 
-function readNumber<T>(value: T): number | undefined {
+export function readNumber<T>(value: T): number | undefined {
   // SAFETY: The tag and finite checks confirm the value is a valid number.
   return Object.prototype.toString.call(value) === "[object Number]" &&
     Number.isFinite(value)

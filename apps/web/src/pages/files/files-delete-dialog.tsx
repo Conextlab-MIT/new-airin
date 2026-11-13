@@ -1,5 +1,5 @@
-import type { ArtifactFile } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ArtifactFile } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -7,9 +7,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Fragment, type ReactNode, useState } from "react";
 import { client, formatError } from "@/lib/client";

@@ -1,0 +1,6 @@
+#!/bin/sh
+# GUI git (Cursor) often has a short PATH without Bun.
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+# Same lint as the CI Check job, so it fails here instead of on GitHub.
+bun run check:ci

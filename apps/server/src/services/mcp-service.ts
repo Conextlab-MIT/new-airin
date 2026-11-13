@@ -1,4 +1,3 @@
-import { auth } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
   CreateMcpServerRequest,
   ListMcpServersResponse,
@@ -12,14 +11,18 @@ import type {
   ProfileRef,
   TestMcpServerResponse,
   UpdateMcpServerRequest,
-} from "@nakama/core";
-import { createId, NakamaApiError } from "@nakama/core";
-import { isPreinstalledMcpServerId } from "@nakama/core/mcp/preinstalled";
+} from "@airin/core";
+import { AirinApiError, createId } from "@airin/core";
+import { isPreinstalledMcpServerId } from "@airin/core/mcp/preinstalled";
 import type {
   DatabaseAdapter,
   StoredMcpServerRecord,
   StoredProfileRecord,
-} from "@nakama/db";
+} from "@airin/db";
+import {
+  auth,
+  UnauthorizedError,
+} from "@modelcontextprotocol/sdk/client/auth.js";
 import {
   isMcpReconnectableError,
   type JsonValue,
@@ -27,6 +30,7 @@ import {
   type McpToolArguments,
   toCachedMcpToolSummaries,
 } from "./mcp-client-manager";
+import { fetchMcpRemote } from "./mcp-fetch";
 import {
   type McpOAuthGrant,
   McpServerOAuthProvider,
@@ -34,6 +38,7 @@ import {
   type StoredMcpHttpConfig,
   serverAdvertisesOAuth,
 } from "./mcp-oauth";
+import { withClaimedOAuthState } from "./oauth-callback-claim";
 
 const INVALID_OAUTH_CALLBACK_MESSAGE =
   "This sign-in link is no longer valid. Start it again from the MCP page.";
@@ -79,6 +84,30 @@ function buildOAuthProvider(
   }
 
   return provider;
+}
+
+/**
+ * Some servers answer initialize and tools/list anonymously and refuse only
+ * the tool call, so a connect never meets the 401 that starts a sign-in. When
+ * one is wanted, start it up front and throw what the transport would have,
+ * so the caller's authorization branch takes it from there.
+ */
+async function signInBeforeConnect(
+  provider: McpServerOAuthProvider,
+  serverUrl: string
+): Promise<void> {
+  if (!(await serverAdvertisesOAuth(serverUrl))) {
+    return;
+  }
+
+  if (
+    (await auth(provider, {
+      fetchFn: fetchMcpRemote,
+      serverUrl,
+    })) === "REDIRECT"
+  ) {
+    throw new UnauthorizedError();
+  }
 }
 
 function withOAuthGrant(
@@ -146,7 +175,7 @@ export class McpService {
     const existing = await this.db.getMcpServerByName(name);
 
     if (existing) {
-      throw new NakamaApiError(`MCP server already exists: ${name}`, 409);
+      throw new AirinApiError(`MCP server already exists: ${name}`, 409);
     }
 
     const now = new Date().toISOString();
@@ -176,6 +205,13 @@ export class McpService {
       });
 
       try {
+        if (request.signIn && provider) {
+          await signInBeforeConnect(
+            provider,
+            resolveMcpConfig("http", record.config).url
+          );
+        }
+
         const cachedTools = await this.manager.connect(
           record,
           provider ? { authProvider: provider } : undefined
@@ -187,7 +223,7 @@ export class McpService {
           const message =
             error instanceof Error ? error.message : String(error);
 
-          throw new NakamaApiError(
+          throw new AirinApiError(
             `Could not connect MCP server "${name}": ${message}`,
             422
           );
@@ -295,7 +331,7 @@ export class McpService {
 
     if (profiles.length > 0 && !force) {
       const profileRefs = toProfileRefs(profiles);
-      throw new NakamaApiError(
+      throw new AirinApiError(
         formatMcpServerInUseMessage(profileRefs),
         409,
         undefined,
@@ -326,7 +362,24 @@ export class McpService {
       this.saveOAuthGrant(serverId, grant)
     );
 
+    // A grant without tokens is a sign-in that was started and never finished.
+    const grant = readMcpOAuthGrant(server.config);
+    const signInPending = grant !== undefined && !grant.tokens;
+
+    // Nobody is here to open a link, and an anonymous connection would hide
+    // that the sign-in is still owed.
+    if (signInPending && !provider) {
+      return { server: toMcpServerDetail(server) };
+    }
+
     try {
+      if (signInPending && provider) {
+        await signInBeforeConnect(
+          provider,
+          resolveMcpConfig("http", server.config).url
+        );
+      }
+
       const cachedTools = await this.manager.connect(
         server,
         provider ? { authProvider: provider } : undefined
@@ -371,7 +424,18 @@ export class McpService {
    * Finishes the browser half of the flow: the provider redirected the operator
    * back with a code, which is exchanged for tokens before reconnecting.
    */
-  async completeOAuth(
+  completeOAuth(
+    serverId: string,
+    options: { code: string; state: string; callbackBaseUrl: string }
+  ): Promise<McpServerResponse> {
+    return withClaimedOAuthState(
+      `mcp:${serverId}:${options.state}`,
+      () => new AirinApiError(INVALID_OAUTH_CALLBACK_MESSAGE, 400),
+      () => this.completeClaimedOAuth(serverId, options)
+    );
+  }
+
+  private async completeClaimedOAuth(
     serverId: string,
     options: { code: string; state: string; callbackBaseUrl: string }
   ): Promise<McpServerResponse> {
@@ -381,7 +445,7 @@ export class McpService {
     const server = await this.db.getMcpServer(serverId);
 
     if (!server || server.transport !== "http") {
-      throw new NakamaApiError(INVALID_OAUTH_CALLBACK_MESSAGE, 400);
+      throw new AirinApiError(INVALID_OAUTH_CALLBACK_MESSAGE, 400);
     }
 
     // The base the flow actually started from wins: the token exchange must
@@ -394,18 +458,19 @@ export class McpService {
     );
 
     if (!provider?.matchesPendingState(options.state)) {
-      throw new NakamaApiError(INVALID_OAUTH_CALLBACK_MESSAGE, 400);
+      throw new AirinApiError(INVALID_OAUTH_CALLBACK_MESSAGE, 400);
     }
 
     const config = resolveMcpConfig("http", server.config);
 
     const result = await auth(provider, {
       authorizationCode: options.code,
+      fetchFn: fetchMcpRemote,
       serverUrl: config.url,
     });
 
     if (result !== "AUTHORIZED") {
-      throw new NakamaApiError("MCP authorization did not complete.", 400);
+      throw new AirinApiError("MCP authorization did not complete.", 400);
     }
 
     return this.connectServer(serverId, { callbackBaseUrl });
@@ -890,8 +955,8 @@ function redactStringRecord(
   return redacted;
 }
 
-function invalidMcpServerRequest(message: string): NakamaApiError {
-  return new NakamaApiError(message, 400);
+function invalidMcpServerRequest(message: string): AirinApiError {
+  return new AirinApiError(message, 400);
 }
 
 function normalizeTransport(transport: string | undefined): McpTransport {

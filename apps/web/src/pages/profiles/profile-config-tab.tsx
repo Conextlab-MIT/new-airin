@@ -1,24 +1,23 @@
-import { Tabs } from "@base-ui/react/tabs";
-import type { ProfileSummary } from "@nakama/core";
-import { Button } from "@nakama/ui/button";
+import type { ProfileSummary } from "@airin/core";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/ui/select";
+import { toast } from "@airin/ui/toast";
+import { Tabs } from "@base-ui/react/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowDown01Icon,
   ArrowRight01Icon,
   Building06Icon,
   CloudDownloadIcon,
@@ -31,8 +30,10 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { DiscordSettingsCard } from "@/components/DiscordSettingsCard";
 import { ExportProfileDialog } from "@/components/profiles/ExportProfileDialog";
 import { ProfileSkillsSettingsSection } from "@/components/profiles/ProfileSkillsSettingsSection";
+import { RegressionCasesList } from "@/components/regression-cases";
 import { SlackSettingsCard } from "@/components/SlackSettingsCard";
 import { SoulTab } from "@/components/soul-tools/SoulTab";
+import { TeamsSettingsCard } from "@/components/TeamsSettingsCard";
 import { TelegramSettingsCard } from "@/components/TelegramSettingsCard";
 import { WhatsAppSettingsCard } from "@/components/WhatsAppSettingsCard";
 import { useAuth } from "@/context/use-auth";
@@ -44,58 +45,64 @@ import {
 } from "@/hooks/use-app-queries";
 import { useSystemStatusQuery } from "@/hooks/use-system-status";
 import { client, formatError } from "@/lib/client";
-import { profilePath } from "@/lib/navigation";
+import { canAccessIntegrationsPage, profilePath } from "@/lib/navigation";
 import { isProfileOwner } from "@/lib/profiles";
 import { queryKeys } from "@/lib/query-keys";
+import { buildProfileChannels } from "@/pages/profiles/profile-channels";
 import { ProfileConfigAssignmentsSection } from "@/pages/profiles/profile-config-assignments-section";
 import {
   ProfileConfigIdentitySection,
   ProfileSystemPromptCard,
 } from "@/pages/profiles/profile-config-identity-section";
-import { ProfileHistoryTab } from "@/pages/profiles/profile-history-tab";
+import { ProfileHistorySheet } from "@/pages/profiles/profile-history-tab";
 import { ProfileMcpSection } from "@/pages/profiles/profile-mcp-section";
 import { ProfileSkillsSection } from "@/pages/profiles/profile-skills-section";
 import type { ProfilesPageState } from "@/pages/profiles/use-profiles-page";
 
 const sectionTabClass =
-  "whitespace-nowrap rounded-full px-2 py-1.5 text-center font-medium text-muted-foreground text-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:bg-background data-[active]:text-foreground data-[active]:shadow-sm sm:px-3";
+  "shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-center text-muted-foreground text-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:bg-background data-[active]:font-medium data-[active]:text-foreground data-[active]:shadow-sm";
 
 function ProfilePromptPanel({
   state,
-  canPack,
   canCreateProfile,
   profileId,
 }: {
   state: ProfilesPageState;
-  canPack: boolean;
   canCreateProfile: boolean;
   profileId: string;
 }) {
   const { user } = useAuth();
   const isOwner = isProfileOwner(state.detail, user?.id);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const showFiles = canCreateProfile || isOwner;
 
   return (
     <>
       <ProfileSystemPromptCard state={state} />
-      {canPack || isOwner ? (
-        <section className="space-y-4" id="profile-prompt">
-          {canCreateProfile || isOwner ? (
-            <SoulTab profileId={profileId} />
+      <section className="space-y-2" id="profile-prompt">
+        <div className="flex items-center justify-between gap-3">
+          {showFiles ? (
+            <h2 className="font-medium text-muted-foreground text-sm">
+              Agent prompt
+            </h2>
           ) : null}
-          <details className="group/history">
-            <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-muted-foreground/55 text-sm hover:text-muted-foreground [&::-webkit-details-marker]:hidden">
-              <span>Change histories</span>
-              <ArrowDown01Icon
-                aria-hidden="true"
-                className="size-3.5 -rotate-90 transition-transform group-open/history:rotate-0"
-              />
-            </summary>
-            <div className="pt-3">
-              <ProfileHistoryTab profileId={profileId} />
-            </div>
-          </details>
-        </section>
-      ) : null}
+          <button
+            aria-haspopup="dialog"
+            className="ml-auto flex h-8 items-center gap-1 rounded-md pr-4 text-primary text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setHistoryOpen(true)}
+            type="button"
+          >
+            Change history
+            <ArrowRight01Icon aria-hidden="true" className="size-3.5" />
+          </button>
+        </div>
+        {showFiles ? <SoulTab profileId={profileId} /> : null}
+        <ProfileHistorySheet
+          onOpenChange={setHistoryOpen}
+          open={historyOpen}
+          profileId={profileId}
+        />
+      </section>
     </>
   );
 }
@@ -105,8 +112,10 @@ function initialProfileSection(
   hash: string,
   search: string
 ) {
-  if (new URLSearchParams(search).get("section") === "tools") {
-    return "tools";
+  const section = new URLSearchParams(search).get("section");
+
+  if (section === "tools" || section === "mcp") {
+    return section;
   }
 
   if (detailTab === "proposals") {
@@ -114,6 +123,13 @@ function initialProfileSection(
   }
 
   return hash === "#profile-connections" ? "channels" : "prompt";
+}
+
+/** The chosen section, or the first one this member can see. */
+function visibleSection(sections: { value: string }[], section: string) {
+  return sections.some((item) => item.value === section)
+    ? section
+    : (sections[0]?.value ?? "tools");
 }
 
 function ProfileSectionTab({
@@ -129,7 +145,7 @@ function ProfileSectionTab({
     <Tabs.Tab className={sectionTabClass} value={value}>
       {label}
       {hint ? (
-        <span className="ml-1.5 hidden text-muted-foreground/70 text-xs tabular-nums sm:inline">
+        <span className="ml-1.5 hidden text-muted-foreground text-xs tabular-nums sm:inline">
           {hint}
         </span>
       ) : null}
@@ -142,18 +158,22 @@ function buildProfileSections({
   detail,
   showBehavior,
   showChannels,
+  showPrompt,
+  showTests,
 }: {
   channels: { connected: boolean }[] | null;
   detail: NonNullable<ProfilesPageState["detail"]>;
   showBehavior: boolean;
   showChannels: boolean;
+  showPrompt: boolean;
+  showTests: boolean;
 }) {
   const channelHint = channels
     ? `${channels.filter((channel) => channel.connected).length}/${channels.length}`
     : "";
 
   return [
-    { hint: "", label: "Prompt", value: "prompt" },
+    ...(showPrompt ? [{ hint: "", label: "Prompt", value: "prompt" }] : []),
     ...(showChannels
       ? [{ hint: channelHint, label: "Channels", value: "channels" }]
       : []),
@@ -175,6 +195,7 @@ function buildProfileSections({
       label: "Skills",
       value: "skills",
     },
+    ...(showTests ? [{ hint: "", label: "Tests", value: "tests" }] : []),
   ];
 }
 
@@ -191,9 +212,10 @@ function profileTabAccess(
   return {
     canCreateProfile,
     canManage: canCreateProfile || isOwner,
-    canPack,
     showBehavior: isOrgAdmin || isOwner,
     showChannels: (canPack || isOwner) && !detail.isSuper,
+    showPrompt: canPack || isOwner,
+    showTests: canAccessIntegrationsPage(orgRole),
   };
 }
 
@@ -215,8 +237,14 @@ export function ProfileConfigTab({ state }: { state: ProfilesPageState }) {
 
   const { busy, detail, selectedId } = state;
 
-  const { canCreateProfile, canManage, canPack, showBehavior, showChannels } =
-    profileTabAccess(detail, user, activeOrg?.role);
+  const {
+    canCreateProfile,
+    canManage,
+    showBehavior,
+    showChannels,
+    showPrompt,
+    showTests,
+  } = profileTabAccess(detail, user, activeOrg?.role);
 
   const channelsReady = !(isPending || channelsError);
 
@@ -225,11 +253,13 @@ export function ProfileConfigTab({ state }: { state: ProfilesPageState }) {
     detail,
     showBehavior,
     showChannels,
+    showPrompt,
+    showTests,
   });
 
   return (
     <div
-      className="mx-auto flex w-fit max-w-3xl flex-col gap-8"
+      className="mx-auto flex w-full max-w-3xl flex-col gap-8"
       id="profile-detail-panel-profile"
     >
       <ProfileConfigIdentitySection state={state} />
@@ -237,36 +267,35 @@ export function ProfileConfigTab({ state }: { state: ProfilesPageState }) {
         className="min-w-0 space-y-6"
         key={detail.id}
         onValueChange={(value) => setSection(String(value))}
-        value={
-          sections.some((item) => item.value === section) ? section : "prompt"
-        }
+        value={visibleSection(sections, section)}
       >
         <Tabs.List
           aria-label="Agent sections"
-          className="mx-auto grid w-full max-w-full auto-cols-fr grid-flow-col gap-1 overflow-x-auto rounded-full bg-muted p-1 sm:w-fit"
+          className="no-scrollbar grid w-full max-w-full auto-cols-[minmax(max-content,1fr)] grid-flow-col gap-1 overflow-x-auto rounded-full bg-muted p-1"
         >
           {sections.map((item) => (
             <ProfileSectionTab key={item.value} {...item} />
           ))}
         </Tabs.List>
-        <Tabs.Panel className="w-0 min-w-full space-y-6" value="prompt">
-          <ProfilePromptPanel
-            canCreateProfile={canCreateProfile}
-            canPack={canPack}
-            profileId={detail.id}
-            state={state}
-          />
-          {(showChannels || canManage) && selectedId ? (
-            <ProfileFooterActions
-              onExport={() => setExportOpen(true)}
-              onMove={() => setMoveOpen(true)}
-              showAdmin={canManage}
-              showMove={canCreateProfile}
-              showPack={showChannels}
+        {showPrompt ? (
+          <Tabs.Panel className="w-0 min-w-full space-y-6" value="prompt">
+            <ProfilePromptPanel
+              canCreateProfile={canCreateProfile}
+              profileId={detail.id}
               state={state}
             />
-          ) : null}
-        </Tabs.Panel>
+            {(showChannels || canManage) && selectedId ? (
+              <ProfileFooterActions
+                onExport={() => setExportOpen(true)}
+                onMove={() => setMoveOpen(true)}
+                showAdmin={canManage}
+                showMove={canCreateProfile}
+                showPack={showChannels}
+                state={state}
+              />
+            ) : null}
+          </Tabs.Panel>
+        ) : null}
         {showChannels ? (
           <Tabs.Panel className="w-0 min-w-full" value="channels">
             <ChannelProfileContext.Provider
@@ -290,6 +319,7 @@ export function ProfileConfigTab({ state }: { state: ProfilesPageState }) {
             allMcpServers={state.allMcpServers}
             busy={busy || !state.canManageProfile}
             detail={detail}
+            onAssign={state.handleAssignMcpServer}
             onCreateOpen={() => state.setMcpCreateOpen(true)}
             onRemove={state.setRemoveConfirm}
           />
@@ -312,6 +342,11 @@ export function ProfileConfigTab({ state }: { state: ProfilesPageState }) {
             }}
           />
         </Tabs.Panel>
+        {showTests ? (
+          <Tabs.Panel className="w-0 min-w-full" value="tests">
+            <RegressionCasesList profileId={detail.id} />
+          </Tabs.Panel>
+        ) : null}
       </Tabs.Root>
       <MoveProfileDialog
         onOpenChange={setMoveOpen}
@@ -330,61 +365,7 @@ export function ProfileConfigTab({ state }: { state: ProfilesPageState }) {
 
 function useProfileChannels() {
   const { data: status, isPending, error } = useSystemStatusQuery();
-
-  // Brand SVGs: Simple Icons v16 (CC0), https://simpleicons.org. Slack is from
-  // v13.21.0, the last release that still ships it.
-  const channels = [
-    {
-      id: "telegram",
-      name: "Telegram",
-      worker: status?.telegramWorker,
-    },
-    {
-      id: "whatsapp",
-      name: "WhatsApp",
-      worker: status?.whatsappWorker,
-    },
-    {
-      id: "discord",
-      name: "Discord",
-      worker: status?.discordWorker,
-    },
-    {
-      id: "slack",
-      name: "Slack",
-      worker: status?.slackWorker,
-    },
-  ].map((channel) => {
-    const worker = channel.worker;
-
-    const connected = Boolean(
-      !error &&
-        worker?.running &&
-        worker.paired &&
-        ("connected" in worker ? worker.connected : true)
-    );
-
-    const unavailable = Boolean(error || !worker);
-
-    const action =
-      unavailable || worker?.configured || worker?.paired
-        ? "Settings"
-        : "Connect";
-
-    const statusLabel = isPending
-      ? "Checking…"
-      : unavailable
-        ? "Status unavailable"
-        : connected
-          ? "Connected"
-          : worker?.paired
-            ? "Offline"
-            : worker?.configured
-              ? "Setup incomplete"
-              : "Not connected";
-
-    return { ...channel, action, connected, statusLabel };
-  });
+  const { channels } = buildProfileChannels(status, Boolean(error), isPending);
 
   return { channels, error, isPending };
 }
@@ -455,6 +436,7 @@ export function ProfileChannelSettingsPage() {
   const settings = {
     discord: { Component: DiscordSettingsCard, name: "Discord" },
     slack: { Component: SlackSettingsCard, name: "Slack" },
+    teams: { Component: TeamsSettingsCard, name: "Microsoft Teams" },
     telegram: { Component: TelegramSettingsCard, name: "Telegram" },
     whatsapp: { Component: WhatsAppSettingsCard, name: "WhatsApp" },
   };
@@ -463,7 +445,8 @@ export function ProfileChannelSettingsPage() {
     channel === "telegram" ||
     channel === "whatsapp" ||
     channel === "discord" ||
-    channel === "slack"
+    channel === "slack" ||
+    channel === "teams"
       ? settings[channel]
       : undefined;
 
@@ -546,7 +529,7 @@ function ProfileFooterActions({
           },
         ]
       : []),
-    ...(showAdmin && !state.detail?.sharedAgent
+    ...(showAdmin && !(state.detail?.sharedAgent || state.detail?.isSuper)
       ? [
           ...(showMove
             ? [
@@ -566,7 +549,7 @@ function ProfileFooterActions({
           },
         ]
       : []),
-    ...(showAdmin
+    ...(showAdmin && !state.detail?.isSuper
       ? [
           {
             destructive: true,
@@ -579,28 +562,39 @@ function ProfileFooterActions({
       : []),
   ];
 
-  // Two columns; an odd button out and the destructive one take a full row.
+  if (actions.length === 0) {
+    return null;
+  }
+
   const regular = actions.filter((action) => !action.destructive);
-  const fullRow = new Set(regular.length % 2 === 1 ? [regular.at(-1)] : []);
+  const destructive = actions.filter((action) => action.destructive);
 
   return (
-    <footer className="grid w-0 min-w-full grid-cols-2 gap-2">
-      {actions.map((action) => {
-        const { Icon, destructive, disabled, label, onClick } = action;
-
-        return (
-          <button
-            className={`flex h-10 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border px-3 text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 ${destructive || fullRow.has(action) ? "col-span-2" : ""} ${destructive ? "text-destructive" : "text-muted-foreground hover:text-foreground"}`}
-            disabled={disabled}
-            key={label}
-            onClick={onClick}
-            type="button"
-          >
-            <Icon aria-hidden className="size-4" />
-            {label}
-          </button>
-        );
-      })}
+    <footer className="flex w-0 min-w-full flex-wrap items-center gap-2 pt-5">
+      {regular.map(({ Icon, disabled, label, onClick }) => (
+        <button
+          className="flex h-9 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-background px-3.5 font-medium text-foreground/90 text-sm shadow-xs outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+          disabled={disabled}
+          key={label}
+          onClick={onClick}
+          type="button"
+        >
+          <Icon aria-hidden className="size-4" />
+          {label}
+        </button>
+      ))}
+      {destructive.map(({ Icon, disabled, label, onClick }) => (
+        <button
+          className="ml-auto flex h-9 items-center gap-2 whitespace-nowrap rounded-full border border-red-200 bg-background px-3.5 font-medium text-red-700 text-sm shadow-xs outline-none transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 dark:border-destructive/40 dark:text-destructive"
+          disabled={disabled}
+          key={label}
+          onClick={onClick}
+          type="button"
+        >
+          <Icon aria-hidden className="size-4" />
+          {label}
+        </button>
+      ))}
     </footer>
   );
 }

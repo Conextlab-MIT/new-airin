@@ -2,7 +2,7 @@ import {
   type AgentQuestionnaire,
   nanoid,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import type { AgentQuestionnaireState } from "../services/agent-questionnaire-state";
 
@@ -33,7 +33,7 @@ export function createAskUserQuestionTools(
   return [
     {
       description:
-        "Ask a short multiple-choice questionnaire when you need missing info before continuing.",
+        'Ask short multiple-choice questions only when blocked. Every question needs one choice ending in "(Recommended)".',
       name: "ask_user_question",
       parameters: {
         additionalProperties: false,
@@ -71,11 +71,18 @@ export function createAskUserQuestionTools(
 
         const result = await questionnaireState.write(sessionId, questionnaire);
 
-        return { questionnaire: result };
+        return {
+          message:
+            "Questions shown to the user. Wait for the next user message before continuing.",
+          questionnaire: result,
+        };
       },
     },
   ];
 }
+
+// The same "(Recommended)" label convention Claude Code uses, so no schema field.
+const RECOMMENDED_SUFFIX = /\s*\(recommended\)$/i;
 
 function slugId(value: string, fallback: string): string {
   const slug = value
@@ -105,10 +112,16 @@ function readQuestionnaire(input: unknown): AgentQuestionnaire | null {
   const parsed = parsedInput.data.questions.map((question, questionIndex) => {
     const prompt = question.prompt.trim();
 
-    const rawChoices = question.choices.map((choice) => ({
-      id: "id" in choice ? choice.id?.trim() : undefined,
-      label: choice.label.trim(),
-    }));
+    const rawChoices = question.choices.map((choice) => {
+      const label = choice.label.trim();
+      const unmarked = label.replace(RECOMMENDED_SUFFIX, "");
+
+      return {
+        id: "id" in choice ? choice.id?.trim() : undefined,
+        label: unmarked,
+        recommended: unmarked !== label,
+      };
+    });
 
     if (!prompt || rawChoices.some((choice) => !choice.label)) {
       return null;
@@ -117,11 +130,19 @@ function readQuestionnaire(input: unknown): AgentQuestionnaire | null {
     const questionId =
       question.id?.trim() || slugId(prompt, `q${questionIndex + 1}`);
 
-    const choices = rawChoices.map((choice, choiceIndex) => ({
-      id:
-        choice.id || slugId(choice.label, `${questionId}_c${choiceIndex + 1}`),
-      label: choice.label,
-    }));
+    const recommendedIndex = rawChoices.findIndex(
+      (choice) => choice.recommended
+    );
+
+    const choices = rawChoices
+      .map((choice, choiceIndex) => ({
+        id:
+          choice.id ||
+          slugId(choice.label, `${questionId}_c${choiceIndex + 1}`),
+        label: choice.label,
+        recommended: choiceIndex === recommendedIndex || undefined,
+      }))
+      .sort((a, b) => Number(!a.recommended) - Number(!b.recommended));
 
     return {
       allowCustomAnswer: question.allowCustomAnswer ?? false,

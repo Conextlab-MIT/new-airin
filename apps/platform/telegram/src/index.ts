@@ -1,24 +1,22 @@
 import { join } from "node:path";
-import { NakamaClient } from "@nakama/client";
+import { AirinClient } from "@airin/client";
 import {
   installErrorHandlers,
   installErrorTrackingSink,
   log,
-} from "@nakama/core";
-import { hasActiveStreams } from "@nakama/core/channel-active-stream";
-import { ChannelOrgStore } from "@nakama/core/channel-org";
-import { ChannelSessionStore } from "@nakama/core/channel-session-store";
+} from "@airin/core";
+import { hasActiveStreams } from "@airin/core/channel-active-stream";
+import { readBotTokensFromServer } from "@airin/core/channel-config-shared";
+import { ChannelOrgStore } from "@airin/core/channel-org";
+import { ChannelSessionStore } from "@airin/core/channel-session-store";
 import {
   ensureServerRunning,
   stopSpawnedServer,
-} from "@nakama/core/ensure-server";
-import { loadLocalAuthToken } from "@nakama/core/local-auth";
-import { resolveWebPublicUrl } from "@nakama/core/runtime";
-import { getTelegramConfigDir } from "@nakama/core/telegram-config";
-import {
-  createTelegramWorkerHeartbeat,
-  isHeartbeatAlive,
-} from "@nakama/core/telegram-worker";
+} from "@airin/core/ensure-server";
+import { loadLocalAuthToken } from "@airin/core/local-auth";
+import { resolveWebPublicUrl } from "@airin/core/runtime";
+import { getTelegramConfigDir } from "@airin/core/telegram-config";
+import { createTelegramWorkerHeartbeat } from "@airin/core/telegram-worker";
 import { TelegramAuthStore } from "./auth-store";
 import { createBot } from "./bot";
 import { loadTelegramIdentities, type TelegramBridgeConfig } from "./config";
@@ -29,7 +27,7 @@ void installErrorTrackingSink();
 
 type StartedIdentity = {
   clearHeartbeat: () => Promise<void>;
-  stop: () => void;
+  stop: () => Promise<void>;
   writeHeartbeat: () => Promise<void>;
 };
 
@@ -44,7 +42,7 @@ registerCleanupHandlers(async () => {
 
   if (hasActiveStreams()) {
     console.warn(
-      "Leaving the spawned Nakama server running so in-flight agent turns can finish; the next worker start will reuse it."
+      "Leaving the spawned Airin server running so in-flight agent turns can finish; the next worker start will reuse it."
     );
   } else {
     stopSpawnedServer(spawnedChild);
@@ -52,6 +50,15 @@ registerCleanupHandlers(async () => {
 });
 
 try {
+  const authToken =
+    (await loadLocalAuthToken("telegram@airin.internal")) ?? undefined;
+
+  // The token is encrypted on disk; the server reads it for us.
+  const tokenClient = new AirinClient({ authToken });
+  readBotTokensFromServer((secret) =>
+    tokenClient.getChannelBotToken(secret.scope, secret.name)
+  );
+
   const identities = await loadTelegramIdentities();
 
   const { serverUrl, spawnedChild: child } = await ensureServerRunning({
@@ -60,10 +67,7 @@ try {
 
   spawnedChild = child;
 
-  const authToken =
-    (await loadLocalAuthToken("telegram@nakama.internal")) ?? undefined;
-
-  const probe = new NakamaClient({
+  const probe = new AirinClient({
     authToken,
     baseUrl: serverUrl,
     clientOrigin: resolveWebPublicUrl(),
@@ -76,7 +80,7 @@ try {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(
-      `Nakama API authentication failed: ${message}\n` +
+      `Airin API authentication failed: ${message}\n` +
         "Restart the server so it can provision the local client user:\n" +
         "  bun run dev:server"
     );
@@ -146,20 +150,25 @@ async function startIdentity(
     config.owner ?? config.orgId ?? null
   );
 
-  const existing = await heartbeat.read();
+  // Only the lock decides. After a restart the heartbeat pid can belong to
+  // another process.
+  try {
+    await heartbeat.acquire();
+  } catch (error) {
+    if (!(await heartbeat.isLeaseHeld())) {
+      throw error;
+    }
 
-  if (existing && existing.pid !== process.pid && isHeartbeatAlive(existing)) {
     console.error(
-      `Another Nakama Telegram bridge already runs the ${label} bot (pid ${existing.pid}). Skipping it.`
+      `Another Airin Telegram bridge already runs the ${label} bot. Skipping it.`
     );
 
     return null;
   }
 
-  await heartbeat.acquire();
   const configDir = getTelegramConfigDir(config.owner ?? config.orgId ?? null);
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken,
     baseUrl: serverUrl,
     clientOrigin: resolveWebPublicUrl(),
@@ -178,7 +187,7 @@ async function startIdentity(
   const authStore = new TelegramAuthStore(config.owner ?? config.orgId ?? null);
   await authStore.reload();
 
-  const bot = await createBot(config, {
+  const { bot, start } = await createBot(config, {
     authStore,
     client,
     orgStore,
@@ -188,26 +197,29 @@ async function startIdentity(
   const writeHeartbeat = () =>
     heartbeat.write({ pid: process.pid, updatedAt: new Date().toISOString() });
 
+  try {
+    await writeHeartbeat();
+  } catch (error) {
+    await heartbeat.clear();
+    throw error;
+  }
+
+  const polling = start();
+
   started.push({
     clearHeartbeat: heartbeat.clear,
-    stop: () => bot.stop(),
+    stop: polling.stop,
     writeHeartbeat,
   });
-
-  await writeHeartbeat();
 
   const authConfig = authStore.getConfig();
   console.log(
     `${label}: profile ${config.profileId} · paired ${authConfig?.pairedUserIds.length ?? 0} · pending handshake ${authConfig?.handshakeCode ? "yes" : "no"}`
   );
 
-  return {
-    running: bot.start({
-      onStart: (info) => {
-        console.log(`Bot @${info.username} is listening for ${label}.`);
-      },
-    }),
-  };
+  console.log(`Bot @${bot.botInfo.username} is listening for ${label}.`);
+
+  return { running: polling.running };
 }
 
 async function stopAll(): Promise<void> {
@@ -217,10 +229,12 @@ async function stopAll(): Promise<void> {
   }
 
   await Promise.all(
-    started.map((identity) => {
-      identity.stop();
-
-      return identity.clearHeartbeat();
+    started.map(async (identity) => {
+      try {
+        await identity.stop();
+      } finally {
+        await identity.clearHeartbeat();
+      }
     })
   );
 }

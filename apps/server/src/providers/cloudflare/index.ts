@@ -3,10 +3,10 @@ import {
   normalizeBaseUrl,
   type ProviderClient,
   type ProviderInstance,
-} from "@nakama/core";
+} from "@airin/core";
 import { createOpenAICompatibleProvider } from "../openai-compatible";
 
-export { CLOUDFLARE_API_ROOT } from "@nakama/core";
+export { CLOUDFLARE_API_ROOT } from "@airin/core";
 
 export function resolveCloudflareBaseUrl(
   accountId: string,

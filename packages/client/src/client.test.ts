@@ -3,20 +3,32 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getUserConfigDir, saveUserConfig } from "@nakama/core";
-import { NakamaAuthExpiredError, NakamaClient } from "./index";
+import { AirinApiError, getUserConfigDir, saveUserConfig } from "@airin/core";
+import { AirinAuthExpiredError, AirinClient } from "./index";
 
 const organizationRequests = [
   {
     body: null,
-    call: (client: NakamaClient) => client.getTool("tool/a?", "team/a?"),
+    call: (client: AirinClient) =>
+      client.forOrg("team/a?").regenerateTeamsHandshake("agent/a?"),
+    method: "POST",
+    path: "/v1/settings/teams/handshake?profileId=agent%2Fa%3F",
+    response: {
+      configured: true,
+      handshakeCode: "A".repeat(32),
+      pairedUserIds: [],
+    },
+  },
+  {
+    body: null,
+    call: (client: AirinClient) => client.getTool("tool/a?", "team/a?"),
     method: "GET",
     path: "/v1/tools/tool%2Fa%3F",
     response: { tool: { id: "tool/a?", name: "Shared tool" } },
   },
   {
     body: null,
-    call: (client: NakamaClient) =>
+    call: (client: AirinClient) =>
       client.listPublishedSkillFiles("team/a?", "publication/a?"),
     method: "GET",
     path: "/v1/orgs/team%2Fa%3F/shared-resources/publication%2Fa%3F/skill/files",
@@ -27,7 +39,7 @@ const organizationRequests = [
   },
   {
     body: null,
-    call: (client: NakamaClient) =>
+    call: (client: AirinClient) =>
       client.readPublishedSkillFile(
         "team/a?",
         "publication/a?",
@@ -39,7 +51,7 @@ const organizationRequests = [
   },
   {
     body: null,
-    call: (client: NakamaClient) =>
+    call: (client: AirinClient) =>
       client.getPublishedSkill("team/a?", "publication/a?"),
     method: "GET",
     path: "/v1/orgs/team%2Fa%3F/shared-resources/publication%2Fa%3F/skill",
@@ -53,7 +65,7 @@ const organizationRequests = [
   },
   {
     body: null,
-    call: (client: NakamaClient) => client.getOrganizationOverview("team/a?"),
+    call: (client: AirinClient) => client.getOrganizationOverview("team/a?"),
     method: "GET",
     path: "/v1/orgs/team%2Fa%3F/overview",
     response: { activeOrgId: "team/a?", sharedResources: [], teams: [] },
@@ -65,7 +77,7 @@ const organizationRequests = [
       requestId: "retry-1",
       slug: "sales",
     },
-    call: (client: NakamaClient) =>
+    call: (client: AirinClient) =>
       client.createTeam("team/a?", {
         adminUserId: "user-2",
         name: "Sales",
@@ -78,14 +90,14 @@ const organizationRequests = [
   },
   {
     body: null,
-    call: (client: NakamaClient) => client.listOrgSharedResources("team/a?"),
+    call: (client: AirinClient) => client.listOrgSharedResources("team/a?"),
     method: "GET",
     path: "/v1/orgs/team%2Fa%3F/shared-resources",
     response: { resources: [] },
   },
   {
     body: { resourceId: "provider::model", resourceKind: "model" },
-    call: (client: NakamaClient) =>
+    call: (client: AirinClient) =>
       client.publishOrgSharedResource("team/a?", {
         resourceId: "provider::model",
         resourceKind: "model",
@@ -96,7 +108,7 @@ const organizationRequests = [
   },
   {
     body: null,
-    call: (client: NakamaClient) =>
+    call: (client: AirinClient) =>
       client.unpublishOrgSharedResource("team/a?", "publication/a?"),
     method: "DELETE",
     path: "/v1/orgs/team%2Fa%3F/shared-resources/publication%2Fa%3F",
@@ -104,7 +116,7 @@ const organizationRequests = [
   },
   {
     body: null,
-    call: (client: NakamaClient) =>
+    call: (client: AirinClient) =>
       client.createSharedAgentInstance("team/a?", "publication/a?"),
     method: "POST",
     path: "/v1/orgs/team%2Fa%3F/shared-agents/publication%2Fa%3F/instance",
@@ -121,14 +133,13 @@ const authScopeUser = {
 
 const authScopeRequests = [
   {
-    call: (client: NakamaClient) =>
-      client.login("user@example.com", "password"),
+    call: (client: AirinClient) => client.login("user@example.com", "password"),
     method: "POST",
     path: "/v1/auth/login",
     response: authScopeUser,
   },
   {
-    call: (client: NakamaClient) =>
+    call: (client: AirinClient) =>
       client.setupUser({
         admin: {
           email: "user@example.com",
@@ -142,14 +153,14 @@ const authScopeRequests = [
     response: authScopeUser,
   },
   {
-    call: (client: NakamaClient) =>
+    call: (client: AirinClient) =>
       client.updateAuthProfile({ name: "Updated" }),
     method: "PATCH",
     path: "/v1/auth/me",
     response: authScopeUser,
   },
   {
-    call: (client: NakamaClient) => client.acceptOrgInvite({ token: "invite" }),
+    call: (client: AirinClient) => client.acceptOrgInvite({ token: "invite" }),
     method: "POST",
     path: "/v1/auth/accept-invite",
     response: {
@@ -167,7 +178,7 @@ for (const action of authScopeRequests) {
       const pending = Promise.withResolvers<Response>();
       const requests: Request[] = [];
 
-      const client = new NakamaClient({
+      const client = new AirinClient({
         baseUrl: "http://localhost",
         fetch: async (input, init) => {
           const request = new Request(input, init);
@@ -213,7 +224,7 @@ test.each(["switch", "reset"] as const)(
     const pending = Promise.withResolvers<Response>();
     const requests: Request[] = [];
 
-    const client = new NakamaClient({
+    const client = new AirinClient({
       baseUrl: "http://localhost",
       fetch: async (input, init) => {
         const request = new Request(input, init);
@@ -253,7 +264,7 @@ test("a delayed switch cannot restore a cleared client scope", async () => {
   const pending = Promise.withResolvers<Response>();
   const requests: Request[] = [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "http://localhost",
     fetch: async (input, init) => {
       const request = new Request(input, init);
@@ -279,7 +290,7 @@ test("an unchanged identity read does not discard a pending team switch", async 
   const pending = Promise.withResolvers<Response>();
   const requests: Request[] = [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "http://localhost",
     fetch: async (input, init) => {
       const request = new Request(input, init);
@@ -310,7 +321,7 @@ test("an unchanged identity read does not discard a pending team switch", async 
 test("a current identity read still selects the server's active tenant", async () => {
   const requests: Request[] = [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "http://localhost",
     fetch: async (input, init) => {
       const request = new Request(input, init);
@@ -337,7 +348,7 @@ test.each([false, true])(
     const second = Promise.withResolvers<Response>();
     const requests: Request[] = [];
 
-    const client = new NakamaClient({
+    const client = new AirinClient({
       baseUrl: "http://localhost",
       fetch: async (input, init) => {
         const request = new Request(input, init);
@@ -380,9 +391,9 @@ test.each(organizationRequests)(
   async ({ call, method, path, body, response }) => {
     const requests: Request[] = [];
 
-    const client = new NakamaClient({
+    const client = new AirinClient({
       authToken: "test-token",
-      baseUrl: "https://nakama.example.com",
+      baseUrl: "https://airin.example.com",
       fetch: async (input, init) => {
         requests.push(new Request(input, init));
 
@@ -396,7 +407,7 @@ test.each(organizationRequests)(
     expect<unknown>(await call(client)).toEqual(response);
     expect(requests).toHaveLength(1);
     const request = requests[0]!;
-    expect(request.url).toBe(`https://nakama.example.com${path}`);
+    expect(request.url).toBe(`https://airin.example.com${path}`);
     expect(request.method).toBe(method);
     expect(request.headers.get("X-Org-Id")).toBe("team/a?");
     expect(request.headers.get("Authorization")).toBe("Bearer test-token");
@@ -416,8 +427,8 @@ test.each(organizationRequests)(
 test.each(organizationRequests)(
   "$method $path preserves denied access",
   async ({ call }) => {
-    const client = new NakamaClient({
-      baseUrl: "https://nakama.example.com",
+    const client = new AirinClient({
+      baseUrl: "https://airin.example.com",
       fetch: async () => Response.json({ error: "denied" }, { status: 403 }),
     });
 
@@ -425,12 +436,12 @@ test.each(organizationRequests)(
   }
 );
 
-test.each(["http://localhost:4310", "https://nakama.example.com"])(
+test.each(["http://localhost:4310", "https://airin.example.com"])(
   "CLI images are uploaded in the request body to %s",
   async (baseUrl) => {
     const requests: Request[] = [];
 
-    const client = new NakamaClient({
+    const client = new AirinClient({
       authToken: "test-token",
       baseUrl,
       fetch: async (input, init) => {
@@ -465,7 +476,7 @@ test.each(["http://localhost:4310", "https://nakama.example.com"])(
     );
     expect(request.headers.get("Authorization")).toBe("Bearer test-token");
     expect(request.headers.get("X-Org-Id")).toBe("org-a");
-    expect(request.headers.get("X-Nakama-WhatsApp-Context-Token")).toBe(
+    expect(request.headers.get("X-Airin-WhatsApp-Context-Token")).toBe(
       "internal-worker-token"
     );
     expect(await request.json()).toMatchObject({
@@ -480,7 +491,7 @@ test.each(["http://localhost:4310", "https://nakama.example.com"])(
 test("scoped clients keep session requests in their original organization", async () => {
   const requests: Request[] = [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "test-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -508,7 +519,7 @@ test("scoped clients keep session requests in their original organization", asyn
 test("plugin access requests retain their explicit organization", async () => {
   const requests: Request[] = [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
       requests.push(new Request(input, init));
@@ -540,10 +551,29 @@ test("plugin access requests retain their explicit organization", async () => {
   ]);
 });
 
+test("an API error keeps the server's error code", async () => {
+  const client = new AirinClient({
+    baseUrl: "http://localhost:4310",
+    fetch: async () =>
+      Response.json(
+        { code: "COMPOSIO_CUSTOM_AUTH_REQUIRED", error: "No managed auth." },
+        { status: 422 }
+      ),
+  });
+
+  const connect = client.connectComposioToolkit("googleforms");
+
+  await expect(connect).rejects.toBeInstanceOf(AirinApiError);
+  await expect(connect).rejects.toMatchObject({
+    code: "COMPOSIO_CUSTOM_AUTH_REQUIRED",
+    status: 422,
+  });
+});
+
 test("official plugin reinstall sends revision and explicit organization", async () => {
   let request!: Request;
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
       request = new Request(input, init);
@@ -561,6 +591,50 @@ test("official plugin reinstall sends revision and explicit organization", async
   expect(await request.json()).toEqual({ expectedRevision: 7 });
 });
 
+test("local draft transport pins the explicit organization, digest, revision, and review offset", async () => {
+  const requests: Request[] = [];
+
+  const client = new AirinClient({
+    baseUrl: "http://localhost",
+    fetch: async (input, init) => {
+      requests.push(new Request(input, init));
+
+      return Response.json({});
+    },
+    orgId: "other-org",
+  });
+
+  const draft = { draftId: "notes", orgId: "reviewed-org", profileId: "super" };
+  await client.previewLocalPlugin(draft);
+  await client.readLocalPluginFile({
+    ...draft,
+    expectedDigest: "a".repeat(64),
+    offset: 1024,
+    path: "src/list.js",
+  });
+  await client.installLocalPlugin({
+    ...draft,
+    expectedDigest: "a".repeat(64),
+    expectedRevision: 7,
+  });
+  expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+    "/v1/platform/plugins/preview-local",
+    "/v1/platform/plugins/local-file",
+    "/v1/platform/plugins/install-local",
+  ]);
+  expect(await requests[0]!.json()).toEqual(draft);
+  expect(await requests[1]!.json()).toMatchObject({
+    ...draft,
+    expectedDigest: "a".repeat(64),
+    offset: 1024,
+  });
+  expect(await requests[2]!.json()).toEqual({
+    ...draft,
+    expectedDigest: "a".repeat(64),
+    expectedRevision: 7,
+  });
+});
+
 test("chat stream request includes cookie CSRF protection", async () => {
   const originalDocument = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -569,13 +643,13 @@ test("chat stream request includes cookie CSRF protection", async () => {
 
   Object.defineProperty(globalThis, "document", {
     configurable: true,
-    value: { cookie: "nakama_csrf=csrf-token-123; other=value" },
+    value: { cookie: "airin_csrf=csrf-token-123; other=value" },
   });
 
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
       fetchCalls.push({ init, input });
@@ -622,14 +696,14 @@ test("CSRF header prefers the host-bound cookie a sibling host cannot set", asyn
 
   Object.defineProperty(globalThis, "document", {
     configurable: true,
-    value: { cookie: "nakama_csrf=planted; __Host-nakama_csrf=host-bound" },
+    value: { cookie: "airin_csrf=planted; __Host-airin_csrf=host-bound" },
   });
 
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
-    baseUrl: "https://nakama.example.com",
+  const client = new AirinClient({
+    baseUrl: "https://airin.example.com",
     fetch: async (input, init) => {
       fetchCalls.push({ init, input });
 
@@ -660,7 +734,7 @@ test("automation run requests disable Bun fetch idle timeout", async () => {
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -685,7 +759,7 @@ test("clients send org context on authenticated requests", async () => {
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -707,7 +781,7 @@ test("listProfiles takes an org id per call, overriding the client's", async () 
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -728,7 +802,7 @@ test("non-browser clients send local auth as a bearer token", async () => {
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -745,11 +819,11 @@ test("non-browser clients send local auth as a bearer token", async () => {
   expect(headers.get("Content-Type")).toBeNull();
 });
 
-test("data export downloads zip bytes with filename metadata", async () => {
+test("data export returns the raw ZIP stream with filename metadata", async () => {
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -757,15 +831,14 @@ test("data export downloads zip bytes with filename metadata", async () => {
 
       return new Response(new Uint8Array([1, 2, 3]), {
         headers: {
-          "Content-Disposition":
-            'attachment; filename="nakama-export-test.zip"',
+          "Content-Disposition": 'attachment; filename="airin-export-test.zip"',
           "Content-Type": "application/zip",
         },
       });
     },
   });
 
-  const result = await client.exportData();
+  const response = await client.exportDataResponse();
 
   expect(fetchCalls[0]!.input.toString()).toBe(
     "http://localhost:4310/v1/platform/data/export"
@@ -773,15 +846,19 @@ test("data export downloads zip bytes with filename metadata", async () => {
   const headers = new Headers(fetchCalls[0]!.init?.headers);
   expect(headers.get("Authorization")).toBe("Bearer local-auth-token");
   expect(headers.get("Content-Type")).toBeNull();
-  expect(result.filename).toBe("nakama-export-test.zip");
-  expect(Array.from(new Uint8Array(result.data))).toEqual([1, 2, 3]);
+  expect(response.headers.get("Content-Disposition")).toBe(
+    'attachment; filename="airin-export-test.zip"'
+  );
+  expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([
+    1, 2, 3,
+  ]);
 });
 
 test("user data export scopes the download path to the requested user", async () => {
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -790,7 +867,7 @@ test("user data export scopes the download path to the requested user", async ()
       return new Response(new Uint8Array([4, 5, 6]), {
         headers: {
           "Content-Disposition":
-            'attachment; filename="nakama-user-export-test.zip"',
+            'attachment; filename="airin-user-export-test.zip"',
           "Content-Type": "application/zip",
         },
       });
@@ -802,7 +879,7 @@ test("user data export scopes the download path to the requested user", async ()
   expect(fetchCalls[0]!.input.toString()).toBe(
     "http://localhost:4310/v1/platform/users/user%2Fwith%20space/data/export"
   );
-  expect(result.filename).toBe("nakama-user-export-test.zip");
+  expect(result.filename).toBe("airin-user-export-test.zip");
   expect(Array.from(new Uint8Array(result.data))).toEqual([4, 5, 6]);
 });
 
@@ -810,7 +887,7 @@ test("profile pack helpers export zip and upload base64 preview/import bodies", 
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -821,7 +898,7 @@ test("profile pack helpers export zip and upload base64 preview/import bodies", 
         return new Response(new Uint8Array([9, 8, 7]), {
           headers: {
             "Content-Disposition":
-              'attachment; filename="nakama-profile-export-bot.zip"',
+              'attachment; filename="airin-profile-export-bot.zip"',
             "Content-Type": "application/zip",
           },
         });
@@ -829,7 +906,7 @@ test("profile pack helpers export zip and upload base64 preview/import bodies", 
 
       if (url.endsWith("/pack/import/preview")) {
         return Response.json({
-          manifest: { kind: "nakama-profile-export" },
+          manifest: { kind: "airin-profile-export" },
           plannedName: "Bot",
           skippedAssignments: [],
           topLevelPaths: ["SOUL.md"],
@@ -837,7 +914,7 @@ test("profile pack helpers export zip and upload base64 preview/import bodies", 
       }
 
       return Response.json({
-        manifest: { kind: "nakama-profile-export" },
+        manifest: { kind: "airin-profile-export" },
         profileId: "profile_new",
         skippedAssignments: [],
       });
@@ -849,7 +926,7 @@ test("profile pack helpers export zip and upload base64 preview/import bodies", 
   expect(fetchCalls[0]!.input.toString()).toBe(
     "http://localhost:4310/v1/profiles/profile_1/pack/export"
   );
-  expect(exported.filename).toBe("nakama-profile-export-bot.zip");
+  expect(exported.filename).toBe("airin-profile-export-bot.zip");
 
   await expect(
     client.previewProfilePackImport(new Uint8Array([1, 2, 3]))
@@ -875,7 +952,7 @@ test("readProfileArtifactContent fetches artifact bytes with inline query", asyn
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -913,7 +990,7 @@ test("hasProfileArtifact reads a 404 as deleted and rethrows other failures", as
   const methods: Array<string | undefined> = [];
   let status = 200;
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (_input, init) => {
@@ -934,11 +1011,11 @@ test("hasProfileArtifact reads a 404 as deleted and rethrows other failures", as
   expect(methods).toEqual(["HEAD", "HEAD", "HEAD"]);
 });
 
-test("data import helpers upload base64 archive data", async () => {
+test("data import helpers upload bytes as a raw ZIP and strings as JSON", async () => {
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -948,16 +1025,16 @@ test("data import helpers upload base64 archive data", async () => {
         return Response.json({
           archiveFileCount: 1,
           archiveTotalBytes: 3,
-          manifest: { kind: "nakama-export" },
+          manifest: { kind: "airin-export" },
           topLevelPaths: ["config.ini"],
           willReplaceRoot: true,
         });
       }
 
       return Response.json({
-        manifest: { kind: "nakama-export" },
+        manifest: { kind: "airin-export" },
         restoredFileCount: 1,
-        restoredRoot: "/tmp/nakama",
+        restoredRoot: "/tmp/airin",
       });
     },
   });
@@ -971,10 +1048,20 @@ test("data import helpers upload base64 archive data", async () => {
     client.restoreDataImport(new Uint8Array([4, 5, 6]), { confirm: true })
   ).resolves.toMatchObject({ restoredFileCount: 1 });
 
-  expect(JSON.parse(String(fetchCalls[0]!.init?.body))).toEqual({
-    data: "AQID",
-  });
-  expect(JSON.parse(String(fetchCalls[1]!.init?.body))).toEqual({
+  await client.restoreDataImport("BAUG", { confirm: true });
+
+  expect(new Headers(fetchCalls[0]!.init?.headers).get("Content-Type")).toBe(
+    "application/zip"
+  );
+  expect(fetchCalls[0]!.init?.body).toEqual(new Uint8Array([1, 2, 3]));
+  expect(fetchCalls[1]!.input.toString()).toEndWith(
+    "/v1/platform/data/import/restore?confirm=true"
+  );
+  expect(fetchCalls[1]!.init?.body).toEqual(new Uint8Array([4, 5, 6]));
+  expect(fetchCalls[2]!.input.toString()).toEndWith(
+    "/v1/platform/data/import/restore"
+  );
+  expect(JSON.parse(String(fetchCalls[2]!.init?.body))).toEqual({
     confirm: true,
     data: "BAUG",
   });
@@ -983,9 +1070,59 @@ test("data import helpers upload base64 archive data", async () => {
   );
 });
 
+test("an upload with onProgress goes through XHR and keeps the API error", async () => {
+  const sent: Uint8Array[] = [];
+  const opened: string[] = [];
+
+  class FakeXhr {
+    onerror = () => {};
+    onload = () => {};
+    responseText = JSON.stringify({ error: "Too big." });
+    status = 413;
+    upload = {
+      onprogress: (_event: {
+        lengthComputable: boolean;
+        loaded: number;
+        total: number;
+      }) => {},
+    };
+    withCredentials = false;
+    getAllResponseHeaders = () => "content-type: application/json\r\n";
+    open = (method: string, url: string) => opened.push(`${method} ${url}`);
+    setRequestHeader = () => {};
+    send = (body: Uint8Array) => {
+      sent.push(body);
+      this.upload.onprogress({ lengthComputable: true, loaded: 3, total: 3 });
+      this.onload();
+    };
+  }
+
+  const original = globalThis.XMLHttpRequest;
+  Object.assign(globalThis, { XMLHttpRequest: FakeXhr });
+
+  try {
+    const seen: Array<[number, number]> = [];
+    const client = new AirinClient({ baseUrl: "http://localhost:4310" });
+
+    await expect(
+      client.restoreDataImport(new Uint8Array([1, 2, 3]), {
+        confirm: true,
+        onProgress: (loaded, total) => seen.push([loaded, total]),
+      })
+    ).rejects.toMatchObject({ status: 413 });
+    expect(opened).toEqual([
+      "POST http://localhost:4310/v1/platform/data/import/restore?confirm=true",
+    ]);
+    expect(sent).toEqual([new Uint8Array([1, 2, 3])]);
+    expect(seen).toEqual([[3, 3]]);
+  } finally {
+    globalThis.XMLHttpRequest = original;
+  }
+});
+
 test("non-browser clients reload the local auth token once after a 401", async () => {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-client-auth-reload-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(join(tmpdir(), "airin-client-auth-reload-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
 
   try {
     await writeFile(
@@ -1008,7 +1145,7 @@ test("non-browser clients reload the local auth token once after a 401", async (
 
     let attempts = 0;
 
-    const client = new NakamaClient({
+    const client = new AirinClient({
       authToken: "tc_local_stale",
       baseUrl: "http://localhost:4310",
       fetch: async () => {
@@ -1031,17 +1168,15 @@ test("non-browser clients reload the local auth token once after a 401", async (
     await expect(client.health()).resolves.toMatchObject({ ok: true });
     expect(attempts).toBe(2);
   } finally {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     await rm(configDir, { force: true, recursive: true });
   }
 });
 
-test("non-browser clients throw NakamaAuthExpiredError when 401 token is unchanged", async () => {
-  const configDir = await mkdtemp(
-    join(tmpdir(), "nakama-client-auth-expired-")
-  );
+test("non-browser clients throw AirinAuthExpiredError when 401 token is unchanged", async () => {
+  const configDir = await mkdtemp(join(tmpdir(), "airin-client-auth-expired-"));
 
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  process.env.AIRIN_CONFIG_DIR = configDir;
 
   try {
     await writeFile(
@@ -1057,7 +1192,7 @@ test("non-browser clients throw NakamaAuthExpiredError when 401 token is unchang
       providers: [],
     });
 
-    const client = new NakamaClient({
+    const client = new AirinClient({
       authToken: "tc_local_same",
       baseUrl: "http://localhost:4310",
       fetch: async () =>
@@ -1067,11 +1202,9 @@ test("non-browser clients throw NakamaAuthExpiredError when 401 token is unchang
         }),
     });
 
-    await expect(client.health()).rejects.toBeInstanceOf(
-      NakamaAuthExpiredError
-    );
+    await expect(client.health()).rejects.toBeInstanceOf(AirinAuthExpiredError);
   } finally {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     await rm(configDir, { force: true, recursive: true });
   }
 });
@@ -1080,7 +1213,7 @@ test("notification destination client methods hit the expected routes", async ()
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
@@ -1150,7 +1283,7 @@ function createPublishShareClient(options: {
   const fetchCalls: Array<{ input: RequestInfo | URL; init?: RequestInit }> =
     [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: "local-auth-token",
     baseUrl: "http://127.0.0.1:4310",
     clientOrigin: options.clientOrigin,
@@ -1167,12 +1300,12 @@ function createPublishShareClient(options: {
 
 test("publishProfileArtifactShare includes clientOrigin when configured", async () => {
   const { client, fetchCalls } = createPublishShareClient({
-    clientOrigin: "https://nakama.example.com/",
+    clientOrigin: "https://airin.example.com/",
     response: {
       id: "share_1",
       refreshed: false,
       sharePath: "/s/tok",
-      shareUrl: "https://nakama.example.com/s/tok",
+      shareUrl: "https://airin.example.com/s/tok",
       token: "tok",
       webPublicUrlConfigured: true,
     },
@@ -1185,7 +1318,7 @@ test("publishProfileArtifactShare includes clientOrigin when configured", async 
     "http://127.0.0.1:4310/v1/profiles/profile_1/artifacts/shares"
   );
   expect(JSON.parse(String(fetchCalls[0]!.init?.body))).toEqual({
-    clientOrigin: "https://nakama.example.com",
+    clientOrigin: "https://airin.example.com",
     path: "report.md",
   });
 });
@@ -1212,7 +1345,7 @@ test("publishProfileArtifactShare omits clientOrigin when unset", async () => {
 test("listSessions asks for several channels and a page in one request", async () => {
   const urls: string[] = [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "http://localhost:4310",
     fetch: async (input, init) => {
       urls.push(new Request(input, init).url);
@@ -1252,7 +1385,7 @@ test("artifact download budget stops declared and chunked oversize bodies", asyn
       },
     });
 
-    const client = new NakamaClient({
+    const client = new AirinClient({
       fetch: async () =>
         new Response(body, {
           headers: declared ? { "Content-Length": declared } : {},
@@ -1267,7 +1400,7 @@ test("artifact download budget stops declared and chunked oversize bodies", asyn
     expect(cancelled).toBe(true);
   }
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     fetch: async () => new Response("1234"),
   });
 
@@ -1282,12 +1415,41 @@ test("artifact download budget stops declared and chunked oversize bodies", asyn
   ).toBe("1234");
 });
 
+test("attachment previews keep org scope and bound bytes", async () => {
+  const requests: Request[] = [];
+
+  const client = new AirinClient({
+    fetch: async (input, init) => {
+      requests.push(new Request(input, init));
+
+      return new Response("1234", {
+        headers: { "Content-Type": "text/markdown" },
+      });
+    },
+  }).forOrg("org-preview");
+
+  const blob = await client.readAttachmentContent("a/b", {
+    maxBytes: 4,
+    render: "markdown",
+  });
+
+  expect(await blob.text()).toBe("1234");
+  expect(blob.type).toBe("text/markdown");
+  expect(requests[0].headers.get("X-Org-Id")).toBe("org-preview");
+  expect(new URL(requests[0].url).searchParams.get("preview")).toBe("1");
+  expect(new URL(requests[0].url).searchParams.get("render")).toBe("markdown");
+  await expect(
+    client.readAttachmentContent("id", { maxBytes: 3 })
+  ).rejects.toThrow();
+  expect(await (await client.readAttachmentContent("id")).text()).toBe("1234");
+});
+
 test("artifact download cancellation aborts a pending body read and forwards the signal", async () => {
   const controller = new AbortController();
   let cancelled = false;
   let requestSignal: AbortSignal | null | undefined;
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     fetch: async (_input, init) => {
       requestSignal = init?.signal;
 
@@ -1332,9 +1494,9 @@ test.each([
       headers.set("Content-Type", contentType);
     }
 
-    const client = new NakamaClient({
+    const client = new AirinClient({
       authToken: "test-token",
-      baseUrl: "https://nakama.example.com",
+      baseUrl: "https://airin.example.com",
       fetch: async (input, init) => {
         requests.push(new Request(input, init));
 
@@ -1355,7 +1517,7 @@ test.each([
     expect(new Uint8Array(document.data)).toEqual(bytes);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.url).toBe(
-      `https://nakama.example.com/v1/orgs/team%2Fa%3F/shared-resources/publication%2Fa%3F/content${query}`
+      `https://airin.example.com/v1/orgs/team%2Fa%3F/shared-resources/publication%2Fa%3F/content${query}`
     );
     expect(requests[0]?.method).toBe("GET");
     expect(requests[0]?.headers.get("X-Org-Id")).toBe("team/a?");
@@ -1372,8 +1534,8 @@ test.each([
 test.each([403, 404])(
   "published document reads preserve denial status %s",
   async (status) => {
-    const client = new NakamaClient({
-      baseUrl: "https://nakama.example.com",
+    const client = new AirinClient({
+      baseUrl: "https://airin.example.com",
       fetch: async () => Response.json({ error: "Unavailable" }, { status }),
     });
 
@@ -1391,8 +1553,8 @@ test.each([403, 404])(
 test("tool detail scope overrides one request and preserves the client default", async () => {
   const requests: Request[] = [];
 
-  const client = new NakamaClient({
-    baseUrl: "https://nakama.example.com",
+  const client = new AirinClient({
+    baseUrl: "https://airin.example.com",
     fetch: async (input, init) => {
       requests.push(new Request(input, init));
 

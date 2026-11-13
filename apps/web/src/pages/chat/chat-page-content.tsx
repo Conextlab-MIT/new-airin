@@ -1,28 +1,63 @@
-import { formatAgentQuestionnaireAnswersMessage } from "@nakama/core/agent-questionnaire";
+import { hasActiveAgentQuestionnaire } from "@airin/core/agent-questionnaire";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { useMemo, useState } from "react";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
+import { Settings01Icon } from "hugeicons-react";
+import {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { PromptInputProvider } from "@/components/ai-elements/prompt-input";
-import { ArtifactStreamingPanelBridge } from "@/components/chat/artifact-streaming-panel-bridge";
 import { ChatCognitoControl } from "@/components/chat/chat-cognito-control";
 import { ChatComposer } from "@/components/chat/chat-composer";
-import { ChatMessageList } from "@/components/chat/chat-message-list";
-import { ProviderSetupForm } from "@/components/ProviderSetupForm";
+import { OwnerAgentSettingsDialog } from "@/components/OwnerAgentSettingsDialog";
 import { ChatAttachmentPanelProvider } from "@/context/chat-attachment-panel-context";
+import { useUiMode } from "@/context/use-ui-mode";
 import { useChatUsageVisible } from "@/hooks/use-chat-usage-visible";
 import { usePostTurnSkillReviewOverlay } from "@/hooks/use-post-turn-skill-review-overlay";
 import { formatSessionChannelLabel } from "@/lib/chat-history";
 import { sumChatUsage } from "@/lib/chat-usage";
 import { extractModelId } from "@/lib/models";
-import { shouldShowCognitoControl } from "@/pages/chat/chat-page.shared";
+import {
+  emptyStateControlClass,
+  shouldShowCognitoControl,
+} from "@/pages/chat/chat-page.shared";
+import {
+  ChatConversation,
+  EmptyChatBody,
+  NewChatTopBar,
+} from "@/pages/chat/chat-page-conversation";
 import { ChatPageColumn, ChatWelcome } from "@/pages/chat/chat-page-layout";
+import { ChatStatusButton } from "@/pages/chat/chat-status-panel";
+import { useOnboarding } from "@/pages/chat/use-chat-onboarding";
 import type { ChatPageState } from "@/pages/chat/use-chat-page";
 
-export function ChatPageContent(state: ChatPageState) {
+const ProviderSetupForm = lazy(async () => ({
+  default: (await import("@/components/ProviderSetupForm")).ProviderSetupForm,
+}));
+
+// oxlint-disable-next-line react-doctor/no-high-complexity-react-function -- Owner/Advanced empty vs active chat composition stays in one entry.
+export function ChatPageContent({
+  below,
+  cognitoLocked = false,
+  onBtw,
+  ...state
+}: ChatPageState & {
+  below?: ReactNode;
+  /** Cognito cannot be turned off here: no toggle, no cognito surface. */
+  cognitoLocked?: boolean;
+  onBtw?: (question: string) => void;
+}) {
   const {
     session,
     messages,
@@ -33,19 +68,19 @@ export function ChatPageContent(state: ChatPageState) {
     chatStatus,
     busy,
     lastSuccessfulTurnAt,
-    turnStartedAt,
     canStop,
     error,
     composerDraftKey,
     composerEntry,
     queuedMessages,
-    branchingMessageId,
+    editQueuedMessage,
+    removeQueuedMessage,
+    sendQueuedMessageNow,
     showOfflineHint,
     health,
     providerModelGroups,
     currentModelSelection,
     activeModelSupportsVision,
-    showThinking,
     thinkingEffortVisible,
     thinkingEffort,
     thinkingEffortDisabled,
@@ -60,31 +95,52 @@ export function ChatPageContent(state: ChatPageState) {
     handleThinkingEffortChange,
     renderModelLabel,
     cognito,
-    handleBranchMessage,
     handleCognitoChange,
-    handleEditMessage,
-    handleTryAgainMessage,
     sendMessage,
     stopStreaming,
     agentTodos,
     agentQuestionnaire,
+    promptHistoryRef,
   } = state;
 
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
 
-  const cognitoControl = shouldShowCognitoControl(cognito, isEmptyState) ? (
-    // Pinned to the column's top-right corner, which is the top right of the
-    // screen area. The backdrop keeps it readable over a scrolling transcript.
-    <div className="absolute top-2 right-3 z-20 rounded-full backdrop-blur sm:right-6">
+  const onboarding = useOnboarding({
+    cognito,
+    cognitoLocked,
+    isEmptyState,
+    profileId,
+    readOnlySession,
+  });
+
+  // A locked cognito chat looks like a normal one: it has no other mode.
+  const cognitoSurface = cognito && !cognitoLocked;
+
+  const cognitoToggle =
+    !cognitoLocked && shouldShowCognitoControl(cognito, isEmptyState) ? (
       <ChatCognitoControl
         cognito={cognito}
         disabled={busy || readOnlySession}
         onCognitoChange={handleCognitoChange}
       />
-    </div>
-  ) : null;
+    ) : null;
 
-  const { visible: showUsage } = useChatUsageVisible();
+  // Pinned to the column's top-right corner, which is the top right of the
+  // screen area. The backdrop keeps it readable over a scrolling transcript.
+  const cognitoControl = (className?: string, extra?: ReactNode) =>
+    cognitoToggle || extra ? (
+      <div
+        className={cn(
+          "absolute top-2 right-3 z-20 rounded-full backdrop-blur sm:right-6",
+          className
+        )}
+      >
+        {cognitoToggle}
+        {extra}
+      </div>
+    ) : null;
+
+  const { visible: chatUsageSetting } = useChatUsageVisible();
   const sessionUsage = useMemo(() => sumChatUsage(messages), [messages]);
 
   const { banner: skillReviewBanner } = usePostTurnSkillReviewOverlay({
@@ -95,6 +151,26 @@ export function ChatPageContent(state: ChatPageState) {
     sessionId: session?.id ?? null,
   });
 
+  const modelPickerTriggerRef = useRef<HTMLButtonElement>(null);
+  const { uiMode } = useUiMode();
+  const ownerMode = uiMode === "owner";
+  const showUsage = !ownerMode && chatUsageSetting;
+  const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
+
+  const ownerAgentSettingsButton =
+    ownerMode && activeProfile && !isEmptyState ? (
+      <Button
+        aria-label="Agent settings"
+        className="text-muted-foreground"
+        onClick={() => setAgentSettingsOpen(true)}
+        size="icon-sm"
+        type="button"
+        variant="ghost"
+      >
+        <Settings01Icon aria-hidden className="size-4" />
+      </Button>
+    ) : null;
+
   const readOnlyBanner = readOnlySession ? (
     <p className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-muted-foreground text-sm">
       View-only {formatSessionChannelLabel(sessionChannel)} conversation. Reply
@@ -102,49 +178,64 @@ export function ChatPageContent(state: ChatPageState) {
     </p>
   ) : null;
 
-  const composer = (
+  const composerClassName =
+    isEmptyState && !error
+      ? "z-10 py-0 [&>p:first-child]:min-h-0"
+      : "z-10 py-0";
+
+  const composerShared = {
+    busy,
+    canStop,
+    chatStatus,
+    className: composerClassName,
+    disabled: composerDisabled,
+    draftStorageKey: composerDraftKey,
+    error,
+    onEditQueuedMessage: editQueuedMessage,
+    onRemoveQueuedMessage: removeQueuedMessage,
+    onSendQueuedMessageNow: sendQueuedMessageNow,
+    onStop: stopStreaming,
+    onSubmit: (text: string, files: Parameters<typeof sendMessage>[1]) => {
+      void sendMessage(text, files);
+    },
+    placeholder: isEmptyState
+      ? ownerMode
+        ? `Message ${activeProfile?.name ?? "agent"}`
+        : composerEntry.placeholder
+      : undefined,
+    promptHistoryRef,
+    queuedMessages,
+    todos: hasActiveAgentQuestionnaire(agentQuestionnaire) ? [] : agentTodos,
+  } as const;
+
+  const composer = ownerMode ? (
     <>
       {readOnlyBanner}
       <ChatComposer
+        {...composerShared}
+        profileId={profileId}
+        variant="minimal"
+      />
+    </>
+  ) : (
+    <>
+      {readOnlyBanner}
+      <ChatComposer
+        {...composerShared}
         availableSkills={availableSkills}
-        busy={busy}
-        canStop={canStop}
-        chatStatus={chatStatus}
-        className={
-          isEmptyState && !error
-            ? "z-10 py-0 [&>p:first-child]:min-h-0"
-            : "z-10 py-0"
-        }
         contextUsage={contextUsage}
         currentModelSelection={currentModelSelection}
-        disabled={composerDisabled}
-        draftStorageKey={composerDraftKey}
-        error={error}
         headerNotice={skillReviewBanner}
+        modelPickerTriggerRef={modelPickerTriggerRef}
+        onBtw={onBtw}
         onConnectProvider={() => setProviderDialogOpen(true)}
         onModelChange={handleModelChange}
-        onStop={stopStreaming}
-        onSubmit={(text, files) => {
-          void sendMessage(text, files);
-        }}
-        onSubmitQuestionnaire={(answers) => {
-          void sendMessage(
-            formatAgentQuestionnaireAnswersMessage(answers),
-            [],
-            {
-              questionnaireAnswers: answers,
-            }
-          );
-        }}
         onThinkingEffortChange={handleThinkingEffortChange}
-        placeholder={isEmptyState ? composerEntry.placeholder : undefined}
         primarySupportsVision={activeModelSupportsVision}
         profileId={profileId}
         profileModelId={extractModelId(currentModelSelection)}
         providerConfigured={health?.providerConfigured}
         providerModelGroups={providerModelGroups}
-        questionnaire={agentQuestionnaire}
-        queuedMessages={queuedMessages}
         renderModelLabel={renderModelLabel}
         sessionUsage={sessionUsage}
         showOfflineHint={showOfflineHint}
@@ -153,71 +244,66 @@ export function ChatPageContent(state: ChatPageState) {
         thinkingEffortDisabled={thinkingEffortDisabled}
         thinkingEffortOptions={thinkingEffortOptions}
         thinkingEffortVisible={thinkingEffortVisible}
-        todos={agentTodos}
       />
     </>
   );
 
   const content = isEmptyState ? (
-    <ChatAttachmentPanelProvider key={session?.id ?? "new"}>
-      <ChatPageColumn centered cognito={cognito}>
-        {cognitoControl}
-        <div className="mx-auto mb-12 flex w-full max-w-3xl flex-col gap-1">
-          <ChatWelcome
-            cognito={cognito}
-            onProfileSwitch={handleProfileSwitch}
-            profile={activeProfile}
-            profileId={profileId}
-            profileSwitchDisabled={busy}
-            profiles={profiles}
+    <ChatAttachmentPanelProvider below={below} key={session?.id ?? "new"}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {cognitoSurface ? null : (
+          <NewChatTopBar
+            actions={ownerAgentSettingsButton}
+            toggle={cognitoToggle}
           />
-          {composer}
-        </div>
-      </ChatPageColumn>
+        )}
+        <ChatPageColumn
+          centered
+          cognito={cognitoSurface}
+          wallpaper={ownerMode && !cognitoSurface}
+        >
+          {cognitoControl(
+            emptyStateControlClass(cognitoSurface),
+            ownerMode ? ownerAgentSettingsButton : undefined
+          )}
+          <div className="mx-auto mb-12 flex w-full max-w-3xl flex-col gap-1">
+            <EmptyChatBody onboarding={onboarding}>
+              <ChatWelcome
+                cognito={cognito}
+                onProfileSwitch={handleProfileSwitch}
+                ownerMode={ownerMode}
+                profile={activeProfile}
+                profileId={profileId}
+                profileSwitchDisabled={busy}
+                profiles={profiles}
+              />
+              {composer}
+            </EmptyChatBody>
+          </div>
+        </ChatPageColumn>
+      </div>
     </ChatAttachmentPanelProvider>
   ) : (
-    <ChatAttachmentPanelProvider key={session?.id ?? "new"}>
-      <ArtifactStreamingPanelBridge messages={messages} profileId={profileId} />
-      <ChatPageColumn cognito={cognito}>
-        {cognitoControl}
-        <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <ChatMessageList
-              actionsDisabled={busy || readOnlySession}
-              branchingMessageId={branchingMessageId}
-              messages={messages}
-              modelLabel={
-                currentModelSelection
-                  ? renderModelLabel(currentModelSelection)
-                  : null
-              }
-              onBranchMessage={(message) => void handleBranchMessage(message)}
-              onContinueToolSetup={async (setupId) => {
-                await sendMessage(
-                  `Build the approved tool setup ${setupId}. Use this setupId with create_tool to connect the saved credentials and selected agent.`,
-                  []
-                );
-              }}
-              onEditMessage={(message, text) =>
-                void handleEditMessage(message, text)
-              }
-              onRetryMessage={(message) => void handleTryAgainMessage(message)}
-              profileId={profileId}
-              sessionId={session?.id}
-              showThinking={showThinking}
-              showUsage={showUsage}
-              streamActive={busy}
-              turnStartedAt={turnStartedAt}
-              workStreamActive={turnStartedAt !== null}
-            />
-          </div>
-
-          <div className="sticky bottom-0 z-10 mt-auto w-full shrink-0 bg-background/95 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:pt-4 sm:pb-4">
-            {composer}
-          </div>
-        </div>
-      </ChatPageColumn>
-    </ChatAttachmentPanelProvider>
+    <ChatConversation
+      below={below}
+      // The session bar is hidden on phones, so the status button sits here.
+      cognitoControl={cognitoControl(
+        "sm:hidden",
+        <>
+          {ownerAgentSettingsButton}
+          <ChatStatusButton />
+        </>
+      )}
+      cognitoSurface={cognitoSurface}
+      cognitoToggle={cognitoToggle}
+      composer={composer}
+      onSwitchModel={() => modelPickerTriggerRef.current?.click()}
+      ownerAgentSettingsButton={ownerAgentSettingsButton}
+      ownerMode={ownerMode}
+      showSessionBar={!cognitoLocked}
+      showUsage={showUsage}
+      state={state}
+    />
   );
 
   return (
@@ -226,16 +312,25 @@ export function ChatPageContent(state: ChatPageState) {
       key={`${composerDraftKey}:${composerEntry.revision}`}
     >
       {content}
+      {activeProfile ? (
+        <OwnerAgentSettingsDialog
+          onOpenChange={setAgentSettingsOpen}
+          open={agentSettingsOpen}
+          profile={activeProfile}
+        />
+      ) : null}
       <Dialog onOpenChange={setProviderDialogOpen} open={providerDialogOpen}>
         <DialogContent className="w-[min(96vw,56rem)] grid-cols-1 sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Connect provider</DialogTitle>
           </DialogHeader>
-          <ProviderSetupForm
-            onSuccess={() => setProviderDialogOpen(false)}
-            showHeading={false}
-            submitLabel="Connect provider"
-          />
+          <Suspense fallback={<Spinner className="size-6" />}>
+            <ProviderSetupForm
+              onSuccess={() => setProviderDialogOpen(false)}
+              showHeading={false}
+              submitLabel="Connect provider"
+            />
+          </Suspense>
         </DialogContent>
       </Dialog>
     </PromptInputProvider>

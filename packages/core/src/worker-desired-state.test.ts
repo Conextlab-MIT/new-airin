@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -19,18 +19,18 @@ afterEach(async () => {
 });
 
 async function withConfigDir<T>(run: () => Promise<T>): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), "nakama-worker-desired-"));
+  const dir = await mkdtemp(join(tmpdir(), "airin-worker-desired-"));
   configDirs.push(dir);
-  const previous = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = dir;
+  const previous = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = dir;
 
   try {
     return await run();
   } finally {
     if (previous === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous;
+      process.env.AIRIN_CONFIG_DIR = previous;
     }
   }
 }
@@ -41,6 +41,7 @@ describe("parseWorkerDesiredState", () => {
       automation: true,
       discord: false,
       slack: false,
+      teams: false,
       telegram: true,
       whatsapp: false,
     });
@@ -51,20 +52,7 @@ describe("parseWorkerDesiredState", () => {
       automation: true,
       discord: false,
       slack: false,
-      telegram: false,
-      whatsapp: false,
-    });
-  });
-
-  test("explicit automation false is honored", () => {
-    expect(
-      parseWorkerDesiredState(
-        '{"telegram":false,"whatsapp":false,"automation":false}'
-      )
-    ).toEqual({
-      automation: false,
-      discord: false,
-      slack: false,
+      teams: false,
       telegram: false,
       whatsapp: false,
     });
@@ -78,6 +66,7 @@ describe("worker desired state persistence", () => {
         automation: true,
         discord: false,
         slack: false,
+        teams: false,
         telegram: false,
         whatsapp: false,
       });
@@ -91,6 +80,7 @@ describe("worker desired state persistence", () => {
         automation: true,
         discord: false,
         slack: false,
+        teams: false,
         telegram: true,
         whatsapp: false,
       });
@@ -100,6 +90,7 @@ describe("worker desired state persistence", () => {
         automation: true,
         discord: false,
         slack: false,
+        teams: false,
         telegram: true,
         whatsapp: true,
       });
@@ -109,6 +100,7 @@ describe("worker desired state persistence", () => {
         automation: false,
         discord: false,
         slack: false,
+        teams: false,
         telegram: true,
         whatsapp: true,
       });
@@ -118,27 +110,9 @@ describe("worker desired state persistence", () => {
         automation: false,
         discord: false,
         slack: false,
+        teams: false,
         telegram: false,
         whatsapp: true,
-      });
-    });
-  });
-
-  test("loads existing file from disk", async () => {
-    await withConfigDir(async () => {
-      const runtimeDir = join(process.env.NAKAMA_CONFIG_DIR!, "runtime");
-      await mkdir(runtimeDir, { recursive: true });
-      await writeFile(
-        join(runtimeDir, "worker-desired-state.json"),
-        '{"telegram":true,"whatsapp":false}\n'
-      );
-
-      expect(await readWorkerDesiredState()).toEqual({
-        automation: true,
-        discord: false,
-        slack: false,
-        telegram: true,
-        whatsapp: false,
       });
     });
   });

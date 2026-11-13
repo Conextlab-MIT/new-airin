@@ -11,6 +11,7 @@ import {
   type WebSearchConfigFile,
 } from "../web-search-config";
 import { jsonSchemaFromZod } from "./schema";
+import { readBoundedBody } from "./web-fetch";
 import {
   WEB_SEARCH_TOOL_NAME,
   type WebSearchInput,
@@ -26,6 +27,11 @@ const MAX_RESULTS = 5;
 const MAX_SNIPPET_CHARS = 800;
 
 const MAX_ERROR_BODY_CHARS = 300;
+
+/** Five hits with snippets fit in a few KB; this only stops a runaway endpoint. */
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+
+const MAX_ERROR_BODY_BYTES = 64 * 1024;
 
 const JsonObjectSchema = z.record(z.string(), z.json());
 
@@ -68,19 +74,42 @@ function truncate(value: string, maxChars: number): string {
 interface SearchRequestHeaders {
   accept: string;
   authorization?: string;
-  "content-type": string;
+  "content-type"?: string;
+  "user-agent"?: string;
   "x-api-key"?: string;
 }
 
 interface SearchRequest {
-  body: string;
+  /** Absent for a GET vendor, which carries the query in the URL instead. */
+  body?: string;
   headers: SearchRequestHeaders;
+  method: "GET" | "POST";
+  url: string;
 }
 
 function buildRequest(
   config: WebSearchConfigFile,
   query: string
 ): SearchRequest {
+  // Serply reads the query from the URL, so it carries no body and no content
+  // type, and identifies the project in the agent string the vendor asked for.
+  if (config.provider === "serply") {
+    const url = new URL(config.endpoint);
+
+    url.searchParams.set("q", query);
+    url.searchParams.set("num", String(MAX_RESULTS));
+
+    return {
+      headers: {
+        accept: "application/json",
+        "user-agent": "airin",
+        "x-api-key": config.apiKey,
+      },
+      method: "GET",
+      url: url.toString(),
+    };
+  }
+
   const headers: SearchRequestHeaders = {
     accept: "application/json",
     "content-type": "application/json",
@@ -96,6 +125,8 @@ function buildRequest(
         query,
       }),
       headers: { ...headers },
+      method: "POST",
+      url: config.endpoint,
     };
   }
 
@@ -104,6 +135,8 @@ function buildRequest(
   return {
     body: JSON.stringify({ limit: MAX_RESULTS, query }),
     headers,
+    method: "POST",
+    url: config.endpoint,
   };
 }
 
@@ -205,21 +238,28 @@ export async function runCustomWebSearch(
   context?: ToolContext
 ): Promise<CustomWebSearchOutput> {
   const { query } = webSearchInputSchema.parse(input);
-  const { body, headers } = buildRequest(config, query);
+  const { body, headers, method, url } = buildRequest(config, query);
 
-  const response = await fetch(
-    config.endpoint,
-    withDisabledFetchIdle({
-      body,
-      headers: new Headers(Object.entries(headers)),
-      method: "POST",
-      signal: resolveSignal(context),
-    })
-  );
+  const init: RequestInit = {
+    headers: new Headers(Object.entries(headers)),
+    method,
+    signal: resolveSignal(context),
+  };
+
+  if (body !== undefined) {
+    init.body = body;
+  }
+
+  const response = await fetch(url, withDisabledFetchIdle(init));
 
   if (!response.ok) {
     const detail = truncate(
-      (await response.text().catch(() => "")).trim(),
+      (
+        await readBoundedBody(response, MAX_ERROR_BODY_BYTES).then(
+          (bytes) => bytes.toString("utf8"),
+          () => ""
+        )
+      ).trim(),
       MAX_ERROR_BODY_CHARS
     );
 
@@ -228,10 +268,11 @@ export async function runCustomWebSearch(
     );
   }
 
+  const responseBody = await readBoundedBody(response, MAX_RESPONSE_BYTES);
   let payload: JsonValue;
 
   try {
-    payload = JsonValueSchema.parse(await response.json());
+    payload = JsonValueSchema.parse(JSON.parse(responseBody.toString("utf8")));
   } catch {
     throw new Error("web_search: search endpoint returned invalid JSON.");
   }

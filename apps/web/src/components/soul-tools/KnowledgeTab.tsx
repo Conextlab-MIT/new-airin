@@ -1,10 +1,10 @@
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import type {
   ImportKnowledgeBaseZipResponse,
   KnowledgeBaseDocument,
-} from "@nakama/core/contract";
-import { MAX_KNOWLEDGE_ZIP_BYTES } from "@nakama/core/message-content";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { MAX_KNOWLEDGE_ZIP_BYTES } from "@airin/core/message-content";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 import { useEffect, useRef, useState } from "react";
 import {
   KnowledgeTabPanel,
@@ -169,7 +169,7 @@ export function KnowledgeTab({ profileId }: { profileId: string | null }) {
 
       return true;
     } catch (err) {
-      if (!(err instanceof NakamaApiError && err.status === 409)) {
+      if (!(err instanceof AirinApiError && err.status === 409)) {
         setError(formatError(err));
 
         return false;

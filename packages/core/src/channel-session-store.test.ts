@@ -30,7 +30,7 @@ describe("ChannelSessionStore hot session cache", () => {
   });
 
   test("load clears hot sessions without touching persisted map", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "nakama-session-store-"));
+    const dir = await mkdtemp(path.join(tmpdir(), "airin-session-store-"));
     const filePath = path.join(dir, "chat-sessions.json");
 
     try {
@@ -53,7 +53,7 @@ describe("ChannelSessionStore hot session cache", () => {
   });
 
   test("a slow save does not land after a newer one", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "nakama-session-store-"));
+    const dir = await mkdtemp(path.join(tmpdir(), "airin-session-store-"));
     const filePath = path.join(dir, "chat-sessions.json");
 
     try {

@@ -1,10 +1,12 @@
-import uFuzzy from "@leeoniya/ufuzzy";
 import type {
   ListUserOrgsResponse,
   ModelsResponse,
   ProfileSummary,
   ProviderModelOption,
-} from "@nakama/core";
+  ThinkingEffort,
+} from "@airin/core";
+import { clampThinkingEffort } from "@airin/core/thinking-effort";
+import uFuzzy from "@leeoniya/ufuzzy";
 
 export function parseModelCommandArg(raw: string) {
   const trimmed = raw.trim();
@@ -100,6 +102,21 @@ export function effectiveModelState(
     modelId,
     providerId: match?.providerId ?? models?.currentProviderId ?? null,
   };
+}
+
+/** The effort the active model gets, lower than the saved one when it stops sooner. */
+export function effortForActiveModel(
+  effort: ThinkingEffort,
+  profile: ProfileSummary,
+  models: ModelsResponse | null
+): ThinkingEffort {
+  const active = effectiveModelState(profile, models);
+
+  const model = models?.models.find((entry) =>
+    isActiveModelOption(entry, active)
+  );
+
+  return model ? clampThinkingEffort(effort, model.id, model.provider) : effort;
 }
 
 function isActiveModelOption(

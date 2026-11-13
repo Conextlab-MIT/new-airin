@@ -1,4 +1,4 @@
-import type { UpdateDiscordSettingsRequest } from "@nakama/core/contract";
+import type { UpdateDiscordSettingsRequest } from "@airin/core/contract";
 import { useEffect, useRef, useState } from "react";
 import {
   type AllowedDiscordUser,

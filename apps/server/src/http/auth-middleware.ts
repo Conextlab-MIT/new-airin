@@ -1,4 +1,4 @@
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type { MiddlewareHandler } from "hono";
 import type { ServerOptions } from "./context";
 import { isPublicRouteRequest } from "./public-routes";
@@ -50,7 +50,7 @@ export function createAuthMiddleware(
     try {
       assertBrowserCsrf(c.req.raw, auth, authService);
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         c.res = Response.json(
           { error: error.message },
           { status: error.status }
@@ -75,7 +75,7 @@ export function createAuthMiddleware(
     }
 
     if (
-      c.req.header("X-Nakama-App-User-Id") !== undefined &&
+      c.req.header("X-Airin-App-User-Id") !== undefined &&
       (c.req.path.startsWith("/v1/sessions") ||
         c.req.path.startsWith("/v1/attachments/") ||
         /^\/v1\/profiles\/[^/]+\/artifacts(?:\/|$)/.test(c.req.path))

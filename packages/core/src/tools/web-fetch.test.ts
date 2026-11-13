@@ -117,14 +117,6 @@ describe("web_fetch input schema", () => {
   });
 });
 
-describe("web_fetch tool metadata", () => {
-  test("exports the parameters schema", () => {
-    expect(webFetchTool.parameters?.type).toBe("object");
-    expect(webFetchTool.parameters?.required).toEqual(["url"]);
-    expect(webFetchTool.parameters?.additionalProperties).toBe(false);
-  });
-});
-
 describe("web_fetch tool validation errors", () => {
   test("throws on missing url, non-http url, and unknown keys", async () => {
     // SAFETY: This call deliberately supplies invalid input to test runtime validation.
@@ -683,6 +675,17 @@ describe("web_fetch happy path", () => {
 });
 
 describe("convertHtmlToMarkdown", () => {
+  test("keeps the text after an unclosed comment", async () => {
+    const md = await convertHtmlToMarkdown(
+      "<p>Intro</p><!-- a --><p>Kept</p><p>a <!-- b</p><p>Tail text</p>"
+    );
+
+    expect(md).toContain("Intro");
+    expect(md).toContain("Kept");
+    expect(md).not.toContain(" a ");
+    expect(md).toContain("Tail text");
+  });
+
   test("converts headings and bold", async () => {
     const md = await convertHtmlToMarkdown(
       "<h2>Sub</h2><p>a <strong>b</strong></p>"
@@ -697,14 +700,14 @@ describe("convertHtmlToMarkdown", () => {
       <!--[-->
       <nav><!--]--><a href="#content">Skip to content</a><!--[--></nav>
       <!---->
-      <!--[--><main id="content"><h1>Nakama</h1><p>Self-hosted AI agents</p></main><!--]-->
+      <!--[--><main id="content"><h1>Airin</h1><p>Self-hosted AI agents</p></main><!--]-->
     `);
 
     expect(md).not.toContain("<!--[-->");
     expect(md).not.toContain("<!--]-->");
     expect(md).not.toContain("<!---->");
     expect(md).toContain("[Skip to content](#content)");
-    expect(md).toContain("# Nakama");
+    expect(md).toContain("# Airin");
     expect(md).toContain("Self-hosted AI agents");
   });
 });

@@ -2,7 +2,7 @@
 title: "Code mode for agent tools"
 type: feat
 date: 2026-10-07
-origin: https://github.com/ahmadrosid/nakama/issues/1680
+origin: https://github.com/ahmadrosid/airin/issues/1680
 status: proposed
 ---
 
@@ -29,7 +29,7 @@ These parts provide the host tool set and execution context. No current path let
 
 OpenCode exposes one `execute` tool backed by a confined JavaScript interpreter. It gives the program an explicit tool tree, a searchable catalog, call limits, and plain-data input and output. The host still owns authorization. Its MCP adapter keeps file content outside the interpreter and attaches it to the outer result.
 
-Borrow those boundaries, not its runtime code. `@opencode-ai/codemode` is currently a private OpenCode workspace package and uses Effect. Nakama should first test a small QuickJS WASM adapter under Bun and the Docker build. QuickJS supports memory limits and interrupt handlers, but its promise job loop needs explicit handling. Do not start the agent integration until this check passes.
+Borrow those boundaries, not its runtime code. `@opencode-ai/codemode` is currently a private OpenCode workspace package and uses Effect. Airin should first test a small QuickJS WASM adapter under Bun and the Docker build. QuickJS supports memory limits and interrupt handlers, but its promise job loop needs explicit handling. Do not start the agent integration until this check passes.
 
 References: [OpenCode design](https://github.com/anomalyco/opencode/blob/dev/packages/codemode/codemode.md), [OpenCode adapter](https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/tool/code-mode.ts), [QuickJS documentation](https://github.com/justjake/quickjs-emscripten/blob/main/README.md).
 
@@ -48,7 +48,7 @@ References: [OpenCode design](https://github.com/anomalyco/opencode/blob/dev/pac
 11. Enforce time, memory, call-count, concurrency, input-size, child-result-size, and final-output limits. Pass cancellation through the MCP bridge too. Do not retry a mutating call after an uncertain timeout.
 12. Persist each child call's name, input, result or error, status, timing, organization, and parent call ID outside model history. Start the record before dispatch. Keep intermediate results out of provider context.
 13. Expose `execute` only for a stored session with an organization and working audit callbacks. Exclude cognito sessions, which have no session row. A missing or failed audit callback must never allow an unrecorded child call.
-14. Gate the first release with `NAKAMA_CODE_MODE=1`. Keep normal direct calls available when the setting is off or a tool is outside the catalog.
+14. Gate the first release with `AIRIN_CODE_MODE=1`. Keep normal direct calls available when the setting is off or a tool is outside the catalog.
 
 ## Design
 
@@ -85,7 +85,7 @@ Keep image, audio, and file payloads on the host side. The first release support
 2. **Add the runtime adapter.** Create one sandbox per call. Supply exact-name tool functions through a host bridge. Add bounded catalog search, JSON Schema input validation, JSON-like data copying, and child-call scheduling. Reuse an installed validator if it covers the schemas; otherwise add one direct dependency.
 3. **Add child audit storage.** Update `packages/db/sql/schema.sql`, the migration in `packages/db/src/migrate.ts`, database types, and the SQLite adapter. Insert each child record before its tool runs. Add organization and session guards, session-delete cascade, and a size limit. Keep results outside model history.
 4. **Wire the agent loop.** Build `execute` from assigned tools and use the existing execution context. Keep direct tools for fallback. Exclude `execute` itself and ineligible tools from its catalog. Pass host audit callbacks from `AgentService`. Pass `ToolContext.signal` and the host-owned child marker through `buildMcpToolDefinitions()`, `McpService.callTool()`, and `McpClientManager.callTool()`; the current MCP path has no signal. Detect media before the MCP manager discards raw content. Keep the private envelope out of direct tool results and model history.
-5. **Add opt-in and coverage.** Gate `execute` with `NAKAMA_CODE_MODE=1` for stored, non-cognito sessions. Test chat with one MCP tool and `search_files`, including audit retention, cross-organization isolation, a media result without repeat, cancellation, and serialized writes. Compare context use and elapsed time with direct calls. If the sandbox needs a package, update its workspace manifest and root lockfile. Update `.docker/runtime-deps` and regenerate its lockfile for both image architectures.
+5. **Add opt-in and coverage.** Gate `execute` with `AIRIN_CODE_MODE=1` for stored, non-cognito sessions. Test chat with one MCP tool and `search_files`, including audit retention, cross-organization isolation, a media result without repeat, cancellation, and serialized writes. Compare context use and elapsed time with direct calls. If the sandbox needs a package, update its workspace manifest and root lockfile. Update `.docker/runtime-deps` and regenerate its lockfile for both image architectures.
 
 Automation support is a follow-up. Before enabling it, extend `replayAutomationSteps()` to journal nested calls and report uncertain effects. Never replay an interrupted mutating child.
 

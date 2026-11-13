@@ -1,8 +1,9 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, useCallback, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useArtifactAttachmentPreviewPanel } from "@/components/chat/use-artifact-attachment-preview-panel";
+import { useArtifactPreviewContent } from "@/components/chat/use-artifact-preview-content";
 import {
   AuthContext,
   type AuthContextValue,
@@ -11,6 +12,60 @@ import {
   type ChatAttachmentPanelConfig,
   ChatAttachmentPanelContext,
 } from "@/context/chat-attachment-panel-context-shared";
+import { client } from "@/lib/client";
+
+test("Word preview budgets converted content instead of original file size", async () => {
+  const root = createRoot(document.createElement("div"));
+  const scoped = spyOn(client, "forOrg").mockReturnValue(client);
+
+  const read = spyOn(client, "readProfileArtifactContent").mockResolvedValue({
+    contentType: "text/markdown",
+    data: new TextEncoder().encode("# Report").buffer,
+  });
+
+  function Preview() {
+    useArtifactPreviewContent({
+      artifact: {
+        filename: "report.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        path: "report.docx",
+        savedAt: "",
+        sizeBytes: 12 * 1024 * 1024,
+      },
+      canPreview: true,
+      isHtml: false,
+      isImage: false,
+      isPdf: false,
+      isVideo: false,
+      isWordDocument: true,
+      open: true,
+      profileId: "profile",
+    });
+
+    return null;
+  }
+
+  // SAFETY: This hook reads only activeOrg from auth.
+  const auth = { activeOrg: null } as AuthContextValue;
+
+  try {
+    await act(async () =>
+      root.render(
+        <AuthContext.Provider value={auth}>
+          <Preview />
+        </AuthContext.Provider>
+      )
+    );
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read.mock.calls[0]?.[2]?.maxBytes).toBe(8 * 1024 * 1024);
+    expect(read.mock.calls[0]?.[2]?.render).toBe("markdown");
+  } finally {
+    await act(async () => root.unmount());
+    read.mockRestore();
+    scoped.mockRestore();
+  }
+});
 
 test("opening an artifact preview does not update the panel on every render", async () => {
   const queryClient = new QueryClient();
@@ -45,6 +100,7 @@ test("opening an artifact preview does not update the panel on every render", as
           hide: () => setConfig(null),
           isFullscreen: false,
           isOpen: config !== null,
+          requestRestore: () => () => undefined,
           show,
           update,
         }}
@@ -85,6 +141,77 @@ test("opening an artifact preview does not update the panel on every render", as
     );
     await act(async () => openPanel());
     expect(updates).toBe(1);
+  } finally {
+    await act(async () => root.unmount());
+    queryClient.clear();
+  }
+});
+
+test("a card asks to restore its panel on mount and opens it when told to", async () => {
+  const queryClient = new QueryClient();
+  const root = createRoot(document.createElement("div"));
+  const requests: { id: string; restoreKey: string }[] = [];
+  let shown: ChatAttachmentPanelConfig | null = null;
+
+  function Card() {
+    useArtifactAttachmentPreviewPanel({
+      artifact: {
+        filename: "bakso.html",
+        mimeType: "text/html",
+        path: "artifacts/bakso.html",
+        savedAt: "2026-10-07T00:00:00Z",
+        sizeBytes: 12,
+      },
+      id: "turn-1:profile:artifacts/bakso.html",
+      profileId: "profile",
+    });
+
+    return null;
+  }
+
+  // SAFETY: Preview reads only activeOrg and user from this fixture.
+  const auth = { activeOrg: null, user: null } as AuthContextValue;
+
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <AuthContext.Provider value={auth}>
+            <ChatAttachmentPanelContext.Provider
+              value={{
+                activeId: null,
+                hide: () => undefined,
+                isFullscreen: false,
+                isOpen: false,
+                requestRestore: (restoreKey, id, open) => {
+                  requests.push({ id, restoreKey });
+                  open();
+
+                  return () => undefined;
+                },
+                show: (config) => {
+                  shown = config;
+                },
+                update: () => undefined,
+              }}
+            >
+              <Card />
+            </ChatAttachmentPanelContext.Provider>
+          </AuthContext.Provider>
+        </QueryClientProvider>
+      )
+    );
+
+    expect(requests).toEqual([
+      {
+        id: "turn-1:profile:artifacts/bakso.html",
+        restoreKey: "profile:artifacts/bakso.html",
+      },
+    ]);
+    expect(shown).toMatchObject({
+      id: "turn-1:profile:artifacts/bakso.html",
+      restoreKey: "profile:artifacts/bakso.html",
+    });
   } finally {
     await act(async () => root.unmount());
     queryClient.clear();

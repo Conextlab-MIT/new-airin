@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import {
   getMentionTokenRanges,
   type SkillTokenRange,
@@ -6,16 +6,28 @@ import {
 
 interface ChatSkillTokenOverlayProps {
   className?: string;
+  /**
+   * Draws the whole text itself, mentions in the primary color with no
+   * background; the textarea above must then have transparent text.
+   */
+  flat?: boolean;
+  /** Tokens to highlight; defaults to the chat composer's built-in mentions. */
+  ranges?: SkillTokenRange[];
+  /** The textarea's scroll offset, so highlights stay under their text. */
+  scrollTop?: number;
   value: string;
 }
 
 export function ChatSkillTokenOverlay({
   value,
   className,
+  flat = false,
+  ranges,
+  scrollTop,
 }: ChatSkillTokenOverlayProps) {
-  const tokenRanges = getMentionTokenRanges(value);
+  const tokenRanges = ranges ?? getMentionTokenRanges(value);
 
-  if (tokenRanges.length === 0) {
+  if (tokenRanges.length === 0 && !flat) {
     return null;
   }
 
@@ -23,16 +35,27 @@ export function ChatSkillTokenOverlay({
     <div
       aria-hidden
       className={cn(
-        "pointer-events-none absolute inset-0 z-0 overflow-hidden whitespace-pre-wrap break-words text-transparent",
+        "pointer-events-none absolute inset-0 z-0 overflow-hidden whitespace-pre-wrap break-words",
+        flat ? "text-foreground" : "text-transparent",
         className
       )}
     >
-      {renderHighlightedValue(value, tokenRanges)}
+      {scrollTop ? (
+        <div style={{ transform: `translateY(${-scrollTop}px)` }}>
+          {renderHighlightedValue(value, tokenRanges, flat)}
+        </div>
+      ) : (
+        renderHighlightedValue(value, tokenRanges, flat)
+      )}
     </div>
   );
 }
 
-function renderHighlightedValue(value: string, tokenRanges: SkillTokenRange[]) {
+function renderHighlightedValue(
+  value: string,
+  tokenRanges: SkillTokenRange[],
+  flat: boolean
+) {
   const parts: React.ReactNode[] = [];
   let cursor = 0;
 
@@ -43,7 +66,11 @@ function renderHighlightedValue(value: string, tokenRanges: SkillTokenRange[]) {
 
     parts.push(
       <span
-        className="rounded bg-primary/10 ring-1 ring-primary/20"
+        className={
+          flat
+            ? "text-primary"
+            : "-mx-1 rounded bg-primary/10 px-1 py-0.5 ring-1 ring-primary/20"
+        }
         key={`${token.start}:${token.end}`}
       >
         {value.slice(token.start, token.end)}

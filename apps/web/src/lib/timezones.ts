@@ -1,7 +1,7 @@
 import type {
   ListTimezonesResponse,
   TimezoneCatalogEntry,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
 export function getBrowserTimezone(): string {
   try {
@@ -21,7 +21,7 @@ function getTimezoneEntries(
   return response.groups.flatMap((group) => group.timezones);
 }
 
-export function findTimezoneEntry(
+function findTimezoneEntry(
   id: string | undefined,
   response: ListTimezonesResponse | undefined
 ): TimezoneCatalogEntry | null {

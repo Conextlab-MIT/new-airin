@@ -20,14 +20,14 @@ function parseJsonObject(text: string): JsonObject {
 
 describe("createTelegramOutboundAdapter", () => {
   let tempHome = "";
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
   let homedirSpy: ReturnType<typeof spyOn<typeof os, "homedir">> | null = null;
 
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     homedirSpy?.mockRestore();
@@ -40,9 +40,9 @@ describe("createTelegramOutboundAdapter", () => {
   });
 
   async function useTempHome(run: () => Promise<void>): Promise<void> {
-    tempHome = await mkdtemp(path.join(os.tmpdir(), "nakama-tg-outbound-"));
+    tempHome = await mkdtemp(path.join(os.tmpdir(), "airin-tg-outbound-"));
     homedirSpy = spyOn(os, "homedir").mockReturnValue(tempHome);
-    process.env.NAKAMA_CONFIG_DIR = path.join(tempHome, ".nakama");
+    process.env.AIRIN_CONFIG_DIR = path.join(tempHome, ".airin");
     await saveTelegramConfig(owner, { botToken: "1234567890:TEST" });
     await run();
   }
@@ -119,6 +119,63 @@ describe("createTelegramOutboundAdapter", () => {
         chat_id: 1001,
         parse_mode: "HTML",
         text: '✅ <b>New payment</b>\n\nCustomer: <a href="https://example.com">Ahmad</a>',
+      });
+    });
+  });
+
+  test("resends a rejected HTML chunk as plain text", async () => {
+    await useTempHome(async () => {
+      const calls: JsonObject[] = [];
+
+      const adapter = createTelegramOutboundAdapter({
+        fetchImpl: asTestFetch(async (_input, init) => {
+          const body = parseJsonObject(String(init?.body));
+          calls.push(body);
+
+          return body.parse_mode === "HTML"
+            ? new Response("Bad Request: can't parse entities", { status: 400 })
+            : new Response("ok", { status: 200 });
+        }),
+      });
+
+      await expect(
+        adapter.send({
+          ...owner,
+          chatIds: [1001],
+          parseMode: "HTML",
+          text: "*hello*",
+        })
+      ).resolves.toEqual({ ok: true });
+
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toEqual({
+        chat_id: 1001,
+        parse_mode: "HTML",
+        text: "<i>hello</i>",
+      });
+      expect(calls[1]).toEqual({ chat_id: 1001, text: "hello" });
+    });
+  });
+
+  test("reports the failure when the plain-text resend also fails", async () => {
+    await useTempHome(async () => {
+      const adapter = createTelegramOutboundAdapter({
+        fetchImpl: asTestFetch(
+          async () =>
+            new Response("Bad Request: chat not found", { status: 400 })
+        ),
+      });
+
+      await expect(
+        adapter.send({
+          ...owner,
+          chatIds: [1001],
+          parseMode: "HTML",
+          text: "*hello*",
+        })
+      ).resolves.toEqual({
+        error: "Telegram API error (400): Bad Request: chat not found",
+        ok: false,
       });
     });
   });

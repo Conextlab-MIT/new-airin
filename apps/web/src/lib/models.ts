@@ -1,19 +1,19 @@
 import type {
   ConfigureProviderRequest,
   CreateProviderRequest,
-  CustomModelEntry,
   OllamaHostMode,
   ProviderModelOption,
   WireApi,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
+import { isDiscoveryModelProvider } from "@airin/core/discovery-providers";
 import {
   OLLAMA_CLOUD_DEFAULT_BASE_URL,
   OLLAMA_LOCAL_DEFAULT_BASE_URL,
   ollamaRequiresApiKey,
-} from "@nakama/core/ollama-provider-config";
-import { isOpenRouterModelSlug } from "@nakama/core/openrouter-model-slug";
-import { formatConfiguredProviderLabel } from "@nakama/core/provider-label";
-import type { UserProviderName } from "@nakama/core/provider-resolution";
+} from "@airin/core/ollama-provider-config";
+import { isOpenRouterModelSlug } from "@airin/core/openrouter-model-slug";
+import { formatConfiguredProviderLabel } from "@airin/core/provider-label";
+import type { UserProviderName } from "@airin/core/provider-resolution";
 
 export type SelectedProvider = UserProviderName;
 
@@ -61,6 +61,7 @@ export function formatProviderLabel(
     provider === "ollama" ||
     provider === "openai_compatible" ||
     provider === "opencode_go" ||
+    provider === "command_code" ||
     provider === "chatgpt" ||
     provider === "xai_oauth" ||
     provider === "minimax" ||
@@ -70,8 +71,12 @@ export function formatProviderLabel(
     provider === "zhipu" ||
     provider === "zhipu_cn" ||
     provider === "xai" ||
+    provider === "groq" ||
+    provider === "cheaper_inference" ||
+    provider === "standardcompute" ||
     provider === "together" ||
     provider === "xiaomi" ||
+    provider === "meta" ||
     provider === "qwen" ||
     provider === "qwen_cn" ||
     provider === "vercel_ai_gateway"
@@ -95,6 +100,7 @@ export const PROVIDER_OPTIONS: Array<{ id: SelectedProvider; label: string }> =
     { id: "doubao", label: "Doubao (Volcengine)" },
     { id: "together", label: "Together AI" },
     { id: "xiaomi", label: "Xiaomi MiMo" },
+    { id: "meta", label: "Meta Model API" },
     { id: "vercel_ai_gateway", label: "Vercel AI Gateway" },
     { id: "mistral", label: "Mistral" },
     { id: "qwen", label: "Qwen (DashScope)" },
@@ -105,8 +111,12 @@ export const PROVIDER_OPTIONS: Array<{ id: SelectedProvider; label: string }> =
     { id: "fireworks", label: "Fireworks" },
     { id: "ollama", label: "Ollama" },
     { id: "opencode_go", label: "OpenCode Go" },
+    { id: "command_code", label: "Command Code" },
     { id: "minimax", label: "MiniMax" },
     { id: "xai", label: "xAI Grok" },
+    { id: "groq", label: "Groq" },
+    { id: "cheaper_inference", label: "Cheaper Inference" },
+    { id: "standardcompute", label: "Standard Compute" },
     { id: "minimax_cn", label: "MiniMax (CN)" },
     { id: "moonshot", label: "Moonshot Kimi" },
     { id: "moonshot_cn", label: "Moonshot Kimi (CN)" },
@@ -144,56 +154,6 @@ export function firstAvailableProviderOption(
   );
 
   return next?.id ?? "openai_compatible";
-}
-
-/** OpenCode Zen free catalog — not OpenCode Go (`/zen/go`). */
-export function isOpenCodeZenBaseUrl(
-  baseUrl: string | null | undefined
-): boolean {
-  const trimmed = baseUrl?.trim();
-
-  if (!trimmed) {
-    return false;
-  }
-
-  try {
-    const url = new URL(trimmed);
-
-    if (url.hostname.toLowerCase() !== "opencode.ai") {
-      return false;
-    }
-
-    const path = url.pathname.toLowerCase();
-
-    return /\/zen(\/|$)/.test(path) && !/\/zen\/go(\/|$)/.test(path);
-  } catch {
-    const normalized = trimmed.toLowerCase();
-
-    return (
-      normalized.includes("opencode.ai/zen") &&
-      !normalized.includes("opencode.ai/zen/go")
-    );
-  }
-}
-
-export function hasOpenCodeZenProvider(
-  providers: ReadonlyArray<{
-    type: string;
-    baseUrl?: string | null;
-    label?: string | null;
-  }>
-): boolean {
-  return providers.some((provider) => {
-    if (provider.type !== "openai_compatible") {
-      return false;
-    }
-
-    if (isOpenCodeZenBaseUrl(provider.baseUrl)) {
-      return true;
-    }
-
-    return provider.label?.trim().toLowerCase() === "opencode zen";
-  });
 }
 
 export function apiKeyPlaceholder(provider: SelectedProvider): string {
@@ -263,6 +223,18 @@ export function validateApiKeyForProvider(
   return null;
 }
 
+const LOCAL_HOST_PATTERN =
+  /^(localhost|127\.\d+\.\d+\.\d+|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|.+\.local)$/i;
+
+/** A hosted endpoint almost always needs a key; a local one often does not. */
+export function isLocalBaseUrl(baseUrl: string): boolean {
+  try {
+    return LOCAL_HOST_PATTERN.test(new URL(baseUrl.trim()).hostname);
+  } catch {
+    return true;
+  }
+}
+
 export function validateDisplayNameInput(displayName: string): string | null {
   const trimmed = displayName.trim();
 
@@ -293,6 +265,27 @@ export function validateBaseUrlInput(baseUrl: string): string | null {
   return null;
 }
 
+function findDuplicateModelIds(models: Array<{ id: string }>): Set<string> {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  for (const model of models) {
+    const id = model.id.trim();
+
+    if (!id) {
+      continue;
+    }
+
+    if (seen.has(id)) {
+      duplicates.add(id);
+    }
+
+    seen.add(id);
+  }
+
+  return duplicates;
+}
+
 export function validateCustomModelsInput(
   models: Array<{
     id: string;
@@ -304,6 +297,12 @@ export function validateCustomModelsInput(
 
   if (valid.length === 0) {
     return "Add at least one model.";
+  }
+
+  const duplicateId = findDuplicateModelIds(valid).values().next().value;
+
+  if (duplicateId) {
+    return `Model ID "${duplicateId}" is in the list two times. Remove one.`;
   }
 
   for (const row of valid) {
@@ -396,13 +395,17 @@ export function validateOpenCodeGoModelsInput(
 
 export type ShortlistCapabilityProvider = Extract<
   SelectedProvider,
-  "cerebras" | "fireworks"
+  "cerebras" | "cloudflare" | "fireworks"
 >;
 
 export function isShortlistCapabilityProvider(
   provider: SelectedProvider
 ): provider is ShortlistCapabilityProvider {
-  return provider === "cerebras" || provider === "fireworks";
+  return (
+    provider === "cerebras" ||
+    provider === "cloudflare" ||
+    provider === "fireworks"
+  );
 }
 
 type ShortlistModelRow = {
@@ -502,31 +505,6 @@ export function modelsFromOpenRouterRows(
   return models;
 }
 
-export function appendOpenRouterModelRow(
-  rows: CustomModelEntry[],
-  modelId: string,
-  modelName: string,
-  extra?: Partial<CustomModelEntry>
-): CustomModelEntry[] {
-  // Spread rather than copying known keys, so anything the browse row carries
-  // (pricing, context window) survives instead of being silently dropped.
-  const base: CustomModelEntry[] = [];
-
-  for (const { default: _wasDefault, ...row } of rows) {
-    if (!row.id.trim()) {
-      continue;
-    }
-
-    base.push({ ...row, name: row.name ?? row.id });
-  }
-
-  if (base.some((row) => row.id === modelId)) {
-    return base.map((row) => ({ ...row, default: row.id === modelId }));
-  }
-
-  return [...base, { ...extra, default: true, id: modelId, name: modelName }];
-}
-
 export function resolveOpenRouterSetupModel(
   rows: Array<{ id: string; default?: boolean }>,
   selectedModel: string
@@ -534,11 +512,18 @@ export function resolveOpenRouterSetupModel(
   const trimmed = selectedModel.trim();
   const valid = rows.filter((row) => row.id.trim());
 
+  // The row the user marked as default wins over the catalog pick.
+  const flagged = valid.find((row) => row.default)?.id;
+
+  if (flagged) {
+    return flagged;
+  }
+
   if (trimmed && valid.some((row) => row.id === trimmed)) {
     return trimmed;
   }
 
-  return valid.find((row) => row.default)?.id ?? valid[0]?.id ?? "";
+  return valid[0]?.id ?? "";
 }
 
 function validateCustomOpenRouterModel(model: string): string | null {
@@ -587,9 +572,24 @@ export function buildCreateProviderRequest(options: {
       "xai_oauth",
       "chatgpt",
       "cerebras",
+      "cloudflare",
       "fireworks",
       "ollama",
       "opencode_go",
+      // Catalog providers keep a list the user changed in Add.
+      "openai",
+      "anthropic",
+      "gemini",
+      "deepseek",
+      "doubao",
+      "together",
+      "xiaomi",
+      "meta",
+      "vercel_ai_gateway",
+      "mistral",
+      "qwen",
+      "qwen_cn",
+      "perplexity",
     ].includes(options.provider) &&
       options.customModels?.length)
       ? options.customModels
@@ -758,38 +758,58 @@ export function knownModelSelection(
   return match ? encodeModelSelection(match.providerId, modelId) : null;
 }
 
-export function profileModelLabel(
-  modelId: string | null,
+/** The option a selection points at, looked up in its own provider first. */
+function findModelMatch(
+  selection: string | null | undefined,
   groups: ReturnType<typeof groupModelsByProvider>
-): string {
-  if (!modelId) {
-    return "Select model";
+) {
+  if (!selection) {
+    return;
   }
 
-  const decoded = decodeModelSelection(modelId);
-  const resolvedModelId = decoded?.modelId ?? modelId;
+  const decoded = decodeModelSelection(selection);
+  const resolvedModelId = decoded?.modelId ?? selection;
 
   if (decoded && decoded.providerId !== "__unknown__") {
     const group = groups.find(
       (entry) => entry.providerId === decoded.providerId
     );
 
-    const match = group?.models.find((model) => model.id === resolvedModelId);
+    const model = group?.models.find((entry) => entry.id === resolvedModelId);
 
-    if (match) {
-      return match.name;
+    if (group && model) {
+      return { group, inSelectedProvider: true, model };
     }
   }
 
   for (const group of groups) {
-    const match = group.models.find((model) => model.id === resolvedModelId);
+    const model = group.models.find((entry) => entry.id === resolvedModelId);
 
-    if (match) {
-      return match.name;
+    if (model) {
+      return { group, inSelectedProvider: false, model };
     }
   }
+}
 
-  return resolvedModelId;
+export function profileModelLabel(
+  modelId: string | null,
+  groups: ReturnType<typeof groupModelsByProvider>,
+  options: { withProvider?: boolean } = {}
+): string {
+  if (!modelId) {
+    return "Select model";
+  }
+
+  const match = findModelMatch(modelId, groups);
+
+  if (!match) {
+    return decodeModelSelection(modelId)?.modelId ?? modelId;
+  }
+
+  // Match the menu items, which name the provider too.
+  return options.withProvider && match.inSelectedProvider
+    ? `${match.model.name} · ${match.group.providerLabel}`
+    : match.model.name;
 }
 
 export function effectiveProfileModelSelection(
@@ -811,41 +831,17 @@ export function effectiveProfileModelSelection(
     : null;
 }
 
-export function resolveModelThinkingSupport(
+/** The model option a picker selection points at, in its provider first. */
+export function findSelectedModel(
   selection: string | null | undefined,
   groups: ReturnType<typeof groupModelsByProvider>
+): ProviderModelOption | undefined {
+  return findModelMatch(selection, groups)?.model;
+}
+
+export function resolveModelThinkingSupport(
+  model: ProviderModelOption | undefined
 ): boolean | undefined {
-  if (!selection) {
-    return;
-  }
-
-  const decoded = decodeModelSelection(selection);
-  const resolvedModelId = decoded?.modelId ?? selection;
-
-  const findModel = () => {
-    if (decoded && decoded.providerId !== "__unknown__") {
-      const group = groups.find(
-        (entry) => entry.providerId === decoded.providerId
-      );
-
-      const match = group?.models.find((model) => model.id === resolvedModelId);
-
-      if (match) {
-        return match;
-      }
-    }
-
-    for (const group of groups) {
-      const match = group.models.find((model) => model.id === resolvedModelId);
-
-      if (match) {
-        return match;
-      }
-    }
-  };
-
-  const model = findModel();
-
   if (!model) {
     return;
   }
@@ -857,6 +853,7 @@ export function resolveModelThinkingSupport(
     model.provider === "doubao" ||
     model.provider === "together" ||
     model.provider === "xiaomi" ||
+    model.provider === "meta" ||
     model.provider === "vercel_ai_gateway" ||
     model.provider === "mistral" ||
     model.provider === "qwen" ||
@@ -912,18 +909,21 @@ export function resolveModelVisionSupport(
   }
 
   if (
+    (model.provider !== "acp" && isDiscoveryModelProvider(model.provider)) ||
     model.provider === "openai_compatible" ||
     model.provider === "opencode_go" ||
     model.provider === "deepseek" ||
     model.provider === "doubao" ||
     model.provider === "together" ||
     model.provider === "xiaomi" ||
+    model.provider === "meta" ||
     model.provider === "vercel_ai_gateway" ||
     model.provider === "mistral" ||
     model.provider === "qwen" ||
     model.provider === "qwen_cn" ||
     model.provider === "perplexity" ||
     model.provider === "cerebras" ||
+    model.provider === "cloudflare" ||
     model.provider === "fireworks" ||
     model.provider === "ollama" ||
     model.provider === "openrouter"

@@ -8,7 +8,7 @@ import type {
   GenerateChatInput,
   ProviderClient,
   ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   persistInlineAttachmentsInContent,
   readFileInputSchema,
@@ -16,7 +16,7 @@ import {
   runReadFile,
   toAnthropicUserContent,
   toOpenAIChatUserContent,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import { createAgentChatSession } from "./index";
 
@@ -128,6 +128,132 @@ function delayedTool(
 }
 
 describe("agent chat tool loop", () => {
+  test("keeps working when the model stops with open todos, up to two times", async () => {
+    const prompts: string[] = [];
+    let reminders = 0;
+
+    const provider: ProviderClient = {
+      generateChat(input: GenerateChatInput) {
+        prompts.push(input.system);
+
+        return Promise.resolve(textReply(`stop ${prompts.length}`));
+      },
+      generateText() {
+        return Promise.resolve({ content: "{}" });
+      },
+      name: "openai",
+      streamChat(input: GenerateChatInput) {
+        return this.generateChat(input);
+      },
+    };
+
+    const session = createAgentChatSession(
+      { provider, tools: [sampleTool] },
+      {
+        toolContext: {
+          openTodosReminder: () => {
+            reminders += 1;
+
+            return Promise.resolve("OPEN TODOS");
+          },
+        },
+      }
+    );
+
+    const reply = await session.send("Do the plan");
+
+    expect(reply).toBe("stop 3");
+    expect(prompts).toHaveLength(3);
+    expect(prompts[0]).not.toContain("OPEN TODOS");
+    expect(prompts[1]).toContain("OPEN TODOS");
+    expect(prompts[2]).toContain("OPEN TODOS");
+    expect(reminders).toBe(2);
+  });
+
+  test("ends the turn when no todos are open", async () => {
+    const provider = createMockProvider([textReply("done")]);
+
+    const session = createAgentChatSession(
+      { provider, tools: [sampleTool] },
+      {
+        toolContext: { openTodosReminder: () => Promise.resolve(null) },
+      }
+    );
+
+    expect(await session.send("Hi")).toBe("done");
+  });
+
+  test.each([false, true])(
+    "waits for questionnaire answers after the tool batch (stream: %s)",
+    async (stream) => {
+      const calls: string[] = [];
+
+      const question: ToolDefinition = {
+        description: "Ask the user",
+        name: "ask_user_question",
+        async run() {
+          calls.push("question");
+
+          return { questionnaire: { title: "Choose" } };
+        },
+      };
+
+      const other: ToolDefinition = {
+        ...sampleTool,
+        async run() {
+          calls.push("other");
+
+          return { ok: true };
+        },
+      };
+
+      const session = createAgentChatSession({
+        provider: createMockProvider([
+          toolTurn([
+            { arguments: {}, id: "question", name: "ask_user_question" },
+            { arguments: {}, id: "other", name: "sample" },
+          ]),
+        ]),
+        tools: [question, other],
+      });
+
+      const reply = stream
+        ? await session.sendStream("Build a page", { onChunk() {} })
+        : await session.send("Build a page");
+
+      expect(reply).toBe("");
+      expect(calls).toEqual(["question", "other"]);
+      expect(
+        session
+          .getHistory()
+          .filter((message) => message.role === "tool")
+          .map((message) => message.toolCallId)
+      ).toEqual(["question", "other"]);
+    }
+  );
+
+  test("continues when ask_user_question fails", async () => {
+    const session = createAgentChatSession({
+      provider: createMockProvider([
+        toolTurn([
+          { arguments: {}, id: "question", name: "ask_user_question" },
+        ]),
+        textReply("Please answer in chat."),
+      ]),
+      tools: [
+        {
+          description: "Ask the user",
+          name: "ask_user_question",
+          async run() {
+            throw new Error("No active session");
+          },
+        },
+      ],
+    });
+
+    expect(await session.send("Build a page")).toBe("Please answer in chat.");
+  });
+
   test.each([
     { images: [] },
     { images: null },
@@ -241,7 +367,7 @@ describe("agent chat tool loop", () => {
   test.each([false, true])(
     "delivers read_file images after all tool results (stream: %s)",
     async (stream) => {
-      const dir = await mkdtemp(path.join(os.tmpdir(), "nakama-tool-image-"));
+      const dir = await mkdtemp(path.join(os.tmpdir(), "airin-tool-image-"));
 
       const data =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -991,6 +1117,113 @@ describe("agent chat tool loop", () => {
     });
   });
 
+  test("does not run a tool call cut off at the output limit", async () => {
+    let toolRuns = 0;
+    const lastMessages: ChatMessage[] = [];
+
+    const tool: ToolDefinition = {
+      ...sampleTool,
+      run(input) {
+        toolRuns += 1;
+
+        return Promise.resolve(input);
+      },
+    };
+
+    const provider = createMockProvider([
+      {
+        ...toolTurn([{ arguments: {}, id: "c1", name: "sample" }]),
+        truncated: true,
+      },
+      textReply("Final"),
+    ]);
+
+    const generateChat = provider.generateChat.bind(provider);
+    provider.generateChat = (input) => {
+      const last = input.messages.at(-1);
+
+      if (last) {
+        lastMessages.push(last);
+      }
+
+      return generateChat(input);
+    };
+
+    const session = createAgentChatSession({ provider }, { tools: [tool] });
+
+    const reply = await session.send("go");
+    expect(reply).toBe("Final");
+    expect(toolRuns).toBe(0);
+    expect(lastMessages[1]).toMatchObject({ role: "tool", toolCallId: "c1" });
+    expect(JSON.parse(String(lastMessages[1]?.content))).toHaveProperty(
+      "error"
+    );
+  });
+
+  test("turns thinking off for the turn when thinking used the whole output limit", async () => {
+    const seen: GenerateChatInput[] = [];
+
+    const provider: ProviderClient = {
+      ...createMockProvider([]),
+      generateChat(input: GenerateChatInput) {
+        seen.push(input);
+
+        if (seen.length === 1) {
+          return Promise.resolve({ ...textReply(""), truncated: true });
+        }
+
+        return Promise.resolve(
+          seen.length === 2
+            ? toolTurn([
+                { arguments: { message: "hi" }, id: "c1", name: "sample" },
+              ])
+            : textReply("Final")
+        );
+      },
+    };
+
+    const session = createAgentChatSession(
+      {
+        chatOptions: { thinking: { effort: "high", enabled: true } },
+        provider,
+      },
+      { tools: [sampleTool] }
+    );
+
+    const reply = await session.send("go");
+    expect(reply).toBe("Final");
+    expect(seen[0]?.providerOptions?.thinking?.enabled).toBe(true);
+    expect(seen[1]?.providerOptions?.thinking).toBeUndefined();
+    expect(seen[1]?.tools?.length).toBe(1);
+    expect(seen[2]?.providerOptions?.thinking).toBeUndefined();
+  });
+
+  test("keeps thinking on the retry after an empty reply under the limit", async () => {
+    const seen: GenerateChatInput[] = [];
+
+    const provider: ProviderClient = {
+      ...createMockProvider([]),
+      generateChat(input: GenerateChatInput) {
+        seen.push(input);
+
+        return Promise.resolve(
+          seen.length === 1 ? textReply("") : textReply("Final")
+        );
+      },
+    };
+
+    const session = createAgentChatSession(
+      {
+        chatOptions: { thinking: { effort: "high", enabled: true } },
+        provider,
+      },
+      { tools: [sampleTool] }
+    );
+
+    await session.send("go");
+    expect(seen[1]?.providerOptions?.thinking?.enabled).toBe(true);
+  });
+
   test.each([
     ["send", ""],
     ["send", "Working"],
@@ -1146,6 +1379,85 @@ describe("agent chat tool loop", () => {
     expect(events).toEqual(["start:sample", "end:sample", "chunk:done"]);
   });
 
+  test("tool images reach onToolEnd and stay out of the tool message text", async () => {
+    const image = { data: "aW1hZ2U=", mediaType: "image/png" };
+
+    const replies = [
+      toolTurn([{ arguments: {}, id: "shot", name: "sample" }]),
+      textReply("Done"),
+    ];
+
+    const session = createAgentChatSession({
+      provider: {
+        ...createMockProvider([]),
+        streamChat: async () => replies.shift() ?? textReply("Extra"),
+      },
+      tools: [
+        { ...sampleTool, run: async () => ({ images: [image], text: "ok" }) },
+      ],
+    });
+
+    const ended: unknown[] = [];
+
+    await session.sendStream("Look", {
+      onChunk() {},
+      onToolEnd: (event) => ended.push(event.images),
+    });
+
+    expect(ended).toEqual([[image]]);
+    const message = session.getHistory().find((item) => item.role === "tool");
+
+    if (message?.role !== "tool") {
+      throw new Error("Missing tool result");
+    }
+
+    expect(JSON.parse(message.content)).toEqual({ text: "ok" });
+    expect(message.attachments).toContainEqual({ ...image, type: "image" });
+  });
+
+  test("tool images reach onToolEnd after preprocess stores them as refs", async () => {
+    const image = { data: "aW1hZ2U=", mediaType: "image/png" };
+
+    const replies = [
+      toolTurn([{ arguments: {}, id: "shot", name: "sample" }]),
+      textReply("Done"),
+    ];
+
+    const session = createAgentChatSession(
+      {
+        provider: {
+          ...createMockProvider([]),
+          streamChat: async () => replies.shift() ?? textReply("Extra"),
+        },
+        tools: [
+          { ...sampleTool, run: async () => ({ images: [image], text: "ok" }) },
+        ],
+      },
+      {
+        preprocessUserContent: async (content) =>
+          Array.isArray(content)
+            ? [
+                {
+                  attachmentId: "att_1",
+                  mediaType: "image/png",
+                  size: 5,
+                  type: "image_ref",
+                },
+              ]
+            : content,
+      }
+    );
+
+    const ended: unknown[] = [];
+
+    await session.sendStream("Look", {
+      onChunk() {},
+      onToolEnd: (event) => ended.push(event.images),
+    });
+
+    expect(ended).toEqual([[image]]);
+  });
+
   test("runs parallelSafe tool calls concurrently and preserves history order", async () => {
     const track = { active: 0, max: 0 };
 
@@ -1293,6 +1605,79 @@ describe("agent chat tool loop", () => {
 });
 
 describe("plugin tool discovery", () => {
+  test.each(["send", "stream"])(
+    "keeps session-scoped discoveries across turns and clears them on reset (%s)",
+    async (mode) => {
+      const snapshots: string[][] = [];
+      let runs = 0;
+
+      const mcp: ToolDefinition = {
+        ...sampleTool,
+        discoveryGroup: "filesystem",
+        discoveryScope: "session",
+        name: "filesystem__read_file",
+        async run() {
+          runs += 1;
+
+          return { ok: true };
+        },
+      };
+
+      const replies = [
+        toolTurn([
+          {
+            arguments: { query: "read filesystem" },
+            id: "discover",
+            name: "find_tools",
+          },
+        ]),
+        toolTurn([{ arguments: {}, id: "read", name: mcp.name }]),
+        textReply("Done"),
+        toolTurn([{ arguments: {}, id: "read_again", name: mcp.name }]),
+        textReply("Done again"),
+        textReply("Reset"),
+      ];
+
+      const generate = (input: GenerateChatInput) => {
+        snapshots.push(input.tools?.map((tool) => tool.name) ?? []);
+
+        return Promise.resolve(replies.shift()!);
+      };
+
+      const provider: ProviderClient = {
+        generateChat: generate,
+        generateText: async () => ({ content: "" }),
+        name: "openai",
+        async streamChat(input, handlers) {
+          const result = await generate(input);
+          handlers.onChunk(result.content);
+
+          return result;
+        },
+      };
+
+      const session = createAgentChatSession({
+        provider,
+        tools: [sampleTool, mcp],
+      });
+
+      if (mode === "stream") {
+        await session.sendStream("Read the file", { onChunk() {} });
+      } else {
+        await session.send("Read the file");
+      }
+
+      await session.send("Read again");
+      expect(snapshots[0]).toEqual(["sample", "find_tools"]);
+      expect(snapshots[1]).toContain(mcp.name);
+      expect(snapshots[3]).toContain(mcp.name);
+      expect(runs).toBe(2);
+      session.clear();
+      await session.send("Hello");
+      expect(snapshots[5]).toEqual(snapshots[0]);
+    }
+  );
+
   test.each(["send", "stream"])(
     "loads only requested definitions and resets next turn (%s)",
     async (mode) => {

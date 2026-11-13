@@ -112,7 +112,7 @@ describe("prepareChannelOrgContext", () => {
 
 describe("ChannelOrgStore", () => {
   test("a slow save does not land after a newer one", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "nakama-org-store-"));
+    const dir = await mkdtemp(path.join(tmpdir(), "airin-org-store-"));
     const filePath = path.join(dir, "org-selection.json");
 
     try {

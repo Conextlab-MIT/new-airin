@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type {
   CreateMcpServerRequest,
   McpServerDetail,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -149,3 +149,60 @@ test.each(["http", "stdio"] as const)(
     }
   }
 );
+
+test("a new connection starts on API key and sends its headers", async () => {
+  const queryClient = new QueryClient();
+  const requests: CreateMcpServerRequest[] = [];
+  let state: ReturnType<typeof useMcpServerDialogState>;
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+
+  function Probe({ open }: { open: boolean }) {
+    state = useMcpServerDialogState({
+      busy: false,
+      onSubmit: async (request) => {
+        requests.push(structuredClone(request));
+      },
+      open,
+      server: null,
+    });
+
+    return <form onSubmit={state.handleSubmit} />;
+  }
+
+  const render = (open: boolean) =>
+    root.render(
+      <QueryClientProvider client={queryClient}>
+        <Probe open={open} />
+      </QueryClientProvider>
+    );
+
+  try {
+    await act(async () => render(false));
+    await act(async () => render(true));
+    expect(state!.kind).toBe("http");
+    expect(state!.headers).toEqual([{ key: "Authorization", value: "" }]);
+
+    await act(async () => {
+      state.setName("Keyed");
+      state.setUrl("https://example.com/mcp");
+      state.setHeaders([{ key: "Authorization", value: "Bearer key" }]);
+    });
+    await act(async () => {
+      container
+        .querySelector("form")!
+        .dispatchEvent(
+          new window.Event("submit", { bubbles: true, cancelable: true })
+        );
+    });
+    expect(requests.at(-1)?.config).toEqual({
+      headers: { Authorization: "Bearer key" },
+      url: "https://example.com/mcp",
+    });
+  } finally {
+    await act(async () => root.unmount());
+    queryClient.clear();
+    container.remove();
+  }
+});

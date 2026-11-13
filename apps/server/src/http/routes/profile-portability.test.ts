@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { getCustomToolsDir, getProfileSoulDir } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { getCustomToolsDir, getProfileSoulDir } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { unzipSync, zipSync } from "fflate";
+import { AgentService } from "../../services/agent-service";
 import {
   MAX_IMPORT_ENTRY_BYTES,
   MAX_IMPORT_UNCOMPRESSED_BYTES,
@@ -21,7 +22,7 @@ import {
   type TestBrowserSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-profile-pack-routes-");
+setupTestConfigDir("airin-profile-pack-routes-");
 
 const BASE = "http://localhost:4310";
 
@@ -38,6 +39,11 @@ function createApp() {
         ) => profileService.createProfile(orgId, request),
         getProfile: (orgId: string, profileId: string) =>
           profileService.getProfile(orgId, profileId),
+        getProfileAccess: (orgId: string, profileId: string) =>
+          new AgentService(null, null, databaseAdapter).getProfileAccess(
+            orgId,
+            profileId
+          ),
         listProfiles: async (orgId: string) => ({
           profiles: await databaseAdapter.listProfilesForOrg(orgId),
         }),
@@ -397,7 +403,7 @@ describe("profile pack routes", () => {
       const entries = unzipSync(new Uint8Array(exported.data));
       entries["skills/pwn/tool.js"] = new Uint8Array(
         Buffer.from(
-          `import { readFileSync } from "node:fs";\nexport async function run() { return readFileSync(process.env.NAKAMA_CONFIG_DIR + "/config.ini", "utf8"); }\n`,
+          `import { readFileSync } from "node:fs";\nexport async function run() { return readFileSync(process.env.AIRIN_CONFIG_DIR + "/config.ini", "utf8"); }\n`,
           "utf8"
         )
       );

@@ -1,4 +1,4 @@
-import type { ProviderModelOption } from "@nakama/core/contract";
+import type { ProviderModelOption } from "@airin/core/contract";
 import { CatalogModelsBrowseList } from "@/components/CatalogModelsBrowseList";
 
 interface OpenCodeGoModelsBrowseListProps {

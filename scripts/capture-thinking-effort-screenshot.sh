@@ -2,11 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TEMP_CONFIG="/tmp/nakama-thinking-effort-screenshot-$$"
-COOKIE_JAR="/tmp/nakama-thinking-effort-cookies-$$.txt"
+TEMP_CONFIG="/tmp/airin-thinking-effort-screenshot-$$"
+COOKIE_JAR="/tmp/airin-thinking-effort-cookies-$$.txt"
 PORT=4314
 BASE_URL="http://127.0.0.1:${PORT}"
-SESSION=nakama-thinking-effort-screenshot
+SESSION=airin-thinking-effort-screenshot
 SERVER_PID=""
 OUTPUT="${ROOT}/docs/website/public/screenshots/chat-thinking-effort-preview.png"
 VIEWPORT_WIDTH=1280
@@ -30,8 +30,8 @@ trap cleanup EXIT
 
 mkdir -p "$TEMP_CONFIG" "$(dirname "$OUTPUT")"
 
-NAKAMA_CONFIG_DIR="$TEMP_CONFIG" NAKAMA_PORT="$PORT" \
-  bun run "$ROOT/apps/server/src/index.ts" > /tmp/nakama-thinking-effort-server.log 2>&1 &
+AIRIN_CONFIG_DIR="$TEMP_CONFIG" AIRIN_PORT="$PORT" \
+  bun run "$ROOT/apps/server/src/index.ts" > /tmp/airin-thinking-effort-server.log 2>&1 &
 SERVER_PID=$!
 
 for _ in $(seq 1 80); do
@@ -51,8 +51,8 @@ curl -sf -c "$COOKIE_JAR" -X POST "${BASE_URL}/v1/auth/setup" \
     \"webPublicUrl\": \"${BASE_URL}\"
   }" >/dev/null
 
-CSRF_VAL=$(awk '$6=="nakama_csrf"{print $7}' "$COOKIE_JAR")
-SESSION_VAL=$(awk '$6=="nakama_session"{print $7}' "$COOKIE_JAR")
+CSRF_VAL=$(awk '$6=="airin_csrf"{print $7}' "$COOKIE_JAR")
+SESSION_VAL=$(awk '$6=="airin_session"{print $7}' "$COOKIE_JAR")
 ORG_ID=$(curl -sf -b "$COOKIE_JAR" "${BASE_URL}/v1/auth/me" | python3 -c 'import json,sys; print(json.load(sys.stdin)["activeOrgId"])')
 
 curl -sf -b "$COOKIE_JAR" -X POST "${BASE_URL}/v1/providers" \
@@ -89,9 +89,9 @@ curl -sf -b "$COOKIE_JAR" -X PUT "${BASE_URL}/v1/settings/thinking" \
   -d '{"enabled": true, "effort": "medium"}' >/dev/null
 
 $AB --session "$SESSION" close --all 2>/dev/null || true
-$AB --session "$SESSION" cookies set nakama_session "$SESSION_VAL" \
+$AB --session "$SESSION" cookies set airin_session "$SESSION_VAL" \
   --url "${BASE_URL}/" --httpOnly --sameSite Lax
-$AB --session "$SESSION" cookies set nakama_csrf "$CSRF_VAL" \
+$AB --session "$SESSION" cookies set airin_csrf "$CSRF_VAL" \
   --url "${BASE_URL}/" --sameSite Lax
 $AB --session "$SESSION" open "${BASE_URL}/chat"
 $AB --session "$SESSION" wait 2500

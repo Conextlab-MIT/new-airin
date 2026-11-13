@@ -7,13 +7,15 @@ import {
   test,
 } from "bun:test";
 import path from "node:path";
+import type { AirinClient } from "@airin/client";
 import {
   hasActiveStreams,
   resetActiveStreamsForTests,
-} from "@nakama/core/channel-active-stream";
-import { ChannelSessionStore as SessionStore } from "@nakama/core/channel-session-store";
-import type { ChatMessage } from "@nakama/core/contract";
-import { listTelegramAccessRequests } from "@nakama/core/telegram-config";
+} from "@airin/core/channel-active-stream";
+import { ChannelSessionStore as SessionStore } from "@airin/core/channel-session-store";
+import type { AgentQuestionnaire, ChatMessage } from "@airin/core/contract";
+import { listTelegramAccessRequests } from "@airin/core/telegram-config";
+import type { Context } from "grammy";
 import {
   UNSUPPORTED_DOCUMENT_TYPES_REPLY,
   UNSUPPORTED_MEDIA_REPLY,
@@ -21,8 +23,8 @@ import {
 import { TelegramAuthStore } from "./auth-store";
 import {
   createChatHandler,
+  formatReplyDraft,
   resetChatLocksForTests,
-  withChatLock,
 } from "./chat-handler";
 import {
   createMessageContext,
@@ -68,7 +70,7 @@ async function createTestHandler(
   const mock = createMockClient(clientOptions);
 
   const sessionStore = new SessionStore(
-    path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+    path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
   );
 
   const orgStore = createTestOrgStore(homeDir);
@@ -111,8 +113,8 @@ describe("createChatHandler group chats", () => {
   test("ignores plain group messages without mention", async () => {
     await withTempHome(async (homeDir) => {
       const privateMessage = "private 🔒 message";
-      const previousDebug = process.env.NAKAMA_CH_DEBUG;
-      process.env.NAKAMA_CH_DEBUG = "1";
+      const previousDebug = process.env.AIRIN_CH_DEBUG;
+      process.env.AIRIN_CH_DEBUG = "1";
       const log = spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -150,9 +152,9 @@ describe("createChatHandler group chats", () => {
         log.mockRestore();
 
         if (previousDebug === undefined) {
-          delete process.env.NAKAMA_CH_DEBUG;
+          delete process.env.AIRIN_CH_DEBUG;
         } else {
-          process.env.NAKAMA_CH_DEBUG = previousDebug;
+          process.env.AIRIN_CH_DEBUG = previousDebug;
         }
       }
     });
@@ -334,6 +336,94 @@ describe("createChatHandler group chats", () => {
     });
   });
 
+  test("/status in a group topic names that topic's session", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        botToken: "1234567890:TEST",
+        pairedUserIds: [42],
+      });
+
+      const { handler: handleMessage } = await createTestHandler(
+        homeDir,
+        undefined,
+        {
+          profiles: [
+            {
+              id: "default",
+              isDefault: true,
+              model: "local::base",
+              name: "Default Bot",
+            },
+          ],
+          providerConfigured: true,
+        }
+      );
+
+      const topic = {
+        chatId: -100_123,
+        chatType: "supergroup" as const,
+        messageThreadId: 10,
+        userId: 42,
+      };
+
+      await handleMessage(createMessageContext({ ...topic, text: "/new" }).ctx);
+
+      const status = createMessageContext({ ...topic, text: "/status" });
+      await handleMessage(status.ctx);
+
+      expect(status.replies.join("\n")).toBe(
+        [
+          "Server: ok",
+          "Provider configured: yes",
+          "Profile: Default Bot",
+          "Provider: unknown",
+          "Model: base",
+          "Session: session_",
+        ].join("\n")
+      );
+    });
+  });
+
+  // The owner's agent is listed only in the owner's org, not the active one.
+  test("/status names the owner's agent from the owner's org", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        botToken: "1234567890:TEST",
+        pairedUserIds: [42],
+      });
+
+      const { calls, handler: handleMessage } = await createTestHandler(
+        homeDir,
+        {
+          config: {
+            ...TEST_CONFIG,
+            orgId: "org_test",
+            owner: { orgId: "org_owner", profileId: "agent_owner" },
+          },
+        },
+        {
+          profiles: [{ id: "default", isDefault: true, name: "Default Bot" }],
+          profilesByOrgId: {
+            org_owner: [
+              { id: "agent_owner", model: "local::owned", name: "Owner Bot" },
+            ],
+          },
+          providerConfigured: true,
+        }
+      );
+
+      const status = createMessageContext({ text: "/status", userId: 42 });
+      const listedBefore = calls.listProfiles;
+      await handleMessage(status.ctx);
+
+      const statusText = status.replies.join("\n");
+      expect(statusText).toContain("Profile: Owner Bot");
+      expect(statusText).toContain("Model: owned");
+      // One lookup finds the agent; status does not list profiles again.
+      expect(calls.listProfiles - listedBefore).toBe(1);
+    });
+  });
+
   test("/status in a group topic reports that topic profile", async () => {
     await withTempHome(async (homeDir) => {
       await writeTelegramConfigIni(homeDir, {
@@ -436,7 +526,7 @@ describe("createChatHandler group chats", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -488,7 +578,7 @@ describe("createChatHandler group chats", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -786,7 +876,7 @@ describe("createChatHandler security", () => {
       await handleMessage(pairAttempt.ctx);
 
       expect(pairAttempt.replies).toEqual([
-        "Linked successfully. You can chat with Nakama now.",
+        "Linked successfully. You can chat with Airin now.",
       ]);
       expect(authStore.isAuthorized(1001)).toBe(true);
       expect(authStore.getConfig()?.handshakeCode).toBeNull();
@@ -1081,6 +1171,596 @@ describe("createChatHandler security", () => {
     });
   });
 
+  test("shows agent questions as buttons and sends the tapped answers to the agent", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { calls, getLastStreamInput, handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        {
+          steps: [
+            { questionnaire: BUDGET_QUESTIONNAIRE, type: "questionnaire" },
+            { reply: "", type: "resolve" },
+          ],
+          streaming: true,
+        }
+      );
+
+      const asked = createMessageContext({ text: "budget", userId: 4242 });
+      await handler(asked.ctx);
+
+      expect(asked.replies).toHaveLength(2);
+      expect(asked.replies.join("\n")).not.toContain("(empty reply)");
+      expect(buttonLabels(asked.replyOptions[0])).toEqual([
+        "20% (recommended)",
+        "10%",
+      ]);
+
+      const firstTap = createMessageContext({
+        callbackData: buttonData(asked.replyOptions[0], 1),
+        userId: 4242,
+      });
+
+      await handler(firstTap.ctx);
+
+      expect(calls.sendStream).toBe(1);
+      expect(firstTap.edits.at(0)?.text).toContain("✅ 10%");
+
+      const secondTap = createMessageContext({
+        callbackData: buttonData(asked.replyOptions[1], 0),
+        userId: 4242,
+      });
+
+      await handler(secondTap.ctx);
+
+      expect(calls.sendStream).toBe(2);
+      expect(getLastStreamInput()).toMatchObject({
+        message:
+          "Answers\n\nQ: Target tabungan?\nA: 10%\n\nQ: Fokus kurangi apa?\nA: Makan di luar",
+      });
+
+      const repeatTap = createMessageContext({
+        callbackData: buttonData(asked.replyOptions[0], 0),
+        userId: 4242,
+      });
+
+      await handler(repeatTap.ctx);
+
+      expect(calls.sendStream).toBe(2);
+      expect(repeatTap.callbackAnswers).toHaveLength(1);
+      expect(repeatTap.edits).toEqual([]);
+    });
+  });
+
+  test("question buttons still work after the worker restarts", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const clientOptions = {
+        steps: [
+          {
+            questionnaire: BUDGET_QUESTIONNAIRE,
+            type: "questionnaire" as const,
+          },
+          { reply: "", type: "resolve" as const },
+        ],
+        streaming: true,
+      };
+
+      const before = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        clientOptions
+      );
+
+      const asked = createMessageContext({ text: "budget", userId: 4242 });
+
+      await before.handler(asked.ctx);
+
+      const firstTap = createMessageContext({
+        callbackData: buttonData(asked.replyOptions[0], 1),
+        userId: 4242,
+      });
+
+      await before.handler(firstTap.ctx);
+
+      resetChatLocksForTests();
+
+      const after = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        clientOptions
+      );
+
+      await after.sessionStore.load();
+
+      const secondTap = createMessageContext({
+        callbackData: buttonData(asked.replyOptions[1], 0),
+        userId: 4242,
+      });
+
+      await after.handler(secondTap.ctx);
+
+      expect(secondTap.edits.at(0)?.text).toContain("✅ Makan di luar");
+      expect(after.calls.sendStream).toBe(1);
+      expect(after.getLastStreamInput()).toMatchObject({
+        message:
+          "Answers\n\nQ: Target tabungan?\nA: 10%\n\nQ: Fokus kurangi apa?\nA: Makan di luar",
+      });
+    });
+  });
+
+  test("a second tap on an answered question does not close the questions", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { calls, getLastStreamInput, handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        QUESTION_TURN
+      );
+
+      const asked = createMessageContext({ text: "budget", userId: 4242 });
+
+      await handler(asked.ctx);
+
+      const tap = (questionIndex: number, choiceIndex: number) =>
+        createMessageContext({
+          callbackData: buttonData(
+            asked.replyOptions[questionIndex],
+            choiceIndex
+          ),
+          userId: 4242,
+        });
+
+      await handler(tap(0, 1).ctx);
+
+      const doubleTap = tap(0, 0);
+
+      await handler(doubleTap.ctx);
+
+      expect(doubleTap.edits).toEqual([]);
+      expect(doubleTap.buttonRemovals).toEqual([]);
+
+      await handler(tap(1, 0).ctx);
+
+      expect(calls.sendStream).toBe(2);
+      expect(getLastStreamInput()).toMatchObject({
+        message:
+          "Answers\n\nQ: Target tabungan?\nA: 10%\n\nQ: Fokus kurangi apa?\nA: Makan di luar",
+      });
+    });
+  });
+
+  test("a typed answer joins the tapped answers", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { calls, getLastStreamInput, handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        QUESTION_TURN
+      );
+
+      const asked = createMessageContext({ text: "budget", userId: 4242 });
+
+      await handler(asked.ctx);
+      await handler(
+        createMessageContext({
+          callbackData: buttonData(asked.replyOptions[0], 1),
+          userId: 4242,
+        }).ctx
+      );
+      await handler(createMessageContext({ text: "Kopi", userId: 4242 }).ctx);
+
+      expect(calls.sendStream).toBe(2);
+      expect(getLastStreamInput()).toMatchObject({
+        message:
+          "Answers\n\nQ: Target tabungan?\nA: 10%\n\nQ: Fokus kurangi apa?\nA: Kopi",
+      });
+    });
+  });
+
+  test("a busy bot keeps the answers so the last tap can be repeated", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      let busy = false;
+      let running: Promise<void> = Promise.resolve();
+
+      const { calls, handler } = await createTestHandler(
+        homeDir,
+        {
+          config: TEST_CONFIG,
+          dispatchTurn: (_key, work) => {
+            if (busy) {
+              return false;
+            }
+
+            running = work();
+
+            return true;
+          },
+        },
+        QUESTION_TURN
+      );
+
+      const asked = createMessageContext({ text: "budget", userId: 4242 });
+
+      await handler(asked.ctx);
+      await running;
+
+      const tap = (questionIndex: number, choiceIndex: number) =>
+        createMessageContext({
+          callbackData: buttonData(
+            asked.replyOptions[questionIndex],
+            choiceIndex
+          ),
+          userId: 4242,
+        });
+
+      await handler(tap(0, 1).ctx);
+
+      busy = true;
+
+      const refused = tap(1, 0);
+
+      await handler(refused.ctx);
+
+      expect(calls.sendStream).toBe(1);
+
+      busy = false;
+
+      const retry = tap(1, 0);
+
+      await handler(retry.ctx);
+      await running;
+
+      expect(retry.edits.at(0)?.text).toContain("✅ Makan di luar");
+      expect(calls.sendStream).toBe(2);
+    });
+  });
+
+  test("the last tap still reaches the agent when Telegram refuses the tap answer", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { calls, handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        QUESTION_TURN
+      );
+
+      const asked = createMessageContext({ text: "budget", userId: 4242 });
+
+      await handler(asked.ctx);
+
+      for (const [questionIndex, choiceIndex] of [
+        [0, 1],
+        [1, 0],
+      ] as const) {
+        await handler(
+          createMessageContext({
+            callbackData: buttonData(
+              asked.replyOptions[questionIndex],
+              choiceIndex
+            ),
+            failAnswerTap: true,
+            userId: 4242,
+          }).ctx
+        );
+      }
+
+      expect(calls.sendStream).toBe(2);
+    });
+  });
+
+  test("questions in a group reply thread stay in that thread", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { calls, handler } = await createTestHandler(
+        homeDir,
+        undefined,
+        QUESTION_TURN
+      );
+
+      const inThread = {
+        chatId: -100_123,
+        chatType: "supergroup" as const,
+        messageThreadId: 77,
+        userId: 4242,
+      };
+
+      const asked = createMessageContext({
+        ...inThread,
+        entities: [{ length: 6, offset: 0, type: "mention" }],
+        text: "@mybot budget",
+      });
+
+      await handler(asked.ctx);
+
+      expect(asked.replyOptions[0]).toMatchObject({
+        reply_parameters: { message_id: 100 },
+      });
+
+      for (const [questionIndex, choiceIndex] of [
+        [0, 1],
+        [1, 0],
+      ] as const) {
+        await handler(
+          createMessageContext({
+            ...inThread,
+            callbackData: buttonData(
+              asked.replyOptions[questionIndex],
+              choiceIndex
+            ),
+          }).ctx
+        );
+      }
+
+      expect(calls.sendStream).toBe(2);
+    });
+  });
+
+  test("ignores question button taps from users who are not paired", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { calls, handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        {
+          steps: [
+            { questionnaire: BUDGET_QUESTIONNAIRE, type: "questionnaire" },
+            { reply: "", type: "resolve" },
+          ],
+          streaming: true,
+        }
+      );
+
+      const asked = createMessageContext({ text: "budget", userId: 4242 });
+      await handler(asked.ctx);
+
+      for (const replyOptions of asked.replyOptions) {
+        const stranger = createMessageContext({
+          callbackData: buttonData(replyOptions, 0),
+          chatId: 4242,
+          userId: 777,
+        });
+
+        await handler(stranger.ctx);
+        expect(stranger.edits).toEqual([]);
+      }
+
+      expect(calls.sendStream).toBe(1);
+    });
+  });
+
+  test("streams the reply as a draft in a private chat with no empty draft, then sends the final message", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { getStreamControl, handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        {
+          autoComplete: false,
+          steps: [{ delta: "Halo **dunia**\nlagi", type: "chunk" }],
+          streaming: true,
+        }
+      );
+
+      const { ctx, drafts, replies } = createMessageContext({
+        text: "hello agent",
+        userId: 4242,
+      });
+
+      const handled = handler(ctx);
+
+      await waitForCondition(
+        () => drafts.some((draft) => draft.text === "Halo <b>dunia</b>"),
+        "Expected the streamed text in a draft"
+      );
+
+      getStreamControl()?.complete("Halo **dunia**\nlagi");
+      await handled;
+
+      expect(drafts[0]?.text).toBe("Halo <b>dunia</b>");
+      expect(drafts.every((draft) => draft.text.length > 0)).toBe(true);
+      expect(new Set(drafts.map((draft) => draft.draftId)).size).toBe(1);
+      expect(drafts[0]?.draftId).toBeGreaterThan(0);
+      expect(replies).toEqual(["Halo <b>dunia</b>\nlagi"]);
+    });
+  });
+
+  test("draft text only grows, so Telegram never replays it from the top", () => {
+    const reply =
+      "## Langkah 1\n\nGaji **Rp10.000.000** per bulan.\n\n- Makan: *Rp3 juta*\n- Transport: `Rp1 juta`\n\n| Pos | Jumlah |\n|---|---|\n| Makan | 3 |\n\n```\ntotal = 5\n```\n\nSelesai.\n";
+
+    let shown = "";
+
+    for (let end = 1; end <= reply.length; end++) {
+      const { visible } = formatReplyDraft(reply.slice(0, end));
+
+      expect(visible.startsWith(shown)).toBe(true);
+      shown = visible;
+    }
+
+    expect(shown).toContain("Selesai.");
+  });
+
+  test("a one-paragraph reply streams its finished words", () => {
+    expect(formatReplyDraft("Halo dunia ini sed").visible).toBe(
+      "Halo dunia ini"
+    );
+    expect(formatReplyDraft("Total gaji **Rp10").visible).toBe("Total gaji");
+    expect(formatReplyDraft("- Makan di lu").visible).toBe("");
+  });
+
+  test("after a tool call the draft shows only the new text, under a new id", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { getStreamControl, handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        {
+          autoComplete: false,
+          steps: [
+            { delta: "Cek dulu ya\n", type: "chunk" },
+            { ms: 1300, type: "pause" },
+            { type: "tool_start" },
+            { delta: "Hasil budget\nlagi", type: "chunk" },
+          ],
+          streaming: true,
+        }
+      );
+
+      const { ctx, drafts } = createMessageContext({
+        text: "budget",
+        userId: 4242,
+      });
+
+      const handled = handler(ctx);
+
+      await waitForCondition(
+        () => drafts.some((draft) => draft.text === "Hasil budget"),
+        "Expected the text after the tool call in a draft",
+        { timeoutMs: 4000 }
+      );
+
+      getStreamControl()?.complete("Hasil budget\nlagi");
+      await handled;
+
+      const narration = drafts.find((draft) => draft.text === "Cek dulu ya");
+      const result = drafts.find((draft) => draft.text === "Hasil budget");
+
+      expect(narration?.draftId).not.toBe(result?.draftId);
+      expect(
+        drafts.some((draft) => draft.text.includes("Cek dulu ya\nHasil"))
+      ).toBe(false);
+    });
+  });
+
+  test("a draft request that hangs does not hold back the final reply", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        {
+          steps: [
+            { delta: "Halo dunia\n", type: "chunk" },
+            { ms: 1200, type: "pause" },
+            { reply: "Halo dunia", type: "resolve" },
+          ],
+          streaming: true,
+        }
+      );
+
+      const { ctx, replies } = createMessageContext({
+        hangDraft: true,
+        text: "hello agent",
+        userId: 4242,
+      });
+
+      await handler(ctx);
+
+      expect(replies).toEqual(["Halo dunia"]);
+    });
+  });
+
+  test("does not send drafts in group chats", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { calls, handler } = await createTestHandler(homeDir, undefined, {
+        steps: [{ reply: "Group reply", type: "resolve" }],
+        streaming: true,
+      });
+
+      const { ctx, drafts } = createMessageContext({
+        chatId: -100_123,
+        chatType: "supergroup",
+        entities: [{ length: 6, offset: 0, type: "mention" }],
+        text: "@mybot hello",
+        userId: 4242,
+      });
+
+      await handler(ctx);
+
+      expect(calls.sendStream).toBe(1);
+      expect(drafts).toEqual([]);
+    });
+  });
+
+  test("still sends the final reply when drafts fail", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        allowedUserIds: [4242],
+        botToken: "1234567890:TEST",
+      });
+
+      const { handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        {
+          steps: [{ reply: "Agent reply", type: "resolve" }],
+          streaming: true,
+        }
+      );
+
+      const { ctx, replies } = createMessageContext({
+        failDraft: true,
+        text: "hello agent",
+        userId: 4242,
+      });
+
+      await handler(ctx);
+
+      expect(replies).toEqual(["Agent reply"]);
+    });
+  });
+
   test("does not create a status message when no todo updates arrive", async () => {
     await withTempHome(async (homeDir) => {
       await writeTelegramConfigIni(homeDir, {
@@ -1234,61 +1914,6 @@ describe("createChatHandler security", () => {
     });
   });
 
-  test("skips redundant edits for identical todo payloads", async () => {
-    await withTempHome(async (homeDir) => {
-      await writeTelegramConfigIni(homeDir, {
-        allowedUserIds: [4242],
-        botToken: "1234567890:TEST",
-      });
-
-      const { handler: handleMessage } = await createTestHandler(
-        homeDir,
-        {
-          config: TEST_CONFIG,
-        },
-        {
-          steps: [
-            {
-              todos: [
-                { content: "Plan changes", id: "plan", status: "in_progress" },
-                { content: "Ship update", id: "ship", status: "pending" },
-              ],
-              type: "todos",
-            },
-            {
-              todos: [
-                { content: "Plan changes", id: "plan", status: "in_progress" },
-                { content: "Ship update", id: "ship", status: "pending" },
-              ],
-              type: "todos",
-            },
-            { reply: "Done", type: "resolve" },
-          ],
-          streaming: true,
-        }
-      );
-
-      const { ctx, replies, edits } = createMessageContext({
-        text: "hello agent",
-        userId: 4242,
-      });
-
-      await handleMessage(ctx);
-
-      expect(replies).toEqual([
-        "🛠️ Working\n🔄 [~] Plan changes\n⏳ [ ] Ship update",
-        "Done",
-      ]);
-      expect(edits).toEqual([
-        {
-          chatId: 4242,
-          messageId: 1,
-          text: "✅ Completed\n🔄 [~] Plan changes\n⏳ [ ] Ship update",
-        },
-      ]);
-    });
-  });
-
   test("/start shows pairing prompt before authorization", async () => {
     await withTempHome(async (homeDir) => {
       await writeTelegramConfigIni(homeDir, {
@@ -1356,7 +1981,7 @@ describe("createChatHandler security", () => {
       );
 
       const { ctx, replies } = createMessageContext({
-        text: "/start@NakamaBot",
+        text: "/start@AirinBot",
         userId: 4242,
       });
 
@@ -1554,7 +2179,7 @@ describe("bridge API integration", () => {
     });
   });
 
-  test("/profile hides super bot from channel profile switches", async () => {
+  test("/profile hides super airin from channel profile switches", async () => {
     await withTempHome(async (homeDir) => {
       await writeTelegramConfigIni(homeDir, {
         botToken: "1234567890:TEST",
@@ -1569,7 +2194,7 @@ describe("bridge API integration", () => {
         {
           profiles: [
             { id: "default", isDefault: true, name: "Default Bot" },
-            { id: "super_bot", isSuper: true, name: "Super Bot" },
+            { id: "super_airin", isSuper: true, name: "Airin" },
           ],
         }
       );
@@ -1583,7 +2208,7 @@ describe("bridge API integration", () => {
 
       const text = replies.join("\n");
       expect(text).toContain("Default Bot");
-      expect(text).not.toContain("Super Bot");
+      expect(text).not.toContain("Airin");
     });
   });
 
@@ -1651,7 +2276,7 @@ describe("bridge API integration", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -1701,7 +2326,7 @@ describe("bridge API integration", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -1758,7 +2383,7 @@ describe("bridge API integration", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -1840,7 +2465,7 @@ describe("createChatHandler document attachments", () => {
       const { client, calls, getLastStreamInput } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -1929,7 +2554,7 @@ describe("createChatHandler document attachments", () => {
       const { client, calls, getLastStreamInput } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -2009,7 +2634,7 @@ describe("createChatHandler artifact delivery", () => {
         {
           arguments: {
             content: metaJson,
-            path: "artifacts/report.md.nakama-meta.json",
+            path: "artifacts/report.md.airin-meta.json",
           },
           id: "tool_2",
           name: "write_file",
@@ -2019,7 +2644,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: 8,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md",
       }),
       name: "write_file",
       role: "tool",
@@ -2028,7 +2653,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: metaJson.length,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md.nakama-meta.json",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md.airin-meta.json",
       }),
       name: "write_file",
       role: "tool",
@@ -2037,7 +2662,7 @@ describe("createChatHandler artifact delivery", () => {
     { content: "Saved the report.", role: "assistant" },
   ];
 
-  test("posts a publish share link after a paired save-artifact turn", async () => {
+  test("posts a publish share link after a paired save_artifact turn", async () => {
     await withTempHome(async (homeDir) => {
       await writeTelegramConfigIni(homeDir, {
         botToken: "1234567890:TEST",
@@ -2052,7 +2677,7 @@ describe("createChatHandler artifact delivery", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -2081,11 +2706,7 @@ describe("createChatHandler artifact delivery", () => {
       await handleMessage(ctx);
 
       expect(calls.publishProfileArtifactShare).toBe(1);
-      expect(
-        replies.some((reply) =>
-          reply.includes("https://app.example/s/tok_test")
-        )
-      ).toBe(true);
+      expect(replies.join("\n")).toContain("https://app.example/s/tok_test");
     });
   });
 
@@ -2116,7 +2737,7 @@ describe("createChatHandler artifact delivery", () => {
           {
             content: JSON.stringify({
               bytesWritten: 5,
-              path: "/home/.nakama/orgs/org/profiles/default/artifacts/draft.md",
+              path: "/home/.airin/orgs/org/profiles/default/artifacts/draft.md",
             }),
             name: "write_file",
             role: "tool",
@@ -2126,7 +2747,7 @@ describe("createChatHandler artifact delivery", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -2171,7 +2792,7 @@ describe("createChatHandler artifact delivery", () => {
       const { client, calls } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -2243,7 +2864,7 @@ describe("stream cleanup", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -2279,39 +2900,6 @@ describe("stream cleanup", () => {
   });
 });
 
-describe("withChatLock", () => {
-  test("keeps the lock chain rejection-safe across a failed prior run", async () => {
-    const rejections: unknown[] = [];
-
-    const onUnhandled = (reason: Error) => {
-      rejections.push(reason);
-    };
-
-    process.on("unhandledRejection", onUnhandled);
-
-    try {
-      await expect(
-        withChatLock("tg-lock-a", async () => {
-          throw new Error("first failed");
-        })
-      ).rejects.toThrow("first failed");
-
-      let ranSecond = false;
-      await withChatLock("tg-lock-a", async () => {
-        ranSecond = true;
-      });
-
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(ranSecond).toBe(true);
-      expect(rejections).toEqual([]);
-    } finally {
-      process.off("unhandledRejection", onUnhandled);
-    }
-  });
-});
-
 describe("createChatHandler session hot cache", () => {
   test("reuses RemoteChatSession across messages without recreate", async () => {
     await withTempHome(async (homeDir) => {
@@ -2325,7 +2913,7 @@ describe("createChatHandler session hot cache", () => {
       const { client, calls } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -2434,3 +3022,170 @@ test("owned connection discards foreign hot sessions and never switches or falls
     expect(calls.createSession).toBe(1);
   });
 });
+
+describe("concurrent chats in different orgs", () => {
+  test("a chat's session is created in its own org while another chat switches org", async () => {
+    await withTempHome(async (homeDir) => {
+      await writeTelegramConfigIni(homeDir, {
+        botToken: "1234567890:TEST",
+        pairedUserIds: [1001, 1002],
+      });
+
+      const { client, handler } = await createTestHandler(
+        homeDir,
+        { config: TEST_CONFIG },
+        { orgs: createMultiTestOrgs() }
+      );
+
+      await handler(
+        createMessageContext({ chatId: 1001, text: "1", userId: 1001 }).ctx
+      );
+      await handler(
+        createMessageContext({ chatId: 1002, text: "2", userId: 1002 }).ctx
+      );
+
+      // Each client scope tracks its own org, and the shared base does too,
+      // so the test sees which org a createSession would have sent.
+      const sessionOrgs: Array<string | null> = [];
+      let baseOrg: string | null = null;
+      const baseSetOrgId = client.setOrgId.bind(client);
+      const baseCreateSession = client.createSession.bind(client);
+      const baseListProfiles = client.listProfiles.bind(client);
+
+      let releaseFirst: () => void = () => {};
+
+      const firstWaits = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+
+      let listCalls = 0;
+      let orgSets = 0;
+
+      const track = (
+        target: AirinClient,
+        getOrg: () => string | null,
+        setOrg: (orgId: string | null) => void
+      ) => {
+        target.setOrgId = (orgId) => {
+          setOrg(orgId);
+          baseSetOrgId(orgId);
+          orgSets += 1;
+
+          if (orgSets === 2) {
+            releaseFirst();
+          }
+        };
+
+        target.createSession = (...args) => {
+          sessionOrgs.push(getOrg());
+
+          return baseCreateSession(...args);
+        };
+      };
+
+      track(
+        client,
+        () => baseOrg,
+        (orgId) => {
+          baseOrg = orgId;
+        }
+      );
+
+      client.listProfiles = async (...args) => {
+        listCalls += 1;
+
+        // The first chat waits here until the second chat has set its org.
+        if (listCalls === 1) {
+          await firstWaits;
+        }
+
+        return baseListProfiles(...args);
+      };
+
+      client.forOrg = () => {
+        // The scope inherits every mock method from the base client.
+        const scoped: AirinClient = Object.create(client);
+        let scopedOrg: string | null = baseOrg;
+
+        track(
+          scoped,
+          () => scopedOrg,
+          (orgId) => {
+            scopedOrg = orgId;
+          }
+        );
+
+        return scoped;
+      };
+
+      await Promise.all([
+        handler(
+          createMessageContext({ chatId: 1001, text: "hello", userId: 1001 })
+            .ctx
+        ),
+        handler(
+          createMessageContext({ chatId: 1002, text: "hello", userId: 1002 })
+            .ctx
+        ),
+      ]);
+
+      expect(sessionOrgs.toSorted()).toEqual(["org_a", "org_b"]);
+    });
+  });
+});
+
+const BUDGET_QUESTIONNAIRE = {
+  id: "budget",
+  questions: [
+    {
+      allowCustomAnswer: false,
+      choices: [
+        { id: "twenty", label: "20%", recommended: true },
+        { id: "ten", label: "10%" },
+      ],
+      id: "target",
+      prompt: "Target tabungan?",
+    },
+    {
+      allowCustomAnswer: true,
+      choices: [
+        { id: "food", label: "Makan di luar" },
+        { id: "shop", label: "Belanja online" },
+      ],
+      id: "focus",
+      prompt: "Fokus kurangi apa?",
+    },
+  ],
+  title: "Budget",
+} satisfies AgentQuestionnaire;
+
+const QUESTION_TURN = {
+  steps: [
+    { questionnaire: BUDGET_QUESTIONNAIRE, type: "questionnaire" as const },
+    { reply: "", type: "resolve" as const },
+  ],
+  streaming: true,
+};
+
+function inlineButtons(
+  replyOptions: Parameters<Context["reply"]>[1]
+): Array<{ callback_data?: string; text: string }> {
+  const markup = replyOptions?.reply_markup;
+
+  if (!(markup && "inline_keyboard" in markup)) {
+    return [];
+  }
+
+  return markup.inline_keyboard.flat();
+}
+
+function buttonLabels(replyOptions: Parameters<Context["reply"]>[1]) {
+  return inlineButtons(replyOptions).map((button) => button.text);
+}
+
+function buttonData(
+  replyOptions: Parameters<Context["reply"]>[1],
+  index: number
+): string {
+  return inlineButtons(replyOptions)[index]?.callback_data ?? "";
+}

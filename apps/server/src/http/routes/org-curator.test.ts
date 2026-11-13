@@ -5,8 +5,8 @@ import {
   loadLocalAuthToken,
   pathExists,
   SKILL_ARCHIVE_DIR_NAME,
-} from "@nakama/core";
-import { seedOrgDefaultProfile } from "@nakama/db";
+} from "@airin/core";
+import { seedOrgDefaultProfile } from "@airin/db";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { seedLocalClientUser } from "../test-org-helpers";
@@ -15,7 +15,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-org-curator-test-");
+setupTestConfigDir("airin-org-curator-test-");
 
 const BASE = "http://localhost:4310";
 
@@ -31,7 +31,7 @@ describe("org curator routes", () => {
     const profile = (await databaseAdapter.listProfilesForOrg(orgId))[0]!;
 
     const skillId = await addUnusedSkill({
-      configDir: process.env.NAKAMA_CONFIG_DIR!,
+      configDir: process.env.AIRIN_CONFIG_DIR!,
       db: databaseAdapter,
       name: "old-playbook",
       orgId,
@@ -62,7 +62,7 @@ describe("org curator routes", () => {
     expect(
       await pathExists(
         join(
-          process.env.NAKAMA_CONFIG_DIR!,
+          process.env.AIRIN_CONFIG_DIR!,
           "orgs",
           orgId,
           "profiles",
@@ -154,7 +154,7 @@ describe("org curator routes", () => {
     const orgId = session.orgId!;
     const profile = (await databaseAdapter.listProfilesForOrg(orgId))[0]!;
     await addUnusedSkill({
-      configDir: process.env.NAKAMA_CONFIG_DIR!,
+      configDir: process.env.AIRIN_CONFIG_DIR!,
       db: databaseAdapter,
       name: "seed-me",
       orgId,
@@ -189,7 +189,7 @@ describe("org curator routes", () => {
     expect(
       await pathExists(
         join(
-          process.env.NAKAMA_CONFIG_DIR!,
+          process.env.AIRIN_CONFIG_DIR!,
           "orgs",
           orgId,
           "profiles",

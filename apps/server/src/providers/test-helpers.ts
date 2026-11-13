@@ -1,4 +1,4 @@
-export { asTestFetch } from "@nakama/core/channel-test-helpers";
+export { asTestFetch } from "@airin/core/channel-test-helpers";
 
 export function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();

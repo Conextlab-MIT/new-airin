@@ -1,7 +1,7 @@
-import type { ToolDetail } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import type { ToolDetail } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { ArrowLeft01Icon } from "hugeicons-react";
 import { type ReactNode, useState } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
@@ -19,7 +19,7 @@ import {
   canUseToolPlayground,
   toolPlaygroundBackTarget,
 } from "@/lib/navigation";
-import { findSuperBotProfile } from "@/lib/profiles";
+import { findSuperAirinProfile } from "@/lib/profiles";
 
 const sectionClass = "rounded-md border border-border bg-card";
 
@@ -44,7 +44,7 @@ export function ToolPlaygroundPage() {
   } = useToolQuery(toolId ?? null);
 
   const { data: profiles = [] } = useProfilesQuery();
-  const superBotProfileId = findSuperBotProfile(profiles)?.id ?? null;
+  const superAirinProfileId = findSuperAirinProfile(profiles)?.id ?? null;
 
   if (authLoading) {
     return <PageState message="Loading…" />;
@@ -80,7 +80,7 @@ export function ToolPlaygroundPage() {
   return (
     <ToolPlaygroundPageContent
       key={JSON.stringify([activeOrg?.id ?? null, tool.id])}
-      superBotProfileId={superBotProfileId}
+      superAirinProfileId={superAirinProfileId}
       tool={tool}
     />
   );
@@ -88,10 +88,10 @@ export function ToolPlaygroundPage() {
 
 function ToolPlaygroundPageContent({
   tool,
-  superBotProfileId,
+  superAirinProfileId,
 }: {
   tool: ToolDetail;
-  superBotProfileId: string | null;
+  superAirinProfileId: string | null;
 }) {
   const [searchParams] = useSearchParams();
   const back = toolPlaygroundBackTarget(searchParams);
@@ -99,7 +99,7 @@ function ToolPlaygroundPageContent({
   const isCustomTool =
     tool.handlerType === "javascript" || tool.handlerType === "python";
 
-  const run = useToolPlaygroundRun(tool, superBotProfileId);
+  const run = useToolPlaygroundRun(tool, superAirinProfileId);
   const [mainTab, setMainTab] = useState<"output" | "detail">("output");
 
   return (
@@ -155,7 +155,7 @@ function ToolPlaygroundPageContent({
                     >
                       <ToolPlaygroundOutput
                         run={run}
-                        superBotProfileId={superBotProfileId}
+                        superAirinProfileId={superAirinProfileId}
                       />
                     </div>
                   ) : (

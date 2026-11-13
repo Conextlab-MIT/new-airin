@@ -1,5 +1,5 @@
+import { mergeWorkspaceSettings } from "@airin/db";
 import { z } from "@hono/zod-openapi";
-import { mergeWorkspaceSettings } from "@nakama/db";
 import type { ServerOptions } from "../context";
 import {
   requireActiveOrgIdFromContext,

@@ -1,21 +1,22 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { type ComponentType, lazy, useEffect } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthGuard } from "@/components/AuthGuard";
-import { Layout } from "@/components/Layout";
 import { PlatformAdminGuard } from "@/components/PlatformAdminGuard";
 import { RouteBoundary } from "@/components/RouteBoundary";
 import { SetupGuard } from "@/components/SetupGuard";
 import { AppProvider } from "@/context/app-context";
 import { AuthProvider } from "@/context/auth-context";
 import { AppQueryPrefetch } from "@/hooks/use-app-queries";
-import { PAGE_PATHS } from "@/lib/navigation";
+import { PAGE_PATHS, settingsPathFromLegacy } from "@/lib/navigation";
 import { onGlobalQueryError, queryClient } from "@/lib/query-client";
 
 const lazyPage = <Name extends string>(
   load: () => Promise<Record<Name, ComponentType>>,
   name: Name
 ) => lazy(async () => ({ default: (await load())[name] }));
+
+const Layout = lazyPage(() => import("@/components/Layout"), "Layout");
 
 const AutomationsPage = lazyPage(
   () => import("@/pages/AutomationsPage"),
@@ -39,6 +40,11 @@ const FilesPage = lazyPage(() => import("@/pages/FilesPage"), "FilesPage");
 const IntegrationsPage = lazyPage(
   () => import("@/pages/IntegrationsPage"),
   "IntegrationsPage"
+);
+
+const MarketplacePage = lazyPage(
+  () => import("@/pages/MarketplacePage"),
+  "MarketplacePage"
 );
 
 const LoginPage = lazyPage(() => import("@/pages/LoginPage"), "LoginPage");
@@ -83,6 +89,11 @@ const PublicArtifactSharePage = lazyPage(
   "PublicArtifactSharePage"
 );
 
+const LaundryInnovationSummitPage = lazyPage(
+  () => import("@/pages/LaundryInnovationSummitPage"),
+  "LaundryInnovationSummitPage"
+);
+
 const LlmProvidersPage = lazyPage(
   () => import("@/pages/SettingsPage"),
   "LlmProvidersPage"
@@ -105,7 +116,22 @@ const SkillDetailPage = lazyPage(
 
 const StatusPage = lazyPage(() => import("@/pages/StatusPage"), "StatusPage");
 
+const PlatformOverviewPage = lazyPage(
+  () => import("@/pages/PlatformOverviewPage"),
+  "PlatformOverviewPage"
+);
+
 const LlmUsageTab = lazyPage(() => import("@/pages/StatusPage"), "LlmUsageTab");
+
+const AgentGroupsPage = lazyPage(
+  () => import("@/pages/AgentGroupsPage"),
+  "AgentGroupsPage"
+);
+
+const AgentGroupChatPage = lazyPage(
+  () => import("@/pages/AgentGroupChatPage"),
+  "AgentGroupChatPage"
+);
 
 const GoogleMeetPage = lazyPage(
   () => import("@/pages/GoogleMeetPage"),
@@ -144,6 +170,17 @@ function QueryCacheListener() {
   }, []);
 
   return null;
+}
+
+function LegacySettingsRedirect() {
+  const { hash, pathname, search } = useLocation();
+
+  return (
+    <Navigate
+      replace
+      to={`${settingsPathFromLegacy(pathname) ?? PAGE_PATHS.customize}${search}${hash}`}
+    />
+  );
 }
 
 function AppShell() {
@@ -194,9 +231,23 @@ function AppShell() {
               }
               path="/s/:token"
             />
+            <Route
+              element={
+                <RouteBoundary fullScreen>
+                  <LaundryInnovationSummitPage />
+                </RouteBoundary>
+              }
+              path="/laundry-innovation-summit"
+            />
             <Route element={<AuthGuard />}>
               <Route element={<SetupGuard />}>
-                <Route element={<Layout />}>
+                <Route
+                  element={
+                    <RouteBoundary fullScreen>
+                      <Layout />
+                    </RouteBoundary>
+                  }
+                >
                   <Route element={<Navigate replace to="/chat" />} index />
                   <Route
                     element={<Navigate replace to={PAGE_PATHS.workers} />}
@@ -205,21 +256,36 @@ function AppShell() {
                   <Route element={<PlatformAdminGuard allowOrgAdmin />}>
                     <Route element={<StatusPage />} path="/workers" />
                   </Route>
+                  <Route element={<PlatformAdminGuard />}>
+                    <Route
+                      element={<PlatformOverviewPage />}
+                      path="/platform"
+                    />
+                  </Route>
                   <Route element={<ChatPage />} path="/chat" />
                   <Route
                     element={<ChatPage />}
                     path="/chat/:profileId/:sessionId"
                   />
-                  <Route element={<CustomizePage />} path="/customize" />
+                  <Route
+                    element={<MarketplacePage />}
+                    path={PAGE_PATHS.marketplace}
+                  />
+                  <Route
+                    element={<CustomizePage />}
+                    path={PAGE_PATHS.customize}
+                  />
+                  <Route
+                    element={<LegacySettingsRedirect />}
+                    path="/customize/*"
+                  />
                   <Route element={<PlatformAdminGuard />}>
                     <Route element={<SkillsPage />} path={PAGE_PATHS.skills} />
                   </Route>
                   <Route element={<PlatformAdminGuard allowOrgAdmin />}>
                     <Route element={<LlmUsageTab />} path={PAGE_PATHS.usage} />
                   </Route>
-                  <Route element={<PlatformAdminGuard allowOrgAdmin />}>
-                    <Route element={<FilesPage />} path="/files" />
-                  </Route>
+                  <Route element={<FilesPage />} path="/files" />
                   <Route
                     element={<ToolPlaygroundPage />}
                     path="/system/playground/:toolId"
@@ -234,14 +300,11 @@ function AppShell() {
                   <Route element={<PlatformAdminGuard allowOrgAdmin />}>
                     <Route
                       element={<PluginsPage />}
-                      path="/customize/plugins/:pluginId"
+                      path="/settings/plugins/:pluginId"
                     />
                   </Route>
                   <Route element={<PlatformAdminGuard allowOrgAdmin />}>
-                    <Route
-                      element={<PluginsPage />}
-                      path="/customize/plugins"
-                    />
+                    <Route element={<PluginsPage />} path="/settings/plugins" />
                     <Route
                       element={<PluginsPage />}
                       path="/system/plugins/:pluginId"
@@ -250,6 +313,18 @@ function AppShell() {
                   <Route
                     element={<GoogleMeetPage />}
                     path={PAGE_PATHS["google-meet"]}
+                  />
+                  <Route
+                    element={<AgentGroupsPage />}
+                    path={PAGE_PATHS.groups}
+                  />
+                  <Route
+                    element={<AgentGroupChatPage />}
+                    path={`${PAGE_PATHS.groups}/:groupId`}
+                  />
+                  <Route
+                    element={<AgentGroupChatPage />}
+                    path={`${PAGE_PATHS.groups}/:groupId/:sessionId`}
                   />
                   <Route
                     element={
@@ -275,9 +350,10 @@ function AppShell() {
                     path="/tasks"
                   />
                   <Route element={<IntegrationsPage />} path="/integrations" />
+                  <Route element={<IntegrationsPage />} path="/connectors" />
                   <Route
                     element={<IntegrationsPage />}
-                    path="/customize/connections/:section"
+                    path="/settings/connections/:section"
                   />
                   <Route element={<OrganizationPage />} path="/organization" />
                   <Route
@@ -291,10 +367,13 @@ function AppShell() {
                   <Route element={<PlatformAdminGuard />}>
                     <Route
                       element={<LlmProvidersPage />}
-                      path="/customize/providers"
+                      path="/settings/providers"
                     />
                   </Route>
-                  <Route element={<SettingsPage />} path="/settings" />
+                  <Route
+                    element={<SettingsPage />}
+                    path={PAGE_PATHS.settings}
+                  />
                   <Route element={<Navigate replace to="/chat" />} path="*" />
                 </Route>
               </Route>
