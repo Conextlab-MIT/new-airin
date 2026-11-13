@@ -19,11 +19,13 @@ import {
   ViewIcon,
   Xls02Icon,
 } from "hugeicons-react";
+import { InlineArtifactImageFrame } from "@/components/chat/inline-artifact-image-frame";
 import { useArtifactAttachmentPreviewPanel } from "@/components/chat/use-artifact-attachment-preview-panel";
 import { isXlsxFile } from "@/lib/artifact-spreadsheet";
 import {
   buildArtifactContentUrl,
   type ChatArtifactRef,
+  isImageArtifactMimeType,
 } from "@/lib/chat-artifacts";
 import { client } from "@/lib/client";
 import { formatBytes } from "@/lib/knowledge-base-files";
@@ -33,6 +35,8 @@ interface ArtifactAttachmentPreviewProps {
   className?: string;
   id: string;
   profileId: string;
+  /** Renders a lazy inline thumbnail above the file actions (chat turns). */
+  showInlineImagePreview?: boolean;
   /** `overlay` makes the containing file card the preview target. */
   variant?: "chip" | "icon" | "overlay";
 }
@@ -42,13 +46,15 @@ export function ArtifactAttachmentPreview({
   id,
   artifact,
   className,
+  showInlineImagePreview = false,
   variant = "chip",
 }: ArtifactAttachmentPreviewProps) {
+  const effectiveProfileId = artifact.ownerProfileId ?? profileId;
   const { isImage, isVideo, openPanel } = useArtifactAttachmentPreviewPanel({
     artifact,
     id,
     // Preview, download, share and save all go through this id.
-    profileId: artifact.ownerProfileId ?? profileId,
+    profileId: effectiveProfileId,
   });
 
   if (variant === "overlay") {
@@ -90,7 +96,12 @@ export function ArtifactAttachmentPreview({
     );
   }
 
-  return (
+  const showInline =
+    showInlineImagePreview &&
+    (isImage || isImageArtifactMimeType(artifact.mimeType)) &&
+    !isVideo;
+
+  const fileCard = (
     <FilePreviewCard
       artifact={artifact}
       className={className}
@@ -98,7 +109,7 @@ export function ArtifactAttachmentPreview({
       isVideo={isVideo}
       onDownload={() => {
         const link = document.createElement("a");
-        link.href = `${client.baseUrl}${buildArtifactContentUrl(artifact.ownerProfileId ?? profileId, artifact.path)}`;
+        link.href = `${client.baseUrl}${buildArtifactContentUrl(effectiveProfileId, artifact.path)}`;
         link.download = artifact.filename;
         document.body.append(link);
         link.click();
@@ -106,6 +117,23 @@ export function ArtifactAttachmentPreview({
       }}
       onOpen={openPanel}
     />
+  );
+
+  if (!showInline) {
+    return fileCard;
+  }
+
+  return (
+    <div
+      className={cn("flex w-full min-w-0 max-w-full flex-col gap-2", className)}
+    >
+      <InlineArtifactImageFrame
+        artifact={artifact}
+        onOpen={openPanel}
+        profileId={effectiveProfileId}
+      />
+      {fileCard}
+    </div>
   );
 }
 

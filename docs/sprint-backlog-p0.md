@@ -35,8 +35,8 @@ Parent: [sprint-backlog.md](./sprint-backlog.md)
 | **Owner** | Human: **Content / GTM** |
 | **Subagent** | `Priya Desai` (copy + prompts), `skill-reviewer` (SKILL.md) |
 | **Estimate** | **0.5 PD** |
-| **Dependencies** | P0-1; Composio toolkits connected where used; **no** first-class posting API (honest limits) |
-| **Acceptance criteria** | (1) Agent produces **draft posts + calendar ideas** and copy-paste-ready captions for laundry context. (2) Skill instructs: use Composio only when user's account connected; otherwise draft-only. (3) **No claim** of auto-posting or carousel builder unless wired in P1. (4) One rehearsed prompt returns a coherent multi-channel plan in &lt;2 turns. |
+| **Dependencies** | P0-1; Composio toolkits connected where used; **`OPENROUTER_API_KEY`** on org tool **`laundry_openrouter_image`** (or repo `.env` + cred mirror); **no** first-class posting API (honest limits) |
+| **Acceptance criteria** | (1) Agent produces **draft posts + calendar ideas** and copy-paste-ready captions for laundry context. (2) Skill instructs: use Composio only when user's account connected; otherwise draft-only. (3) **No claim** of auto-posting or carousel builder unless wired in P1. (4) One rehearsed prompt returns a coherent multi-channel plan in &lt;2 turns. (5) Optional one-slide visual: **`laundry_openrouter_image`** via OpenRouter (**openai/gpt-image-2** default) saves PNG under `artifacts/`. (6) Bundled **`laundry-content-writing-playbook`** adapts Hermes BI voice/anti-slop/hooks for Sari; **`laundry-image-aspect-ratio`** documents OpenRouter aspect ratios for image tool. |
 
 ---
 
@@ -156,7 +156,19 @@ Parent: [sprint-backlog.md](./sprint-backlog.md)
 | **Subagent** | `Serena Blackwood` (data model), `Marcus Webb` (settings + injection), `Aditi Sharma` (owner-facing form) |
 | **Estimate** | **1–2 PD** |
 | **Dependencies** | **P0-9** (onboarding can collect business type **and** first-pass business fields); P0-1 (laundry pack agents in org); org-scoped storage (distinct from chat **MEMORY** and per-profile soul); existing org KB or settings patterns in BRD §5 where applicable |
-| **Acceptance criteria** | (1) Owner can **view and edit** structured business info in **Settings** (and optional step during onboarding after Laundry is chosen): **business name**, **address**, **services**, **pricing**, **hours**, **WhatsApp number**, **Google Maps link**, **brand tone**, and related laundry fields as defined in spec. (2) Data is stored as an **org-scoped business profile / knowledge base** — not ad-hoc MEMORY snippets; survives **sessions and server restarts**. (3) All six laundry agents (**Sari, Ardi, Dimas, Gilang, Rina, Toni**) receive this context automatically in prompts/context assembly so answers use real business facts **without** the owner retyping them each chat. (4) Agents must **not** invent placeholders like `[NAMA LAUNDRY]` / `[alamat]` when profile fields are filled; when fields are empty, one short ask or explicit “belum diisi” per field, not repeated every turn. (5) Documented permission model: org **admin** (or owner role) edits; members read-only unless product decides otherwise. (6) Demo rehearse: Sari carousel / captions use saved name, hours, and price after profile is filled once. |
+| **Acceptance criteria** | (1) Owner can **view and edit** structured business info in **Settings** (and optional step during onboarding after Laundry is chosen): **business name**, **address**, **services**, **pricing**, **hours**, **WhatsApp number**, **Google Maps link**, **brand tone**, and related laundry fields as defined in spec. (2) Data is stored as an **org-scoped business profile / knowledge base** — not ad-hoc MEMORY snippets; survives **sessions and server restarts**. (3) All six laundry agents (**Sari, Ardi, Dimas, Gilang, Rina, Toni**) receive this context automatically in prompts/context assembly so answers use real business facts **without** the owner retyping them each chat. (4) Agents must **not** invent placeholders like `[NAMA LAUNDRY]` / `[alamat]` when profile fields are filled; when fields are empty, one short ask or explicit “belum diisi” per field, not repeated every turn. (5) Documented permission model: org **admin** (or owner role) edits; members read-only unless product decides otherwise. (6) Demo rehearse: Sari carousel / captions use saved name, hours, and price after profile is filled once. (7) **OpenRouter image gen:** Sari uses **`laundry_openrouter_image`** + **`OPENROUTER_API_KEY`** (see P0-2); not workspace GPT Image as primary demo path. |
+
+---
+
+### P0-13 — Owner sidebar: visible agent role labels
+
+| Field | Value |
+|---|---|
+| **Owner** | Human: **Web UI dev** |
+| **Subagent** | `Aditi Sharma` (copy/typography), `code-simplifier` (sidebar diff post-approval) |
+| **Estimate** | **0.5 PD** |
+| **Dependencies** | None (orthogonal to P0-1 pack; applies to whatever profiles appear in Owner **Tim Anda** sidebar) |
+| **Acceptance criteria** | (1) Every agent row in Owner mode shows a **persistent subtitle** under the display name at rest — e.g. **Sari — Social Media**, **Rina — WhatsApp Support** — without requiring hover or tooltip. (2) Covers all **six laundry pack agents** and any other agents listed in Owner mode for Conextlab. (3) Subtitle typography is **readable for 40+** users (adequate size/contrast; not tooltip-only microcopy). (4) **Narrow screens / mobile width:** no clipped names, no overlapping avatar/title/subtitle, sidebar scroll still works. (5) Existing hover/focus states for the row **still work** (subtitle does not break hit targets or replace hover detail). (6) Role text sourced from profile/pack metadata (not hard-coded only in one demo org) where feasible, with documented fallback label **“Agen”** when role missing. |
 
 ---
 
@@ -168,12 +180,12 @@ Parent: [sprint-backlog.md](./sprint-backlog.md)
 | 2 | P0-1 | Yes |
 | 3 | P0-4, P0-5, P0-6 | Parallel after P0-1 |
 | 4 | P0-2, P0-3, P0-7 | Parallel |
-| 5 | P0-8, P0-9, **P0-11**, **P0-12** | Can trail agents; **P0-11** / **P0-12** parallel to P0-8; **P0-12** after or with P0-9; finish before dress rehearsal |
+| 5 | P0-8, P0-9, **P0-11**, **P0-12**, **P0-13** | Can trail agents; **P0-11** / **P0-12** parallel to P0-8; **P0-12** after or with P0-9; **P0-13** parallel to **P0-8**; finish before dress rehearsal |
 | 6 | P0-10 | Last |
 
-**P0 total (serial upper bound):** ~**10.5–13 PD** engineering + product (includes **P0-11**, **P0-12**); compress with parallel owners.
+**P0 total (serial upper bound):** ~**11–13.5 PD** engineering + product (includes **P0-11**, **P0-12**, **P0-13**); compress with parallel owners.
 
-**P0 item count:** gate **P0-0** + **P0-1 … P0-12** (12 delivery items).
+**P0 item count:** gate **P0-0** + **P0-1 … P0-13** (13 delivery items).
 
 ---
 

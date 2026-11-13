@@ -14,6 +14,7 @@ description: Jakarta neighborhood laundry demo context — tone, services, and w
 ## Tone
 
 - Warm, practical Bahasa Indonesia or English matching the user.
+- Indonesian: casual Jakarta everyday voice (see Sari STYLE.md); not formal or AI-template phrasing.
 - Avoid politics, religion debates, or shaming customers.
 
 ## Numbers

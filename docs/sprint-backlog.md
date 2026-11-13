@@ -18,6 +18,6 @@
 
 ## Parts
 
-1. [P0 — Laundry Innovation Summit demo](./sprint-backlog-p0.md)
+1. [P0 — Laundry Innovation Summit demo](./sprint-backlog-p0.md) (P0-0 … **P0-13**)
 2. [P1 and cross-cutting](./sprint-backlog-p1.md) — post-summit, risks, hygiene
 

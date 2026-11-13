@@ -42,6 +42,7 @@ import {
   PAGE_PATHS,
   pathForPage,
 } from "@/lib/navigation";
+import { ownerAgentSubtitleMessageKey } from "@/lib/owner-agent-role-subtitle";
 
 /**
  * Owner-mode sidebar: team roster (agents + groups) and a short footer nav.
@@ -187,7 +188,6 @@ export function OwnerTeamSidebar({
             <li key={profile.id}>
               <AgentRow
                 active={openGroupId === null && activeProfileId === profile.id}
-                agentLabel={t("owner.agent")}
                 largeType={ownerSimple}
                 muteLabel={t("owner.mute")}
                 onDelete={() => setDeleteTarget(profile)}
@@ -204,13 +204,13 @@ export function OwnerTeamSidebar({
                     pinned: !pinRank.has(profile.id),
                   });
                 }}
-                orchestratorLabel={t("owner.orchestrator")}
                 pinLabel={
                   pinRank.has(profile.id) ? t("owner.unpin") : t("owner.pin")
                 }
                 pinned={pinRank.has(profile.id)}
                 profile={profile}
                 removeLabel={t("owner.removeChat")}
+                roleSubtitle={t(ownerAgentSubtitleMessageKey(profile))}
                 unmuteLabel={t("owner.unmute")}
               />
             </li>
@@ -341,8 +341,7 @@ function AgentRow({
   muteLabel,
   unmuteLabel,
   removeLabel,
-  agentLabel,
-  orchestratorLabel,
+  roleSubtitle,
 }: {
   profile: ProfileSummary;
   active: boolean;
@@ -356,8 +355,7 @@ function AgentRow({
   muteLabel: string;
   unmuteLabel: string;
   removeLabel: string;
-  agentLabel: string;
-  orchestratorLabel: string;
+  roleSubtitle: string;
 }) {
   const muted = useMuted(profile.id);
 
@@ -402,8 +400,14 @@ function AgentRow({
                 />
               ) : null}
             </span>
-            <span className="block truncate text-muted-foreground text-xs">
-              {profile.isSuper ? orchestratorLabel : agentLabel}
+            <span
+              className={cn(
+                "block truncate text-muted-foreground leading-snug",
+                largeType ? "text-xs" : "text-2xs"
+              )}
+              title={roleSubtitle}
+            >
+              {roleSubtitle}
             </span>
           </span>
         </button>

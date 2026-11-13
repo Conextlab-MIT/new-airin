@@ -426,6 +426,33 @@ describe("extractTurnArtifacts", () => {
     ).toEqual([]);
   });
 
+  test("extracts laundry-style tool results with artifactPath", () => {
+    expect(
+      extractTurnArtifacts([
+        {
+          content: "",
+          id: "tool-laundry-img",
+          role: "tool",
+          tool: "laundry_openrouter_image",
+          toolCallId: "img_laundry",
+          toolInput: { prompt: "promo" },
+          toolResult: {
+            artifactPath: "artifacts/laundry-social-123.png",
+            mediaType: "image/png",
+            ok: true,
+          },
+          toolStatus: "done",
+        },
+      ])
+    ).toEqual([
+      expect.objectContaining({
+        filename: "laundry-social-123.png",
+        mimeType: "image/png",
+        path: "laundry-social-123.png",
+      }),
+    ]);
+  });
+
   test("extracts write_file pairs and generate_image together in one turn", () => {
     const messages: ChatListItem[] = [
       writeFileTool(

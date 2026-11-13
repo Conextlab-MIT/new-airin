@@ -62,6 +62,44 @@ export const LAUNDRY_DEMO_TOOL_TEMPLATES: readonly LaundryDemoToolTemplate[] = [
     moduleFileName: "laundry-apify-maps-reviews.js",
     name: "laundry_apify_maps_reviews",
   },
+  {
+    description:
+      "Generate a laundry promo/social image via OpenRouter (default openai/gpt-image-2). Saves PNG under artifacts/, then runs OpenRouter vision QA (default deepseek/deepseek-v4-flash-vision-exp).",
+    env: [{ name: "OPENROUTER_API_KEY" }],
+    handlerConfigParameters: {
+      properties: {
+        aspect_ratio: {
+          description: "Aspect ratio, e.g. 1:1, 4:5, 9:16, 16:9.",
+          type: "string",
+        },
+        model: {
+          description:
+            "OpenRouter image model slug (default openai/gpt-image-2).",
+          type: "string",
+        },
+        prompt: { description: "Image prompt.", type: "string" },
+        qa_notes: {
+          description:
+            "Expected on-image text (business name, price) for visual QA.",
+          type: "string",
+        },
+        skip_visual_qa: {
+          description: "Set true to skip post-generation vision QA.",
+          type: "boolean",
+        },
+        vision_model: {
+          description:
+            "OpenRouter vision model for QA (default deepseek/deepseek-v4-flash-vision-exp).",
+          type: "string",
+        },
+      },
+      required: ["prompt"],
+      type: "object",
+    },
+    id: "laundry-openrouter-image",
+    moduleFileName: "laundry-openrouter-image.js",
+    name: "laundry_openrouter_image",
+  },
 ] as const;
 
 export function laundryDemoToolTemplatePath(

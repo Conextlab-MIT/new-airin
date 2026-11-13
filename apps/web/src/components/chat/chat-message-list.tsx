@@ -74,7 +74,11 @@ import {
   useComposioToolkits,
 } from "@/hooks/use-composio";
 import { useArtifactsExist } from "@/hooks/use-resource-mutations";
-import { extractTurnArtifacts } from "@/lib/chat-artifacts";
+import {
+  type ChatArtifactRef,
+  extractTurnArtifacts,
+  isImageArtifactMimeType,
+} from "@/lib/chat-artifacts";
 import {
   type ChatListItem,
   formatSessionTimestamp,
@@ -750,6 +754,10 @@ function ToolCredentialCards({
     ));
 }
 
+function isChatImageArtifact(artifact: ChatArtifactRef): boolean {
+  return isImageArtifactMimeType(artifact.mimeType);
+}
+
 function TurnArtifacts({
   artifacts,
   profileId,
@@ -759,20 +767,43 @@ function TurnArtifacts({
   profileId: string;
   turnKey: string;
 }) {
+  const imageArtifacts = artifacts.filter(isChatImageArtifact);
+  const otherArtifacts = artifacts.filter(
+    (artifact) => !isChatImageArtifact(artifact)
+  );
+
+  function renderArtifact(artifact: ChatArtifactRef, inlineImage: boolean) {
+    const chipId = `${turnKey}:${artifact.ownerProfileId ?? profileId}:${artifact.path}`;
+
+    return (
+      <ArtifactAttachmentPreview
+        artifact={artifact}
+        id={chipId}
+        key={chipId}
+        profileId={profileId}
+        showInlineImagePreview={inlineImage}
+      />
+    );
+  }
+
   return (
     <div className="flex w-full min-w-0 flex-col gap-2">
-      {artifacts.map((artifact) => {
-        const chipId = `${turnKey}:${artifact.ownerProfileId ?? profileId}:${artifact.path}`;
-
-        return (
-          <ArtifactAttachmentPreview
-            artifact={artifact}
-            id={chipId}
-            key={chipId}
-            profileId={profileId}
-          />
-        );
-      })}
+      {imageArtifacts.length === 1
+        ? renderArtifact(imageArtifacts[0], true)
+        : null}
+      {imageArtifacts.length > 1 ? (
+        <div className="flex w-full min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-1">
+          {imageArtifacts.map((artifact) => (
+            <div
+              className="w-[min(100%,20rem)] shrink-0 snap-start"
+              key={`${turnKey}:${artifact.ownerProfileId ?? profileId}:${artifact.path}`}
+            >
+              {renderArtifact(artifact, true)}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {otherArtifacts.map((artifact) => renderArtifact(artifact, false))}
     </div>
   );
 }

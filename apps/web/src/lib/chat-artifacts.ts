@@ -334,6 +334,82 @@ function getGenerateImageResult(
   return message.toolResult as GenerateImageResult;
 }
 
+function artifactRefFromToolArtifactPath(
+  message: ChatListItem
+): ChatArtifactRef | null {
+  if (
+    message.role !== "tool" ||
+    message.toolStatus === "running" ||
+    isWriteFileTool(message) ||
+    isGenerateImageTool(message)
+  ) {
+    return null;
+  }
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+  if (typeof message.toolResult !== "object" || message.toolResult === null) {
+    return null;
+  }
+
+  // SAFETY: The enclosing parser checks the value before this conversion.
+  const result = message.toolResult as {
+    artifactPath?: string;
+    error?: string;
+    mediaType?: string;
+    mimeType?: string;
+    ok?: boolean;
+    sizeBytes?: number;
+  };
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+  if (typeof result.error === "string" || result.ok === false) {
+    return null;
+  }
+
+  const rawPath =
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    typeof result.artifactPath === "string" ? result.artifactPath.trim() : "";
+
+  if (!rawPath) {
+    return null;
+  }
+
+  const normalized = rawPath.replace(/^\.\//, "");
+  const relativePath =
+    toArtifactsRelativePath(normalized) ??
+    (normalized.startsWith(ARTIFACTS_PREFIX)
+      ? normalized.slice(ARTIFACTS_PREFIX.length)
+      : null);
+
+  if (!relativePath || isArtifactMetaRelativePath(relativePath)) {
+    return null;
+  }
+
+  const mimeType =
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    (typeof result.mediaType === "string" && result.mediaType.trim()
+      ? result.mediaType.trim()
+      : null) ??
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    (typeof result.mimeType === "string" && result.mimeType.trim()
+      ? result.mimeType.trim()
+      : inferArtifactMimeType(relativePath.split("/").pop() ?? relativePath));
+
+  const sizeBytes =
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
+    typeof result.sizeBytes === "number" &&
+    Number.isInteger(result.sizeBytes) &&
+    result.sizeBytes >= 0
+      ? result.sizeBytes
+      : 0;
+
+  return buildArtifactRef(relativePath, {
+    mimeType,
+    savedAt: "",
+    sizeBytes,
+  });
+}
+
 function artifactRefFromGenerateImage(
   message: ChatListItem
 ): ChatArtifactRef | null {
@@ -519,11 +595,15 @@ export function extractTurnArtifacts(
   for (const message of messages) {
     const generated = artifactRefFromGenerateImage(message);
 
-    if (!generated) {
-      continue;
+    if (generated) {
+      artifactsByPath.set(generated.path, generated);
     }
 
-    artifactsByPath.set(generated.path, generated);
+    const fromArtifactPath = artifactRefFromToolArtifactPath(message);
+
+    if (fromArtifactPath) {
+      artifactsByPath.set(fromArtifactPath.path, fromArtifactPath);
+    }
   }
 
   for (const message of messages) {

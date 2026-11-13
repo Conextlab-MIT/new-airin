@@ -19,6 +19,7 @@ curl -sS -X POST \
 5. Set tool credentials (no secrets in git):
    - `OPENWEATHER_API_KEY` — analyst weather tool
    - `APIFY_API_KEY` — visibility Maps scrape (optional `APIFY_MAPS_ACTOR_ID`, default `compass/crawler-google-places`)
+   - `OPENROUTER_API_KEY` — Sari social images via tool `laundry_openrouter_image` (default model `google/gemini-2.5-flash-image`)
 6. Composio: connect **instagram** (Social), **googlesheets** (Dimas) when posting/sheet reads are in the script.
 7. WhatsApp (P0-3): pair number + worker before stage; failover = web-only Support agent.
 
@@ -45,6 +46,7 @@ Under `packages/core/src/skills/bundled/laundry-*` — assigned on pack install,
 |---|---|
 | `laundry_weather_forecast` | `packages/core/src/laundry-demo/tool-templates/laundry-weather-forecast.js` |
 | `laundry_apify_maps_reviews` | `packages/core/src/laundry-demo/tool-templates/laundry-apify-maps-reviews.js` |
+| `laundry_openrouter_image` | `packages/core/src/laundry-demo/tool-templates/laundry-openrouter-image.js` |
 
 Sample loads CSV: `packages/core/src/laundry-demo/fixtures/sample-laundry-loads.csv`.
 

@@ -1,5 +1,8 @@
 # ultracite
 #!/bin/sh
+# GUI git (Cursor) often has a short PATH without Bun.
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 # Check if there are any staged files
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 if [ -z "$STAGED_FILES" ]; then
