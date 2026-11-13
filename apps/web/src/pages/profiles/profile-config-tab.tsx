@@ -88,7 +88,7 @@ function ProfilePromptPanel({
           ) : null}
           <button
             aria-haspopup="dialog"
-            className="ml-auto flex h-8 items-center gap-1 rounded-md pr-4 text-amber-800 text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring dark:text-primary"
+            className="ml-auto flex h-8 items-center gap-1 rounded-md pr-4 text-primary text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => setHistoryOpen(true)}
             type="button"
           >

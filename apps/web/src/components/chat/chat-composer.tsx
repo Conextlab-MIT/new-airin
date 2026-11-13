@@ -253,13 +253,13 @@ function ChatComposerOfflineHint({
 }) {
   return (
     <div
-      className="mx-4 mb-2 flex flex-col gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+      className="mx-4 mb-2 flex flex-col gap-2 rounded-2xl border border-border bg-muted/60 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
       role="status"
     >
       <div className="flex min-w-0 items-start gap-2">
         <Alert02Icon
           aria-hidden="true"
-          className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300"
+          className="mt-0.5 size-4 shrink-0 text-primary"
         />
         <div className="min-w-0 space-y-0.5">
           <p className="font-semibold text-foreground text-sm">
@@ -1421,9 +1421,7 @@ function ProviderPickerHeading({
     <span className="flex items-center gap-2">
       {label}
       {warning ? (
-        <span className="font-normal text-amber-700 dark:text-amber-300">
-          {warning}
-        </span>
+        <span className="font-medium text-muted-foreground">{warning}</span>
       ) : null}
     </span>
   );
@@ -1748,7 +1746,7 @@ function ChatComposerFullFooter({
             <ChatModelPicker busy={busy} disabled={disabled} props={props} />
           )
         ) : (
-          <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-amber-500/10 px-3 font-medium text-amber-800 text-sm dark:text-amber-200">
+          <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-muted px-3 font-medium text-muted-foreground text-sm">
             <WifiOff01Icon aria-hidden className="size-3.5 shrink-0" />
             Offline
           </span>

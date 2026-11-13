@@ -119,7 +119,7 @@ function FloatingExample() {
         className={`${FLOATING_CARD} top-14 right-8 flex rotate-[2.5deg] gap-2.5`}
       >
         <ExampleAvatar
-          className="size-7 bg-primary/15 text-amber-800 text-xs dark:text-primary"
+          className="size-7 bg-primary/15 text-primary text-xs"
           letter="R"
         />
         <p>
@@ -137,7 +137,7 @@ function FloatingExample() {
         <p>
           <span className="block font-semibold">Writer</span>Draft done. 140
           words, ready for review.
-          <span className="mt-1 block font-medium text-amber-800 text-xs dark:text-primary">
+          <span className="mt-1 block font-medium text-primary text-xs">
             2 replies in thread
           </span>
         </p>
@@ -201,7 +201,7 @@ function ChatExample() {
       <ExampleAgentMessage
         avatar={
           <ExampleAvatar
-            className="size-7 bg-primary/15 text-amber-800 text-xs dark:text-primary"
+            className="size-7 bg-primary/15 text-primary text-xs"
             letter="R"
           />
         }

@@ -278,7 +278,7 @@ export function ProfileRail({ onNavigate }: { onNavigate?: () => void } = {}) {
       <div className="flex size-7 shrink-0 items-center justify-center">
         <img
           alt="Airin"
-          className="size-5.5 -translate-y-px object-contain"
+          className="size-6 rounded-lg object-contain"
           src={logoSrc}
         />
       </div>

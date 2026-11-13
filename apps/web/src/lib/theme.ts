@@ -47,25 +47,9 @@ export function applyTheme(theme: Theme): void {
   const resolved = resolveTheme(theme);
   document.documentElement.classList.toggle("dark", resolved === "dark");
   document.documentElement.style.colorScheme = resolved;
-  applyFavicon(resolved);
 }
 
-export function markLogoSrc(resolvedTheme: ResolvedTheme): string {
-  return resolvedTheme === "light"
-    ? "/airin-mark.svg"
-    : "/airin-mark-white.svg";
-}
-
-function applyFavicon(resolved: ResolvedTheme): void {
-  const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-
-  if (!favicon) {
-    return;
-  }
-
-  const href = markLogoSrc(resolved);
-
-  if (favicon.getAttribute("href") !== href) {
-    favicon.setAttribute("href", href);
-  }
+/** The app icon is one design in both themes, so the brand mark no longer swaps. */
+export function markLogoSrc(_resolvedTheme?: ResolvedTheme): string {
+  return "/icons/icon-192-v3.png";
 }
