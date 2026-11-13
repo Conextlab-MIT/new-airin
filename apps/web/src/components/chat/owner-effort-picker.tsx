@@ -43,9 +43,11 @@ export function OwnerEffortPicker({
   triggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const [open, setOpen] = useState(false);
+
   const [effort, setEffort] = useState<OwnerChatEffort>(() =>
     getStoredOwnerChatEffort()
   );
+
   const syncedRef = useRef(false);
   const hoveringRef = useRef(false);
   const closeTimerRef = useRef<number | null>(null);
@@ -131,6 +133,7 @@ export function OwnerEffortPicker({
             clearCloseTimer();
             hoveringRef.current = true;
             setOpen(true);
+
             return;
           }
 

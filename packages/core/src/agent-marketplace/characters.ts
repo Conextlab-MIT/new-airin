@@ -31,9 +31,7 @@ export const AGENT_CHARACTER_IDS = [
 export type AgentCharacterId = (typeof AGENT_CHARACTER_IDS)[number];
 
 /** Marketplace agent id → portrait id. */
-export const MARKETPLACE_CHARACTER_BY_AGENT_ID: Readonly<
-  Record<string, AgentCharacterId>
-> = {
+export const MARKETPLACE_CHARACTER_BY_AGENT_ID = {
   "chief-of-staff": "jovan",
   "customer-success": "hana",
   "finance-ops": "dimas",
@@ -48,12 +46,10 @@ export const MARKETPLACE_CHARACTER_BY_AGENT_ID: Readonly<
   ops: "bima",
   sales: "fajar",
   "social-media": "kezia",
-};
+} as const satisfies Record<string, AgentCharacterId>;
 
 /** Profile display name (case-insensitive) → portrait id for installed marketplace agents. */
-export const MARKETPLACE_CHARACTER_BY_NAME: Readonly<
-  Record<string, AgentCharacterId>
-> = {
+export const MARKETPLACE_CHARACTER_BY_NAME = {
   alya: "alya",
   analyst: "mira",
   ardi: "mira",
@@ -80,12 +76,10 @@ export const MARKETPLACE_CHARACTER_BY_NAME: Readonly<
   support: "hana",
   toni: "bima",
   visibility: "laras",
-};
+} as const satisfies Record<string, AgentCharacterId>;
 
 /** Older role titles → person names (same portrait / gender). */
-export const MARKETPLACE_LEGACY_NAME_TO_PERSON: Readonly<
-  Record<string, string>
-> = {
+export const MARKETPLACE_LEGACY_NAME_TO_PERSON = {
   "chief of staff": "Jovan",
   "customer success": "Hana",
   "finance ops": "Dimas",
@@ -94,9 +88,10 @@ export const MARKETPLACE_LEGACY_NAME_TO_PERSON: Readonly<
   ops: "Bima",
   sales: "Fajar",
   "social media": "Kezia",
-};
+} as const satisfies Record<string, string>;
 
 export function isAgentCharacterId(value: string): value is AgentCharacterId {
+  // SAFETY: value is accepted only when it is a member of AGENT_CHARACTER_IDS.
   return (AGENT_CHARACTER_IDS as readonly string[]).includes(value);
 }
 
@@ -114,6 +109,7 @@ export function characterIdForIdentity(identity: string): AgentCharacterId {
     hash = (hash * 31 + identity.charCodeAt(index)) % 0x1_00_00_00_00;
   }
 
+  // SAFETY: AGENT_CHARACTER_IDS is non-empty; the modulo index is always in range.
   return AGENT_CHARACTER_IDS[
     Math.abs(hash) % AGENT_CHARACTER_IDS.length
   ] as AgentCharacterId;

@@ -51,6 +51,7 @@ export class AgentMarketplaceService {
   async list(orgId: string): Promise<AgentMarketplaceListResponse> {
     await this.renameLegacyMarketplaceProfiles(orgId);
     const existing = await this.profiles.listProfiles(orgId);
+
     const installedNames = new Set(
       existing.profiles.map((profile) => marketplaceNameKey(profile.name))
     );
@@ -100,6 +101,7 @@ export class AgentMarketplaceService {
 
     const existing = await this.profiles.listProfiles(orgId);
     const installedKeys = installedNameKeysForEntry(entry);
+
     const already = existing.profiles.find((profile) =>
       installedKeys.has(marketplaceNameKey(profile.name))
     );

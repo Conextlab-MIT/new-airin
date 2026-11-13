@@ -51,11 +51,13 @@ function OwnerCreateAgentForm({
 
     if (!trimmedName) {
       setError("Name is required.");
+
       return;
     }
 
     if (!task) {
       setError("First task is required.");
+
       return;
     }
 

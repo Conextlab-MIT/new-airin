@@ -5,10 +5,12 @@ export type LaundryDemoToolTemplateId =
   | "laundry-apify-maps-reviews"
   | "laundry-openrouter-image";
 
+import type { JsonSchema } from "../contract";
+
 export interface LaundryDemoToolTemplate {
   description: string;
   env: { name: string }[];
-  handlerConfigParameters: Record<string, unknown>;
+  handlerConfigParameters: JsonSchema;
   id: LaundryDemoToolTemplateId;
   moduleFileName: string;
   name: string;

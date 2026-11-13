@@ -186,14 +186,18 @@ export function useOnboarding({
   const userId = user?.id ?? "";
   const [goalSkipped, setGoalSkipped] = useState(false);
   const [businessTypeSkipped, setBusinessTypeSkipped] = useState(false);
+
   const [businessTypeError, setBusinessTypeError] = useState<string | null>(
     null
   );
+
   const [businessTypePending, setBusinessTypePending] = useState(false);
+
   const [businessVertical, setBusinessVertical] =
     useState<BusinessVerticalId | null>(() =>
       userId ? readBusinessVertical(userId) : null
     );
+
   const [pendingGoal, setPendingGoal] = useState<string | null>(null);
   const [phase, setPhase] = useState<OnboardingPhase>("idle");
   const [aboutYouOpen, setAboutYouOpen] = useState(false);

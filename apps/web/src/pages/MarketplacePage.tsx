@@ -35,8 +35,10 @@ export function MarketplacePage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [installingId, setInstallingId] = useState<string | null>(null);
+
   const [pickedCharacterId, setPickedCharacterId] =
     useState<AgentCharacterId | null>(null);
+
   const uploadAvatar = useUploadProfileAvatarMutation();
 
   const catalog = useQuery({

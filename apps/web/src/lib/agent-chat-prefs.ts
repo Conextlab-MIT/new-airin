@@ -1,6 +1,10 @@
 /** Per-agent chat prefs for Owner mode (mute notifications). */
 
+import { z } from "zod";
+
 const MUTED_KEY = "airin-agent-chat-muted";
+
+const mutedAgentIdsSchema = z.array(z.string());
 
 function readMutedIds(): Set<string> {
   try {
@@ -10,11 +14,9 @@ function readMutedIds(): Set<string> {
       return new Set();
     }
 
-    const parsed: unknown = JSON.parse(raw);
+    const parsed = mutedAgentIdsSchema.safeParse(JSON.parse(raw));
 
-    return Array.isArray(parsed)
-      ? new Set(parsed.filter((id): id is string => typeof id === "string"))
-      : new Set();
+    return parsed.success ? new Set(parsed.data) : new Set();
   } catch {
     return new Set();
   }

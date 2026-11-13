@@ -470,6 +470,7 @@ export async function loadUserTimezone(): Promise<string> {
 }
 
 export function isValidAppLanguage(value: string): value is AppLanguage {
+  // SAFETY: value is accepted only when it is a member of APP_LANGUAGES.
   return (APP_LANGUAGES as readonly string[]).includes(value);
 }
 

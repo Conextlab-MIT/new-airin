@@ -2,7 +2,49 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const DEFAULT_MODEL = "openai/gpt-image-2";
+
 const DEFAULT_VISION_MODEL = "deepseek/deepseek-v4-flash-vision-exp";
+
+function isStringTag(value) {
+  return (
+    value !== null &&
+    value !== undefined &&
+    Object.prototype.toString.call(value) === "[object String]"
+  );
+}
+
+function trimmedString(value, fallback = "") {
+  if (!isStringTag(value)) {
+    return fallback;
+  }
+
+  const text = value.trim();
+
+  return text || fallback;
+}
+
+function readFiniteNumber(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
+function usageCostUsd(usage) {
+  if (!isPlainObject(usage)) {
+    return null;
+  }
+
+  return (
+    readFiniteNumber(usage.cost) ?? readFiniteNumber(usage.total_cost) ?? null
+  );
+}
+
+function isPlainObject(value) {
+  return (
+    value !== null &&
+    value !== undefined &&
+    !Array.isArray(value) &&
+    Object.prototype.toString.call(value) === "[object Object]"
+  );
+}
 
 const QA_SYSTEM = `You are a visual QA reviewer for laundry social graphics. Inspect the image for:
 - Misspelled or garbled text (especially brand name, prices, promo words)
@@ -14,14 +56,12 @@ Reply in the user's language (default Bahasa Indonesia if unclear). Be brief: 3â
 /** @param {{ fetch?: typeof fetch; workspaceRoot?: string }} context */
 export async function run(input, context) {
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+
   const model =
-    typeof input.model === "string" && input.model.trim()
-      ? input.model.trim()
-      : (process.env.OPENROUTER_IMAGE_MODEL ?? DEFAULT_MODEL).trim();
-  const prompt =
-    typeof input.prompt === "string" && input.prompt.trim()
-      ? input.prompt.trim()
-      : "";
+    trimmedString(input.model) ||
+    (process.env.OPENROUTER_IMAGE_MODEL ?? DEFAULT_MODEL).trim();
+
+  const prompt = trimmedString(input.prompt);
 
   if (!apiKey) {
     return {
@@ -35,12 +75,10 @@ export async function run(input, context) {
     return { error: "prompt is required.", ok: false };
   }
 
-  const aspectRatio =
-    typeof input.aspect_ratio === "string" && input.aspect_ratio.trim()
-      ? input.aspect_ratio.trim()
-      : "1:1";
+  const aspectRatio = trimmedString(input.aspect_ratio, "1:1");
 
   const fetchFn = context?.fetch ?? globalThis.fetch;
+
   const headers = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
@@ -79,6 +117,7 @@ export async function run(input, context) {
     mediaType = item?.mime_type ?? "image/png";
   } else if (imagesRes.status === 404 || imagesRes.status === 405) {
     provider = "openrouter-chat";
+
     const chatRes = await fetchFn(
       "https://openrouter.ai/api/v1/chat/completions",
       {
@@ -95,6 +134,7 @@ export async function run(input, context) {
 
     if (!chatRes.ok) {
       const text = await chatRes.text();
+
       return {
         error: `OpenRouter image request failed (${chatRes.status}): ${text.slice(0, 240)}`,
         ok: false,
@@ -106,6 +146,7 @@ export async function run(input, context) {
     imageBase64 = extractImageFromChatMessage(chat);
   } else {
     const text = await imagesRes.text();
+
     return {
       error: `OpenRouter images API failed (${imagesRes.status}): ${text.slice(0, 240)}`,
       ok: false,
@@ -132,19 +173,14 @@ export async function run(input, context) {
     artifactPath = `artifacts/${fileName}`;
   }
 
-  const cost =
-    typeof usage?.cost === "number"
-      ? usage.cost
-      : typeof usage?.total_cost === "number"
-        ? usage.total_cost
-        : null;
+  const cost = usageCostUsd(usage);
 
   const skipQa = input.skip_visual_qa === true;
   let visualQa = null;
 
   if (!skipQa) {
-    const qaUserNotes =
-      typeof input.qa_notes === "string" ? input.qa_notes.trim() : "";
+    const qaUserNotes = trimmedString(input.qa_notes);
+
     visualQa = await runOpenRouterVisualQa({
       apiKey,
       expectedText: qaUserNotes,
@@ -154,7 +190,7 @@ export async function run(input, context) {
       mediaType,
       originalPrompt: prompt,
       visionModel:
-        (typeof input.vision_model === "string" && input.vision_model.trim()) ||
+        trimmedString(input.vision_model) ||
         process.env.OPENROUTER_VISION_MODEL?.trim() ||
         DEFAULT_VISION_MODEL,
     });
@@ -224,6 +260,7 @@ async function runOpenRouterVisualQa({
 
     if (!response.ok) {
       const text = await response.text();
+
       return {
         error: `Vision QA failed (${response.status}): ${text.slice(0, 200)}`,
         model: visionModel,
@@ -233,16 +270,11 @@ async function runOpenRouterVisualQa({
     }
 
     const payload = await response.json();
-    const findings =
-      typeof payload?.choices?.[0]?.message?.content === "string"
-        ? payload.choices[0].message.content.trim()
-        : "";
-    const qaCost =
-      typeof payload?.usage?.cost === "number"
-        ? payload.usage.cost
-        : typeof payload?.usage?.total_cost === "number"
-          ? payload.usage.total_cost
-          : null;
+
+    const findings = trimmedString(payload?.choices?.[0]?.message?.content);
+
+    const qaCost = usageCostUsd(payload?.usage);
+
     const pass = /\bFAIL\b/i.test(findings)
       ? false
       : /\bPASS\b/i.test(findings)
@@ -269,7 +301,7 @@ async function runOpenRouterVisualQa({
 }
 
 function extractBase64FromUrl(value) {
-  if (typeof value !== "string") {
+  if (!isStringTag(value)) {
     return;
   }
 
@@ -282,7 +314,7 @@ function extractImageFromChatMessage(chat) {
   const message = chat?.choices?.[0]?.message;
   const content = message?.content;
 
-  if (typeof content === "string") {
+  if (isStringTag(content)) {
     return extractBase64FromUrl(content);
   }
 

@@ -768,6 +768,7 @@ function TurnArtifacts({
   turnKey: string;
 }) {
   const imageArtifacts = artifacts.filter(isChatImageArtifact);
+
   const otherArtifacts = artifacts.filter(
     (artifact) => !isChatImageArtifact(artifact)
   );

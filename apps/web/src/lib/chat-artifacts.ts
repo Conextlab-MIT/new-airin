@@ -375,6 +375,7 @@ function artifactRefFromToolArtifactPath(
   }
 
   const normalized = rawPath.replace(/^\.\//, "");
+
   const relativePath =
     toArtifactsRelativePath(normalized) ??
     (normalized.startsWith(ARTIFACTS_PREFIX)

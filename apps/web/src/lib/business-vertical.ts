@@ -49,9 +49,7 @@ export function findLaundryWorkspaceOrg(
 ): UserOrgSummary | null {
   return (
     orgs.find(
-      (org) =>
-        /laundry/i.test(org.name) ||
-        (typeof org.slug === "string" && /laundry/i.test(org.slug))
+      (org) => /laundry/i.test(org.name) || /laundry/i.test(org.slug)
     ) ?? null
   );
 }

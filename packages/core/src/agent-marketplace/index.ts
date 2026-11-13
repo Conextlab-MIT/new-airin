@@ -10,6 +10,7 @@ export {
   listLaundryInnovationSummitCatalog,
   listLaundryPackAgentIds,
 } from "./catalog";
+
 export {
   AGENT_CHARACTER_IDS,
   type AgentCharacterId,

@@ -6,7 +6,7 @@ import type { ProfileService } from "./profile-service";
 function profilesStub(initial: { id: string; name: string }[] = []) {
   const profiles = [...initial];
 
-  return {
+  const stub = {
     createProfile: async (
       _orgId: string,
       input: { name: string; systemPrompt?: string }
@@ -16,6 +16,7 @@ function profilesStub(initial: { id: string; name: string }[] = []) {
         name: input.name,
         systemPrompt: input.systemPrompt ?? "",
       };
+
       profiles.push(profile);
 
       return profile;
@@ -38,7 +39,10 @@ function profilesStub(initial: { id: string; name: string }[] = []) {
 
       return profile;
     },
-  } as unknown as ProfileService;
+  };
+
+  // SAFETY: These tests call only createProfile, listProfiles, and updateProfile.
+  return stub as ProfileService;
 }
 
 describe("AgentMarketplaceService", () => {

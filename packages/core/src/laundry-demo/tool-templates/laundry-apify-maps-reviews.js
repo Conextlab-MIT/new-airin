@@ -1,15 +1,33 @@
+function isStringTag(value) {
+  return (
+    value !== null &&
+    value !== undefined &&
+    Object.prototype.toString.call(value) === "[object String]"
+  );
+}
+
+function trimmedString(value, fallback) {
+  if (!isStringTag(value)) {
+    return fallback;
+  }
+
+  const text = value.trim();
+
+  return text || fallback;
+}
+
 /** @param {Record<string, unknown>} input */
 /** @param {{ fetch?: typeof fetch }} context */
 export async function run(input, context) {
   const apiKey = process.env.APIFY_API_KEY?.trim();
-  const searchQuery =
-    typeof input.searchQuery === "string" && input.searchQuery.trim()
-      ? input.searchQuery.trim()
-      : "laundry Jakarta";
+
+  const searchQuery = trimmedString(input.searchQuery, "laundry Jakarta");
+
   const maxPlaces = Math.min(
     20,
     Math.max(1, Number(input.maxPlaces ?? 5) || 5)
   );
+
   const actorId = (
     process.env.APIFY_MAPS_ACTOR_ID ?? "compass/crawler-google-places"
   ).trim();

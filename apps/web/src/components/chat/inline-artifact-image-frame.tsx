@@ -28,6 +28,7 @@ function InlineArtifactImageBody({
       </p>
     );
   }
+
   if (!shouldLoad) {
     return (
       <div
@@ -36,11 +37,13 @@ function InlineArtifactImageBody({
       />
     );
   }
+
   if (error) {
     return (
       <p className="px-4 py-4 text-center text-destructive text-sm">{error}</p>
     );
   }
+
   if (!url) {
     return (
       <div
@@ -50,6 +53,7 @@ function InlineArtifactImageBody({
       />
     );
   }
+
   return (
     <img
       alt={artifact.filename}
@@ -105,6 +109,7 @@ export function InlineArtifactImageFrame({
 
   const tooLarge =
     artifact.sizeBytes > 0 && artifact.sizeBytes > MAX_INLINE_IMAGE_BYTES;
+
   const active = shouldLoad && !tooLarge;
 
   const { error, url } = useAuthenticatedImagePreview(

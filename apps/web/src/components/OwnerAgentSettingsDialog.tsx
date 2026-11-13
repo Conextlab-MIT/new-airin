@@ -59,9 +59,11 @@ function OwnerAgentSettingsForm({
   const updateProfile = useUpdateProfileMutation();
   const uploadAvatar = useUploadProfileAvatarMutation();
   const [name, setName] = useState(profile.name);
+
   const [characterId, setCharacterId] = useState<AgentCharacterId>(() =>
     resolveAgentCharacterId({ name: profile.name, profileId: profile.id })
   );
+
   const [error, setError] = useState<string | null>(null);
 
   const busy = updateProfile.isPending || uploadAvatar.isPending;

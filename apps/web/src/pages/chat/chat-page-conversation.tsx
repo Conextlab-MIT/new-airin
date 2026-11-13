@@ -123,6 +123,7 @@ export function EmptyChatBody({
         />
       );
     }
+
     case "finding":
       return <ChatSetupFinding goal={onboarding.goal} />;
     case "checklist":

@@ -1,11 +1,16 @@
 import { cn } from "@airin/ui/utils";
 import { useEffect, useRef, useState } from "react";
+import { z } from "zod";
 import {
   ARTIFACT_FRAME_READY,
   ARTIFACT_FRAME_URL,
   ARTIFACT_HTML_IFRAME_SANDBOX,
   htmlForArtifactPreview,
 } from "@/lib/artifact-html-preview";
+
+const artifactHeightMessageSchema = z.object({
+  airinArtifactHeight: z.number(),
+});
 
 /**
  * Renders agent HTML (with inline CSS/JS) in a sandboxed artifact frame so
@@ -36,15 +41,16 @@ export function InlineHtmlFrame({
 
       if (event.data === ARTIFACT_FRAME_READY) {
         frame.contentWindow?.postMessage({ airinArtifactHtml: prepared }, "*");
+
         return;
       }
 
-      if (
-        event.data &&
-        typeof event.data === "object" &&
-        typeof event.data.airinArtifactHeight === "number"
-      ) {
-        setHeight(Math.min(720, Math.max(120, event.data.airinArtifactHeight)));
+      const heightMessage = artifactHeightMessageSchema.safeParse(event.data);
+
+      if (heightMessage.success) {
+        setHeight(
+          Math.min(720, Math.max(120, heightMessage.data.airinArtifactHeight))
+        );
       }
     }
 

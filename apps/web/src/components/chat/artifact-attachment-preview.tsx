@@ -50,6 +50,7 @@ export function ArtifactAttachmentPreview({
   variant = "chip",
 }: ArtifactAttachmentPreviewProps) {
   const effectiveProfileId = artifact.ownerProfileId ?? profileId;
+
   const { isImage, isVideo, openPanel } = useArtifactAttachmentPreviewPanel({
     artifact,
     id,

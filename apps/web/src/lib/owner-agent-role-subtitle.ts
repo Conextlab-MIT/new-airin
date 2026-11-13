@@ -8,17 +8,17 @@ export type OwnerAgentRoleMessageKey =
   | "owner.role.laundrySupport"
   | "owner.role.laundryVisibility";
 
-const LAUNDRY_PROFILE_ID_TO_ROLE: Record<string, OwnerAgentRoleMessageKey> = {
+const LAUNDRY_PROFILE_ID_TO_ROLE = {
   laundry_analyst: "owner.role.laundryAnalyst",
   laundry_finance: "owner.role.laundryFinance",
   laundry_ops: "owner.role.laundryOps",
   laundry_social: "owner.role.laundrySocial",
   laundry_support: "owner.role.laundrySupport",
   laundry_visibility: "owner.role.laundryVisibility",
-};
+} as const satisfies Record<string, OwnerAgentRoleMessageKey>;
 
 /** Summit roster display names and legacy pack labels → role subtitle. */
-const LAUNDRY_PROFILE_NAME_TO_ROLE: Record<string, OwnerAgentRoleMessageKey> = {
+const LAUNDRY_PROFILE_NAME_TO_ROLE = {
   Analyst: "owner.role.laundryAnalyst",
   Ardi: "owner.role.laundryAnalyst",
   Dimas: "owner.role.laundryFinance",
@@ -30,7 +30,7 @@ const LAUNDRY_PROFILE_NAME_TO_ROLE: Record<string, OwnerAgentRoleMessageKey> = {
   Support: "owner.role.laundrySupport",
   Toni: "owner.role.laundryOps",
   Visibility: "owner.role.laundryVisibility",
-};
+} as const satisfies Record<string, OwnerAgentRoleMessageKey>;
 
 export function laundryAgentRoleMessageKey(
   profile: Pick<ProfileSummary, "id" | "name" | "isSuper">

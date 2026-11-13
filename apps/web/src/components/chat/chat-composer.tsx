@@ -717,6 +717,7 @@ const ConnectorsContext = createContext<{
   onAdd: (() => void) | null;
   profileId: string;
 } | null>(null);
+
 /** True when `/btw` is offered: only the composer that can open a side chat. */
 const BtwCommandContext = createContext(false);
 
@@ -950,6 +951,7 @@ export function ChatComposer(props: ChatComposerProps) {
     }),
     [addProfileId, canAddCapabilities, openAddCommand, openPluginContext]
   );
+
   return (
     <CommandPrefixContext.Provider value={commandContext}>
       <BtwCommandContext.Provider value={Boolean(onBtw)}>

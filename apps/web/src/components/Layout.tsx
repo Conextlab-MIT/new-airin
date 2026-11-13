@@ -56,6 +56,7 @@ export function Layout() {
   const btwOpen = useBtwChatStore((store) => store.chat !== null);
   const { uiMode } = useUiMode();
   const ownerMode = uiMode === "owner";
+
   const { collapsed: ownerSidebarHidden, toggle: toggleOwnerSidebar } =
     useOwnerSidebarHidden();
 

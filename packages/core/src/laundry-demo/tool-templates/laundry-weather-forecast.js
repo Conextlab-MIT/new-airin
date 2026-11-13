@@ -1,17 +1,46 @@
+function isStringTag(value) {
+  return (
+    value !== null &&
+    value !== undefined &&
+    Object.prototype.toString.call(value) === "[object String]"
+  );
+}
+
+function trimmedString(value, fallback) {
+  if (!isStringTag(value)) {
+    return fallback;
+  }
+
+  const text = value.trim();
+
+  return text || fallback;
+}
+
+function isPlainObject(value) {
+  return (
+    value !== null &&
+    value !== undefined &&
+    !Array.isArray(value) &&
+    Object.prototype.toString.call(value) === "[object Object]"
+  );
+}
+
+function coerceFiniteNumber(value, fallback) {
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 /** @param {Record<string, unknown>} input */
 /** @param {{ fetch?: typeof fetch }} context */
 export async function run(input, context) {
   const apiKey = process.env.OPENWEATHER_API_KEY?.trim();
-  const city =
-    typeof input.city === "string" && input.city.trim()
-      ? input.city.trim()
-      : "Jakarta";
+
+  const city = trimmedString(input.city, "Jakarta");
+
   const days = Math.min(7, Math.max(1, Number(input.days ?? 7) || 7));
 
-  const loads =
-    input.dailyLoadsKg && typeof input.dailyLoadsKg === "object"
-      ? input.dailyLoadsKg
-      : null;
+  const loads = isPlainObject(input.dailyLoadsKg) ? input.dailyLoadsKg : null;
 
   if (!apiKey) {
     return {
@@ -50,6 +79,7 @@ export async function run(input, context) {
   const forecastUrl = new URL(
     "https://api.openweathermap.org/data/2.5/forecast"
   );
+
   forecastUrl.searchParams.set("lat", String(lat));
   forecastUrl.searchParams.set("lon", String(lon));
   forecastUrl.searchParams.set("appid", apiKey);
@@ -65,6 +95,7 @@ export async function run(input, context) {
   }
 
   const forecast = await forecastRes.json();
+
   const slices = Array.isArray(forecast?.list)
     ? forecast.list.slice(0, days * 8)
     : [];
@@ -93,12 +124,7 @@ export async function run(input, context) {
 
   const daily = [...byDay.values()].slice(0, days);
 
-  const baselineKg =
-    typeof input.baselineDailyLoadKg === "number"
-      ? input.baselineDailyLoadKg
-      : typeof input.baselineDailyLoadKg === "string"
-        ? Number(input.baselineDailyLoadKg)
-        : 120;
+  const baselineKg = coerceFiniteNumber(input.baselineDailyLoadKg, 120);
 
   const forecastLoads = daily.map((day) => {
     let factor = 1;
@@ -119,6 +145,7 @@ export async function run(input, context) {
 
       if (!Number.isNaN(historical) && historical > 0) {
         const blended = Math.round(historical * factor);
+
         return {
           ...day,
           adjustmentReasons: reasons,

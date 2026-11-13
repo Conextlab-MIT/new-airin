@@ -74,10 +74,12 @@ export function SidebarUserMenu({
   const { theme, setTheme } = useTheme();
   const { uiMode, setUiMode } = useUiMode();
   const { t } = useLocale();
+
   const uiModeOptions: { id: UiMode; label: string }[] = [
     { id: "owner", label: t("mode.owner") },
     { id: "advanced", label: t("mode.advanced") },
   ];
+
   const [profileOpen, setProfileOpen] = useState(false);
   const [personalisationOpen, setPersonalisationOpen] = useState(false);
   const version = health?.version?.trim();

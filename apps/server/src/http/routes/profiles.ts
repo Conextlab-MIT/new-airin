@@ -1358,6 +1358,7 @@ export function registerProfileRoutes(
   app.get("/v1/profiles", async (c) => {
     const auth = getRequestAuth(c);
     const orgId = requireActiveOrgIdFromContext(c);
+
     // Best-effort: older marketplace installs used role titles. Never block
     // the roster if rename fails (MFA, shared lock, etc.).
     try {
@@ -1367,6 +1368,7 @@ export function registerProfileRoutes(
     } catch {
       // Roster still loads with the previous names.
     }
+
     const response = await agent.listProfiles(orgId);
 
     return json<ListProfilesResponse>({

@@ -33,6 +33,7 @@ export class LaundryPackService {
     owner?: { ownerUserId: string; sharedWithTeam: boolean }
   ): Promise<LaundryPackInstallResponse> {
     const seededTools = await this.ensureDemoTools(orgId);
+
     const toolIdsByName = new Map(
       seededTools.map((tool) => [tool.name, tool.id])
     );
@@ -48,6 +49,7 @@ export class LaundryPackService {
           toolIdsByName,
           owner
         );
+
         installed.push(profile);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -92,6 +94,7 @@ export class LaundryPackService {
   ): Promise<ProfileResponse> {
     const existing = await this.profiles.listProfiles(orgId);
     const nameKey = entry.name.trim().toLowerCase();
+
     const already = existing.profiles.find(
       (profile) => profile.name.trim().toLowerCase() === nameKey
     );
@@ -103,11 +106,11 @@ export class LaundryPackService {
       );
     }
 
-    const soulFiles: Record<string, string> = {
+    const soulFiles = {
       "INSTRUCTIONS.md": entry.instructions,
       "SOUL.md": entry.soul,
       "STYLE.md": entry.style,
-    };
+    } satisfies Record<string, string>;
 
     if (entry.roleOneLiner) {
       soulFiles["INSTRUCTIONS.md"] =

@@ -21,6 +21,7 @@ export function MobileNavDrawer({ className }: { className?: string }) {
   const location = useLocation();
   const { uiMode } = useUiMode();
   const ownerMode = uiMode === "owner";
+
   const { collapsed: ownerSidebarHidden, toggle: toggleOwnerSidebar } =
     useOwnerSidebarHidden();
 

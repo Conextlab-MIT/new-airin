@@ -5,7 +5,18 @@ import {
   DEFAULT_SUB_AGENT_TIMEOUT_MS,
   failSubAgentResult,
   MAX_SUB_AGENT_TIMEOUT_MS,
+  type SubAgentRunResult,
 } from "./sub-agent-shared";
+
+export type SendToBotToolResult =
+  | SubAgentRunResult
+  | {
+      error?: string;
+      from: string;
+      output: string;
+      status: "error" | "ok";
+      summary: string;
+    };
 
 export const SEND_TO_BOT_TOOL_NAME = "send_to_bot";
 
@@ -60,7 +71,7 @@ export async function runSendToBotTool(
   input: z.infer<typeof SendToBotInputSchema>,
   context: ToolContext,
   agentService: AgentService
-): Promise<Record<string, unknown>> {
+): Promise<SendToBotToolResult> {
   const depth = context.agentDepth ?? 0;
 
   if (!Number.isInteger(depth) || depth < 0) {
@@ -88,6 +99,7 @@ export async function runSendToBotTool(
   }
 
   const { profiles } = await agentService.listProfiles(orgId);
+
   const target = profiles.find(
     (profile) => profile.name.trim().toLowerCase() === botName.toLowerCase()
   );
@@ -103,6 +115,7 @@ export async function runSendToBotTool(
   }
 
   const timeoutMs = clampTimeout(input.timeoutMs ?? null);
+
   const fromName =
     profiles.find((profile) => profile.id === fromProfileId)?.name ??
     "another agent";

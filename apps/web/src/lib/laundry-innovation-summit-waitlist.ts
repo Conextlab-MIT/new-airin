@@ -1,3 +1,9 @@
+import { z } from "zod";
+
+const waitlistErrorBodySchema = z.object({
+  error: z.string().optional(),
+});
+
 export type LaundryInnovationSummitWaitlistInput = {
   name: string;
   businessName: string;
@@ -33,7 +39,7 @@ export async function submitLaundryInnovationSummitWaitlist(
     let message = "Gagal mengirim daftar tunggu.";
 
     try {
-      const body = (await response.json()) as { error?: string };
+      const body = waitlistErrorBodySchema.parse(await response.json());
 
       if (body.error?.trim()) {
         message = body.error;
