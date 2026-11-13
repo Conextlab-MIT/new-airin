@@ -260,12 +260,39 @@ function SidebarHeader({
   }
 
   return (
-    <div className="app-shell-header">
-      <div className="flex min-w-0 flex-1">
-        <OrgSwitcher collapsed={false} />
+    <div className="flex shrink-0 flex-col border-border/40 border-b pb-2">
+      <div className="px-3 pt-3">
+        <BrandWordmark />
       </div>
-      {collapsible ? <SidebarCollapseButton onToggle={onToggle} /> : null}
+      <div className="flex min-w-0 items-center gap-1 px-2 pt-1">
+        <div className="flex min-w-0 flex-1">
+          <OrgSwitcher collapsed={false} />
+        </div>
+        {collapsible ? <SidebarCollapseButton onToggle={onToggle} /> : null}
+      </div>
     </div>
+  );
+}
+
+/** The Airin wordmark, spanning the sidebar's inner width. */
+function BrandWordmark() {
+  return (
+    <Link aria-label="Airin" className="block" to={PAGE_PATHS.chat}>
+      <img
+        alt="Airin"
+        className="h-auto w-full object-contain object-left dark:hidden"
+        height={40}
+        src="/airin-wordmark.png"
+        width={414}
+      />
+      <img
+        alt="Airin"
+        className="hidden h-auto w-full object-contain object-left dark:block"
+        height={40}
+        src="/airin-wordmark-light.png"
+        width={414}
+      />
+    </Link>
   );
 }
 
