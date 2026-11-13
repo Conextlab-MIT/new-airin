@@ -11,10 +11,7 @@ import {
   moodstoneSvg,
   type ProfileAvatarProfile,
   resolveAvatarSrc,
-  SUPER_AGENT_DEFAULT_AVATAR,
 } from "./moodstone";
-
-const SUPER_AGENT_LIGHT_AVATAR = "/super-agent-light.png";
 
 const sizeClasses = {
   lg: "size-16",
@@ -154,11 +151,7 @@ export function ProfileAvatar({
   const image = (
     <img
       alt=""
-      className={cn(
-        surfaceClass,
-        "object-cover",
-        src === SUPER_AGENT_DEFAULT_AVATAR && "hidden dark:block"
-      )}
+      className={cn(surfaceClass, "object-cover")}
       height={sizePixels[size]}
       onError={() => setFailedUrl(avatarUrl)}
       src={src}
@@ -166,20 +159,5 @@ export function ProfileAvatar({
     />
   );
 
-  if (src !== SUPER_AGENT_DEFAULT_AVATAR) {
-    return image;
-  }
-
-  return (
-    <>
-      {image}
-      <img
-        alt=""
-        className={cn(surfaceClass, "object-cover dark:hidden")}
-        height={sizePixels[size]}
-        src={SUPER_AGENT_LIGHT_AVATAR}
-        width={sizePixels[size]}
-      />
-    </>
-  );
+  return image;
 }
