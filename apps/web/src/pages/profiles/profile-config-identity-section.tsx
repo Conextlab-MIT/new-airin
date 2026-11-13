@@ -412,6 +412,7 @@ function ProfileChatAgentField({
   // sentinel that maps back to "no agent" on save.
   const builtInValue = "builtin";
   const value = selectedPresetId ?? (hasCustomAgent ? "custom" : builtInValue);
+
   // A profile that already runs a retired engine still shows its own label;
   // it just is not offered to anyone else.
   const currentLabel = selectedPresetId
