@@ -9,6 +9,26 @@ import type {
 export const NO_ACP_AGENT_PRESETS: AcpAgentPresetSummary[] = [];
 
 /**
+ * Chat engines that Airin no longer offers in the "Chat agent" dropdown.
+ * A profile that already runs one keeps it: the saved agent and its label stay
+ * intact, it just cannot be picked again from the list.
+ */
+export const RETIRED_ACP_PRESET_IDS: readonly string[] = [
+  "claude",
+  "codex",
+  "opencode",
+];
+
+/** The presets a person may pick. Airin is the only engine offered today. */
+export function offeredAcpAgentPresets(
+  presets: AcpAgentPresetSummary[]
+): AcpAgentPresetSummary[] {
+  return presets.filter(
+    (preset) => !RETIRED_ACP_PRESET_IDS.includes(preset.id)
+  );
+}
+
+/**
  * The preset a saved agent came from. Null for the built-in chat, and for a
  * custom command that is not one of the presets.
  */

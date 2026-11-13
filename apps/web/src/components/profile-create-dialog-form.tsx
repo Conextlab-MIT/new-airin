@@ -199,7 +199,6 @@ export function ProfileCreateDialogForm({
             <AgentFields
               agentId={agentId}
               agentLabel={agentLabel}
-              agentPresets={agentPresets}
               busy={busy}
               onAgentChange={onAgentChange}
               onProfileIdChange={onProfileIdChange}
@@ -307,7 +306,6 @@ function AvatarPicker({
 function AgentFields({
   agentId,
   agentLabel,
-  agentPresets,
   busy,
   onAgentChange,
   onProfileIdChange,
@@ -318,7 +316,6 @@ function AgentFields({
 }: {
   agentId: string;
   agentLabel: string;
-  agentPresets: AcpAgentPresetSummary[];
   busy: boolean;
   onAgentChange: (agentId: string) => void;
   onProfileIdChange: (value: string) => void;
@@ -359,11 +356,6 @@ function AgentFields({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={BUILT_IN_AGENT}>Airin</SelectItem>
-            {agentPresets.map((preset) => (
-              <SelectItem key={preset.id} value={preset.id}>
-                {preset.label}
-              </SelectItem>
-            ))}
           </SelectContent>
         </Select>
       </div>

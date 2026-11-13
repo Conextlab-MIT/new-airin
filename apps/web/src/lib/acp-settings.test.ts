@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { presetIdForAgent } from "./acp-settings";
+import {
+  offeredAcpAgentPresets,
+  presetIdForAgent,
+  RETIRED_ACP_PRESET_IDS,
+} from "./acp-settings";
 
 const presets = [
   {
@@ -12,7 +16,36 @@ const presets = [
     id: "codex",
     label: "Codex",
   },
+  {
+    agent: { args: ["acp"], command: "opencode" },
+    id: "opencode",
+    label: "OpenCode",
+  },
 ];
+
+describe("offeredAcpAgentPresets", () => {
+  test("hides the retired chat engines from the picker", () => {
+    expect(offeredAcpAgentPresets(presets)).toEqual([]);
+  });
+
+  test("keeps an engine that is not retired", () => {
+    const gemini = {
+      agent: { args: ["--experimental-acp"], command: "gemini" },
+      id: "gemini",
+      label: "Gemini",
+    };
+
+    expect(offeredAcpAgentPresets([...presets, gemini])).toEqual([gemini]);
+  });
+
+  test("retires exactly Claude, Codex and OpenCode", () => {
+    expect([...RETIRED_ACP_PRESET_IDS].sort()).toEqual([
+      "claude",
+      "codex",
+      "opencode",
+    ]);
+  });
+});
 
 describe("presetIdForAgent", () => {
   test("finds the preset whose command and args match", () => {

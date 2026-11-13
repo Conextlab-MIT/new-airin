@@ -60,6 +60,7 @@ type IdentityState = Pick<
   | "handleAvatarRemove"
   | "acpAgentId"
   | "acpAgentPresets"
+  | "allAcpAgentPresets"
   | "handleEditAcpAgent"
   | "acpCurrentModelSelection"
   | "acpEffortOptions"
@@ -272,7 +273,7 @@ function ProfileAgentPicker({
         disabled={disabled}
         hasCustomAgent={hasAcpAgent && !acpAgentId}
         onChange={state.handleEditAcpAgent}
-        presets={state.acpAgentPresets}
+        presets={state.allAcpAgentPresets}
         selectedPresetId={acpAgentId}
       />
       <ProfileModelField disabled={disabled || acpIsSaving} {...model} />
@@ -411,6 +412,11 @@ function ProfileChatAgentField({
   // sentinel that maps back to "no agent" on save.
   const builtInValue = "builtin";
   const value = selectedPresetId ?? (hasCustomAgent ? "custom" : builtInValue);
+  // A profile that already runs a retired engine still shows its own label;
+  // it just is not offered to anyone else.
+  const currentLabel = selectedPresetId
+    ? presets.find((preset) => preset.id === selectedPresetId)?.label
+    : undefined;
 
   return (
     <Select
@@ -426,17 +432,11 @@ function ProfileChatAgentField({
         id="profile-chat-agent"
       >
         <SelectValue placeholder="Airin">
-          {presets.find((preset) => preset.id === selectedPresetId)?.label ??
-            (hasCustomAgent ? "Custom command" : "Airin")}
+          {currentLabel ?? (hasCustomAgent ? "Custom command" : "Airin")}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={builtInValue}>Airin</SelectItem>
-        {presets.map((preset) => (
-          <SelectItem key={preset.id} value={preset.id}>
-            {preset.label}
-          </SelectItem>
-        ))}
         {hasCustomAgent ? (
           <SelectItem disabled value="custom">
             Custom command

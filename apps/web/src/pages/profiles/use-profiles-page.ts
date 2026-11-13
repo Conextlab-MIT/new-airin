@@ -46,6 +46,7 @@ import {
 import {
   acpAgentSettingsKey,
   NO_ACP_AGENT_PRESETS,
+  offeredAcpAgentPresets,
   presetIdForAgent,
 } from "@/lib/acp-settings";
 import { resolveProfilesPageProfileId } from "@/lib/chat-history";
@@ -231,9 +232,18 @@ export function useProfilesPage() {
   // ACP agents run on the server host, so only platform admins may pick one.
   const { data: acpPresetsData } = useAcpAgentPresetsQuery();
 
-  const acpAgentPresets =
-    (user?.isPlatformAdmin === true ? acpPresetsData : undefined) ??
-    NO_ACP_AGENT_PRESETS;
+  const acpAgentPresets = useMemo(
+    () =>
+      offeredAcpAgentPresets(
+        (user?.isPlatformAdmin === true ? acpPresetsData : undefined) ??
+          NO_ACP_AGENT_PRESETS
+      ),
+    [acpPresetsData, user?.isPlatformAdmin]
+  );
+
+  // Label lookup keeps a retired engine's name on a profile that already uses
+  // it, even though the engine is no longer offered.
+  const allAcpAgentPresets = acpPresetsData ?? NO_ACP_AGENT_PRESETS;
 
   const acpModelControls = useAcpChatControls({
     agentKey: acpAgentSettingsKey(detail?.acpAgent),
@@ -242,7 +252,7 @@ export function useProfilesPage() {
     sessionId: null,
   });
 
-  const acpAgentId = presetIdForAgent(detail?.acpAgent, acpAgentPresets);
+  const acpAgentId = presetIdForAgent(detail?.acpAgent, allAcpAgentPresets);
   const { mutateAsync: updateProfile } = updateMutation;
   const cloneProfileMutation = useCloneProfileMutation();
   const deleteMutation = useDeleteProfileMutation();
@@ -1296,6 +1306,7 @@ export function useProfilesPage() {
     acpEffortValue: acpModelControls.effortValue,
     acpIsSaving: acpModelControls.isSaving,
     acpModelGroups: acpModelControls.providerModelGroups,
+    allAcpAgentPresets,
     allMcpServers,
     allSkills,
     allTools,
