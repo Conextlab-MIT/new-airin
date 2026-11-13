@@ -1,5 +1,5 @@
-import type { OrgLlmQuotaStatusResponse } from "@nakama/core/contract";
-import { Card, CardContent } from "@nakama/ui/card";
+import type { OrgLlmQuotaStatusResponse } from "@airin/core/contract";
+import { Card, CardContent } from "@airin/ui/card";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/use-auth";
 import { client, formatError } from "@/lib/client";

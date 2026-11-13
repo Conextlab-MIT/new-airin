@@ -1,3 +1,12 @@
+import type {
+  CachedMcpToolSummary,
+  McpHttpConfig,
+  McpServerConfig,
+  McpStdioConfig,
+  McpTransport,
+} from "@airin/core";
+import { getProfileSoulDir } from "@airin/core";
+import type { CachedMcpTool, StoredMcpServerRecord } from "@airin/db";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -7,15 +16,6 @@ import {
 } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { RequestOptions } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type {
-  CachedMcpToolSummary,
-  McpHttpConfig,
-  McpServerConfig,
-  McpStdioConfig,
-  McpTransport,
-} from "@nakama/core";
-import { getProfileSoulDir } from "@nakama/core";
-import type { CachedMcpTool, StoredMcpServerRecord } from "@nakama/db";
 import { z } from "zod";
 import { fetchMcpRemote } from "./mcp-fetch";
 
@@ -171,7 +171,7 @@ export class McpClientManager {
     const transport = createTransport(server.transport, server.config, options);
 
     const client = new Client({
-      name: "nakama",
+      name: "airin",
       version: "1.0.0",
     });
 
@@ -299,7 +299,7 @@ export class McpClientManager {
     const mcpTransport = createTransport(transport, config);
 
     const client = new Client({
-      name: "nakama",
+      name: "airin",
       version: "1.0.0",
     });
 
@@ -335,7 +335,7 @@ export class McpClientManager {
     });
 
     const client = new Client({
-      name: "nakama",
+      name: "airin",
       version: "1.0.0",
     });
 

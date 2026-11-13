@@ -6,7 +6,7 @@ import type {
   WorkflowRunRecord,
   WorkflowRunStepRecord,
   WorkflowStep,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { validateWorkflowSteps, type WorkflowRecord } from "./workflow-ops";
 
 function validateWorkflowInput(input: {

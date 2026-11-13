@@ -1,13 +1,13 @@
-import type { ProfileSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ProfileSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { cn } from "@airin/ui/utils";
 import {
   ArrowDown01Icon,
   Delete02Icon,
@@ -19,6 +19,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChatProfileSwitcher } from "@/components/chat/chat-profile-switcher";
 import type { AgentActivity } from "@/components/moodstone";
+import { OwnerSidebarReopen } from "@/components/OwnerSidebarReopen";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import {
   RecentChatsDialogs,
@@ -296,10 +297,13 @@ export function ChatPageColumn({
   children,
   centered = false,
   cognito = false,
+  wallpaper = false,
 }: {
   children: React.ReactNode;
   centered?: boolean;
   cognito?: boolean;
+  /** Owner chat: WhatsApp-style low-opacity emoji pattern. */
+  wallpaper?: boolean;
 }) {
   const attachmentPanel = useChatAttachmentPanel();
 
@@ -307,6 +311,7 @@ export function ChatPageColumn({
     <div
       className={cn(
         cognito && COGNITO_SURFACE,
+        wallpaper && !cognito && "chat-wa-wallpaper",
         // `relative` so a page-level control can pin itself to this column's
         // top-right corner, which is the top-right of the screen area.
         "relative isolate flex min-h-0 min-w-0 flex-col transition-[width,opacity,padding] duration-200 ease-out motion-reduce:transition-none",
@@ -319,7 +324,7 @@ export function ChatPageColumn({
         centered && "justify-center"
       )}
     >
-      {centered && !cognito && <ChatDitherBackground />}
+      {centered && !cognito && !wallpaper ? <ChatDitherBackground /> : null}
       {children}
     </div>
   );
@@ -358,6 +363,7 @@ export function ChatWelcome({
   onProfileSwitch,
   profileSwitchDisabled = false,
   cognito = false,
+  ownerMode = false,
 }: {
   profile: ProfileSummary | undefined;
   profileId: string;
@@ -365,7 +371,35 @@ export function ChatWelcome({
   onProfileSwitch: (profileId: string) => void;
   profileSwitchDisabled?: boolean;
   cognito?: boolean;
+  /** Grok-like empty state: avatar, name, one line — no switcher row. */
+  ownerMode?: boolean;
 }) {
+  if (ownerMode && !cognito) {
+    return (
+      <div
+        className="fade-in-0 slide-in-from-top-1 flex animate-in flex-col items-center gap-3 px-4 pb-4 text-center duration-300 motion-reduce:animate-none"
+        key={welcomeAnimationKey(false)}
+      >
+        {profile ? (
+          <ProfileAvatar
+            active
+            className="size-16"
+            profile={profile}
+            size="lg"
+          />
+        ) : null}
+        <div className="flex flex-col gap-1">
+          <h2 className="font-semibold text-2xl text-foreground tracking-tight sm:text-3xl">
+            {profile?.name ?? "Your agent"}
+          </h2>
+          <p className="max-w-md text-base text-muted-foreground leading-relaxed">
+            Ask anything. Your agent handles the rest.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2 px-4 pb-2">
       {/*
@@ -432,6 +466,7 @@ export function ChatSessionBar({
 
   return (
     <div className="-mx-6 flex h-12 shrink-0 items-center gap-2 border-border border-b px-4 max-sm:hidden">
+      <OwnerSidebarReopen />
       <div className="flex h-7 min-w-0 flex-1 items-center gap-2">
         {profile ? (
           <ProfileAvatar

@@ -30,8 +30,9 @@ import type {
   SyncSkillsResponse,
   ToolContext,
   ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   assertNotBundledSkillName,
   assertValidSkillName,
   BUNDLED_SKILL_NAMES,
@@ -57,7 +58,6 @@ import {
   isMemberAuthoredSkillDirectory,
   isPathWithinProfileSkillsDir,
   loadSkillTools,
-  NakamaApiError,
   orgIdFromSkillSourcePath,
   parseRawProfileSkillContent,
   parseSkillMarkdown,
@@ -72,15 +72,15 @@ import {
   SKILL_FILE_NAME,
   writeProfileSkillSupportingFile,
   writeRawProfileSkillMarkdown,
-} from "@nakama/core";
-import { inferArtifactMimeType } from "@nakama/core/artifact-mime";
-import { pathExists } from "@nakama/core/fs";
+} from "@airin/core";
+import { inferArtifactMimeType } from "@airin/core/artifact-mime";
+import { pathExists } from "@airin/core/fs";
 import type {
   DatabaseAdapter,
   SkillCreatedBy,
   StoredSkillRecord,
   StoredSkillUsageRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { z } from "zod";
 import {
   REMOTE_BACKEND_HOST_CODE_REFUSAL,
@@ -142,7 +142,7 @@ async function findSkillDirectory(
     const response = await fetch(
       `https://api.github.com/repos/${ownerRepo}/git/trees/HEAD?recursive=1`,
       {
-        headers: { "User-Agent": "nakama-skill-install" },
+        headers: { "User-Agent": "airin-skill-install" },
         signal: AbortSignal.timeout(10_000),
       }
     );
@@ -178,7 +178,7 @@ export async function resolveSkillsAddCommand(
     !/^skills(?:@[\w.-]+)?$/.test(tokens[1] ?? "") ||
     tokens[2] !== "add"
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Use: npx skills add <github-owner>/<repo> --skill <name>.",
       400
     );
@@ -189,7 +189,7 @@ export async function resolveSkillsAddCommand(
   const skillName = skillIndex >= 0 ? tokens[skillIndex + 1] : undefined;
 
   if (!(source && skillName) || tokens.length !== skillIndex + 2) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Include one skill, for example: npx skills add vercel-labs/agent-skills --skill pdf.",
       400
     );
@@ -202,7 +202,7 @@ export async function resolveSkillsAddCommand(
       source.includes("://") ? source : `https://github.com/${source}`
     );
   } catch {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "The npx skills add source must be a public GitHub repository.",
       400
     );
@@ -212,7 +212,7 @@ export async function resolveSkillsAddCommand(
     baseUrl.hostname !== "github.com" ||
     baseUrl.pathname.split("/").filter(Boolean).length !== 2
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "The npx skills add source must be a public GitHub repository.",
       400
     );
@@ -319,7 +319,7 @@ export class SkillsService {
 
           publishedSkills.push(source.summary);
         } catch (error) {
-          if (!(error instanceof NakamaApiError && error.status === 404)) {
+          if (!(error instanceof AirinApiError && error.status === 404)) {
             throw error;
           }
         }
@@ -357,7 +357,7 @@ export class SkillsService {
       : null;
 
     if (!publication) {
-      throw new NakamaApiError("Skill is unavailable.", 404);
+      throw new AirinApiError("Skill is unavailable.", 404);
     }
 
     return (await this.resolvePublishedSkill(orgId, publication.id)).summary;
@@ -386,7 +386,7 @@ export class SkillsService {
       parent.archivedAt ||
       parent.setupPending
     ) {
-      throw new NakamaApiError("Skill is unavailable.", 404);
+      throw new AirinApiError("Skill is unavailable.", 404);
     }
 
     const publication = await this.db.getOrgSharedResource(
@@ -395,7 +395,7 @@ export class SkillsService {
     );
 
     if (!publication || publication.resourceKind !== "skill") {
-      throw new NakamaApiError("Skill is unavailable.", 404);
+      throw new AirinApiError("Skill is unavailable.", 404);
     }
 
     const record = await this.db.getSkill(publication.resourceId);
@@ -406,7 +406,7 @@ export class SkillsService {
       !record.enabled ||
       isPluginOwnedSkill(record)
     ) {
-      throw new NakamaApiError("Skill is unavailable.", 404);
+      throw new AirinApiError("Skill is unavailable.", 404);
     }
 
     const profiles = await this.db.listProfilesForOrg(parent.id);
@@ -426,7 +426,7 @@ export class SkillsService {
       );
 
       if (!owner) {
-        throw new NakamaApiError("Skill is unavailable.", 404);
+        throw new AirinApiError("Skill is unavailable.", 404);
       }
 
       const { resolved } = await guardFilePath(
@@ -442,7 +442,7 @@ export class SkillsService {
       );
 
       if (parsed.frontmatter.name !== record.name) {
-        throw new NakamaApiError("Skill is unavailable.", 404);
+        throw new AirinApiError("Skill is unavailable.", 404);
       }
 
       return {
@@ -466,7 +466,7 @@ export class SkillsService {
         },
       };
     } catch {
-      throw new NakamaApiError("Skill is unavailable.", 404);
+      throw new AirinApiError("Skill is unavailable.", 404);
     }
   }
 
@@ -620,11 +620,11 @@ export class SkillsService {
     const command = request.command?.trim() ?? "";
 
     if (!profileId) {
-      throw new NakamaApiError("profileId is required.", 400);
+      throw new AirinApiError("profileId is required.", 400);
     }
 
     if (!(url || command || request.zipBase64)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "A GitHub URL, npx skills add command, or ZIP file is required.",
         400
       );
@@ -633,7 +633,7 @@ export class SkillsService {
     const profile = await this.db.getProfileForOrg(profileId, orgId);
 
     if (!profile) {
-      throw new NakamaApiError("Profile not found.", 404);
+      throw new AirinApiError("Profile not found.", 404);
     }
 
     const commandUrl = command ? await resolveSkillsAddCommand(command) : "";
@@ -643,7 +643,7 @@ export class SkillsService {
           const archive = Buffer.from(request.zipBase64!, "base64");
 
           if (archive.length > 50 * 1024 * 1024) {
-            throw new NakamaApiError("Skill ZIP is too large.", 400);
+            throw new AirinApiError("Skill ZIP is too large.", 400);
           }
 
           return readUploadedSkillBundle(archive);
@@ -655,7 +655,7 @@ export class SkillsService {
     try {
       parseSkillMarkdown(content, url || commandUrl);
     } catch (error) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         error instanceof Error
           ? error.message
           : "Skill file is missing or has invalid frontmatter.",
@@ -673,7 +673,7 @@ export class SkillsService {
 
       return { skill: installed.skill };
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         throw error;
       }
 
@@ -685,10 +685,10 @@ export class SkillsService {
           message
         )
       ) {
-        throw new NakamaApiError(message, 409);
+        throw new AirinApiError(message, 409);
       }
 
-      throw new NakamaApiError(message, 400);
+      throw new AirinApiError(message, 400);
     }
   }
 
@@ -1118,7 +1118,7 @@ export class SkillsService {
     const record = await this.requireSkill(skillId);
 
     if (orgId && record.orgId && record.orgId !== orgId) {
-      throw new NakamaApiError("Skill not found.", 404);
+      throw new AirinApiError("Skill not found.", 404);
     }
 
     const directory = await this.resolveSkillDirectory(record);
@@ -1146,7 +1146,7 @@ export class SkillsService {
     const record = await this.db.getSkill(skillId);
 
     if (!record || (record.orgId && record.orgId !== orgId)) {
-      throw new NakamaApiError("Skill not found.", 404);
+      throw new AirinApiError("Skill not found.", 404);
     }
 
     const actorNames = new Map<string, Promise<string | null>>();
@@ -1250,14 +1250,14 @@ export class SkillsService {
     const record = await this.db.getSkill(skillId);
 
     if (!record || (record.orgId && record.orgId !== orgId)) {
-      throw new NakamaApiError("Skill not found.", 404);
+      throw new AirinApiError("Skill not found.", 404);
     }
 
     assertEditableSkill(record);
     const version = await this.db.getSkillVersion(skillId, versionId);
 
     if (!version) {
-      throw new NakamaApiError("Skill version not found.", 404);
+      throw new AirinApiError("Skill version not found.", 404);
     }
 
     const skillFilePath = path.join(record.sourcePath, SKILL_FILE_NAME);
@@ -1270,7 +1270,7 @@ export class SkillsService {
       parseSkillMarkdown(version.content, skillFilePath).frontmatter.name !==
       currentName
     ) {
-      throw new NakamaApiError("A restore cannot rename the skill.", 409);
+      throw new AirinApiError("A restore cannot rename the skill.", 409);
     }
 
     await writeFile(skillFilePath, version.content, "utf8");
@@ -1296,19 +1296,19 @@ export class SkillsService {
     const record = await this.db.getSkill(skillId);
 
     if (!record || (record.orgId && record.orgId !== orgId)) {
-      throw new NakamaApiError("Skill not found.", 404);
+      throw new AirinApiError("Skill not found.", 404);
     }
 
     const directory = await this.resolveSkillDirectory(record);
 
     if (!directory) {
-      throw new NakamaApiError("Skill files are unavailable.", 404);
+      throw new AirinApiError("Skill files are unavailable.", 404);
     }
 
     try {
       return await realpath(directory);
     } catch {
-      throw new NakamaApiError("Skill files are unavailable.", 404);
+      throw new AirinApiError("Skill files are unavailable.", 404);
     }
   }
 
@@ -1333,7 +1333,7 @@ export class SkillsService {
     try {
       return await this.listFilesInRoot(directory);
     } catch {
-      throw new NakamaApiError("Skill files are unavailable.", 404);
+      throw new AirinApiError("Skill files are unavailable.", 404);
     }
   }
 
@@ -1422,11 +1422,11 @@ export class SkillsService {
     try {
       return await this.readFileFromRoot(directory, filePath);
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         throw error;
       }
 
-      throw new NakamaApiError("Skill file is unavailable.", 404);
+      throw new AirinApiError("Skill file is unavailable.", 404);
     }
   }
 
@@ -1440,7 +1440,7 @@ export class SkillsService {
     const profile = await this.db.getProfile(profileId);
 
     if (profile?.orgId !== orgId) {
-      throw new NakamaApiError("Profile not found.", 404);
+      throw new AirinApiError("Profile not found.", 404);
     }
 
     const { summary, directory } = await this.resolvePublishedSkill(
@@ -1451,11 +1451,11 @@ export class SkillsService {
     const assigned = await this.getAssignedSkills(orgId, profileId);
 
     if (!assigned.some((item) => item.id === summary.id)) {
-      throw new NakamaApiError("Skill is unavailable.", 404);
+      throw new AirinApiError("Skill is unavailable.", 404);
     }
 
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
-      throw new NakamaApiError("Invalid file size limit.", 400);
+      throw new AirinApiError("Invalid file size limit.", 400);
     }
 
     try {
@@ -1466,16 +1466,16 @@ export class SkillsService {
       );
 
       if (!bytes) {
-        throw new NakamaApiError("Skill file exceeds the size limit.", 413);
+        throw new AirinApiError("Skill file exceeds the size limit.", 413);
       }
 
       return bytes;
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         throw error;
       }
 
-      throw new NakamaApiError("Skill file is unavailable.", 404);
+      throw new AirinApiError("Skill file is unavailable.", 404);
     }
   }
 
@@ -1533,7 +1533,7 @@ export class SkillsService {
       path.isAbsolute(filePath) ||
       filePath.split("/").includes("..")
     ) {
-      throw new NakamaApiError("Invalid skill file path.", 400);
+      throw new AirinApiError("Invalid skill file path.", 400);
     }
 
     let target: string;
@@ -1541,11 +1541,11 @@ export class SkillsService {
     try {
       target = await realpath(path.join(root, filePath));
     } catch {
-      throw new NakamaApiError("Skill file not found.", 404);
+      throw new AirinApiError("Skill file not found.", 404);
     }
 
     if (!target.startsWith(`${root}${path.sep}`)) {
-      throw new NakamaApiError("File is outside the skill directory.", 403);
+      throw new AirinApiError("File is outside the skill directory.", 403);
     }
 
     const handle = await open(target, "r");
@@ -1554,7 +1554,7 @@ export class SkillsService {
       const stat = await handle.stat();
 
       if (!stat.isFile()) {
-        throw new NakamaApiError("Select a file.", 400);
+        throw new AirinApiError("Select a file.", 400);
       }
 
       if (stat.size > maxBytes) {
@@ -1711,7 +1711,7 @@ export class SkillsService {
     const profile = await this.db.getProfile(profileId);
 
     if (profile?.orgId !== orgId) {
-      throw new NakamaApiError("Profile not found.", 404);
+      throw new AirinApiError("Profile not found.", 404);
     }
 
     const records = (await this.db.listSkillsForProfile(profileId)).filter(
@@ -1779,7 +1779,7 @@ export class SkillsService {
       const listing = await this.listFilesInRoot(source.directory);
 
       if (listing.truncated) {
-        throw new NakamaApiError("Shared skill code is unavailable.", 503);
+        throw new AirinApiError("Shared skill code is unavailable.", 503);
       }
 
       for (const file of listing.files.filter(
@@ -1795,7 +1795,7 @@ export class SkillsService {
         );
 
         if (!bytes) {
-          throw new NakamaApiError("Shared skill code is unavailable.", 503);
+          throw new AirinApiError("Shared skill code is unavailable.", 503);
         }
 
         hash.update(file.path);
@@ -1837,7 +1837,7 @@ export class SkillsService {
             requireToolOrgMember(context);
 
             if (context.orgId !== orgId || context.profileId !== profileId) {
-              throw new NakamaApiError("Skill is unavailable.", 404);
+              throw new AirinApiError("Skill is unavailable.", 404);
             }
 
             const current = (
@@ -1849,7 +1849,7 @@ export class SkillsService {
             ).find((entry) => entry.name === tool.name);
 
             if (!current) {
-              throw new NakamaApiError("Skill tool is unavailable.", 404);
+              throw new AirinApiError("Skill tool is unavailable.", 404);
             }
 
             try {
@@ -1861,10 +1861,7 @@ export class SkillsService {
                 })
               );
             } catch {
-              throw new NakamaApiError(
-                "Shared skill code is unavailable.",
-                503
-              );
+              throw new AirinApiError("Shared skill code is unavailable.", 503);
             }
           },
         });
@@ -1872,7 +1869,7 @@ export class SkillsService {
     }
 
     if (new Set(tools.map((tool) => tool.name)).size !== tools.length) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Conflicting skill tool names are assigned.",
         409
       );
@@ -1889,7 +1886,7 @@ export class SkillsService {
     const profile = await this.db.getProfile(profileId);
 
     if (profile?.orgId !== orgId) {
-      throw new NakamaApiError("Profile not found.", 404);
+      throw new AirinApiError("Profile not found.", 404);
     }
 
     const source = await this.resolvePublishedSkill(orgId, publicationId);
@@ -1897,13 +1894,13 @@ export class SkillsService {
     const record = assigned.find((item) => item.id === source.summary.id);
 
     if (!record) {
-      throw new NakamaApiError("Skill is unavailable.", 404);
+      throw new AirinApiError("Skill is unavailable.", 404);
     }
 
     const discovered = await discoverSkillDirectory(source.directory);
 
     if (!discovered) {
-      throw new NakamaApiError("Skill is unavailable.", 404);
+      throw new AirinApiError("Skill is unavailable.", 404);
     }
 
     try {
@@ -1914,7 +1911,7 @@ export class SkillsService {
         buildToolExecutionContext({ orgId, profileId })
       );
     } catch {
-      throw new NakamaApiError("Shared skill code is unavailable.", 503);
+      throw new AirinApiError("Shared skill code is unavailable.", 503);
     }
   }
 
@@ -1938,7 +1935,7 @@ export class SkillsService {
       profileId
     ).catch((error) => {
       console.warn(
-        `[nakama:skills] Treating ${orgId}/${profileId} skill code as unapproved:`,
+        `[airin:skills] Treating ${orgId}/${profileId} skill code as unapproved:`,
         error instanceof Error ? error.message : error
       );
 
@@ -1952,7 +1949,7 @@ export class SkillsService {
         .listSkillProposals(orgId, { profileId, status: "approved" })
         .catch((error) => {
           console.warn(
-            "[nakama:skills] Could not read approved skill code:",
+            "[airin:skills] Could not read approved skill code:",
             error
           );
 
@@ -2423,7 +2420,7 @@ export class SkillsService {
       source.acpAgent ||
       source.acpSettings
     ) {
-      throw new NakamaApiError("Shared agent is unavailable.", 404);
+      throw new AirinApiError("Shared agent is unavailable.", 404);
     }
 
     const assigned = await this.db.listSkillsForProfile(source.id);
@@ -2442,7 +2439,7 @@ export class SkillsService {
               )))
       )
     ) {
-      throw new NakamaApiError("Shared agent skills are unavailable.", 409);
+      throw new AirinApiError("Shared agent skills are unavailable.", 409);
     }
 
     return assigned;
@@ -2457,7 +2454,7 @@ export class SkillsService {
     const profile = await this.db.getProfile(profileId);
 
     if (profile?.orgId !== orgId) {
-      throw new NakamaApiError("Profile not found.", 404);
+      throw new AirinApiError("Profile not found.", 404);
     }
 
     const result = await this.getAssignedDiscoveredSkills(orgId, profileId);
@@ -2486,10 +2483,7 @@ export class SkillsService {
         if (
           result.some((item) => item.discovered.name === source.summary.name)
         ) {
-          throw new NakamaApiError(
-            "Conflicting skill names are assigned.",
-            409
-          );
+          throw new AirinApiError("Conflicting skill names are assigned.", 409);
         }
 
         const code = await discoverSkillDirectory(source.directory);
@@ -2516,7 +2510,7 @@ export class SkillsService {
           record,
         });
       } catch (error) {
-        if (!(error instanceof NakamaApiError && error.status === 404)) {
+        if (!(error instanceof AirinApiError && error.status === 404)) {
           throw error;
         }
       }

@@ -1,28 +1,28 @@
 import { join } from "node:path";
-import { NakamaClient } from "@nakama/client";
+import { AirinClient } from "@airin/client";
 import {
   installErrorHandlers,
   installErrorTrackingSink,
   log,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   ChannelConfigBusyError,
   channelOwnerFromEnv,
-} from "@nakama/core/channel-config-shared";
-import { ChannelSessionStore } from "@nakama/core/channel-session-store";
+} from "@airin/core/channel-config-shared";
+import { ChannelSessionStore } from "@airin/core/channel-session-store";
 import {
   ensureServerRunning,
   stopSpawnedServer,
-} from "@nakama/core/ensure-server";
-import { loadLocalAuthToken } from "@nakama/core/local-auth";
-import { resolveWebPublicUrl } from "@nakama/core/runtime";
+} from "@airin/core/ensure-server";
+import { loadLocalAuthToken } from "@airin/core/local-auth";
+import { resolveWebPublicUrl } from "@airin/core/runtime";
 import {
   getTeamsConfigDir,
   loadTeamsConfigFile,
   saveTeamsInboundPort,
   validateTeamsCredentials,
-} from "@nakama/core/teams-config";
-import { createTeamsWorkerHeartbeat } from "@nakama/core/teams-worker";
+} from "@airin/core/teams-config";
+import { createTeamsWorkerHeartbeat } from "@airin/core/teams-worker";
 import { createTeamsChatHandler } from "./chat-handler";
 import { startTeamsApp, type TeamsAppHandle } from "./teams-app";
 
@@ -99,7 +99,7 @@ try {
   const { serverUrl, spawnedChild: child } = await ensureServerRunning();
   spawnedChild = child;
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: (await loadLocalAuthToken()) ?? undefined,
     baseUrl: serverUrl,
     clientOrigin: resolveWebPublicUrl(),

@@ -1,10 +1,10 @@
-import { Button } from "@nakama/ui";
+import { Button } from "@airin/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
+} from "@airin/ui/dropdown-menu";
 import {
   BrainIcon,
   Folder01Icon,

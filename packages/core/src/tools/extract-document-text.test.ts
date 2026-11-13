@@ -13,7 +13,7 @@ import {
   UNTRUSTED_DOCUMENT_GUIDANCE,
 } from "./extract-document-text";
 
-process.env.NAKAMA_EMAIL_ATTACHMENT_SECRET ??=
+process.env.AIRIN_EMAIL_ATTACHMENT_SECRET ??=
   "test-email-attachment-secret-32-chars";
 
 const FIXTURES = join(import.meta.dir, "..", "__fixtures__");
@@ -23,7 +23,7 @@ const SAMPLE_PDF = readFileSync(join(FIXTURES, "sample.pdf"));
 // A minimal BIFF8 workbook in an OLE container, one text cell.
 const SAMPLE_XLS = readFileSync(join(FIXTURES, "sample.xls"));
 
-const SAMPLE_XLS_CELL = "nakama xls cell";
+const SAMPLE_XLS_CELL = "airin xls cell";
 
 const completeConfig: EmailConfigFile = {
   from: "user@example.com",

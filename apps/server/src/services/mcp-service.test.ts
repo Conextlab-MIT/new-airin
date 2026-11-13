@@ -1,16 +1,16 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { AirinApiError, getProfileSoulDir, nanoid } from "@airin/core";
+import { PREINSTALLED_MCP_SERVER_IDS } from "@airin/core/mcp/preinstalled";
+import {
+  createInMemoryDatabaseAdapter,
+  ensurePreinstalledMcpServers,
+} from "@airin/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import {
   StreamableHTTPClientTransport,
   StreamableHTTPError,
 } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { getProfileSoulDir, NakamaApiError, nanoid } from "@nakama/core";
-import { PREINSTALLED_MCP_SERVER_IDS } from "@nakama/core/mcp/preinstalled";
-import {
-  createInMemoryDatabaseAdapter,
-  ensurePreinstalledMcpServers,
-} from "@nakama/db";
 import { McpClientManager } from "./mcp-client-manager";
 import { McpService } from "./mcp-service";
 import { buildMcpToolDefinitions } from "./mcp-tool-bridge";
@@ -473,9 +473,9 @@ describe("McpService", () => {
       // oxlint-disable-next-line anti-slop/no-unknown-parameters -- The test callback ignores framework inputs that this case does not inspect.
       .catch((caught: unknown) => caught);
 
-    expect(error instanceof NakamaApiError).toBe(true);
+    expect(error instanceof AirinApiError).toBe(true);
     // SAFETY: This test double supplies only the fields exercised by this test.
-    expect((error as NakamaApiError).status).toBe(422);
+    expect((error as AirinApiError).status).toBe(422);
 
     const listed = await service.listServers();
     expect(listed.servers).toHaveLength(0);

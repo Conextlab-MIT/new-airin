@@ -7,11 +7,11 @@ const isMeeting = /^\/(?:meet\/)?[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(
 );
 
 // The transcript lives in the side panel. This badge only tells people in
-// the call that Nakama is recording.
+// the call that Airin is recording.
 const badge = isMeeting ? document.createElement("div") : undefined;
 
 if (badge) {
-  badge.textContent = "Nakama transcription active";
+  badge.textContent = "Airin transcription active";
   badge.style.cssText =
     "display:none;position:fixed;z-index:2147483647;top:12px;right:12px;padding:6px 10px;border-radius:6px;background:#dc2626;color:white;font:12px system-ui";
   document.documentElement.append(badge);

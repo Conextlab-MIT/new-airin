@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { createAgentChatSession } from "@nakama/agent";
+import { createAgentChatSession } from "@airin/agent";
 import type { ProviderJsonRecord } from "../shared";
 import { asTestFetch } from "../test-helpers";
 import { createOpenRouterProvider } from "./index";

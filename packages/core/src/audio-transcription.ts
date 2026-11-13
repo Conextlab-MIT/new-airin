@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import { normalizeBaseUrl } from "./compatible-provider-config";
 import type { ProviderInstance } from "./user-config";
 
@@ -47,7 +47,7 @@ async function transcribeWithChat(options: {
   const format = audioFormat(options.audio);
 
   if (!format) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Unsupported audio format for ${options.audio.filename}.`,
       400
     );
@@ -85,7 +85,7 @@ async function transcribeWithChat(options: {
 
   if (!response.ok) {
     await response.body?.cancel();
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Audio transcription failed (${response.status}).`,
       502
     );
@@ -100,7 +100,7 @@ async function transcribeWithChat(options: {
     : "";
 
   if (!text) {
-    throw new NakamaApiError("Audio transcription returned empty text.", 502);
+    throw new AirinApiError("Audio transcription returned empty text.", 502);
   }
 
   return text;
@@ -134,7 +134,7 @@ export async function transcribeAudio(options: {
     provider.type !== "openai" &&
     (provider.type !== "openai_compatible" || !provider.baseUrl?.trim())
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Transcription is not supported for provider ${provider.type}.`,
       400
     );
@@ -160,7 +160,7 @@ export async function transcribeAudio(options: {
   });
 
   if (!response.ok) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Audio transcription failed (${response.status}).`,
       502
     );
@@ -169,7 +169,7 @@ export async function transcribeAudio(options: {
   const payload = TranscriptionResponseSchema.safeParse(await response.json());
 
   if (!(payload.success && payload.data.text.trim())) {
-    throw new NakamaApiError("Audio transcription returned empty text.", 502);
+    throw new AirinApiError("Audio transcription returned empty text.", 502);
   }
 
   return payload.data.text.trim();

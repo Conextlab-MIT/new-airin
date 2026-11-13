@@ -33,7 +33,7 @@ const EXTRA_EFFORT_HOSTS = new Set([
 
 // Levels above "high" per model family, from each vendor's API docs. Vendors
 // disagree on aliases (DeepSeek reads xhigh as high, Cloudflare as max), so
-// nakama clamps before sending instead of relying on them.
+// airin clamps before sending instead of relying on them.
 // A static id table. OpenRouter's `supported_efforts` could replace it if it drifts.
 const EXTRA_EFFORTS_BY_MODEL: readonly (readonly [
   RegExp,

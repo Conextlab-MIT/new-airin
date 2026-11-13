@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { executeToolCall } from "@nakama/agent";
-import { toLlmToolDefinition } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { executeToolCall } from "@airin/agent";
+import { toLlmToolDefinition } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { estimateToolToken } from "../providers/usage-tracking";
 import { AgentQuestionnaireState } from "../services/agent-questionnaire-state";
 import { createAskUserQuestionTools } from "./ask-user-question-tool";

@@ -16,7 +16,7 @@ import {
 } from "./plugins";
 
 const identity = {
-  author: "Nakama",
+  author: "Airin",
   description: "Notes for an organization",
   id: "notes",
   license: "MIT",
@@ -41,7 +41,7 @@ describe("validatePluginManifest", () => {
       ...identity,
       apiVersion: 1,
       icon,
-      minNakamaVersion: "0.1.0",
+      minAirinVersion: "0.1.0",
     });
 
     expect(result.ok).toBe(true);
@@ -64,14 +64,14 @@ describe("validatePluginManifest", () => {
         ...identity,
         apiVersion: 1,
         icon,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
       }).ok
     ).toBe(false);
   });
   test("accepts a skills-only manifest", () => {
     const result = validatePluginManifest({
       apiVersion: PLUGIN_MANIFEST_API_VERSION,
-      minNakamaVersion: "0.1.0",
+      minAirinVersion: "0.1.0",
       ...identity,
       skills: [{ directory: "skills/notes", key: "notes" }],
     });
@@ -89,7 +89,7 @@ describe("validatePluginManifest", () => {
   test("accepts a UI-only manifest", () => {
     const result = validatePluginManifest({
       apiVersion: PLUGIN_MANIFEST_API_VERSION,
-      minNakamaVersion: "0.1.0",
+      minAirinVersion: "0.1.0",
       ...identity,
       ui: {
         assetsDir: "ui/assets",
@@ -115,7 +115,7 @@ describe("validatePluginManifest", () => {
         validatePluginManifest({
           ...identity,
           apiVersion: PLUGIN_MANIFEST_API_VERSION,
-          minNakamaVersion: "0.1.0",
+          minAirinVersion: "0.1.0",
           ui: { assetsDir: "ui", entryModule, pageLabel: "Notes" },
         }).ok
       ).toBe(accepted);
@@ -125,7 +125,7 @@ describe("validatePluginManifest", () => {
   test("accepts an action-only manifest", () => {
     const result = validatePluginManifest({
       apiVersion: PLUGIN_MANIFEST_API_VERSION,
-      minNakamaVersion: "0.1.0",
+      minAirinVersion: "0.1.0",
       ...identity,
       actions: [
         {
@@ -160,7 +160,7 @@ describe("validatePluginManifest", () => {
         ...identity,
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
         hooks: { activate: "hooks/activate.js" },
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
       })
     ).toEqual({ code: "unsupported_hooks", ok: false });
   });
@@ -169,7 +169,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: 2,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         skills: [{ directory: "skills/notes", key: "notes" }],
       }).ok
@@ -178,7 +178,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         skills: [{ directory: "skills/notes", key: "notes" }],
         version: "v1.0.0",
@@ -188,7 +188,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "latest",
+        minAirinVersion: "latest",
         ...identity,
         skills: [{ directory: "skills/notes", key: "notes" }],
       }).ok
@@ -199,7 +199,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         skills: [
           { directory: "skills/a", key: "notes" },
@@ -211,7 +211,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         actions: [
           {
@@ -247,7 +247,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         actions: [
           {
@@ -261,7 +261,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         actions: [
           {
@@ -280,7 +280,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         skills: [{ key: "notes" }],
       }).ok
@@ -289,7 +289,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         ui: { pageLabel: "Notes" },
       }).ok
@@ -298,7 +298,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         actions: [
           {
@@ -315,7 +315,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         skills: [
           {
@@ -332,7 +332,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         id: "Notes Plugin",
         skills: [{ directory: "skills/notes", key: "notes" }],
@@ -342,7 +342,7 @@ describe("validatePluginManifest", () => {
     expect(
       validatePluginManifest({
         apiVersion: PLUGIN_MANIFEST_API_VERSION,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         ...identity,
         skills: [{ directory: "../outside", key: "notes" }],
       }).ok
@@ -461,7 +461,7 @@ describe("validatePluginJsonInstance", () => {
 
 describe("plugin package paths", () => {
   test("resolves release and staging dirs from the config root", () => {
-    const configDir = resolve("/tmp/nakama-config");
+    const configDir = resolve("/tmp/airin-config");
     expect(getPluginsRootDir(configDir)).toBe(join(configDir, "plugins"));
     expect(getPluginReleaseDir("notes", "1.0.0", configDir)).toBe(
       join(configDir, "plugins", "notes", "1.0.0")
@@ -486,17 +486,17 @@ describe("plugin package paths", () => {
   test("rejects relative config dirs and unsafe identity segments", () => {
     expect(() => getPluginReleaseDir("notes", "1.0.0", "relative")).toThrow();
     expect(() =>
-      getPluginReleaseDir("../notes", "1.0.0", "/tmp/nakama-config")
+      getPluginReleaseDir("../notes", "1.0.0", "/tmp/airin-config")
     ).toThrow();
     expect(() =>
-      getPluginReleaseDir("notes", "1.0.0/../2", "/tmp/nakama-config")
+      getPluginReleaseDir("notes", "1.0.0/../2", "/tmp/airin-config")
     ).toThrow();
     expect(() =>
-      getOrgPluginDataDir("../org", "notes", "/tmp/nakama-config")
+      getOrgPluginDataDir("../org", "notes", "/tmp/airin-config")
     ).toThrow();
     expect(() =>
       resolvePluginReleaseEntry(
-        "/tmp/nakama-config/plugins/notes/1.0.0",
+        "/tmp/airin-config/plugins/notes/1.0.0",
         "../x.js"
       )
     ).toThrow();
@@ -518,7 +518,7 @@ describe("derivePluginToolName", () => {
 });
 
 test("worker manifests preserve declarations and reject unsafe or duplicate entries", () => {
-  const base = { ...identity, apiVersion: 1, minNakamaVersion: "0.1.0" };
+  const base = { ...identity, apiVersion: 1, minAirinVersion: "0.1.0" };
 
   const worker = {
     entry: "workers/engine.js",

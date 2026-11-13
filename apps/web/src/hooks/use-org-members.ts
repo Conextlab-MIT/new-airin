@@ -4,7 +4,7 @@ import type {
   InviteOrgMemberRequest,
   PublishOrgSharedResourceRequest,
   UpdateOrgMemberRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   queryOptions,
   useMutation,

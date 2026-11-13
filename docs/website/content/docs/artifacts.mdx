@@ -25,7 +25,7 @@ The **Knowledge** view accepts TXT, Markdown, CSV, and PDF files up to 20 MB eac
 
 ![The Browse Files page grouping nested coding-agent-runs logs into a folder](/screenshots/files-artifacts-after-folders.png)
 
-Each file shows its inferred type, size, last modified time, and, in the list view, who created it. **Created by** is empty for files saved before Nakama recorded owners and for files written by `bash` or a coding agent. Nakama infers type from the extension. Files with unknown extensions are checked for valid UTF-8 when previewed, so a `Dockerfile` or `notes.abc` can preview as text instead of being treated as binary.
+Each file shows its inferred type, size, last modified time, and, in the list view, who created it. **Created by** is empty for files saved before Airin recorded owners and for files written by `bash` or a coding agent. Airin infers type from the extension. Files with unknown extensions are checked for valid UTF-8 when previewed, so a `Dockerfile` or `notes.abc` can preview as text instead of being treated as binary.
 
 ## Preview files
 
@@ -82,9 +82,9 @@ In web chat, open an HTML artifact and select **Download as PDF** in its actions
 
 In Telegram, Discord, WhatsApp, Slack, and Teams, ask the agent for a PDF. The agent prints the HTML on the server with headless Chrome and saves the PDF as a new artifact. The server must have Chrome or Chromium:
 
-- Install Chrome or Chromium on the server, or set `NAKAMA_CHROME_PATH` to the Chrome binary.
-- The default Docker image does not include Chrome. An image built with `INSTALL_CHROMIUM=true` includes Chromium. Run that image with `NAKAMA_CHROME_NO_SANDBOX=true`, because Docker's default seccomp profile blocks Chrome's sandbox.
-- If Chrome stops at start outside Docker because the host blocks its sandbox (for example Ubuntu 24.04), set `NAKAMA_CHROME_NO_SANDBOX=true`. The page is still limited to the artifacts folder and the preview's font and script hosts.
+- Install Chrome or Chromium on the server, or set `AIRIN_CHROME_PATH` to the Chrome binary.
+- The default Docker image does not include Chrome. An image built with `INSTALL_CHROMIUM=true` includes Chromium. Run that image with `AIRIN_CHROME_NO_SANDBOX=true`, because Docker's default seccomp profile blocks Chrome's sandbox.
+- If Chrome stops at start outside Docker because the host blocks its sandbox (for example Ubuntu 24.04), set `AIRIN_CHROME_NO_SANDBOX=true`. The page is still limited to the artifacts folder and the preview's font and script hosts.
 
 Without Chrome, the agent tells the user that the server admin must set up headless Chrome. Slack and Teams do not send files yet, so there the PDF stays in the artifacts folder.
 
@@ -101,7 +101,7 @@ HTML and SVG artifacts are never served inline on the app origin, so a published
 ## Where the files live
 
 ```
-~/.nakama/orgs/{orgId}/profiles/{profileId}/artifacts/
+~/.airin/orgs/{orgId}/profiles/{profileId}/artifacts/
 ```
 
 See [Profiles](/profiles#knowledge-base-and-memory) for the rest of the workspace layout, and [Backup and restore](/backup-restore) for what an export carries.

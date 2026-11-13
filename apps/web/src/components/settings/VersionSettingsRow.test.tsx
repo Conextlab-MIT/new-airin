@@ -25,16 +25,16 @@ const settle = () =>
 test("shows the newer release with its upgrade command and checks again on click", async () => {
   let latest = "0.4.60";
 
-  const check = spyOn(client, "getNakamaVersion").mockImplementation(
+  const check = spyOn(client, "getAirinVersion").mockImplementation(
     async () => ({
       current: "0.4.59",
       latest,
-      releaseUrl: `https://github.com/ahmadrosid/nakama/releases/tag/v${latest}`,
+      releaseUrl: `https://github.com/ahmadrosid/airin/releases/tag/v${latest}`,
       updateAvailable: latest !== "0.4.59",
     })
   );
 
-  const upgradeState = spyOn(client, "getNakamaUpgrade").mockResolvedValue({
+  const upgradeState = spyOn(client, "getAirinUpgrade").mockResolvedValue({
     available: false,
     rollbacks: [],
     status: null,
@@ -65,10 +65,10 @@ test("shows the newer release with its upgrade command and checks again on click
   await settle();
 
   expect(container.querySelector("pre")?.textContent).toContain(
-    "NAKAMA_VERSION=0.4.60"
+    "AIRIN_VERSION=0.4.60"
   );
   expect(container.querySelector("a")?.getAttribute("href")).toBe(
-    "https://github.com/ahmadrosid/nakama/releases/tag/v0.4.60"
+    "https://github.com/ahmadrosid/airin/releases/tag/v0.4.60"
   );
 
   expect(
@@ -91,14 +91,14 @@ test("shows the newer release with its upgrade command and checks again on click
 });
 
 test("with the updater running, Update sends the release and Restore asks first", async () => {
-  const check = spyOn(client, "getNakamaVersion").mockResolvedValue({
+  const check = spyOn(client, "getAirinVersion").mockResolvedValue({
     current: "0.4.59",
     latest: "0.4.60",
-    releaseUrl: "https://github.com/ahmadrosid/nakama/releases/tag/v0.4.60",
+    releaseUrl: "https://github.com/ahmadrosid/airin/releases/tag/v0.4.60",
     updateAvailable: true,
   });
 
-  const upgradeState = spyOn(client, "getNakamaUpgrade").mockResolvedValue({
+  const upgradeState = spyOn(client, "getAirinUpgrade").mockResolvedValue({
     available: true,
     rollbacks: [{ at: "2026-10-20T01:00:00Z", version: "0.4.58" }],
     status: {
@@ -109,7 +109,7 @@ test("with the updater running, Update sends the release and Restore asks first"
     },
   });
 
-  const start = spyOn(client, "startNakamaUpgrade").mockResolvedValue({
+  const start = spyOn(client, "startAirinUpgrade").mockResolvedValue({
     available: true,
     rollbacks: [],
     status: null,
@@ -174,14 +174,14 @@ test("with the updater running, Update sends the release and Restore asks first"
 });
 
 test("a running download shows its layers on a progress bar", async () => {
-  const check = spyOn(client, "getNakamaVersion").mockResolvedValue({
+  const check = spyOn(client, "getAirinVersion").mockResolvedValue({
     current: "0.4.59",
     latest: "0.4.60",
-    releaseUrl: "https://github.com/ahmadrosid/nakama/releases/tag/v0.4.60",
+    releaseUrl: "https://github.com/ahmadrosid/airin/releases/tag/v0.4.60",
     updateAvailable: true,
   });
 
-  const upgradeState = spyOn(client, "getNakamaUpgrade").mockResolvedValue({
+  const upgradeState = spyOn(client, "getAirinUpgrade").mockResolvedValue({
     available: true,
     rollbacks: [],
     status: {
@@ -224,9 +224,9 @@ test("a running download shows its layers on a progress bar", async () => {
   expect(bar?.max).toBe(14);
 });
 
-test("NAKAMA_DISABLE_UPDATE_CHECK hides the check, Update and Restore", async () => {
-  const check = spyOn(client, "getNakamaVersion");
-  const upgradeState = spyOn(client, "getNakamaUpgrade");
+test("AIRIN_DISABLE_UPDATE_CHECK hides the check, Update and Restore", async () => {
+  const check = spyOn(client, "getAirinVersion");
+  const upgradeState = spyOn(client, "getAirinUpgrade");
 
   const container = document.createElement("div");
   document.body.append(container);

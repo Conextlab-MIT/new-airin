@@ -8,13 +8,13 @@ import {
   runSqliteTool,
 } from "./sqlite";
 
-const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 afterEach(() => {
   if (previousConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+    process.env.AIRIN_CONFIG_DIR = previousConfigDir;
   }
 });
 
@@ -46,7 +46,7 @@ describe("sqlite tool", () => {
   });
 
   test("returns columns and rows for SELECT", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-sqlite-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-sqlite-"));
     const databasePath = join(dir, "workflow-data.sqlite");
 
     try {
@@ -108,7 +108,7 @@ describe("sqlite tool", () => {
   });
 
   test("inspects tables and preview rows", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-sqlite-inspect-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-sqlite-inspect-"));
     const databasePath = join(dir, "workflow-data.sqlite");
 
     try {
@@ -145,7 +145,7 @@ describe("sqlite tool", () => {
   });
 
   test("inspects a missing file as empty and rejects unknown tables", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-sqlite-missing-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-sqlite-missing-"));
     const databasePath = join(dir, "workflow-data.sqlite");
 
     try {
@@ -175,9 +175,9 @@ describe("sqlite tool", () => {
   });
 
   test("resolves a per-org file under the config dir", async () => {
-    process.env.NAKAMA_CONFIG_DIR = "/tmp/nakama-config-test";
+    process.env.AIRIN_CONFIG_DIR = "/tmp/airin-config-test";
     expect(getOrgWorkflowSqlitePath("org_abc")).toBe(
-      join("/tmp/nakama-config-test", "orgs", "org_abc", "workflow-data.sqlite")
+      join("/tmp/airin-config-test", "orgs", "org_abc", "workflow-data.sqlite")
     );
   });
 });

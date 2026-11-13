@@ -1,19 +1,19 @@
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@nakama/ui/card";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@airin/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import {
   Table,
   TableBody,
   TableHead,
   TableHeader,
   TableRow,
-} from "@nakama/ui/table";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/ui/table";
+import { toast } from "@airin/ui/toast";
 import { Add01Icon, Alert02Icon } from "hugeicons-react";
 import { useState } from "react";
 import {

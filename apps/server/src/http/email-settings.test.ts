@@ -4,18 +4,18 @@ import {
   readEnvValue,
   readTextOrNull,
   setManagedSecretResolver,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../services/agent-service";
 import { ManagedSecrets } from "../services/managed-secrets";
 import { setupTestConfigDir } from "../test-config-dir";
 import { createMinimalHonoApp } from "./test-app-helpers";
 import { setupFreshInstallSession } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-email-route-");
+setupTestConfigDir("airin-email-route-");
 
 afterEach(() => {
-  delete process.env.NAKAMA_EMAIL_PASSWORD;
+  delete process.env.AIRIN_EMAIL_PASSWORD;
   setManagedSecretResolver(
     async (_scope, _name, envNames) =>
       envNames.map((name) => readEnvValue(process.env, name)).find(Boolean) ??
@@ -147,7 +147,7 @@ describe("email settings routes", () => {
     );
 
     const authHeaders = session.headers({ "X-CSRF-Token": session.csrfToken });
-    process.env.NAKAMA_EMAIL_PASSWORD = "override";
+    process.env.AIRIN_EMAIL_PASSWORD = "override";
 
     const overridden = await app.fetch(
       new Request("http://localhost:4310/v1/settings/email", {
@@ -156,7 +156,7 @@ describe("email settings routes", () => {
     );
 
     expect((await overridden.json()).source).toBe("environment");
-    delete process.env.NAKAMA_EMAIL_PASSWORD;
+    delete process.env.AIRIN_EMAIL_PASSWORD;
 
     const fallback = await app.fetch(
       new Request("http://localhost:4310/v1/settings/email", {

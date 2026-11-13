@@ -9,12 +9,12 @@ import type {
   ImageAttachment,
   SendMessageInput,
   SendMessageRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
 /** `total` is 0 when the size is unknown. */
 export type TransferProgress = (loaded: number, total: number) => void;
 
-export interface NakamaClientOptions {
+export interface AirinClientOptions {
   authToken?: string;
   baseUrl?: string;
   /** Browser-style origin for OAuth callbacks when this client has no window (e.g. Telegram bridge). */

@@ -69,8 +69,8 @@ try {
             icon = '../web/public/icons/icon-512-v2.png'
         }
         appx = @{
-            artifactName = 'Nakama-${version}-${arch}.msix'
-            applicationId = 'Nakama'
+            artifactName = 'Airin-${version}-${arch}.msix'
+            applicationId = 'Airin'
             identityName = $identity
             publisher = $publisher
             publisherDisplayName = $publisherName
@@ -84,7 +84,7 @@ try {
     $config | ConvertTo-Json -Depth 10 | Set-Content $configPath -Encoding utf8
     & bun x electron-builder --win --x64 --publish never --config $configPath
     if ($LASTEXITCODE -ne 0) { throw 'MSIX packaging failed.' }
-    Write-Host "Unsigned Store upload: dist/electron/Nakama-$version-x64.msix"
+    Write-Host "Unsigned Store upload: dist/electron/Airin-$version-x64.msix"
 } finally {
     Pop-Location
 }

@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type { ProviderJsonRecord } from "../shared";
 import { asTestFetch, streamFromChunks } from "../test-helpers";
 import { createOpenRouterProvider } from "./index";
@@ -503,7 +503,7 @@ describe("createOpenRouterProvider", () => {
       { onChunk() {} }
     );
 
-    await expect(refused).rejects.toBeInstanceOf(NakamaApiError);
+    await expect(refused).rejects.toBeInstanceOf(AirinApiError);
     await expect(refused).rejects.toMatchObject({ status: 400 });
   });
 

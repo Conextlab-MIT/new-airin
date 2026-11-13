@@ -1,13 +1,13 @@
-import type { ProfileSummary } from "@nakama/core/contract";
+import type { ProfileSummary } from "@airin/core/contract";
 
-export function findSuperNakamaProfile(
+export function findSuperAirinProfile(
   profiles: ProfileSummary[]
 ): ProfileSummary | undefined {
   return profiles.find((profile) => profile.isSuper);
 }
 
-/** Profile id to open for Super Nakama chat CTAs, or null when none exists. */
-export function resolveSuperNakamaChatProfileId(
+/** Profile id to open for Airin chat CTAs, or null when none exists. */
+export function resolveSuperAirinChatProfileId(
   profiles: Array<Pick<ProfileSummary, "id" | "isSuper">>
 ): string | null {
   return profiles.find((profile) => profile.isSuper)?.id ?? null;

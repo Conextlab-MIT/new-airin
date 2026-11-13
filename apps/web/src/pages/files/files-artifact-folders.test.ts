@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ArtifactFile } from "@nakama/core/contract";
+import type { ArtifactFile } from "@airin/core/contract";
 import { listArtifactsInFolder } from "./files-artifact-folders";
 
 function artifact(

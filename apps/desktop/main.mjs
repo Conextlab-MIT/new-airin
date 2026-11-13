@@ -25,7 +25,7 @@ async function loadDesktopSecretsKey() {
     safeStorage.getSelectedStorageBackend?.() === "basic_text"
   ) {
     throw new Error(
-      "Unlock the operating-system credential store before starting Nakama."
+      "Unlock the operating-system credential store before starting Airin."
     );
   }
 
@@ -37,7 +37,7 @@ async function loadDesktopSecretsKey() {
     return safeStorage.decryptString(await readFile(keyPath));
   } catch (error) {
     if (error.code !== "ENOENT") {
-      throw new Error("Cannot unlock the saved Nakama secrets key.");
+      throw new Error("Cannot unlock the saved Airin secrets key.");
     }
   }
 
@@ -54,8 +54,8 @@ async function exportRecoveryKey() {
   const key = await loadDesktopSecretsKey();
 
   const { canceled, filePath } = await dialog.showSaveDialog({
-    defaultPath: "nakama-recovery-key.txt",
-    title: "Save Nakama recovery key",
+    defaultPath: "airin-recovery-key.txt",
+    title: "Save Airin recovery key",
   });
 
   if (canceled || !filePath) {
@@ -64,7 +64,7 @@ async function exportRecoveryKey() {
 
   await writeFile(filePath, `${key}\n`, { flag: "wx", mode: 0o600 });
   await dialog.showMessageBox({
-    detail: "Keep this file separate from your Nakama backup.",
+    detail: "Keep this file separate from your Airin backup.",
     message: "Recovery key saved",
     type: "info",
   });
@@ -73,7 +73,7 @@ async function exportRecoveryKey() {
 async function importRecoveryKey(runtime, dataDir) {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ["openFile"],
-    title: "Open Nakama recovery key",
+    title: "Open Airin recovery key",
   });
 
   if (canceled || !filePaths[0]) {
@@ -90,7 +90,7 @@ async function importRecoveryKey(runtime, dataDir) {
   }
 
   const env = Object.fromEntries(
-    Object.entries(process.env).filter(([name]) => !name.startsWith("NAKAMA_"))
+    Object.entries(process.env).filter(([name]) => !name.startsWith("AIRIN_"))
   );
 
   const child = spawn(
@@ -100,12 +100,12 @@ async function importRecoveryKey(runtime, dataDir) {
       cwd: runtime,
       env: {
         ...env,
-        DATABASE_URL: `file:${join(dataDir, "sqlite/nakama.sqlite")}`,
-        NAKAMA_CHECK_SECRETS_KEY: "1",
-        NAKAMA_CONFIG_DIR: dataDir,
-        NAKAMA_HOST: "127.0.0.1",
-        NAKAMA_PORT: "0",
-        NAKAMA_SECRETS_KEY: key,
+        AIRIN_CHECK_SECRETS_KEY: "1",
+        AIRIN_CONFIG_DIR: dataDir,
+        AIRIN_HOST: "127.0.0.1",
+        AIRIN_PORT: "0",
+        AIRIN_SECRETS_KEY: key,
+        DATABASE_URL: `file:${join(dataDir, "sqlite/airin.sqlite")}`,
         PATH: `${join(runtime, "bin")}${delimiter}${process.env.PATH ?? ""}`,
       },
       stdio: "ignore",
@@ -119,7 +119,7 @@ async function importRecoveryKey(runtime, dataDir) {
   });
 
   if (code !== 0) {
-    throw new Error("This recovery key cannot unlock the saved Nakama data.");
+    throw new Error("This recovery key cannot unlock the saved Airin data.");
   }
 
   const keyPath = join(app.getPath("userData"), "secrets-key.enc");
@@ -217,7 +217,7 @@ export function configureUpdates(
     if (installing) {
       dialog.showErrorBox(
         "Could not install update",
-        "Reopen Nakama to try again."
+        "Reopen Airin to try again."
       );
       app.quit();
     }
@@ -241,9 +241,9 @@ export function configureUpdates(
             ? "You’ll be asked to restart when the update is ready."
             : undefined,
           message: result?.isUpdateAvailable
-            ? `Downloading Nakama ${result.updateInfo.version}`
+            ? `Downloading Airin ${result.updateInfo.version}`
             : result
-              ? "Nakama is up to date"
+              ? "Airin is up to date"
               : "Updates are unavailable in this build",
           type: "info",
         });
@@ -283,7 +283,7 @@ export function configureUpdates(
         defaultId: 1,
         detail:
           "Restarting stops running local tasks. Your saved data is kept.",
-        message: `Nakama ${version} is ready to install`,
+        message: `Airin ${version} is ready to install`,
         type: "info",
       });
 
@@ -307,13 +307,13 @@ export async function startLocalServer(runtime, dataDir) {
   const secretsKey = await loadDesktopSecretsKey();
   const log = await open(join(dataDir, "server.log"), "w", 0o600);
 
-  // NAKAMA_PYTHON_BIN survives on Windows so users whose Python is not on PATH
+  // AIRIN_PYTHON_BIN survives on Windows so users whose Python is not on PATH
   // can point the server at it; the server still checks it against its allowlist.
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([key]) =>
-        !key.startsWith("NAKAMA_") ||
-        (process.platform === "win32" && key === "NAKAMA_PYTHON_BIN")
+        !key.startsWith("AIRIN_") ||
+        (process.platform === "win32" && key === "AIRIN_PYTHON_BIN")
     )
   );
 
@@ -324,17 +324,17 @@ export async function startLocalServer(runtime, dataDir) {
       cwd: runtime,
       env: {
         ...env,
+        AIRIN_CONFIG_DIR: dataDir,
+        AIRIN_DESKTOP: "1",
+        AIRIN_DISABLE_FIX_PATH: "1",
+        AIRIN_HOST: "127.0.0.1",
+        AIRIN_PORT: "0",
+        AIRIN_SECRETS_KEY: secretsKey,
+        // A data restore must not move the log this process writes to.
+        AIRIN_SERVER_LOG: join(dataDir, "server.log"),
         BUN_INSTALL_BIN: join(dataDir, "bin"),
         BUN_INSTALL_GLOBAL_DIR: join(dataDir, "bun/install/global"),
-        DATABASE_URL: `file:${join(dataDir, "sqlite/nakama.sqlite")}`,
-        NAKAMA_CONFIG_DIR: dataDir,
-        NAKAMA_DESKTOP: "1",
-        NAKAMA_DISABLE_FIX_PATH: "1",
-        NAKAMA_HOST: "127.0.0.1",
-        NAKAMA_PORT: "0",
-        NAKAMA_SECRETS_KEY: secretsKey,
-        // A data restore must not move the log this process writes to.
-        NAKAMA_SERVER_LOG: join(dataDir, "server.log"),
+        DATABASE_URL: `file:${join(dataDir, "sqlite/airin.sqlite")}`,
         NODE_ENV: "production",
         PATH: `${join(runtime, "bin")}${delimiter}${process.env.PATH ?? ""}`,
         PM2_HOME: join(dataDir, "pm2"),
@@ -381,7 +381,7 @@ export async function startLocalServer(runtime, dataDir) {
       const onError = (error) => finish(error);
 
       const onMessage = (message) => {
-        if (message?.type === "nakama-ready") {
+        if (message?.type === "airin-ready") {
           finish(null, message.url);
         }
       };
@@ -470,7 +470,7 @@ export async function createWindow(url, { show = true } = {}) {
     minHeight: 540,
     minWidth: 720,
     show,
-    title: "Nakama",
+    title: "Airin",
     ...(process.platform === "darwin" && {
       titleBarStyle: "hiddenInset",
       trafficLightPosition: { x: 14, y: 14 },
@@ -488,7 +488,7 @@ export async function createWindow(url, { show = true } = {}) {
     width: 1200,
   });
 
-  window.webContents.ipc.on("nakama:theme", (event, theme) => {
+  window.webContents.ipc.on("airin:theme", (event, theme) => {
     if (
       event.senderFrame === window.webContents.mainFrame &&
       new URL(event.senderFrame.url).origin === origin &&
@@ -552,8 +552,8 @@ export async function createWindow(url, { show = true } = {}) {
         buttons: ["Retry", "Close"],
         cancelId: 1,
         defaultId: 0,
-        detail: `Start your Nakama server, then retry.\n${url}`,
-        message: "Cannot connect to Nakama",
+        detail: `Start your Airin server, then retry.\n${url}`,
+        message: "Cannot connect to Airin",
         type: "error",
       });
 
@@ -571,10 +571,10 @@ if (!process.argv.includes("--smoke-test")) {
   let localServer;
   let quitting = false;
   let recovery = null;
-  app.setName("Nakama");
+  app.setName("Airin");
   app.setPath(
     "userData",
-    join(app.getPath("appData"), "Nakama Desktop Electron")
+    join(app.getPath("appData"), "Airin Desktop Electron")
   );
 
   if (app.requestSingleInstanceLock()) {
@@ -591,11 +591,11 @@ if (!process.argv.includes("--smoke-test")) {
     app
       .whenReady()
       .then(async () => {
-        if (process.env.NAKAMA_DESKTOP_URL) {
-          return createWindow(serverUrl(process.env.NAKAMA_DESKTOP_URL));
+        if (process.env.AIRIN_DESKTOP_URL) {
+          return createWindow(serverUrl(process.env.AIRIN_DESKTOP_URL));
         }
 
-        const dataDir = join(app.getPath("home"), ".nakama-desktop");
+        const dataDir = join(app.getPath("home"), ".airin-desktop");
         const legacyDataDir = join(app.getPath("userData"), "server");
 
         try {
@@ -628,8 +628,8 @@ if (!process.argv.includes("--smoke-test")) {
         localServer.child.once("exit", () => {
           if (!quitting) {
             dialog.showErrorBox(
-              "Nakama server stopped",
-              "Reopen Nakama to restart the local server."
+              "Airin server stopped",
+              "Reopen Airin to restart the local server."
             );
             app.quit();
           }
@@ -661,7 +661,7 @@ if (!process.argv.includes("--smoke-test")) {
         }
       })
       .catch((error) => {
-        dialog.showErrorBox("Cannot open Nakama", error.message);
+        dialog.showErrorBox("Cannot open Airin", error.message);
         app.quit();
       });
     app.on("window-all-closed", () => app.quit());

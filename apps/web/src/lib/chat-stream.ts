@@ -1,12 +1,12 @@
-import type { StreamHandlers } from "@nakama/client";
+import type { StreamHandlers } from "@airin/client";
 import type {
   AgentQuestionAnswer,
   AgentQuestionnaire,
   AgentTodo,
   ChatContextUsage,
   ProfileSummary,
-} from "@nakama/core/contract";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/core/contract";
+import { cn } from "@airin/ui/utils";
 import type { Dispatch, SetStateAction } from "react";
 import type { ChatStatus } from "@/lib/ai-ui-types";
 import type { ChatListItem } from "@/lib/chat-history";

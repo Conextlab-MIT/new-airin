@@ -4,7 +4,7 @@ import {
   type JsonValue,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import type { AgentService } from "../services/agent-service";
 

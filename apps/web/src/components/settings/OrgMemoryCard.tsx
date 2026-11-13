@@ -1,6 +1,6 @@
-import { parseOrgMemoryContent } from "@nakama/core/soul/org-memory";
-import { Button } from "@nakama/ui/button";
-import { Card } from "@nakama/ui/card";
+import { parseOrgMemoryContent } from "@airin/core/soul/org-memory";
+import { Button } from "@airin/ui/button";
+import { Card } from "@airin/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -8,12 +8,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { Textarea } from "@nakama/ui/textarea";
-import { toast } from "@nakama/ui/toast";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { Textarea } from "@airin/ui/textarea";
+import { toast } from "@airin/ui/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import { PencilIcon, PinIcon } from "hugeicons-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";

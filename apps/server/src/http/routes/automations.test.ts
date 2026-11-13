@@ -10,7 +10,7 @@ import {
   getTelegramConfigPath,
   type ListAutomationRunsResponse,
   type RunAutomationResponse,
-} from "@nakama/core";
+} from "@airin/core";
 import { setupTestConfigDir } from "../../test-config-dir";
 import {
   createFixture,
@@ -18,11 +18,11 @@ import {
   PROFILE_ID,
 } from "./automation-route-test-fixtures";
 
-setupTestConfigDir("nakama-automation-routes-");
+setupTestConfigDir("airin-automation-routes-");
 
 async function writeChannelConfigs(orgId: string): Promise<string> {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-automation-route-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(join(tmpdir(), "airin-automation-route-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
   const owner = { orgId, profileId: PROFILE_ID };
 
   await mkdir(getTelegramConfigDir(owner), { recursive: true });
@@ -54,7 +54,7 @@ function automationBody<T>(delivery: T): string {
 
 describe("automation destination authorization over HTTP", () => {
   test("a member cannot create an automation aimed at a foreign destination", async () => {
-    const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+    const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
     const fixture = createFixture();
     const { orgId, session } = await loginMember(fixture);
     const app = fixture.app;
@@ -99,9 +99,9 @@ describe("automation destination authorization over HTTP", () => {
       expect(paired.status).toBe(201);
     } finally {
       if (previousConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+        process.env.AIRIN_CONFIG_DIR = previousConfigDir;
       }
 
       await rm(configDir, { force: true, recursive: true });
@@ -109,7 +109,7 @@ describe("automation destination authorization over HTTP", () => {
   });
 
   test("a member cannot repoint an existing automation at a new destination", async () => {
-    const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+    const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
     const fixture = createFixture();
     const { orgId, session } = await loginMember(fixture);
     const app = fixture.app;
@@ -146,9 +146,9 @@ describe("automation destination authorization over HTTP", () => {
       expect(response.status).toBe(403);
     } finally {
       if (previousConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+        process.env.AIRIN_CONFIG_DIR = previousConfigDir;
       }
 
       await rm(configDir, { force: true, recursive: true });

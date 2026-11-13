@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta content="light dark" name="color-scheme">
-    <title>Nakama Meet</title>
+    <title>Airin Meet</title>
     <style>
-    /* Match Nakama's themes in apps/web/src/index.css. */
+    /* Match Airin's themes in apps/web/src/index.css. */
     :root {
       --background: #fafafa;
       --foreground: #171717;
@@ -389,7 +389,7 @@
   </head>
   <body>
     <header>
-      <!-- Nakama mark, same as apps/web/public/nakama-mark.svg. -->
+      <!-- Airin mark, same as apps/web/public/airin-mark.svg. -->
       <svg
         aria-hidden="true"
         fill="none"
@@ -407,7 +407,7 @@
         <circle cx="8.5" cy="37.42" fill="currentColor" r="7.5" />
         <circle cx="39.5" cy="37.42" fill="currentColor" r="7.5" />
       </svg>
-      <h1>Nakama Meet</h1>
+      <h1>Airin Meet</h1>
       <span id="connection">Checking…</span>
       <button
         aria-controls="settings-panel"
@@ -444,7 +444,7 @@
       <ol aria-label="Transcription setup" class="steps">
         <li>
           <span aria-hidden="true" class="step" id="connect-step">1</span
-          ><span id="connect-label">Connect Nakama</span>
+          ><span id="connect-label">Connect Airin</span>
         </li>
         <li>
           <span aria-hidden="true" class="step" id="meet-step">2</span
@@ -452,11 +452,11 @@
         </li>
       </ol>
       <form hidden id="connect-form">
-        <label for="origin">Nakama address</label>
+        <label for="origin">Airin address</label>
         <input
           autocomplete="url"
           id="origin"
-          placeholder="https://nakama.example.com"
+          placeholder="https://airin.example.com"
           required
           spellcheck="false"
           type="text"
@@ -495,7 +495,7 @@
         </div>
       </div>
       <div class="done-actions" id="done-actions">
-        <button id="open-saved" type="button">Open in Nakama</button>
+        <button id="open-saved" type="button">Open in Airin</button>
         <div class="done-row">
           <button id="copy-text" type="button">Copy text</button>
           <button id="record-again" type="button">Record again</button>
@@ -505,9 +505,7 @@
     <section aria-label="Live transcript" hidden id="live">
       <div class="live-heading">
         <h2 id="live-title">Live transcript</h2>
-        <button hidden id="full-transcript" type="button">
-          Open in Nakama
-        </button>
+        <button hidden id="full-transcript" type="button">Open in Airin</button>
       </div>
       <ol id="transcript"></ol>
     </section>

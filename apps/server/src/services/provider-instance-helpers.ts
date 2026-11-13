@@ -1,4 +1,5 @@
 import {
+  AirinApiError,
   applyChatgptOAuthToInstance,
   applyXaiOAuthToInstance,
   createProviderInstanceId,
@@ -8,7 +9,6 @@ import {
   isOllamaCloudBaseUrl,
   isOllamaCloudInstance,
   isValidBaseUrl,
-  NakamaApiError,
   normalizeBaseUrl,
   normalizeProviderInstanceLabel,
   type OllamaHostMode,
@@ -24,20 +24,20 @@ import {
   validateOpenRouterRoutingSettings,
   validateProviderApiKeyFormat,
   validateProviderInstanceLabel,
-} from "@nakama/core";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
+} from "@airin/core";
+import { createChatLock } from "@airin/core/channel-chat-lock";
 import type {
   CreateProviderRequest,
   ProviderInstanceSummary,
   ProviderModelOption,
   ProviderName,
   UpdateProviderRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   isDiscoveryModelProvider,
   resolveNetraModelId,
-} from "@nakama/core/discovery-providers";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core/discovery-providers";
+import type { DatabaseAdapter } from "@airin/db";
 import {
   getDefaultModel,
   getModelById,
@@ -156,14 +156,14 @@ export function buildProviderInstanceFromCreateRequest(
   const type = request.type;
 
   if (!type) {
-    throw new NakamaApiError("Provider type is required.", 400);
+    throw new AirinApiError("Provider type is required.", 400);
   }
 
   const apiKey = request.apiKey?.trim() ?? "";
 
   if (type === "xai_oauth") {
     if (!request.xaiOAuth) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Sign in with Grok before saving this provider.",
         400
       );
@@ -194,7 +194,7 @@ export function buildProviderInstanceFromCreateRequest(
 
   if (type === "chatgpt") {
     if (!request.chatgptOAuth) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Sign in with ChatGPT before saving this provider.",
         400
       );
@@ -584,7 +584,7 @@ export function resolveConfiguredModelInstance(
   const decoded = decodeStoredModelSelection(trimmed);
 
   if (!decoded || decoded.providerId === "__unknown__") {
-    throw new NakamaApiError(errors.invalid, 400);
+    throw new AirinApiError(errors.invalid, 400);
   }
 
   const instance = userConfig?.providers.find(
@@ -592,7 +592,7 @@ export function resolveConfiguredModelInstance(
   );
 
   if (!instance) {
-    throw new NakamaApiError(errors.missingProvider, 400);
+    throw new AirinApiError(errors.missingProvider, 400);
   }
 
   return {

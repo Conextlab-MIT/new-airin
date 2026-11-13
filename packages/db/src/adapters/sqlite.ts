@@ -5,17 +5,17 @@ import type {
   AcpAgentConfig,
   AgentQuestionnaire,
   ChatMessage,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   decryptCredential,
   derivePluginToolName,
   encryptCredential,
   getUserMessageText,
-  NakamaApiError,
   PRIVATE_FILE_MODE,
-} from "@nakama/core";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
-import { isThinkingEffort } from "@nakama/core/thinking-effort";
+} from "@airin/core";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
+import { isThinkingEffort } from "@airin/core/thinking-effort";
 import { LLM_USAGE_STATS_ID, WORKSPACE_SETTINGS_ID } from "../constants";
 import { ensureDatabaseDirectory, resolveDatabasePath } from "../database-url";
 import { migrateDatabase } from "../migrate";
@@ -616,7 +616,7 @@ interface RegressionCaseRow {
 
 /**
  * The file holds plaintext MCP credentials and every transcript, so it carries
- * the same 0600 the rest of ~/.nakama already uses. bun:sqlite takes no mode, and
+ * the same 0600 the rest of ~/.airin already uses. bun:sqlite takes no mode, and
  * an existing loose file keeps its own, so chmod after open rather than at create.
  */
 export function openPrivateDatabase(databasePath: string): Database {
@@ -1255,15 +1255,15 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
       const profile = getProfileForOrgStmt.get(profileId, sourceOrgId);
 
       if (!profile) {
-        throw new NakamaApiError("Profile not found.", 404);
+        throw new AirinApiError("Profile not found.", 404);
       }
 
       if (sourceOrgId === targetOrgId) {
-        throw new NakamaApiError("Choose another organization.", 400);
+        throw new AirinApiError("Choose another organization.", 400);
       }
 
       if (profile.is_super) {
-        throw new NakamaApiError("Super Nakama cannot be moved.", 400);
+        throw new AirinApiError("Airin cannot be moved.", 400);
       }
 
       const target = db
@@ -1273,7 +1273,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
         .get(targetOrgId);
 
       if (!target) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Destination organization is unavailable.",
           404
         );
@@ -1290,7 +1290,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
             )
             .get(profileId)
         ) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Wait for running automations and workflows to finish.",
             409
           );
@@ -1305,7 +1305,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
           .get(sourceOrgId, profileId);
 
         if (!successor) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Create another profile before moving the default profile.",
             409
           );
@@ -1325,7 +1325,7 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
           )
           .get(workspacePrefix, workspacePrefix, profileId)
       ) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Unassign this profile's local skills from other profiles before moving.",
           409
         );

@@ -61,11 +61,11 @@ describe("resolveProvider", () => {
       }
     }
   });
-  test("prefers NAKAMA_PROVIDER over env keys", () => {
+  test("prefers AIRIN_PROVIDER over env keys", () => {
     const provider = resolveProvider({
       env: {
+        AIRIN_PROVIDER: "gemini",
         GEMINI_API_KEY: "test-key",
-        NAKAMA_PROVIDER: "gemini",
         OPENAI_API_KEY: "sk-test",
       },
     });
@@ -83,7 +83,7 @@ describe("resolveProvider", () => {
   });
 
   test("uses an API key mounted through a companion file variable", () => {
-    const directory = mkdtempSync(join(tmpdir(), "nakama-provider-key-"));
+    const directory = mkdtempSync(join(tmpdir(), "airin-provider-key-"));
     const keyPath = join(directory, "gemini");
     writeFileSync(keyPath, "mounted-secret\n");
 

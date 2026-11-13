@@ -1,7 +1,7 @@
 import {
   LOCAL_CLIENT_EMAIL,
   LOCAL_CLIENT_USER_ID,
-} from "@nakama/core/local-auth";
+} from "@airin/core/local-auth";
 import type { DatabaseAdapter } from "./types";
 
 // `bun test` sets NODE_ENV=test. bcrypt's lowest cost keeps app setup fast in tests.

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import type { ChatMessage } from "@nakama/core";
+import type { ChatMessage } from "@airin/core";
 import {
   generateOpenAIResponsesChat,
   toOpenAIMessages,

@@ -1,5 +1,5 @@
-import type { AgentChatSession } from "@nakama/agent";
-import type { StoredSessionRecord } from "@nakama/db";
+import type { AgentChatSession } from "@airin/agent";
+import type { StoredSessionRecord } from "@airin/db";
 
 /**
  * A cognito session. It never reaches SQLite, so this map is the only place it

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { CreateSessionRequest, GenerateChatInput } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { CreateSessionRequest, GenerateChatInput } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { createDefaultProfile } from "../../services/agent-service-test-fixtures";
 import { WorkerManagerService } from "../../services/worker-manager-service";
@@ -8,7 +8,7 @@ import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { loginUserSession, seedOrgAdmin } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-sessions-cognito-test-");
+setupTestConfigDir("airin-sessions-cognito-test-");
 
 const PASSWORD = "password123";
 
@@ -126,7 +126,7 @@ describe("POST /v1/sessions with cognito", () => {
       });
 
       if (token) {
-        headers["X-Nakama-WhatsApp-Context-Token"] = token;
+        headers["X-Airin-WhatsApp-Context-Token"] = token;
       }
 
       return app.fetch(

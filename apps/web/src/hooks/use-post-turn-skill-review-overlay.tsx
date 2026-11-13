@@ -1,5 +1,5 @@
-import type { AgentChannel, ProfileSummary } from "@nakama/core/contract";
-import { resolveProfileOrgBooleanOverride } from "@nakama/core/skills/profile-org-override";
+import type { AgentChannel, ProfileSummary } from "@airin/core/contract";
+import { resolveProfileOrgBooleanOverride } from "@airin/core/skills/profile-org-override";
 import { useEffect, useMemo, useState } from "react";
 import {
   SkillPostTurnReviewBanner,

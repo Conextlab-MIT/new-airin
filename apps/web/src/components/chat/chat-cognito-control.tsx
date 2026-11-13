@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import { IncognitoIcon } from "hugeicons-react";
 
 export function ChatCognitoControl({

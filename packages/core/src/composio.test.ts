@@ -29,7 +29,7 @@ describe("composio-config", () => {
   });
 
   test("resolveComposioApiKey reads a mounted secret file", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-composio-secret-"));
+    const configDir = await mkdtemp(join(tmpdir(), "airin-composio-secret-"));
     const secretPath = join(configDir, "api-key");
     await writeFile(secretPath, "  ck-mounted\n");
 
@@ -59,15 +59,15 @@ describe("composio-config", () => {
     ).toBe("ck-direct");
   });
 
-  test("composioUserId namespaces nakama user id", () => {
-    expect(composioUserId("usr_123")).toBe("nakama:user:usr_123");
+  test("composioUserId namespaces airin user id", () => {
+    expect(composioUserId("usr_123")).toBe("airin:user:usr_123");
   });
 
   test("Composio reads an environment key without writing config.ini", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-composio-config-"));
-    const previous = process.env.NAKAMA_CONFIG_DIR;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-composio-config-"));
+    const previous = process.env.AIRIN_CONFIG_DIR;
     const previousKey = process.env.COMPOSIO_API_KEY;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    process.env.AIRIN_CONFIG_DIR = configDir;
     process.env.COMPOSIO_API_KEY = "ck_test_secret";
 
     try {
@@ -82,9 +82,9 @@ describe("composio-config", () => {
       expect((await loadComposioSettingsPublic()).configured).toBe(true);
     } finally {
       if (previous === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previous;
+        process.env.AIRIN_CONFIG_DIR = previous;
       }
 
       if (previousKey === undefined) {

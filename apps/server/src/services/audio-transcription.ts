@@ -1,4 +1,4 @@
-import { NakamaApiError, type UserConfig } from "@nakama/core";
+import { AirinApiError, type UserConfig } from "@airin/core";
 import { modelSupportsTranscription } from "../providers/models";
 import {
   type ResolvedProfileProviderSelection,
@@ -38,7 +38,7 @@ export function resolveTranscriptionProviderSelection(
         configured.instance.baseUrl?.trim())
     )
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Audio transcription requires an OpenAI, OpenRouter or OpenAI-compatible provider with a base URL. Update it in Settings → AI Providers (/settings/providers#transcription).",
       400
     );
@@ -47,7 +47,7 @@ export function resolveTranscriptionProviderSelection(
   if (
     !modelSupportsTranscription(configured.modelId, configured.instance.type)
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Configured audio transcription model "${configured.modelId}" is not supported.`,
       400
     );

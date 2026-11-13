@@ -10,7 +10,7 @@ const PAIR_MAX_MS = 5 * 60 * 1000;
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
-// Meet serves calls at /<code> and at /meet/<code>; Nakama stores /<code>.
+// Meet serves calls at /<code> and at /meet/<code>; Airin stores /<code>.
 const MEET_PATH = /^\/(?:meet\/)?([a-z]{3}-[a-z]{4}-[a-z]{3})\/?$/;
 
 let starting = false;
@@ -49,19 +49,19 @@ async function ensureOffscreen() {
   }
 }
 
-/** The origin of a Nakama address the user typed, or an error. */
-function nakamaOrigin(value) {
+/** The origin of an Airin address the user typed, or an error. */
+function airinOrigin(value) {
   const text = String(value ?? "").trim();
   let url;
 
   try {
     url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
   } catch {
-    throw new Error("Enter your Nakama address.");
+    throw new Error("Enter your Airin address.");
   }
 
   if (!(["http:", "https:"].includes(url.protocol) && url.hostname)) {
-    throw new Error("Enter your Nakama address.");
+    throw new Error("Enter your Airin address.");
   }
 
   return url.origin;
@@ -88,13 +88,13 @@ async function readJson(response) {
 
 /** Calls a key-only Meet route. A 401 means the key is dead, so drop it. */
 async function api(path, init = {}) {
-  const { meetKey, nakamaOrigin: origin } = await chrome.storage.local.get([
+  const { meetKey, airinOrigin: origin } = await chrome.storage.local.get([
     "meetKey",
-    "nakamaOrigin",
+    "airinOrigin",
   ]);
 
   if (!(meetKey && origin)) {
-    throw new Error("Connect Nakama first.");
+    throw new Error("Connect Airin first.");
   }
 
   const response = await fetch(new URL(path, origin).href, {
@@ -114,14 +114,14 @@ async function api(path, init = {}) {
       await chrome.storage.local.remove("meetKey");
     }
 
-    throw new Error("Nakama disconnected this browser. Connect again.");
+    throw new Error("Airin disconnected this browser. Connect again.");
   }
 
   const body = await readJson(response);
 
   if (!response.ok) {
     throw new Error(
-      text(body?.error) || `Nakama returned an error (${response.status}).`
+      text(body?.error) || `Airin returned an error (${response.status}).`
     );
   }
 
@@ -138,13 +138,13 @@ function post(path, body) {
 
 function leave(meetingId) {
   return post("/v1/meet/extension/leave", { meetingId }).catch((error) =>
-    console.warn("[Nakama Meet] leave failed", error.message)
+    console.warn("[Airin Meet] leave failed", error.message)
   );
 }
 
 /**
- * Revokes this browser's key on Nakama. False when Nakama did not confirm it,
- * so the key still works until a member removes the browser in Nakama.
+ * Revokes this browser's key on Airin. False when Airin did not confirm it,
+ * so the key still works until a member removes the browser in Airin.
  */
 async function revokeKey() {
   if (!(await chrome.storage.local.get("meetKey")).meetKey) {
@@ -156,9 +156,9 @@ async function revokeKey() {
 
     return true;
   } catch (error) {
-    console.warn("[Nakama Meet] key revoke failed", error.message);
+    console.warn("[Airin Meet] key revoke failed", error.message);
 
-    // api() drops the key on a 401: Nakama no longer accepts it.
+    // api() drops the key on a 401: Airin no longer accepts it.
     return !(await chrome.storage.local.get("meetKey")).meetKey;
   }
 }
@@ -193,7 +193,7 @@ async function pollPairing() {
       { credentials: "omit", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }
     );
   } catch (error) {
-    console.warn("[Nakama Meet] pairing check failed", error.message);
+    console.warn("[Airin Meet] pairing check failed", error.message);
   }
 
   const body = response?.ok ? await readJson(response) : null;
@@ -215,8 +215,8 @@ async function pollPairing() {
 
   if (body?.status === "approved" && text(body.key)) {
     await chrome.storage.local.set({
+      airinOrigin: pairing.origin,
       meetKey: body.key,
-      nakamaOrigin: pairing.origin,
     });
     await chrome.storage.session.remove("pairing");
 
@@ -231,12 +231,12 @@ async function connect(address) {
     throw new Error("Stop the current transcription first.");
   }
 
-  const origin = nakamaOrigin(address);
+  const origin = airinOrigin(address);
 
   if (
     !(await chrome.permissions.contains({ origins: [originPattern(origin)] }))
   ) {
-    throw new Error("Allow access to your Nakama address to connect.");
+    throw new Error("Allow access to your Airin address to connect.");
   }
 
   const response = await fetch(`${origin}/v1/meet/extension/pair`, {
@@ -249,7 +249,7 @@ async function connect(address) {
 
   if (!(response.ok && text(body?.pairId) && text(body.code))) {
     throw new Error(
-      text(body?.error) || "Nakama did not start pairing. Check the address."
+      text(body?.error) || "Airin did not start pairing. Check the address."
     );
   }
 
@@ -258,10 +258,10 @@ async function connect(address) {
     : PAIR_MAX_MS;
 
   // The new pairing replaces the old key. A failure is logged in revokeKey;
-  // the old Nakama still lists that browser, so a member can remove it.
+  // the old Airin still lists that browser, so a member can remove it.
   await revokeKey();
   await chrome.storage.local.remove("meetKey");
-  await chrome.storage.local.set({ nakamaOrigin: origin });
+  await chrome.storage.local.set({ airinOrigin: origin });
   await chrome.storage.session.remove(["pairError", SESSION_KEY]);
   await chrome.storage.session.set({
     pairing: {
@@ -292,7 +292,7 @@ async function disconnect() {
 
   if (!revoked) {
     throw new Error(
-      "Disconnected here, but Nakama did not remove this browser. Remove it on the Google Meet page."
+      "Disconnected here, but Airin did not remove this browser. Remove it on the Google Meet page."
     );
   }
 
@@ -317,8 +317,7 @@ async function transcript(session, after) {
     throw new Error("Invalid transcript cursor");
   }
 
-  const { nakamaOrigin: origin } =
-    await chrome.storage.local.get("nakamaOrigin");
+  const { airinOrigin: origin } = await chrome.storage.local.get("airinOrigin");
 
   if (session.origin !== origin) {
     return null;
@@ -362,13 +361,13 @@ async function start() {
       throw new Error("Join a Google Meet meeting in this tab first.");
     }
 
-    const { meetKey, nakamaOrigin: origin } = await chrome.storage.local.get([
+    const { meetKey, airinOrigin: origin } = await chrome.storage.local.get([
       "meetKey",
-      "nakamaOrigin",
+      "airinOrigin",
     ]);
 
     if (!(meetKey && origin)) {
-      throw new Error("Connect Nakama first.");
+      throw new Error("Connect Airin first.");
     }
 
     // Chrome allows tab capture only after the toolbar button was clicked on
@@ -380,16 +379,16 @@ async function start() {
         targetTabId: tab.id,
       });
     } catch (error) {
-      console.warn("[Nakama Meet] tab capture refused", error.message);
+      console.warn("[Airin Meet] tab capture refused", error.message);
       throw new Error(
-        "Click the Nakama icon in the toolbar on this Meet tab, then start again."
+        "Click the Airin icon in the toolbar on this Meet tab, then start again."
       );
     }
 
     const status = await api("/v1/meet/extension/status");
 
     if (status?.captureProtocol !== 3) {
-      throw new Error("Update Nakama first.");
+      throw new Error("Update Airin first.");
     }
 
     await ensureOffscreen();
@@ -465,7 +464,7 @@ async function start() {
 
 async function state() {
   const [local, session] = await Promise.all([
-    chrome.storage.local.get(["meetKey", "nakamaOrigin"]),
+    chrome.storage.local.get(["meetKey", "airinOrigin"]),
     chrome.storage.session.get(["pairError", "pairing", SESSION_KEY]),
   ]);
 
@@ -478,7 +477,7 @@ async function state() {
   return {
     captureSession: capture,
     connected: Boolean(local.meetKey),
-    origin: local.nakamaOrigin,
+    origin: local.airinOrigin,
     pairError: session.pairError,
     pairing: session.pairing ? { code: session.pairing.code } : undefined,
   };
@@ -528,10 +527,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
   } else if (message.type === "OPEN_TRANSCRIPT" && fromExtensionPage) {
     work = chrome.storage.local
-      .get("nakamaOrigin")
-      .then(async ({ nakamaOrigin: origin }) => {
+      .get("airinOrigin")
+      .then(async ({ airinOrigin: origin }) => {
         if (!origin) {
-          throw new Error("Connect Nakama first.");
+          throw new Error("Connect Airin first.");
         }
 
         await chrome.tabs.create({ url: `${origin}/google-meet` });
@@ -624,7 +623,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: false })
   .catch((error) =>
-    console.warn("[Nakama Meet] side panel behavior failed", error.message)
+    console.warn("[Airin Meet] side panel behavior failed", error.message)
   );
 
 chrome.action.onClicked.addListener((tab) => {
@@ -632,7 +631,7 @@ chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel
     .open({ windowId: tab.windowId })
     .catch((error) =>
-      console.warn("[Nakama Meet] side panel did not open", error.message)
+      console.warn("[Airin Meet] side panel did not open", error.message)
     );
 });
 

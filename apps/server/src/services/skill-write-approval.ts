@@ -1,5 +1,5 @@
-import { NakamaApiError, resolveProfileOrgBooleanOverride } from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+import { AirinApiError, resolveProfileOrgBooleanOverride } from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 
 /**
  * Whether writes to a profile's skills are staged for admin review instead of
@@ -18,13 +18,13 @@ export async function isSkillWriteApprovalRequired(
   const org = await database.getOrganizationById(orgId);
 
   if (!org) {
-    throw new NakamaApiError("Organization not found.", 404);
+    throw new AirinApiError("Organization not found.", 404);
   }
 
   const profile = await database.getProfileForOrg(profileId, orgId);
 
   if (!profile) {
-    throw new NakamaApiError("Profile not found.", 404);
+    throw new AirinApiError("Profile not found.", 404);
   }
 
   return resolveProfileOrgBooleanOverride(

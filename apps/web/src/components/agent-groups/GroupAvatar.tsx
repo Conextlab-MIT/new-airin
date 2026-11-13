@@ -1,6 +1,6 @@
-import type { ProfileSummary } from "@nakama/core";
-import type { AgentGroup } from "@nakama/core/agent-groups";
-import { cn } from "@nakama/ui/utils";
+import type { ProfileSummary } from "@airin/core";
+import type { AgentGroup } from "@airin/core/agent-groups";
+import { cn } from "@airin/ui/utils";
 import { UserGroupIcon } from "hugeicons-react";
 import { useState } from "react";
 import { ProfileAvatar } from "@/components/ProfileAvatar";

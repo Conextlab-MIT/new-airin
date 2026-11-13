@@ -1,10 +1,3 @@
-import {
-  ApiError,
-  type FunctionCall,
-  type GenerateContentResponse,
-  GoogleGenAI,
-  type Part,
-} from "@google/genai";
 import type {
   ChatCompletionResult,
   GenerateChatInput,
@@ -12,8 +5,15 @@ import type {
   GenerateTextResult,
   ProviderClient,
   StreamChatHandlers,
-} from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
+} from "@airin/core";
+import { AirinApiError } from "@airin/core";
+import {
+  ApiError,
+  type FunctionCall,
+  type GenerateContentResponse,
+  GoogleGenAI,
+  type Part,
+} from "@google/genai";
 import {
   buildChatCompletionResult,
   buildProviderHttpError,
@@ -89,7 +89,7 @@ function emptyResponseError<Value>(finishReason: Value): Error {
 
   if (REFUSAL_FINISH_REASONS.has(reason)) {
     // 422, not 500: the request reached the model and the model said no.
-    return new NakamaApiError(
+    return new AirinApiError(
       `${PROVIDER_LABEL} declined to answer (finishReason: ${reason}). Rephrasing may help; retrying the same prompt will not.`,
       422
     );

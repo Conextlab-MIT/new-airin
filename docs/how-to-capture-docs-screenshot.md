@@ -17,7 +17,7 @@ Always capture from an isolated demo server. Never use your real instance (for e
 Each `docs/website/scripts/capture-*.sh` script does these steps:
 
 1. Builds `apps/web` (`ensure_current_web_build` in `capture-common.sh`).
-2. Starts the server with a temp `NAKAMA_CONFIG_DIR` under `/tmp` on its own port.
+2. Starts the server with a temp `AIRIN_CONFIG_DIR` under `/tmp` on its own port.
 3. Seeds over HTTP: `POST /v1/auth/setup` with the **Docs Demo** org (`admin@docs.demo`), then a provider with a placeholder key.
 4. Copies the session cookies into an `agent-browser` session.
 5. Drives the UI and writes PNGs into `public/screenshots/`.
@@ -61,13 +61,13 @@ Copy the script flow by hand:
 1. Start a server with a temp config dir and a free port (not 4310 or 4312–4319):
 
    ```bash
-   NAKAMA_CONFIG_DIR=/tmp/nakama-docs-manual NAKAMA_PORT=4330 bun run apps/server/src/index.ts
+   AIRIN_CONFIG_DIR=/tmp/airin-docs-manual AIRIN_PORT=4330 bun run apps/server/src/index.ts
    ```
 
 2. Seed it with `curl`, as the scripts do: `POST /v1/auth/setup` (Docs Demo org), then `POST /v1/providers`. Send `X-Org-Id` and `X-CSRF-Token` on later calls.
 3. Seed the data the shot needs:
-   - Artifacts: write files into `$NAKAMA_CONFIG_DIR/orgs/<orgId>/profiles/<profileId>/artifacts/`.
-   - Custom tools: put the module in `$NAKAMA_CONFIG_DIR/orgs/<orgId>/tools/`, then `POST /v1/tools`.
+   - Artifacts: write files into `$AIRIN_CONFIG_DIR/orgs/<orgId>/profiles/<profileId>/artifacts/`.
+   - Custom tools: put the module in `$AIRIN_CONFIG_DIR/orgs/<orgId>/tools/`, then `POST /v1/tools`.
    - Channel bots (Telegram, Discord): save config with the `packages/core` helpers in a `bun -e` call. Saving through HTTP checks the token with the real service and fails on a fake token.
 4. Set the cookies in `agent-browser`, then open the page and take the shot:
 

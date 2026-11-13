@@ -1,17 +1,17 @@
-import type { AgentChatSession } from "@nakama/agent";
+import type { AgentChatSession } from "@airin/agent";
 import {
+  AirinApiError,
   type ChatContextUsage,
   type ChatTurnUsage,
   formatServerError,
-  NakamaApiError,
   reportError,
   resolveChatFirstTokenTimeoutMs,
   resolveChatStreamTimeoutMs,
   type SendMessageInput,
   type StreamEvent,
   type ToolContext,
-} from "@nakama/core";
-import type { StoredSessionRecord } from "@nakama/db";
+} from "@airin/core";
+import type { StoredSessionRecord } from "@airin/db";
 import { z } from "zod";
 import { sessionKind } from "./session-runtime";
 import {
@@ -333,7 +333,7 @@ export class TurnRunner {
             }
 
             timedOut = reason;
-            reject(new NakamaApiError(message, 504));
+            reject(new AirinApiError(message, 504));
             // After rejecting, so the race reports the timeout and not the
             // abort. Nothing else stops the open provider request.
             abort.abort();
@@ -387,7 +387,7 @@ export class TurnRunner {
       // A 504 timeout is exactly what an operator needs, so only a 4xx
       // refusal and a cancel go unreported.
       if (
-        !(cancelled || (error instanceof NakamaApiError && error.status < 500))
+        !(cancelled || (error instanceof AirinApiError && error.status < 500))
       ) {
         void this.report(error, { kind: "turn", source: "server" });
       }
@@ -408,7 +408,7 @@ export class TurnRunner {
             kind: "error",
             message: formatServerError(error),
             reason: timedOut ?? "failed",
-            status: error instanceof NakamaApiError ? error.status : 500,
+            status: error instanceof AirinApiError ? error.status : 500,
             usage,
           };
     } finally {

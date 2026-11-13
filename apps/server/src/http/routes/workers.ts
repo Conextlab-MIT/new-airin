@@ -1,9 +1,9 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
-  NakamaApiError,
+  AirinApiError,
   reportError,
   type WorkerLogsResponse,
-} from "@nakama/core";
+} from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import type { ServerOptions } from "../context";
 import {
@@ -30,7 +30,7 @@ function requireWorkerAuthorization(
     requireOrgAdminOrPlatformAdminFromContext(c);
 
     if (!manager.isPluginWorkerForOrg(name, requireActiveOrgIdFromContext(c))) {
-      throw new NakamaApiError("Worker not found", 404);
+      throw new AirinApiError("Worker not found", 404);
     }
 
     return;
@@ -59,7 +59,7 @@ export function registerWorkerRoutes(
     const profileId = c.req.query("profileId")?.trim();
 
     if (!profileId) {
-      throw new NakamaApiError("Choose an agent to manage this worker.", 400);
+      throw new AirinApiError("Choose an agent to manage this worker.", 400);
     }
 
     await options.agent.getProfile(orgId, profileId);
@@ -232,7 +232,7 @@ export function registerWorkerRoutes(
           const owner = await workerScope(c, name);
 
           if (!owner) {
-            throw new NakamaApiError(
+            throw new AirinApiError(
               "Only agent channels can be disconnected",
               400
             );
@@ -253,7 +253,7 @@ export function registerWorkerRoutes(
 
         return json({ ok: true });
       } catch (err) {
-        if (err instanceof NakamaApiError) {
+        if (err instanceof AirinApiError) {
           return errorResponse(err.message, err.status);
         }
 
@@ -290,7 +290,7 @@ export function registerWorkerRoutes(
 
       return json<WorkerLogsResponse>(logs);
     } catch (err) {
-      if (err instanceof NakamaApiError) {
+      if (err instanceof AirinApiError) {
         return errorResponse(err.message, err.status);
       }
 
@@ -314,7 +314,7 @@ export function registerWorkerRoutes(
 
       return json({ ok: true });
     } catch (err) {
-      if (err instanceof NakamaApiError) {
+      if (err instanceof AirinApiError) {
         return errorResponse(err.message, err.status);
       }
 

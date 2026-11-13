@@ -1,5 +1,5 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
-import type { MfaPolicyResponse } from "@nakama/core/contract";
+import type { MfaPolicyResponse } from "@airin/core/contract";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { client } from "@/lib/client";

@@ -1,27 +1,27 @@
 import { join } from "node:path";
-import { NakamaClient } from "@nakama/client";
+import { AirinClient } from "@airin/client";
 import {
   installErrorHandlers,
   installErrorTrackingSink,
   log,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   type ChannelOwner,
   channelOwnerFromEnv,
-} from "@nakama/core/channel-config-shared";
-import { ChannelOrgStore } from "@nakama/core/channel-org";
-import { ChannelSessionStore } from "@nakama/core/channel-session-store";
-import { ensureServerRunning } from "@nakama/core/ensure-server";
-import { loadLocalAuthToken } from "@nakama/core/local-auth";
-import { resolveWebPublicUrl } from "@nakama/core/runtime";
+} from "@airin/core/channel-config-shared";
+import { ChannelOrgStore } from "@airin/core/channel-org";
+import { ChannelSessionStore } from "@airin/core/channel-session-store";
+import { ensureServerRunning } from "@airin/core/ensure-server";
+import { loadLocalAuthToken } from "@airin/core/local-auth";
+import { resolveWebPublicUrl } from "@airin/core/runtime";
 import {
   getWhatsAppConfigDir,
   syncWhatsAppOwnerPairing,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 import {
   createWhatsAppWorkerHeartbeat,
   readWhatsAppHostChannels,
-} from "@nakama/core/whatsapp-worker";
+} from "@airin/core/whatsapp-worker";
 import { WhatsAppAuthStore } from "./auth-store";
 import { installBaileysConsoleRedaction } from "./baileys-logger";
 import { createChatHandler } from "./chat-handler";
@@ -40,7 +40,7 @@ import {
 } from "./socket";
 
 /** The server runs every agent's WhatsApp number in one shared host process. */
-const hostMode = process.env.NAKAMA_WHATSAPP_HOST === "1";
+const hostMode = process.env.AIRIN_WHATSAPP_HOST === "1";
 
 if (hostMode) {
   installChannelLogRouting();
@@ -118,9 +118,9 @@ async function startWhatsAppChannel(
       updatedAt: new Date().toISOString(),
     });
 
-    const client = new NakamaClient({
+    const client = new AirinClient({
       authToken:
-        (await loadLocalAuthToken("whatsapp@nakama.internal")) ?? undefined,
+        (await loadLocalAuthToken("whatsapp@airin.internal")) ?? undefined,
       baseUrl: serverUrl,
       clientOrigin: resolveWebPublicUrl(),
       orgId: owner.orgId,
@@ -156,7 +156,7 @@ async function startWhatsAppChannel(
       getSocket: () => socketHandle?.socket ?? null,
       orgStore,
       sessionStore,
-      whatsappContextToken: process.env.NAKAMA_WHATSAPP_CONTEXT_TOKEN,
+      whatsappContextToken: process.env.AIRIN_WHATSAPP_CONTEXT_TOKEN,
     });
 
     const socket = await createWhatsAppSocket({
@@ -219,7 +219,7 @@ async function startWhatsAppChannel(
     const paired = authConfig?.pairedJid ? "yes" : "no";
     const pendingCode = authConfig?.pairingCode ? "yes" : "no";
     console.log(
-      `Nakama WhatsApp bridge · ${serverUrl} · profile ${config.profileId} · paired ${paired} · pairing code ${pendingCode}`
+      `Airin WhatsApp bridge · ${serverUrl} · profile ${config.profileId} · paired ${paired} · pairing code ${pendingCode}`
     );
 
     await socket.start();
@@ -265,7 +265,7 @@ try {
     };
 
     await poll();
-    console.log(`Nakama WhatsApp host · ${serverUrl}`);
+    console.log(`Airin WhatsApp host · ${serverUrl}`);
   } else {
     const channel = await startWhatsAppChannel(
       channelOwnerFromEnv(),

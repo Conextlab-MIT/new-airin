@@ -33,8 +33,9 @@ import type {
   UpdateProfileRequest,
   UploadKnowledgeBaseResponse,
   UploadOrganizationKnowledgeBaseResponse,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   createId,
   DEFAULT_KNOWLEDGE_SOURCES,
   deleteProfileAvatar,
@@ -54,7 +55,6 @@ import {
   KnowledgeBaseDuplicateError,
   listKnowledgeBaseDocuments,
   listOrganizationKnowledgeBaseDocuments,
-  NakamaApiError,
   nanoid,
   normalizeKnowledgeBaseMediaType,
   pathExists,
@@ -68,29 +68,29 @@ import {
   resolveSoulStackForProfile,
   saveProfileAvatar,
   writeSoulFile,
-} from "@nakama/core";
-import { listChannelOwners } from "@nakama/core/channel-config-shared";
-import { readTextIfExists } from "@nakama/core/fs";
+} from "@airin/core";
+import { listChannelOwners } from "@airin/core/channel-config-shared";
+import { readTextIfExists } from "@airin/core/fs";
 import {
   MAX_KNOWLEDGE_DOCUMENT_BYTES,
   MAX_KNOWLEDGE_ZIP_BYTES,
-} from "@nakama/core/message-content";
+} from "@airin/core/message-content";
 import {
   BASH_TOOL_ID,
   BUILTIN_TOOL_IDS,
   GENERATE_IMAGE_TOOL_ID,
   isProtectedToolId,
   SAVE_ARTIFACT_TOOL_ID,
-} from "@nakama/core/tools/protected";
+} from "@airin/core/tools/protected";
 import type {
   DatabaseAdapter,
   StoredProfileRecord,
   StoredToolRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import {
   ensureBuiltinToolDefinitions,
   ensureProfileDefaultBundledSkills,
-} from "@nakama/db";
+} from "@airin/db";
 import { unzipSync } from "fflate";
 import { z } from "zod";
 import {
@@ -152,23 +152,23 @@ export function readZipUpload(
   const tooLarge = `ZIP file exceeds the ${maxBytes / (1024 * 1024)} MiB limit.`;
 
   if (!isString(zipBase64) || zipBase64.length === 0) {
-    throw new NakamaApiError("ZIP data is required.", 400);
+    throw new AirinApiError("ZIP data is required.", 400);
   }
 
   if (zipBase64.length > Math.ceil(maxBytes / 3) * 4) {
-    throw new NakamaApiError(tooLarge, 413);
+    throw new AirinApiError(tooLarge, 413);
   }
 
   const archive = Buffer.from(zipBase64, "base64");
 
   if (archive.length > maxBytes) {
-    throw new NakamaApiError(tooLarge, 413);
+    throw new AirinApiError(tooLarge, 413);
   }
 
   // The canonical round-trip rejects invalid characters and padding without
   // the regex engine's input-size limit on otherwise valid large archives.
   if (archive.toString("base64") !== zipBase64) {
-    throw new NakamaApiError("Invalid base64 ZIP data.", 400);
+    throw new AirinApiError("Invalid base64 ZIP data.", 400);
   }
 
   let count = 0;
@@ -189,7 +189,7 @@ export function readZipUpload(
           originalSize > MAX_KNOWLEDGE_DOCUMENT_BYTES ||
           totalBytes > maxBytes * MAX_ZIP_EXPANSION
         ) {
-          throw new NakamaApiError("ZIP file exceeds the entry limits.", 413);
+          throw new AirinApiError("ZIP file exceeds the entry limits.", 413);
         }
 
         const path = name.endsWith("/") ? name.slice(0, -1) : name;
@@ -204,14 +204,14 @@ export function readZipUpload(
             .split("/")
             .some((segment) => !segment || segment === "." || segment === "..")
         ) {
-          throw new NakamaApiError("ZIP file contains an invalid path.", 400);
+          throw new AirinApiError("ZIP file contains an invalid path.", 400);
         }
 
         if (!name.endsWith("/")) {
           const normalized = path.normalize("NFC");
 
           if (names.has(normalized)) {
-            throw new NakamaApiError("ZIP file contains duplicate paths.", 400);
+            throw new AirinApiError("ZIP file contains duplicate paths.", 400);
           }
 
           names.add(normalized);
@@ -221,11 +221,11 @@ export function readZipUpload(
       },
     });
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       throw error;
     }
 
-    throw new NakamaApiError("Invalid ZIP file.", 400);
+    throw new AirinApiError("Invalid ZIP file.", 400);
   }
 
   return Object.entries(entries).filter(
@@ -357,7 +357,7 @@ export class ProfileService {
           )
         );
       } catch (error) {
-        if (!(error instanceof NakamaApiError && error.status === 404)) {
+        if (!(error instanceof AirinApiError && error.status === 404)) {
           throw error;
         }
       }
@@ -435,7 +435,7 @@ export class ProfileService {
     const source = await this.requireMutableProfile(orgId, sourceId);
 
     if (source.isSuper) {
-      throw new NakamaApiError("Super Nakama cannot be cloned.", 400);
+      throw new AirinApiError("Airin cannot be cloned.", 400);
     }
 
     const name = request.name?.trim() || `${source.name} (copy)`;
@@ -503,7 +503,7 @@ export class ProfileService {
   // here would rewrite the other org's row.
   private async insertNewProfile(profile: StoredProfileRecord): Promise<void> {
     if (!(await this.db.createProfileIfAbsent(profile))) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Profile id "${profile.id}" is already taken.`,
         409
       );
@@ -573,7 +573,7 @@ export class ProfileService {
           ([name, content]) => name !== "MEMORY.md" && content !== undefined
         ))
     ) {
-      throw new NakamaApiError("Shared agent configuration is read-only.", 403);
+      throw new AirinApiError("Shared agent configuration is read-only.", 403);
     }
 
     validateGeneratedSoulFiles(request.soulFiles);
@@ -693,7 +693,7 @@ export class ProfileService {
           (owner) => owner.orgId === orgId && owner.profileId === profileId
         )
       ) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Disconnect this agent's channels before moving it.",
           409
         );
@@ -703,17 +703,17 @@ export class ProfileService {
     const destination = request?.organizationId;
 
     if (!(isString(destination) && destination.trim())) {
-      throw new NakamaApiError("Destination organization is required.", 400);
+      throw new AirinApiError("Destination organization is required.", 400);
     }
 
     const target = await this.db.getOrganizationById(destination);
 
     if (!target || target.archivedAt) {
-      throw new NakamaApiError("Destination organization is unavailable.", 404);
+      throw new AirinApiError("Destination organization is unavailable.", 404);
     }
 
     if (destination === orgId) {
-      throw new NakamaApiError("Choose another organization.", 400);
+      throw new AirinApiError("Choose another organization.", 400);
     }
 
     const sessions = (await this.db.listSessions()).filter(
@@ -721,7 +721,7 @@ export class ProfileService {
     );
 
     if (sessions.some((session) => sessionTurnRegistry.isActive(session.id))) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Wait for active chats to finish before moving this profile.",
         409
       );
@@ -750,7 +750,7 @@ export class ProfileService {
     try {
       for (const [source, targetPath] of paths) {
         if (lstatSync(targetPath, { throwIfNoEntry: false })) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Destination already contains profile data.",
             409
           );
@@ -911,7 +911,7 @@ export class ProfileService {
       : undefined;
 
     if (orgId && !detail) {
-      throw new NakamaApiError("Tool not found.", 404);
+      throw new AirinApiError("Tool not found.", 404);
     }
 
     const tool = await this.requireTool(toolId);
@@ -931,7 +931,7 @@ export class ProfileService {
       );
 
       if (!detail || detail.scope === "parent") {
-        throw new NakamaApiError("Tool source is unavailable.", 404);
+        throw new AirinApiError("Tool source is unavailable.", 404);
       }
     }
 
@@ -1065,11 +1065,11 @@ export class ProfileService {
     );
 
     if (!tool) {
-      throw new NakamaApiError("Tool not found.", 404);
+      throw new AirinApiError("Tool not found.", 404);
     }
 
     if (tool.id === BASH_TOOL_ID && !isTenantBashEnabled()) {
-      throw new NakamaApiError(TENANT_BASH_DISABLED, 403);
+      throw new AirinApiError(TENANT_BASH_DISABLED, 403);
     }
 
     const assigned = await this.db.listToolsForProfile(profileId);
@@ -1077,7 +1077,7 @@ export class ProfileService {
     if (
       assigned.some((item) => item.id !== tool.id && item.name === tool.name)
     ) {
-      throw new NakamaApiError("Conflicting tool names are assigned.", 409);
+      throw new AirinApiError("Conflicting tool names are assigned.", 409);
     }
 
     await withAssignmentChange(
@@ -1192,7 +1192,7 @@ export class ProfileService {
         (existing) => existing.id !== skill.id && existing.name === skill.name
       )
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "A different skill with this name is assigned.",
         409
       );
@@ -1278,7 +1278,7 @@ export class ProfileService {
     const avatar = await readProfileAvatar(orgId, profileId);
 
     if (!avatar) {
-      throw new NakamaApiError("Profile avatar not found.", 404);
+      throw new AirinApiError("Profile avatar not found.", 404);
     }
 
     return avatar;
@@ -1289,7 +1289,7 @@ export class ProfileService {
     const removed = await deleteProfileAvatar(orgId, profileId);
 
     if (!removed) {
-      throw new NakamaApiError("Profile avatar not found.", 404);
+      throw new AirinApiError("Profile avatar not found.", 404);
     }
 
     const now = new Date().toISOString();
@@ -1357,7 +1357,7 @@ export class ProfileService {
       };
     } catch (error) {
       if (error instanceof KnowledgeBaseDuplicateError) {
-        throw new NakamaApiError(error.message, 409);
+        throw new AirinApiError(error.message, 409);
       }
 
       const message =
@@ -1365,7 +1365,7 @@ export class ProfileService {
           ? error.message
           : "Failed to upload knowledge base document.";
 
-      throw new NakamaApiError(message, 400);
+      throw new AirinApiError(message, 400);
     }
   }
 
@@ -1384,7 +1384,7 @@ export class ProfileService {
         )
       )
     ) {
-      throw new NakamaApiError("ZIP file has no supported documents.", 400);
+      throw new AirinApiError("ZIP file has no supported documents.", 400);
     }
 
     const entries: ImportKnowledgeBaseZipEntry[] = [];
@@ -1484,7 +1484,7 @@ export class ProfileService {
     await this.memoryBackend.syncKnowledge(orgId, profileId);
 
     if (!deleted) {
-      throw new NakamaApiError("Knowledge base document not found.", 404);
+      throw new AirinApiError("Knowledge base document not found.", 404);
     }
 
     return { deleted: true, documentId, profileId };
@@ -1513,7 +1513,7 @@ export class ProfileService {
         allowedDirs: [dir],
       });
     } catch {
-      throw new NakamaApiError("Knowledge catalog is unavailable.", 404);
+      throw new AirinApiError("Knowledge catalog is unavailable.", 404);
     }
 
     const documents = await listOrganizationKnowledgeBaseDocuments(orgId);
@@ -1546,13 +1546,13 @@ export class ProfileService {
       };
     } catch (error) {
       if (error instanceof KnowledgeBaseDuplicateError) {
-        throw new NakamaApiError(error.message, 409);
+        throw new AirinApiError(error.message, 409);
       }
 
       // Replacing a shared document that a profile still references is a
       // conflict, not a bad request.
       if (error instanceof KnowledgeBaseDocumentInUseError) {
-        throw new NakamaApiError(error.message, 409);
+        throw new AirinApiError(error.message, 409);
       }
 
       const message =
@@ -1560,7 +1560,7 @@ export class ProfileService {
           ? error.message
           : "Failed to upload knowledge base document.";
 
-      throw new NakamaApiError(message, 400);
+      throw new AirinApiError(message, 400);
     }
   }
 
@@ -1580,7 +1580,7 @@ export class ProfileService {
     );
 
     if (!deleted) {
-      throw new NakamaApiError("Knowledge base document not found.", 404);
+      throw new AirinApiError("Knowledge base document not found.", 404);
     }
 
     return { deleted: true, documentId };
@@ -1617,7 +1617,7 @@ export class ProfileService {
           ? error.message
           : "Knowledge base document not found.";
 
-      throw new NakamaApiError(message, 404);
+      throw new AirinApiError(message, 404);
     }
   }
 
@@ -1647,7 +1647,7 @@ export class ProfileService {
           )
         );
       } catch (error) {
-        if (!(error instanceof NakamaApiError && error.status === 404)) {
+        if (!(error instanceof AirinApiError && error.status === 404)) {
           throw error;
         }
       }
@@ -1673,7 +1673,7 @@ export class ProfileService {
         options
       );
     } catch {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
   }
 
@@ -1684,7 +1684,7 @@ export class ProfileService {
     const organization = await this.db.getOrganizationById(orgId);
 
     if (!organization || organization.archivedAt) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const sourceOrgId = organization.parentOrgId ?? orgId;
@@ -1700,7 +1700,7 @@ export class ProfileService {
       source.archivedAt ||
       publication?.resourceKind !== "knowledge"
     ) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const dir = getOrgKnowledgeBaseDir(sourceOrgId);
@@ -1721,7 +1721,7 @@ export class ProfileService {
       );
 
       if (!document) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       const stored = await guardFilePath(
@@ -1732,7 +1732,7 @@ export class ProfileService {
       );
 
       if (!(await stat(stored.resolved)).isFile()) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       await guardFilePath(
@@ -1754,7 +1754,7 @@ export class ProfileService {
         uploadedAt: document.uploadedAt,
       };
     } catch {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
   }
 
@@ -1779,7 +1779,7 @@ export class ProfileService {
           ? error.message
           : "Knowledge base document not found.";
 
-      throw new NakamaApiError(message, 404);
+      throw new AirinApiError(message, 404);
     }
   }
 
@@ -1797,17 +1797,14 @@ export class ProfileService {
     }
 
     if (!PROFILE_ID_PATTERN.test(trimmed)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Profile id must start with a letter or number and use only letters, numbers, underscores, and hyphens (max 64 characters).",
         400
       );
     }
 
     if (await this.isProfileIdTaken(trimmed)) {
-      throw new NakamaApiError(
-        `Profile id "${trimmed}" is already taken.`,
-        409
-      );
+      throw new AirinApiError(`Profile id "${trimmed}" is already taken.`, 409);
     }
 
     return trimmed;
@@ -1840,7 +1837,7 @@ export class ProfileService {
     const profile = await this.requireProfile(orgId, profileId);
 
     if (await this.db.getSharedAgentInstance(orgId, profileId)) {
-      throw new NakamaApiError("Shared agent configuration is read-only.", 403);
+      throw new AirinApiError("Shared agent configuration is read-only.", 403);
     }
 
     return profile;
@@ -1853,7 +1850,7 @@ export class ProfileService {
     const profile = await this.db.getProfileForOrg(profileId, orgId);
 
     if (!profile) {
-      throw new NakamaApiError("Profile not found.", 404);
+      throw new AirinApiError("Profile not found.", 404);
     }
 
     return profile;
@@ -1873,7 +1870,7 @@ export class ProfileService {
     const tool = await this.db.getTool(toolId);
 
     if (!tool) {
-      throw new NakamaApiError("Tool not found.", 404);
+      throw new AirinApiError("Tool not found.", 404);
     }
 
     return tool;
@@ -1899,7 +1896,7 @@ export class ProfileService {
       } catch (error) {
         if (
           !(
-            error instanceof NakamaApiError &&
+            error instanceof AirinApiError &&
             [400, 404, 409].includes(error.status)
           )
         ) {
@@ -2174,11 +2171,11 @@ function validateAcpAgent(agent: AcpAgentConfig | null | undefined): void {
   }
 
   if (!agent.command.trim()) {
-    throw new NakamaApiError("ACP agent command is required.", 400);
+    throw new AirinApiError("ACP agent command is required.", 400);
   }
 
   if (agent.args.length > ACP_AGENT_MAX_ARGS) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `ACP agent takes at most ${ACP_AGENT_MAX_ARGS} arguments.`,
       400
     );

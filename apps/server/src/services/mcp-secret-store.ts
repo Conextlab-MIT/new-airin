@@ -1,4 +1,4 @@
-import type { DatabaseAdapter, StoredMcpServerRecord } from "@nakama/db";
+import type { DatabaseAdapter, StoredMcpServerRecord } from "@airin/db";
 import { z } from "zod";
 import type { ManagedSecrets } from "./managed-secrets";
 
@@ -24,14 +24,14 @@ function asConfig(config: StoredMcpServerRecord["config"]): Config | null {
 
 /**
  * Keeps MCP credentials out of `mcp_servers.config`. Writes move the secret
- * fields into managed secrets (encrypted with NAKAMA_SECRETS_KEY, rotated and
+ * fields into managed secrets (encrypted with AIRIN_SECRETS_KEY, rotated and
  * checked with every other saved secret); reads put them back, so callers keep
  * seeing the full config. Without a secrets key the adapter is left as is.
  */
 export async function installMcpSecretStore(
   db: DatabaseAdapter,
   secrets: Pick<ManagedSecrets, "delete" | "resolve" | "save">,
-  hasKey = Boolean(process.env.NAKAMA_SECRETS_KEY)
+  hasKey = Boolean(process.env.AIRIN_SECRETS_KEY)
 ): Promise<void> {
   if (!hasKey) {
     return;

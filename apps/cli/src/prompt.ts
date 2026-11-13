@@ -1,5 +1,5 @@
 import * as readline from "node:readline/promises";
-import type { ImageAttachment } from "@nakama/core";
+import type { ImageAttachment } from "@airin/core";
 
 export class PromptCancelledError extends Error {
   constructor() {

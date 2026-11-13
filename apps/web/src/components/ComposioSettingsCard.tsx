@@ -1,12 +1,12 @@
-import { Button } from "@nakama/ui/button";
-import { ConfirmDialog } from "@nakama/ui/dialog";
+import { Button } from "@airin/ui/button";
+import { ConfirmDialog } from "@airin/ui/dialog";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/input-group";
+import { Spinner } from "@airin/ui/spinner";
 import { LockIcon, ViewIcon, ViewOffIcon } from "hugeicons-react";
 import { useState } from "react";
 import { IntegrationCardShell } from "@/components/integration-settings.shared";

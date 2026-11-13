@@ -18,7 +18,7 @@ import type {
   SkillProposalResponse,
   UnpinOrgMemoryRequest,
   UpdateOrgMemoryRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { OrgsClient } from "./client-orgs";
 
 /** Org memory and its proposals, plus skill proposals and suggestions. */

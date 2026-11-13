@@ -3,7 +3,7 @@ import { gzipSync } from "node:zlib";
 import type {
   InstallPluginPackageRequest,
   PluginPackageRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { Header } from "tar";
@@ -121,12 +121,12 @@ export function pluginPackage(
   hash.update(JSON.stringify(options.packageJson ?? {}));
   hash.update(options.integrity ?? "");
   hash.update(options.tarball ?? "").update(options.token ?? "");
-  const packageName = `@nakama-test/fixture-${hash.digest("hex").slice(0, 24)}`;
+  const packageName = `@airin-test/fixture-${hash.digest("hex").slice(0, 24)}`;
   let version = "1.0.0";
 
   try {
     version =
-      JSON.parse(Buffer.from(files["nakama.plugin.json"] ?? "{}").toString())
+      JSON.parse(Buffer.from(files["airin.plugin.json"] ?? "{}").toString())
         .version ?? version;
   } catch {
     /* Invalid manifest fixtures still need registry metadata. */

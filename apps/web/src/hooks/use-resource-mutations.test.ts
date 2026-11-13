@@ -8,7 +8,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import {
   QueryClient,
   QueryClientProvider,
@@ -736,7 +736,7 @@ for (const kind of ["create", "install", "patch", "delete"] as const) {
         name: "Content review",
         orgId: "parent",
         scriptIssues: [],
-        sourcePath: "/tmp/nakama-test-skills/content-review/SKILL.md",
+        sourcePath: "/tmp/airin-test-skills/content-review/SKILL.md",
         updatedAt: "2026-10-12T00:00:00Z",
       };
 
@@ -1297,7 +1297,7 @@ test.each([200, 404])(
     queryClient.setQueryData(queryKey, { active: true, id: variables.shareId });
 
     if (status === 404) {
-      revoke.mockRejectedValue(new NakamaApiError("Not found", 404));
+      revoke.mockRejectedValue(new AirinApiError("Not found", 404));
     } else {
       revoke.mockResolvedValue({ id: variables.shareId, revoked: true });
     }
@@ -1314,7 +1314,7 @@ test.each([200, 404])(
 
 test("revoke preserves HTTP 403 failures rather than allowing rotation to continue", async () => {
   queryClient.setQueryData(queryKey, { active: true, id: variables.shareId });
-  const error = new NakamaApiError("Request failed", 403);
+  const error = new AirinApiError("Request failed", 403);
   revoke.mockRejectedValue(error);
 
   const mutate = renderMutation();
@@ -1426,7 +1426,7 @@ describe("artifact share controls with a stale share ID", () => {
       revoke.mockImplementation(() => {
         queryClient.setQueryData(queryKey, replacement);
 
-        return Promise.reject(new NakamaApiError("Not found", 404));
+        return Promise.reject(new AirinApiError("Not found", 404));
       });
       publish.mockResolvedValue({
         id: replacement.id,
@@ -1472,7 +1472,7 @@ describe("artifact share controls with a stale share ID", () => {
   });
 
   test("rotation does not clear or publish on a permission failure", async () => {
-    revoke.mockRejectedValue(new NakamaApiError("Forbidden", 403));
+    revoke.mockRejectedValue(new AirinApiError("Forbidden", 403));
 
     await renderControls().rotate();
 
@@ -1624,7 +1624,7 @@ test("useArtifactsExist hides only the artifacts the server reports missing", as
       }
 
       if (path === "flaky.md") {
-        throw new NakamaApiError("Bad gateway", 502);
+        throw new AirinApiError("Bad gateway", 502);
       }
 
       return true;

@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Contributing guide
-    url: https://github.com/ahmadrosid/nakama/blob/main/CONTRIBUTING.md
+    url: https://github.com/ahmadrosid/airin/blob/main/CONTRIBUTING.md
     about: Setup, repo layout, tests, and the PR workflow.
   - name: Documentation
-    url: https://ahmadrosid.github.io/nakama
+    url: https://ahmadrosid.github.io/airin
     about: Read this first if you are unsure whether the behaviour is intended.

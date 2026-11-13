@@ -3,7 +3,7 @@ import {
   createInMemoryDatabaseAdapter,
   type DatabaseAdapter,
   seedOrgDefaultProfile,
-} from "@nakama/db";
+} from "@airin/db";
 import { SkillsService } from "./skills-service";
 
 const ORG_ID = "org_test";

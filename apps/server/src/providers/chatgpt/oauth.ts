@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { ChatgptOAuthCredentials, CustomModelEntry } from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
-import type { ChatgptOAuthDeviceStartResponse } from "@nakama/core/contract";
+import type { ChatgptOAuthCredentials, CustomModelEntry } from "@airin/core";
+import { AirinApiError } from "@airin/core";
+import type { ChatgptOAuthDeviceStartResponse } from "@airin/core/contract";
 import { z } from "zod";
 
 const CHATGPT_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -145,7 +145,7 @@ async function readTokenResponse(
     (response.status === 400 || response.status === 401)
   ) {
     await response.body?.cancel();
-    throw new NakamaApiError(CHATGPT_SIGN_IN_EXPIRED_MESSAGE, 400);
+    throw new AirinApiError(CHATGPT_SIGN_IN_EXPIRED_MESSAGE, 400);
   }
 
   if (!response.ok) {
@@ -379,7 +379,7 @@ export async function fetchChatgptCodexModels(
     try {
       refreshed = await refreshChatgptOAuthToken(oauth.refreshToken);
     } catch {
-      throw new NakamaApiError(CHATGPT_SIGN_IN_EXPIRED_MESSAGE, 400);
+      throw new AirinApiError(CHATGPT_SIGN_IN_EXPIRED_MESSAGE, 400);
     }
 
     await onTokenRefresh(refreshed);
@@ -388,7 +388,7 @@ export async function fetchChatgptCodexModels(
 
   if (response.status === 401) {
     await response.body?.cancel();
-    throw new NakamaApiError(CHATGPT_SIGN_IN_EXPIRED_MESSAGE, 400);
+    throw new AirinApiError(CHATGPT_SIGN_IN_EXPIRED_MESSAGE, 400);
   }
 
   if (!response.ok) {
@@ -518,7 +518,7 @@ export async function completeChatgptOAuthDeviceSession(
   const session = deviceSessions.get(sessionId);
 
   if (!session) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "ChatGPT sign-in session expired. Start again.",
       400
     );

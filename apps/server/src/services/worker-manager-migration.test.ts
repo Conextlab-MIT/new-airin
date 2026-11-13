@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readWorkerDesiredState, setWorkerDesiredRunning } from "@nakama/core";
-import { claimChannelIdentity } from "@nakama/core/channel-config-shared";
-import { saveWhatsAppConfig } from "@nakama/core/whatsapp-config";
+import { readWorkerDesiredState, setWorkerDesiredRunning } from "@airin/core";
+import { claimChannelIdentity } from "@airin/core/channel-config-shared";
+import { saveWhatsAppConfig } from "@airin/core/whatsapp-config";
 import { WorkerManagerService } from "./worker-manager-service";
 
 type Pm2Client = NonNullable<
@@ -39,8 +39,8 @@ const projectRoot = "/tmp/test-project";
 let configDir: string | null = null;
 
 beforeEach(async () => {
-  configDir = await mkdtemp(join(tmpdir(), "nakama-worker-manager-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  configDir = await mkdtemp(join(tmpdir(), "airin-worker-manager-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
 });
 
 afterEach(async () => {
@@ -49,7 +49,7 @@ afterEach(async () => {
     configDir = null;
   }
 
-  delete process.env.NAKAMA_CONFIG_DIR;
+  delete process.env.AIRIN_CONFIG_DIR;
 });
 
 test("plugin workers are isolated, recover desired state, and unregister without deleting data", async () => {
@@ -141,10 +141,10 @@ test("Supermemory receives only the requested OpenAI configuration on each start
 });
 
 test("migration preserves an unambiguous connection and leaves ambiguous credentials stopped", async () => {
-  const { createInMemoryDatabaseAdapter } = await import("@nakama/db");
+  const { createInMemoryDatabaseAdapter } = await import("@airin/db");
 
   const { saveTelegramConfig, loadTelegramConfigFile } = await import(
-    "@nakama/core/telegram-config"
+    "@airin/core/telegram-config"
   );
 
   const db = createInMemoryDatabaseAdapter();
@@ -200,8 +200,8 @@ test("migration preserves an unambiguous connection and leaves ambiguous credent
 });
 
 test("Telegram migration changes only Telegram notification destinations", async () => {
-  const { createInMemoryDatabaseAdapter } = await import("@nakama/db");
-  const { saveTelegramConfig } = await import("@nakama/core/telegram-config");
+  const { createInMemoryDatabaseAdapter } = await import("@airin/db");
+  const { saveTelegramConfig } = await import("@airin/core/telegram-config");
   const db = createInMemoryDatabaseAdapter();
   const now = new Date().toISOString();
   await db.upsertOrganization({
@@ -272,7 +272,7 @@ test("Telegram migration changes only Telegram notification destinations", async
 });
 
 test("migration archives duplicate legacy WhatsApp credentials when the claimed agent is connected", async () => {
-  const { createInMemoryDatabaseAdapter } = await import("@nakama/db");
+  const { createInMemoryDatabaseAdapter } = await import("@airin/db");
   const db = createInMemoryDatabaseAdapter();
   const now = new Date().toISOString();
 
@@ -374,7 +374,7 @@ test("failed stop preserves credentials and blocks owner recovery", async () => 
   await expect(service.disableProfileChannels(owner, true)).rejects.toThrow();
 
   const { loadWhatsAppConfigFile } = await import(
-    "@nakama/core/whatsapp-config"
+    "@airin/core/whatsapp-config"
   );
 
   expect(await loadWhatsAppConfigFile(owner)).not.toBeNull();
@@ -385,7 +385,7 @@ test("failed stop preserves credentials and blocks owner recovery", async () => 
 
 test("stopped agent logs remain available and clearing keeps sibling logs", async () => {
   const { getChannelConfigDir } = await import(
-    "@nakama/core/channel-config-shared"
+    "@airin/core/channel-config-shared"
   );
 
   const a = { orgId: "org_a", profileId: "agent_a" };

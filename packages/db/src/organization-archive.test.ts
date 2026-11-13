@@ -756,7 +756,7 @@ describe("shared agent instance persistence", () => {
   });
 
   test("failed source-link insertion rolls back the new profile", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "nakama-shared-agent-"));
+    const directory = mkdtempSync(join(tmpdir(), "airin-shared-agent-"));
     const path = join(directory, "test.sqlite");
     const database = await createSqliteDatabase(`file:${path}`);
     const raw = new Database(path);
@@ -971,7 +971,7 @@ describe("atomic team creation records", () => {
   test.each(["org_members", "org_team_creation_requests"])(
     "failure writing %s rolls back the child and admin",
     async (table) => {
-      const directory = mkdtempSync(join(tmpdir(), "nakama-team-creation-"));
+      const directory = mkdtempSync(join(tmpdir(), "airin-team-creation-"));
       const path = join(directory, "test.sqlite");
       const database = await createSqliteDatabase(`file:${path}`);
       const raw = new Database(path);

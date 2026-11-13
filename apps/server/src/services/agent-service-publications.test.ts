@@ -5,15 +5,15 @@ import {
   loadUserConfig,
   type ProviderInstance,
   saveUserConfig,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 import { AuthService } from "./auth-service";
 import { OrgService } from "./org-service";
 
 describe("provider model publication removal", () => {
-  setupTestConfigDir("nakama-provider-publication-removal-");
+  setupTestConfigDir("airin-provider-publication-removal-");
   const keptModel = { id: "gpt-4o-mini", name: "Kept" };
   const removedModel = { id: "retired-custom", name: "Removed" };
 

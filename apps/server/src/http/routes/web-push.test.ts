@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import type { ProfileResponse, SessionSummary } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { ProfileResponse, SessionSummary } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { TURN_CANCELLED_ERROR } from "../../services/turn-runner";
 import { webPushService } from "../../services/web-push-service";
@@ -9,7 +9,7 @@ import { createMinimalHonoApp } from "../test-app-helpers";
 import { loginUserSession, seedOrgAdmin } from "../test-session-helpers";
 import { pushTurnEnded } from "./web-push";
 
-setupTestConfigDir("nakama-web-push-routes-test-");
+setupTestConfigDir("airin-web-push-routes-test-");
 
 const ORG = "org_push";
 
@@ -107,6 +107,7 @@ describe("pushTurnEnded", () => {
 
       expect(notify).toHaveBeenCalledWith("user_push", {
         body: "Here is the plan.",
+        profileId: "profile_push",
         tag: "session-s1",
         title: "Writer · Launch plan",
         url: "/chat/profile_push/s1?org=org_push",

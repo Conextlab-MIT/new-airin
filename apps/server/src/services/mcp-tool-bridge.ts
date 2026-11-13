@@ -1,13 +1,13 @@
-import type { JsonSchema, ToolContext, ToolDefinition } from "@nakama/core";
-import { emptyObjectSchema, validateImageAttachments } from "@nakama/core";
-import type { DatabaseAdapter, StoredMcpServerRecord } from "@nakama/db";
+import type { JsonSchema, ToolContext, ToolDefinition } from "@airin/core";
+import { emptyObjectSchema, validateImageAttachments } from "@airin/core";
+import type { DatabaseAdapter, StoredMcpServerRecord } from "@airin/db";
 import type { McpToolArguments } from "./mcp-client-manager";
 import { parseMcpToolArguments } from "./mcp-client-manager";
 import type { McpService } from "./mcp-service";
 
 const LLM_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
-const CURRENT_CHAT_CONTEXT = "x-nakama-context";
+const CURRENT_CHAT_CONTEXT = "x-airin-context";
 
 export function buildMcpToolDefinitions(
   servers: StoredMcpServerRecord[],
@@ -60,7 +60,7 @@ export function buildMcpToolDefinitions(
         discoveryScope: discoveryAccess ? "session" : undefined,
         name,
         parameters: hasCurrentChatContext
-          ? withoutNakamaContext(inputSchema)
+          ? withoutAirinContext(inputSchema)
           : inputSchema,
         readOnly: cachedTool.readOnlyHint === true,
         async run(input, context) {
@@ -104,17 +104,17 @@ export function buildMcpToolDefinitions(
 }
 
 function isCurrentChatContext(schema: JsonSchema): boolean {
-  const property = schema.properties?.nakamaContext;
+  const property = schema.properties?.airinContext;
   const metadata = property ? new Map(Object.entries(property)) : undefined;
 
   return (
     metadata?.get(CURRENT_CHAT_CONTEXT) === "current-chat" &&
-    !(schema.required ?? []).includes("nakamaContext")
+    !(schema.required ?? []).includes("airinContext")
   );
 }
 
-function withoutNakamaContext(schema: JsonSchema): JsonSchema {
-  const { nakamaContext: _context, ...properties } = schema.properties ?? {};
+function withoutAirinContext(schema: JsonSchema): JsonSchema {
+  const { airinContext: _context, ...properties } = schema.properties ?? {};
 
   return { ...schema, properties };
 }
@@ -125,7 +125,7 @@ async function withCurrentChatContext(
 ): Promise<McpToolArguments> {
   const args = { ...input };
 
-  delete args.nakamaContext;
+  delete args.airinContext;
 
   const images: Array<{ data: string; mediaType: string }> = [];
 
@@ -155,7 +155,7 @@ async function withCurrentChatContext(
       currentContext.whatsapp = context.whatsappMessage;
     }
 
-    args.nakamaContext = currentContext;
+    args.airinContext = currentContext;
   }
 
   return args;

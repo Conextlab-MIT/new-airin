@@ -24,16 +24,16 @@ export async function withTempHomedir(
 ): Promise<void> {
   const tempHome = await mkdtemp(path.join(os.tmpdir(), prefix));
   const homedirSpy = spyOn(os, "homedir").mockReturnValue(tempHome);
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = path.join(tempHome, ".nakama");
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = path.join(tempHome, ".airin");
 
   try {
     await run(tempHome);
   } finally {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     homedirSpy.mockRestore();
@@ -55,13 +55,13 @@ export async function writeChannelIniConfig(
   channel: "telegram" | "discord",
   config: ChannelIniConfig
 ): Promise<void> {
-  const dir = path.join(homeDir, ".nakama", channel);
+  const dir = path.join(homeDir, ".airin", channel);
   await mkdir(dir, { recursive: true });
 
   const label = channel === "telegram" ? "Telegram" : "Discord";
 
   const lines = [
-    `# Nakama ${label} bridge`,
+    `# Airin ${label} bridge`,
     `bot_token=${config.botToken}`,
     `profile_id=${config.profileId ?? "default"}`,
   ];
@@ -146,7 +146,7 @@ type SharedChannelConfigCase<TId extends string | number> = {
 export function describeSharedChannelConfigTests<TId extends string | number>(
   tc: SharedChannelConfigCase<TId>
 ): void {
-  const tempPrefix = `nakama-core-${tc.name}-home-`;
+  const tempPrefix = `airin-core-${tc.name}-home-`;
 
   describe(`${tc.name} shared channel config`, () => {
     describe("maskBotToken", () => {

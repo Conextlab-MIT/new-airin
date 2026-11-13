@@ -80,10 +80,10 @@ describe("groupRoster", () => {
   });
 
   test("web and server get the same roster from the same inputs", () => {
-    // The web list keeps Super Nakama; the server list drops it.
-    const superNakama = { id: "s", isSuper: true, name: "Super Nakama" };
+    // The web list keeps Airin; the server list drops it.
+    const superAirin = { id: "s", isSuper: true, name: "Airin" };
     const group = { handles, memberIds: [...memberIds, "s"] };
-    const web = groupRoster(group, [...profiles, superNakama]);
+    const web = groupRoster(group, [...profiles, superAirin]);
     const server = groupRoster(group, profiles);
 
     expect(web.members).toEqual(server.members);

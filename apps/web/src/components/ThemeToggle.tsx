@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { ComputerIcon, Moon02Icon, Sun01Icon } from "hugeicons-react";
 import { useTheme } from "@/context/use-theme";
 import type { Theme } from "@/lib/theme";

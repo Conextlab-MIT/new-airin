@@ -2,7 +2,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { NakamaClient } from "@nakama/client";
+import { AirinClient } from "@airin/client";
 import {
   createChatExitController,
   createDebouncedEscAbortHandler,
@@ -99,7 +99,7 @@ describe("tool rendering", () => {
 describe("formatSoulStatusLines", () => {
   const directory = join(
     homedir(),
-    ".nakama",
+    ".airin",
     "orgs",
     "org_secret",
     "profiles",
@@ -121,7 +121,7 @@ describe("formatSoulStatusLines", () => {
 
   test("masks soul directory by default", () => {
     expect(formatSoulStatusLines(status)[0]).toBe(
-      "Soul directory: ~/.nakama/orgs/<org>/profiles/<profile>"
+      "Soul directory: ~/.airin/orgs/<org>/profiles/<profile>"
     );
   });
 });
@@ -257,7 +257,7 @@ describe("non-TTY slash commands and EOF", () => {
   } as ProfileSummary;
 
   async function runBlockingInput(input: string | null) {
-    const client = new NakamaClient();
+    const client = new AirinClient();
     const session = client.createChatSession("test", "cli");
     const output: string[] = [];
     const clear = spyOn(session, "clear").mockResolvedValue(undefined);

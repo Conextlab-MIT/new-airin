@@ -1,5 +1,5 @@
-import { InputGroup } from "@nakama/ui/input-group";
-import { cn } from "@nakama/ui/utils";
+import { InputGroup } from "@airin/ui/input-group";
+import { cn } from "@airin/ui/utils";
 import type { FormEventHandler, HTMLAttributes, ReactNode } from "react";
 import {
   ComposerRimGlow,

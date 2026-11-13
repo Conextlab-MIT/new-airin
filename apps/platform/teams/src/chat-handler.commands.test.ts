@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { formatClientError } from "@nakama/core/api-error";
-import { resetActiveStreamsForTests } from "@nakama/core/channel-active-stream";
-import { withTempHome } from "@nakama/core/channel-test-helpers";
+import { formatClientError } from "@airin/core/api-error";
+import { resetActiveStreamsForTests } from "@airin/core/channel-active-stream";
+import { withTempHome } from "@airin/core/channel-test-helpers";
 import { activity, CONFIG, createHarness } from "./test-helpers";
 
 // Spelled out: a formatter turns "\u00A0" into the bare character, which looks
@@ -63,7 +63,7 @@ describe("teams commands", () => {
   });
 
   test("!help lists every command and starts no turn", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir);
 
       await handle(activity({ text: "!help" }));
@@ -78,7 +78,7 @@ describe("teams commands", () => {
   });
 
   test("!new moves the next message to a new session", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { createdSessions, handle, turns } = createHarness(homeDir);
 
       await handle(activity({ text: "first" }));
@@ -94,7 +94,7 @@ describe("teams commands", () => {
   });
 
   test("!clear clears the current session and keeps using it", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { clearedSessions, createdSessions, handle, turns } =
         createHarness(homeDir);
 
@@ -112,7 +112,7 @@ describe("teams commands", () => {
   });
 
   test("a failed !new tells the user and keeps the current session", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       let creates = 0;
 
       const { handle, replies, turns } = createHarness(homeDir, {
@@ -139,7 +139,7 @@ describe("teams commands", () => {
   });
 
   test("!clear before the first message answers, and that chat keeps one session", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { clearedSessions, createdSessions, handle, replies, turns } =
         createHarness(homeDir);
 
@@ -156,7 +156,7 @@ describe("teams commands", () => {
   });
 
   test("!stop with nothing running answers and starts no turn", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir);
 
       await handle(activity({ text: "!stop" }));
@@ -167,7 +167,7 @@ describe("teams commands", () => {
   });
 
   test("after a turn ends, !stop answers as if nothing ran", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { handle, replies } = createHarness(homeDir);
 
       await handle(activity({ conversationId: "conv_fresh", text: "!stop" }));
@@ -180,7 +180,7 @@ describe("teams commands", () => {
   });
 
   test("!stop while a finished answer is being posted answers as if nothing ran", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       let markPosting = () => {};
 
       let finishPosting = () => {};
@@ -216,7 +216,7 @@ describe("teams commands", () => {
   });
 
   test("!stop cancels a running turn and keeps what it wrote so far", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const turn = hangingTurn("half an answer");
 
       const { handle, replies } = createHarness(homeDir, {
@@ -236,7 +236,7 @@ describe("teams commands", () => {
   });
 
   test("!stop also stops a turn queued behind the running one", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const turn = hangingTurn();
 
       const { handle, turns } = createHarness(homeDir, {
@@ -259,7 +259,7 @@ describe("teams commands", () => {
   // The turn holds the lock but is not registered yet while it rereads access,
   // so only the queue of waiting turns can reach it there.
   test("!stop while a turn rereads access stops it before any session exists", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       let configReads = 0;
 
       let markReading = () => {};
@@ -304,7 +304,7 @@ describe("teams commands", () => {
   });
 
   test("a server error that lands during a stop is still told", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const failure = new Error("upstream returned 500");
       let markStarted = () => {};
 
@@ -332,7 +332,7 @@ describe("teams commands", () => {
   });
 
   test("an abort no stop asked for is told", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const failure = new Error("provider deadline passed");
       failure.name = "AbortError";
 
@@ -349,7 +349,7 @@ describe("teams commands", () => {
   });
 
   test("!stop while the session is still being created stops the turn", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const turn = hangingTurn();
 
       let markCreating = () => {};
@@ -386,7 +386,7 @@ describe("teams commands", () => {
   // The running turn holds the chat lock, so a command that waited for the
   // lock without stopping the turn first would never run.
   test("!new stops a running turn instead of waiting behind it", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const turn = hangingTurn();
 
       const { createdSessions, handle } = createHarness(homeDir, {
@@ -404,7 +404,7 @@ describe("teams commands", () => {
   });
 
   test("!status reports the agent, provider, model and session", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir);
 
       await handle(activity({ text: "hello" }));
@@ -426,7 +426,7 @@ describe("teams commands", () => {
   });
 
   test("!status with no provider configured answers without asking for models", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       let modelRequests = 0;
 
       const { handle, replies } = createHarness(homeDir, {
@@ -445,7 +445,7 @@ describe("teams commands", () => {
   });
 
   test("!status still answers when the server cannot be reached", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir, {
         health: () => Promise.reject(new Error("connect ECONNREFUSED")),
       });
@@ -459,7 +459,7 @@ describe("teams commands", () => {
 
   // !status waits on the server; a slow answer must not hold up the chat.
   test("a slow !status holds up no other message", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       let markAsking = () => {};
 
       let finishAsking = () => {};
@@ -507,7 +507,7 @@ describe("teams commands", () => {
     ["a no-break space", `${NO_BREAK_SPACE}!help`],
   ] as const) {
     test(`a command with ${name} around it is still a command`, async () => {
-      await withTempHome("nakama-teams-commands-", async (homeDir) => {
+      await withTempHome("airin-teams-commands-", async (homeDir) => {
         const { handle, replies, turns } = createHarness(homeDir);
 
         await handle(activity({ text }));
@@ -519,7 +519,7 @@ describe("teams commands", () => {
   }
 
   test("a message that starts with ! but names no command reaches the agent", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { handle, turns } = createHarness(homeDir);
 
       await handle(activity({ text: "!urgent summarise the report" }));
@@ -532,7 +532,7 @@ describe("teams commands", () => {
 
   // Phone keyboards capitalise the first letter of a message.
   test("commands match regardless of letter case", async () => {
-    await withTempHome("nakama-teams-commands-", async (homeDir) => {
+    await withTempHome("airin-teams-commands-", async (homeDir) => {
       const { createdSessions, handle, turns } = createHarness(homeDir);
 
       await handle(activity({ text: "first" }));
@@ -545,7 +545,7 @@ describe("teams commands", () => {
 
   for (const command of ["!new", "!clear"]) {
     test(`access removed while ${command} waits for the lock stops it there`, async () => {
-      await withTempHome("nakama-teams-commands-", async (homeDir) => {
+      await withTempHome("airin-teams-commands-", async (homeDir) => {
         let configReads = 0;
 
         const { clearedSessions, createdSessions, handle, replies } =
@@ -578,7 +578,7 @@ describe("teams commands", () => {
 
   for (const command of ["!help", "!stop", "!status", "!new"]) {
     test(`${command} from a user outside the allowlist gets no answer`, async () => {
-      await withTempHome("nakama-teams-commands-", async (homeDir) => {
+      await withTempHome("airin-teams-commands-", async (homeDir) => {
         const { createdSessions, handle, replies } = createHarness(homeDir);
 
         await handle(

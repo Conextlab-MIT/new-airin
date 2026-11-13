@@ -1,7 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { clearRuntimeServerUrl, DEFAULT_SERVER_PORT } from "@nakama/core";
-import { withDevSecretsKey } from "@nakama/core/dev-secrets-key";
+import { clearRuntimeServerUrl, DEFAULT_SERVER_PORT } from "@airin/core";
+import { withDevSecretsKey } from "@airin/core/dev-secrets-key";
 
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 

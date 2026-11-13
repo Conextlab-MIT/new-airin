@@ -6,7 +6,7 @@ import {
   getLocalAuthTokenPath,
   loadLocalAuthToken,
   verifyLocalAuthToken,
-} from "@nakama/core/local-auth";
+} from "@airin/core/local-auth";
 import { createMinimalHonoApp } from "../../server/src/http/test-app-helpers";
 import { setupFreshInstallSession } from "../../server/src/http/test-session-helpers";
 import { setupTestConfigDir } from "../../server/src/test-config-dir";
@@ -151,7 +151,7 @@ describe("readPassword", () => {
   });
 });
 
-setupTestConfigDir("nakama-cli-remote-test-");
+setupTestConfigDir("airin-cli-remote-test-");
 
 test("login stores only tokens; restored sessions authenticate and logout revokes them", async () => {
   const { app, databaseAdapter } = createMinimalHonoApp();
@@ -200,8 +200,8 @@ test("login stores only tokens; restored sessions authenticate and logout revoke
   ]);
   // HTTPS servers only accept the host-bound cookie pair (#1345).
   expect(tokens.cookieNames).toEqual({
-    csrf: "__Host-nakama_csrf",
-    session: "__Host-nakama_session",
+    csrf: "__Host-airin_csrf",
+    session: "__Host-airin_session",
   });
   const restored = await createRemoteConnection("https://example.com", options);
   expect((await restored.client.getMe()).id).toBe(user.id);
@@ -232,8 +232,8 @@ test("server arguments reject insecure URLs and embedded credentials", () => {
 });
 
 test("local logout rotates the persisted token through the CLI entrypoint", async () => {
-  const originalToken = await loadLocalAuthToken("cli@nakama.internal");
-  const configDir = process.env.NAKAMA_CONFIG_DIR;
+  const originalToken = await loadLocalAuthToken("cli@airin.internal");
+  const configDir = process.env.AIRIN_CONFIG_DIR;
 
   if (!configDir) {
     throw new Error("Expected an isolated test config directory");
@@ -250,7 +250,7 @@ test("local logout rotates the persisted token through the CLI entrypoint", asyn
     ],
     {
       cwd: join(import.meta.dir, "../../.."),
-      env: { ...process.env, NAKAMA_CONFIG_DIR: configDir },
+      env: { ...process.env, AIRIN_CONFIG_DIR: configDir },
       stderr: "pipe",
       stdout: "pipe",
     }

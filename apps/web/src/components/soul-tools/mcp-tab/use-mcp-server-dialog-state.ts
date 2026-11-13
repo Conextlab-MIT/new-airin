@@ -6,7 +6,7 @@ import type {
   McpServerSummary,
   McpStdioConfig,
   McpTransport,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { type ClipboardEvent, useState } from "react";
 import {
   argsToArray,

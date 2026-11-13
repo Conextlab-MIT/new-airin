@@ -1,6 +1,6 @@
-import { Card } from "@nakama/ui/card";
-import { toast } from "@nakama/ui/toast";
-import { cn } from "@nakama/ui/utils";
+import { Card } from "@airin/ui/card";
+import { toast } from "@airin/ui/toast";
+import { cn } from "@airin/ui/utils";
 import { ArrowDown01Icon } from "hugeicons-react";
 import { useState } from "react";
 import { SkillsCuratorOrgCard } from "@/components/settings/SkillsCuratorOrgCard";

@@ -1,13 +1,13 @@
-import { parseAgentQuestionnaireAnswersMessage } from "@nakama/core/agent-questionnaire";
+import { parseAgentQuestionnaireAnswersMessage } from "@airin/core/agent-questionnaire";
 import type {
   AgentChannel,
   AgentQuestionAnswer,
   ChatMessage,
   ChatUsage,
   SessionMessageMeta,
-} from "@nakama/core/contract";
-import { AGENT_CHANNELS } from "@nakama/core/contract";
-import { extractThinkingFromAssistantMessage } from "@nakama/core/thinking-content";
+} from "@airin/core/contract";
+import { AGENT_CHANNELS } from "@airin/core/contract";
+import { extractThinkingFromAssistantMessage } from "@airin/core/thinking-content";
 import {
   stripImageDescriptionsFromDisplayText,
   userContentToDisplayDocuments,
@@ -47,7 +47,7 @@ export function buildNewChatPath(profileId?: string | null): string {
   return `${buildChatBasePath()}?${params.toString()}`;
 }
 
-/** Profile id from `?new=1&profile=…` when opening a new chat (e.g. Super Nakama from Tools). */
+/** Profile id from `?new=1&profile=…` when opening a new chat (e.g. Airin from Tools). */
 export function readRequestedProfileFromNewChatSearch(
   search: string
 ): string | null {
@@ -92,7 +92,7 @@ export function readRequestedDraftKeyFromNewChatSearch(
   return draftKey || null;
 }
 
-export const CHAT_DRAFT_STORAGE_PREFIX = "nakama:chat-draft:";
+export const CHAT_DRAFT_STORAGE_PREFIX = "airin:chat-draft:";
 
 export function consumeStoredChatDraft(key: string): string | null {
   if (typeof sessionStorage === "undefined") {
@@ -122,7 +122,7 @@ export function chatComposerDraftKey(
   sessionId: string | null
 ): string | null {
   return userId && orgId && profileId
-    ? `nakama:composer-draft:${JSON.stringify([userId, orgId, profileId, sessionId])}`
+    ? `airin:composer-draft:${JSON.stringify([userId, orgId, profileId, sessionId])}`
     : null;
 }
 
@@ -170,7 +170,7 @@ export function isChatSessionPath(pathname: string): boolean {
   return chatProfileIdFromPath(pathname) !== null;
 }
 
-const ACTIVE_CHAT_PROFILE_STORAGE_KEY = "nakama:active-chat-profile";
+const ACTIVE_CHAT_PROFILE_STORAGE_KEY = "airin:active-chat-profile";
 
 export function activeChatProfileStorageKey(orgId: string): string {
   return `${ACTIVE_CHAT_PROFILE_STORAGE_KEY}:${orgId}`;
@@ -434,7 +434,7 @@ export interface FailedChatTurn {
   text: string;
 }
 
-const FAILED_CHAT_TURN_STORAGE_PREFIX = "nakama:failed-chat-turn:";
+const FAILED_CHAT_TURN_STORAGE_PREFIX = "airin:failed-chat-turn:";
 
 export function storeFailedChatTurn(
   sessionId: string,
@@ -490,11 +490,11 @@ export function clearFailedChatTurn(sessionId: string): void {
 }
 
 export function sessionStorageKey(profileId: string): string {
-  return `nakama:session:${profileId}`;
+  return `airin:session:${profileId}`;
 }
 
 export function lastChatModelStorageKey(profileId: string): string {
-  return `nakama:last-model:${profileId}`;
+  return `airin:last-model:${profileId}`;
 }
 
 /**

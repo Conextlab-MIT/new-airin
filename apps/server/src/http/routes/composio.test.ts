@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { COMPOSIO_CUSTOM_AUTH_REQUIRED } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { COMPOSIO_CUSTOM_AUTH_REQUIRED } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { AuthService } from "../../services/auth-service";
 import type { ComposioApiClient } from "../../services/composio-api-client";
@@ -50,8 +50,8 @@ function createMockClient(): Pick<
 }
 
 async function createApp(client = createMockClient()) {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-composio-route-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(join(tmpdir(), "airin-composio-route-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
   process.env.COMPOSIO_API_KEY = TEST_API_KEY;
 
   const databaseAdapter = createInMemoryDatabaseAdapter();

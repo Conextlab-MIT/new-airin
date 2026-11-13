@@ -17,7 +17,7 @@ import {
 
 describe("syncWhatsAppOwnerPairing", () => {
   test("auto-pairs owner when WhatsApp JID includes a device suffix", async () => {
-    await withTempHomedir("nakama-core-wa-sync-", async () => {
+    await withTempHomedir("airin-core-wa-sync-", async () => {
       await saveWhatsAppConfig({ profileId: "default" });
 
       await syncWhatsAppOwnerPairing({
@@ -34,7 +34,7 @@ describe("syncWhatsAppOwnerPairing", () => {
   });
 
   test("overwrites a stale phone number after QR link", async () => {
-    await withTempHomedir("nakama-core-wa-sync-", async () => {
+    await withTempHomedir("airin-core-wa-sync-", async () => {
       await saveWhatsAppConfig({ phoneNumber: "+6281227900622" });
 
       await syncWhatsAppOwnerPairing({
@@ -49,14 +49,14 @@ describe("syncWhatsAppOwnerPairing", () => {
   });
 
   test("clears stale pairing code when owner pairing sync completes", async () => {
-    await withTempHomedir("nakama-core-wa-sync-", async (tempHome) => {
+    await withTempHomedir("airin-core-wa-sync-", async (tempHome) => {
       await saveWhatsAppConfig({ phoneNumber: "+6281379292556" });
 
-      const dir = path.join(tempHome, ".nakama", "whatsapp");
+      const dir = path.join(tempHome, ".airin", "whatsapp");
       await writeFile(
         path.join(dir, "config.ini"),
         [
-          "# Nakama WhatsApp bridge",
+          "# Airin WhatsApp bridge",
           "phone_number=+6281379292556",
           "profile_id=default",
           "pairing_code=ABCD1234",
@@ -79,7 +79,7 @@ describe("syncWhatsAppOwnerPairing", () => {
   });
 
   test("a live code survives a reconnect and pairs another phone", async () => {
-    await withTempHomedir("nakama-core-wa-sync-", async () => {
+    await withTempHomedir("airin-core-wa-sync-", async () => {
       await saveWhatsAppConfig({ profileId: "default" });
       await syncWhatsAppOwnerPairing({
         ownerJid: "6281379292556:12@s.whatsapp.net",
@@ -106,7 +106,7 @@ describe("syncWhatsAppOwnerPairing", () => {
   });
 
   test("a new code waits while the worker holds the config lock", async () => {
-    await withTempHomedir("nakama-core-wa-sync-", async () => {
+    await withTempHomedir("airin-core-wa-sync-", async () => {
       await saveWhatsAppConfig({ profileId: "default" });
       const before = (await loadWhatsAppConfigFile())?.pairingCode;
 
@@ -131,13 +131,13 @@ describe("syncWhatsAppOwnerPairing", () => {
   });
 
   test("preserves an existing paired LID during owner sync", async () => {
-    await withTempHomedir("nakama-core-wa-sync-", async (tempHome) => {
-      const dir = path.join(tempHome, ".nakama", "whatsapp");
+    await withTempHomedir("airin-core-wa-sync-", async (tempHome) => {
+      const dir = path.join(tempHome, ".airin", "whatsapp");
       await mkdir(dir, { recursive: true });
       await writeFile(
         path.join(dir, "config.ini"),
         [
-          "# Nakama WhatsApp bridge",
+          "# Airin WhatsApp bridge",
           "phone_number=6281379292556",
           "profile_id=default",
           "paired_jid=6281379292556@s.whatsapp.net",
@@ -159,7 +159,7 @@ describe("syncWhatsAppOwnerPairing", () => {
   });
 
   test("claims one owner JID across concurrent owners", async () => {
-    await withTempHomedir("nakama-whatsapp-claim-race-", async () => {
+    await withTempHomedir("airin-whatsapp-claim-race-", async () => {
       const first = { orgId: "org_a", profileId: "a" };
       const second = { orgId: "org_b", profileId: "b" };
       await saveWhatsAppConfig({ profileId: "a" }, first);
@@ -186,7 +186,7 @@ describe("syncWhatsAppOwnerPairing", () => {
   });
 
   test("a rejected claim names the owner that holds the JID", async () => {
-    await withTempHomedir("nakama-whatsapp-claim-owner-", async () => {
+    await withTempHomedir("airin-whatsapp-claim-owner-", async () => {
       const first = { orgId: "org_a", profileId: "a" };
       const second = { orgId: "org_b", profileId: "b" };
       await saveWhatsAppConfig({ profileId: "a" }, first);

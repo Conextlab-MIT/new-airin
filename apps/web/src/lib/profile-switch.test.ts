@@ -11,11 +11,19 @@ function pick(pathname: string, search = "", activeProfileId = "alpha") {
 }
 
 describe("resolveProfileSwitch", () => {
-  test("an open session is replaced by a fresh chat", () => {
+  test("an open session is replaced by a fresh chat for the picked agent", () => {
     expect(pick("/chat/alpha/session-1")).toEqual({
       kind: "navigate",
       replace: true,
-      to: "/chat",
+      to: "/chat?new=1&profile=beta",
+    });
+  });
+
+  test("a draft chat swaps to a fresh chat for the picked agent", () => {
+    expect(pick("/chat")).toEqual({
+      kind: "navigate",
+      replace: true,
+      to: "/chat?new=1&profile=beta",
     });
   });
 
@@ -41,7 +49,11 @@ describe("resolveProfileSwitch", () => {
     expect(pick("/settings", "", "beta")).toEqual({
       kind: "navigate",
       replace: false,
-      to: "/chat",
+      to: "/chat?new=1&profile=beta",
     });
+  });
+
+  test("Files still swaps the agent in place", () => {
+    expect(pick("/files")).toEqual({ kind: "select" });
   });
 });

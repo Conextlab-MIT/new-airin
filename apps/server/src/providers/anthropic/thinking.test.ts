@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ChatMessage } from "@nakama/core";
+import type { ChatMessage } from "@airin/core";
 import { asTestFetch } from "../test-helpers";
 import { createAnthropicProvider } from "./index";
 
@@ -340,7 +340,7 @@ test.each(["blocks", "tools"])(
       apiKey: "test-key",
       fetch: asTestFetch(
         async (_input: RequestInfo | URL, init?: RequestInit) => {
-          expect(String(init?.body)).not.toContain("_nakamaPrefixHash");
+          expect(String(init?.body)).not.toContain("_airinPrefixHash");
           requests.push(JSON.parse(String(init?.body)));
 
           return Response.json({
@@ -434,7 +434,7 @@ test("Sonnet 5.5 invalidates thinking after prefix changes", async () => {
       apiKey: "test-key",
       fetch: asTestFetch(
         async (_input: RequestInfo | URL, init?: RequestInit) => {
-          expect(String(init?.body)).not.toContain("_nakamaPrefixHash");
+          expect(String(init?.body)).not.toContain("_airinPrefixHash");
           requests.push(JSON.parse(String(init?.body)));
 
           return Response.json({

@@ -5,11 +5,11 @@ import path from "node:path";
 import {
   createInMemoryDatabaseAdapter,
   ensureBuiltinToolDefinitions,
-} from "@nakama/db";
+} from "@airin/db";
 import { describeProfileChangeEvents } from "./profile-change-history";
 import { ProfileService } from "./profile-service";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 const ORG_ID = "org_history_test";
 
@@ -108,9 +108,9 @@ describe("profile change history", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (tempConfigDir) {
@@ -120,8 +120,8 @@ describe("profile change history", () => {
   });
 
   test("records append-only dashboard updates for system prompt and tools", async () => {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-pch-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-pch-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const db = createInMemoryDatabaseAdapter();
     await ensureBuiltinToolDefinitions(db);
@@ -195,9 +195,9 @@ describe("profile change history", () => {
     expect(again.events).toHaveLength(history.events.length);
   });
 
-  test("records super_nakama and pack_import sources", async () => {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-pch-src-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+  test("records super_airin and pack_import sources", async () => {
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-pch-src-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const db = createInMemoryDatabaseAdapter();
     await db.upsertOrganization({
@@ -222,7 +222,7 @@ describe("profile change history", () => {
         soulFiles: { "SOUL.md": "# soul after" },
         systemPrompt: "v2",
       },
-      { actorUserId: "user_chat", source: "super_nakama" }
+      { actorUserId: "user_chat", source: "super_airin" }
     );
 
     const history = await service.listProfileChangeHistory(
@@ -233,13 +233,12 @@ describe("profile change history", () => {
     expect(
       history.events.some(
         (event) =>
-          event.source === "super_nakama" && event.field === "system_prompt"
+          event.source === "super_airin" && event.field === "system_prompt"
       )
     ).toBe(true);
     expect(
       history.events.some(
-        (event) =>
-          event.source === "super_nakama" && event.field === "soul.soul"
+        (event) => event.source === "super_airin" && event.field === "soul.soul"
       )
     ).toBe(true);
   });

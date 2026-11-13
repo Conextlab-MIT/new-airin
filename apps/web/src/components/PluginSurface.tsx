@@ -1,4 +1,4 @@
-import type { OrgPluginDetail } from "@nakama/core/contract";
+import type { OrgPluginDetail } from "@airin/core/contract";
 import {
   Component,
   type ReactNode,

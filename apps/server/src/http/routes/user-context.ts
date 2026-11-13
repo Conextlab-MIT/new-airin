@@ -1,9 +1,9 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   InitUserContextResponse,
   SetupChecklistResponse,
   UserContextStatusResponse,
-} from "@nakama/core";
+} from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { ServerOptions } from "../context";
 import {
   requireActiveOrgIdFromContext,

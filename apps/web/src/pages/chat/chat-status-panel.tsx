@@ -2,9 +2,9 @@ import type {
   AgentChannel,
   McpServerSummary,
   ProfileSummary,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { cn } from "@airin/ui/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
   AiBrain01Icon,

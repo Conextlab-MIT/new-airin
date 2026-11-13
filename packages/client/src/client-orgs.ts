@@ -30,7 +30,7 @@ import type {
   SkillFilesResponse,
   UpdateOrganizationRequest,
   UpdateOrgMemberRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { AuthClient } from "./client-auth";
 
 /** Organizations, teams, members, shared resources, and the skill curator. */
@@ -159,6 +159,12 @@ export class OrgsClient extends AuthClient {
 
   async listPlatformOrganizations(): Promise<ListOrganizationsResponse> {
     return this.request<ListOrganizationsResponse>("/v1/platform/orgs");
+  }
+
+  async getPlatformOverview(): Promise<
+    import("@airin/core/contract").PlatformOverviewResponse
+  > {
+    return this.request("/v1/platform/overview");
   }
 
   async createPlatformOrganization(

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { COMPOSIO_CUSTOM_AUTH_REQUIRED, NakamaApiError } from "@nakama/core";
+import { AirinApiError, COMPOSIO_CUSTOM_AUTH_REQUIRED } from "@airin/core";
 import {
   buildComposioConnectTools,
   buildComposioToolDefinitions,
@@ -16,9 +16,9 @@ interface EmailActionArguments {
 
 describe("composio-tool-bridge", () => {
   const previous = {
-    configDir: process.env.NAKAMA_CONFIG_DIR,
-    publicUrl: process.env.NAKAMA_PUBLIC_URL,
-    webPublicUrl: process.env.NAKAMA_WEB_PUBLIC_URL,
+    configDir: process.env.AIRIN_CONFIG_DIR,
+    publicUrl: process.env.AIRIN_PUBLIC_URL,
+    webPublicUrl: process.env.AIRIN_WEB_PUBLIC_URL,
   };
 
   let isolatedConfigDir = "";
@@ -26,33 +26,33 @@ describe("composio-tool-bridge", () => {
   beforeEach(() => {
     isolatedConfigDir = join(
       tmpdir(),
-      `nakama-composio-bridge-${crypto.randomUUID()}`
+      `airin-composio-bridge-${crypto.randomUUID()}`
     );
     mkdirSync(isolatedConfigDir, { recursive: true });
-    process.env.NAKAMA_CONFIG_DIR = isolatedConfigDir;
-    delete process.env.NAKAMA_PUBLIC_URL;
-    delete process.env.NAKAMA_WEB_PUBLIC_URL;
+    process.env.AIRIN_CONFIG_DIR = isolatedConfigDir;
+    delete process.env.AIRIN_PUBLIC_URL;
+    delete process.env.AIRIN_WEB_PUBLIC_URL;
   });
 
   afterEach(() => {
     rmSync(isolatedConfigDir, { force: true, recursive: true });
 
     if (previous.configDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous.configDir;
+      process.env.AIRIN_CONFIG_DIR = previous.configDir;
     }
 
     if (previous.publicUrl === undefined) {
-      delete process.env.NAKAMA_PUBLIC_URL;
+      delete process.env.AIRIN_PUBLIC_URL;
     } else {
-      process.env.NAKAMA_PUBLIC_URL = previous.publicUrl;
+      process.env.AIRIN_PUBLIC_URL = previous.publicUrl;
     }
 
     if (previous.webPublicUrl === undefined) {
-      delete process.env.NAKAMA_WEB_PUBLIC_URL;
+      delete process.env.AIRIN_WEB_PUBLIC_URL;
     } else {
-      process.env.NAKAMA_WEB_PUBLIC_URL = previous.webPublicUrl;
+      process.env.AIRIN_WEB_PUBLIC_URL = previous.webPublicUrl;
     }
   });
 
@@ -757,7 +757,7 @@ describe("composio-tool-bridge", () => {
 
     const result = await tools[0]?.run(
       { toolkit_slug: "gmail" },
-      { clientOrigin: "https://nakama.example.com" }
+      { clientOrigin: "https://airin.example.com" }
     );
 
     expect(result).toMatchObject({
@@ -811,13 +811,13 @@ describe("composio-tool-bridge", () => {
 
     return await tools[0]?.run(
       { toolkit_slug: "gmail" },
-      { clientOrigin: "https://nakama.example.com" }
+      { clientOrigin: "https://airin.example.com" }
     );
   }
 
   test("connect tool reports a missing auth config as its own code", async () => {
     const result = await runConnectToolWhenConnectFails(
-      new NakamaApiError("No managed auth.", 422, undefined, undefined, {
+      new AirinApiError("No managed auth.", 422, undefined, undefined, {
         code: COMPOSIO_CUSTOM_AUTH_REQUIRED,
       })
     );

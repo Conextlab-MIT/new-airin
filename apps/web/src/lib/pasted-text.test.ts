@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { MessageContentPart } from "@nakama/core/contract";
+import type { MessageContentPart } from "@airin/core/contract";
 import type { FileUIPart } from "./ai-ui-types";
 import {
   documentDisplayFromContentPart,

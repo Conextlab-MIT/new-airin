@@ -1,4 +1,4 @@
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import { z } from "zod";
 
 const KERNEL_API_URL = "https://api.onkernel.com";
@@ -90,7 +90,7 @@ type KernelRequestBody =
   | Record<string, never>;
 
 function kernelName(...parts: string[]): string {
-  return ["nakama", ...parts.map((part) => part.replace(/[^A-Za-z0-9_-]/g, ""))]
+  return ["airin", ...parts.map((part) => part.replace(/[^A-Za-z0-9_-]/g, ""))]
     .join("-")
     .slice(0, 255);
 }
@@ -116,10 +116,10 @@ function kernelRequest(
 async function kernelFailure(
   response: Response,
   action: string
-): Promise<NakamaApiError> {
+): Promise<AirinApiError> {
   const detail = (await response.text().catch(() => "")).slice(0, 300);
 
-  return new NakamaApiError(
+  return new AirinApiError(
     `Kernel could not ${action} (HTTP ${response.status})${detail ? `: ${detail}` : "."}`,
     502
   );

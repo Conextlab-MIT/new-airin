@@ -1,7 +1,7 @@
 {
-  "name": "nakama-runtime-deps",
+  "name": "airin-runtime-deps",
   "private": true,
-  "description": "Production runtime dependencies baked into the Nakama container image. Installed from the committed bun.lock so the image resolves the same bytes on every build.",
+  "description": "Production runtime dependencies baked into the Airin container image. Installed from the committed bun.lock so the image resolves the same bytes on every build.",
   "overrides": {
     "js-yaml": "4.3.2",
     "zod": "4.6.6"

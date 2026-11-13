@@ -102,7 +102,7 @@ function buildRequest(
     return {
       headers: {
         accept: "application/json",
-        "user-agent": "nakama",
+        "user-agent": "airin",
         "x-api-key": config.apiKey,
       },
       method: "GET",

@@ -193,7 +193,7 @@ describe("failed chat turn storage", () => {
     withLocalStorage((store) => {
       const sessionId = `session_bad_${Date.now()}`;
       store.set(
-        `nakama:failed-chat-turn:${sessionId}`,
+        `airin:failed-chat-turn:${sessionId}`,
         JSON.stringify({ error: "x" })
       );
 
@@ -504,7 +504,7 @@ describe("setup checklist", () => {
 
   test("reads a broken value as no checklist", () => {
     withLocalStorage((store) => {
-      store.set("nakama:setup-checklist:org-c:user-c", "{not json");
+      store.set("airin:setup-checklist:org-c:user-c", "{not json");
       expect(readSetupChecklist("org-c", "user-c")).toBeNull();
     });
   });
@@ -512,7 +512,7 @@ describe("setup checklist", () => {
   test("drops stored items it does not know", () => {
     withLocalStorage((store) => {
       store.set(
-        "nakama:setup-checklist:org-d:user-d",
+        "airin:setup-checklist:org-d:user-d",
         JSON.stringify({
           ...stored,
           items: [...stored.items, { kind: "connect_mcp" }],

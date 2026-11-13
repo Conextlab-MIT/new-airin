@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { TeamsConfigFile } from "@airin/core/teams-config";
 import { App, ExpressAdapter } from "@microsoft/teams.apps";
-import type { TeamsConfigFile } from "@nakama/core/teams-config";
 import { z } from "zod";
 import type { TeamsActivity } from "./chat-handler";
 

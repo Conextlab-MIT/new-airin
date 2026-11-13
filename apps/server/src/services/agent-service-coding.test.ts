@@ -6,9 +6,9 @@ import {
   type AgentChannel,
   ensureBundledSkillFiles,
   type ToolDefinition,
-} from "@nakama/core";
-import type { StoredProfileRecord } from "@nakama/db";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import type { StoredProfileRecord } from "@airin/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "./agent-service";
 import { createDefaultProfile } from "./agent-service-test-fixtures";
 
@@ -35,13 +35,13 @@ describe("AgentService skill_manage injection", () => {
 
   beforeEach(async () => {
     configDir = await mkdtemp(
-      path.join(tmpdir(), "nakama-skill-manage-inject-")
+      path.join(tmpdir(), "airin-skill-manage-inject-")
     );
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (configDir) {
       await rm(configDir, { force: true, recursive: true });

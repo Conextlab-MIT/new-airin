@@ -1,11 +1,11 @@
 import type {
   ImportKnowledgeBaseZipResponse,
   KnowledgeBaseDocument,
-} from "@nakama/core/contract";
-import { MAX_KNOWLEDGE_DOCUMENT_BYTES } from "@nakama/core/message-content";
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/core/contract";
+import { MAX_KNOWLEDGE_DOCUMENT_BYTES } from "@airin/core/message-content";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { Delete02Icon, File01Icon, Upload04Icon } from "hugeicons-react";
 import type { RefObject } from "react";
 import { KnowledgeDocumentPreview } from "@/components/soul-tools/knowledge-document-preview";

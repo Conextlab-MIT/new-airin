@@ -2,16 +2,16 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readEnvValue, setManagedSecretResolver } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { readEnvValue, setManagedSecretResolver } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { ManagedSecrets } from "../../services/managed-secrets";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { setupFreshInstallSession } from "../test-session-helpers";
 
 async function createApp() {
-  process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
-    join(tmpdir(), "nakama-web-search-route-")
+  process.env.AIRIN_CONFIG_DIR = await mkdtemp(
+    join(tmpdir(), "airin-web-search-route-")
   );
 
   const databaseAdapter = createInMemoryDatabaseAdapter();

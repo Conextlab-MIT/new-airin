@@ -5,7 +5,7 @@ import path from "node:path";
 import {
   createInMemoryDatabaseAdapter,
   mergeWorkspaceSettings,
-} from "@nakama/db";
+} from "@airin/db";
 import {
   buildCodingHarnessInstallPlan,
   inferCodingAgentHarnessKind,
@@ -82,7 +82,7 @@ describe("coding-agent harness resolution", () => {
     expect(cursor?.statusMessage).toMatch(/host Cursor auth/i);
   });
 
-  test("marks a harness ready without Nakama provider when passthrough is off", async () => {
+  test("marks a harness ready without Airin provider when passthrough is off", async () => {
     const db = createInMemoryDatabaseAdapter();
     await db.upsertWorkspaceSettings(
       mergeWorkspaceSettings(null, {
@@ -162,7 +162,7 @@ describe("coding-agent harness resolution", () => {
       () =>
         withFastCliProbes(async () => {
           const dir = await mkdtemp(
-            path.join(tmpdir(), "nakama-stubborn-harness-")
+            path.join(tmpdir(), "airin-stubborn-harness-")
           );
 
           const command = path.join(dir, "stubborn");
@@ -241,7 +241,7 @@ describe("coding-agent harness resolution", () => {
     async () => {
       await withFastCliProbes(async () => {
         const dir = await mkdtemp(
-          path.join(tmpdir(), "nakama-sigterm-proof-harness-")
+          path.join(tmpdir(), "airin-sigterm-proof-harness-")
         );
 
         const command = path.join(dir, "stubborn-version");
@@ -302,7 +302,7 @@ describe("coding-agent harness resolution", () => {
 
   test("a harness that hangs on --version resolves as not installed", async () => {
     await withFastCliProbes(async () => {
-      const dir = await mkdtemp(path.join(tmpdir(), "nakama-hanging-harness-"));
+      const dir = await mkdtemp(path.join(tmpdir(), "airin-hanging-harness-"));
       // exec, so SIGTERM reaches sleep itself rather than orphaning it under sh.
       const command = path.join(dir, "hangs");
       await writeFile(command, "#!/bin/sh\nexec sleep 600\n", { mode: 0o755 });

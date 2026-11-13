@@ -7,8 +7,8 @@ install_dir="${1:-$HOME/.local/bin}"
 
 (
   cd "$repo_root"
-  bun build --compile apps/cli/src/index.ts --outfile dist/nakama
+  bun build --compile apps/cli/src/index.ts --outfile dist/airin
 )
 mkdir -p "$install_dir"
-install -m 755 "$repo_root/dist/nakama" "$install_dir/nakama"
-echo "Installed $install_dir/nakama. Add $install_dir to PATH, then run nakama."
+install -m 755 "$repo_root/dist/airin" "$install_dir/airin"
+echo "Installed $install_dir/airin. Add $install_dir to PATH, then run airin."

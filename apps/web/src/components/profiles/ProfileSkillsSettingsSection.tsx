@@ -1,8 +1,8 @@
-import type { ProfileDetail } from "@nakama/core/contract";
-import { Card, CardContent } from "@nakama/ui/card";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { toast } from "@nakama/ui/toast";
+import type { ProfileDetail } from "@airin/core/contract";
+import { Card, CardContent } from "@airin/ui/card";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { toast } from "@airin/ui/toast";
 import { Clock01Icon, UserGroupIcon } from "hugeicons-react";
 import { SettingIcon } from "@/components/profiles/ProfileOrgBooleanOverrideField";
 import { ProfileSkillsCuratorConsolidateField } from "@/components/profiles/ProfileSkillsCuratorConsolidateField";

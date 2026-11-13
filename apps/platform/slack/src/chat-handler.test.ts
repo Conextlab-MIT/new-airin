@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { withTempHome } from "@nakama/core/channel-test-helpers";
+import { withTempHome } from "@airin/core/channel-test-helpers";
 import {
   loadSlackConfigFile,
   regenerateSlackHandshake,
   saveSlackConfig,
-} from "@nakama/core/slack-config";
+} from "@airin/core/slack-config";
 import {
   normalizeSlackText,
   replyToSlackEvent,
@@ -26,7 +26,7 @@ import {
 
 describe("slack chat handler", () => {
   test("pairs a DM sender with the dashboard code, then answers them", async () => {
-    await withTempHome("nakama-slack-pair-", async (homeDir) => {
+    await withTempHome("airin-slack-pair-", async (homeDir) => {
       await saveTokens();
       const { handshakeCode } = await regenerateSlackHandshake(OWNER_AGENT);
       const { handle, posted, turns } = createHarness(homeDir);
@@ -51,7 +51,7 @@ describe("slack chat handler", () => {
   });
 
   test("answers a channel mention in a thread and follows only that thread", async () => {
-    await withTempHome("nakama-slack-thread-", async (homeDir) => {
+    await withTempHome("airin-slack-thread-", async (homeDir) => {
       await saveTokens(OWNER);
       const { handle, posted, turns } = createHarness(homeDir);
 
@@ -77,7 +77,7 @@ describe("slack chat handler", () => {
   });
 
   test("ignores strangers in channels and bot or edited messages", async () => {
-    await withTempHome("nakama-slack-ignore-", async (homeDir) => {
+    await withTempHome("airin-slack-ignore-", async (homeDir) => {
       await saveTokens(OWNER);
       const { handle, posted, turns } = createHarness(homeDir);
 
@@ -93,7 +93,7 @@ describe("slack chat handler", () => {
   });
 
   test("routes ! commands instead of starting a turn", async () => {
-    await withTempHome("nakama-slack-commands-", async (homeDir) => {
+    await withTempHome("airin-slack-commands-", async (homeDir) => {
       await saveTokens(OWNER);
       const { handle, posted, turns } = createHarness(homeDir);
       const dm = { channel: "D0DIRECT", channel_type: "im" };
@@ -111,7 +111,7 @@ describe("slack chat handler", () => {
 });
 
 test("tells an unlinked member who mentions the bot in a channel to pair in a DM", async () => {
-  await withTempHome("nakama-slack-stranger-", async (homeDir) => {
+  await withTempHome("airin-slack-stranger-", async (homeDir) => {
     await saveTokens(OWNER);
     const { handshakeCode } = await regenerateSlackHandshake(OWNER_AGENT);
     const { handle, posted, turns } = createHarness(homeDir);
@@ -133,7 +133,7 @@ test("tells an unlinked member who mentions the bot in a channel to pair in a DM
 });
 
 test("every chat runs as the agent that owns the connection, and !org or !profile cannot move it", async () => {
-  await withTempHome("nakama-slack-org-", async (homeDir) => {
+  await withTempHome("airin-slack-org-", async (homeDir) => {
     await saveTokens(OWNER);
     const { handle, orgRequests, posted, turns } = createHarness(homeDir);
     const dm = { channel: "D0DIRECT", channel_type: "im" };
@@ -152,7 +152,7 @@ test("every chat runs as the agent that owns the connection, and !org or !profil
 });
 
 test("a session saved for another agent is never continued", async () => {
-  await withTempHome("nakama-slack-owner-session-", async (homeDir) => {
+  await withTempHome("airin-slack-owner-session-", async (homeDir) => {
     await saveTokens(OWNER);
     const { handle, sessionStore } = createHarness(homeDir);
     sessionStore.set("D0DIRECT", {
@@ -173,7 +173,7 @@ test("a session saved for another agent is never continued", async () => {
 });
 
 test("everyone in the workspace can chat, but guests and outsiders cannot", async () => {
-  await withTempHome("nakama-slack-workspace-", async (homeDir) => {
+  await withTempHome("airin-slack-workspace-", async (homeDir) => {
     await saveSlackConfig(OWNER_AGENT, {
       allowWorkspace: true,
       appToken: "xapp-1-test",
@@ -199,7 +199,7 @@ test("everyone in the workspace can chat, but guests and outsiders cannot", asyn
 });
 
 test("the workspace gate stays shut until it is turned on", async () => {
-  await withTempHome("nakama-slack-workspace-off-", async (homeDir) => {
+  await withTempHome("airin-slack-workspace-off-", async (homeDir) => {
     await saveTokens();
 
     const { handle, turns } = createHarness(homeDir, undefined, {
@@ -213,7 +213,7 @@ test("the workspace gate stays shut until it is turned on", async () => {
 });
 
 test("!new stops a reply that is still streaming instead of waiting behind it", async () => {
-  await withTempHome("nakama-slack-new-", async (homeDir) => {
+  await withTempHome("airin-slack-new-", async (homeDir) => {
     await saveTokens(OWNER);
     // A turn that only ends when it is aborted, like a long tool run. It
     // reports when it starts, so the test never races the handler's setup.
@@ -257,7 +257,7 @@ test("!new stops a reply that is still streaming instead of waiting behind it", 
 });
 
 test("!stop also stops a message waiting behind the running reply", async () => {
-  await withTempHome("nakama-slack-stop-queued-", async (homeDir) => {
+  await withTempHome("airin-slack-stop-queued-", async (homeDir) => {
     await saveTokens(OWNER);
     let markStarted = () => {};
 
@@ -317,7 +317,7 @@ test("!stop also stops a message waiting behind the running reply", async () => 
 // The turn holds the lock but has no stop signal yet while it finds its
 // session, so only the queue of waiting turns can reach it there.
 test("!stop while a turn finds its session stops it before the agent answers", async () => {
-  await withTempHome("nakama-slack-stop-lookup-", async (homeDir) => {
+  await withTempHome("airin-slack-stop-lookup-", async (homeDir) => {
     await saveTokens(OWNER);
     let markCreating = () => {};
 
@@ -370,7 +370,7 @@ test("!stop while a turn finds its session stops it before the agent answers", a
 });
 
 test("only the five command words are commands, in any letter case", async () => {
-  await withTempHome("nakama-slack-words-", async (homeDir) => {
+  await withTempHome("airin-slack-words-", async (homeDir) => {
     await saveTokens(OWNER);
     const { handle, posted, turns } = createHarness(homeDir);
     const dm = { channel: "D0WORDS", channel_type: "im" };
@@ -387,7 +387,7 @@ test("only the five command words are commands, in any letter case", async () =>
 });
 
 test("!status names the agent, provider, model and session", async () => {
-  await withTempHome("nakama-slack-status-", async (homeDir) => {
+  await withTempHome("airin-slack-status-", async (homeDir) => {
     await saveTokens(OWNER);
     const { handle, posted } = createHarness(homeDir);
     const dm = { channel: "D0STATUS", channel_type: "im" };
@@ -409,7 +409,7 @@ test("!status names the agent, provider, model and session", async () => {
 });
 
 test("!status answers while a reply is still streaming", async () => {
-  await withTempHome("nakama-slack-status-busy-", async (homeDir) => {
+  await withTempHome("airin-slack-status-busy-", async (homeDir) => {
     await saveTokens(OWNER);
     let markStarted = () => {};
 
@@ -455,7 +455,7 @@ test("!status answers while a reply is still streaming", async () => {
 });
 
 test("text written before each tool call is posted in order", async () => {
-  await withTempHome("nakama-slack-order-", async (homeDir) => {
+  await withTempHome("airin-slack-order-", async (homeDir) => {
     await saveTokens(OWNER);
 
     const stream: FakeStream = async (handlers) => {
@@ -492,7 +492,7 @@ test("text written before each tool call is posted in order", async () => {
 });
 
 test("the turn is marked started before it reaches the agent", async () => {
-  await withTempHome("nakama-slack-start-", async (homeDir) => {
+  await withTempHome("airin-slack-start-", async (homeDir) => {
     await saveTokens(OWNER);
 
     const order: string[] = [];
@@ -533,7 +533,7 @@ test("the turn is marked started before it reaches the agent", async () => {
 });
 
 test("using a pairing code counts as started", async () => {
-  await withTempHome("nakama-slack-pair-", async (homeDir) => {
+  await withTempHome("airin-slack-pair-", async (homeDir) => {
     await saveTokens();
 
     const { handshakeCode } = await regenerateSlackHandshake(OWNER_AGENT);

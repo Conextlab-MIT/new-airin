@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { createRoute, z } from "@hono/zod-openapi";
 import {
   type AcceptOrgInviteResponse,
   type AuthUserResponse,
@@ -20,9 +19,10 @@ import {
   type SetupAuthRequest,
   saveUserWebPublicUrl,
   type UpdateAuthProfileRequest,
-} from "@nakama/core";
-import { DEMO_LOGIN_EMAIL, DEMO_LOGIN_HOST } from "@nakama/core/demo-login";
-import { ORG_ROLES } from "@nakama/db";
+} from "@airin/core";
+import { DEMO_LOGIN_EMAIL, DEMO_LOGIN_HOST } from "@airin/core/demo-login";
+import { ORG_ROLES } from "@airin/db";
+import { createRoute, z } from "@hono/zod-openapi";
 import type {
   AuthenticationResponseJSON,
   RegistrationResponseJSON,
@@ -1098,7 +1098,7 @@ export function registerAuthRoutes(app: HonoApp, options: ServerOptions): void {
         })
       ),
       rpID,
-      rpName: "Nakama",
+      rpName: "Airin",
       userDisplayName: user.name ?? user.email,
       userID: new TextEncoder().encode(user.id),
       userName: user.email,
@@ -1363,7 +1363,7 @@ export function registerAuthRoutes(app: HonoApp, options: ServerOptions): void {
 
     return json({
       secret,
-      uri: `otpauth://totp/Nakama:${account}?secret=${secret}&issuer=Nakama&algorithm=SHA1&digits=6&period=30`,
+      uri: `otpauth://totp/Airin:${account}?secret=${secret}&issuer=Airin&algorithm=SHA1&digits=6&period=30`,
     });
   });
 

@@ -6,8 +6,8 @@ import type {
   JsonSchema,
   ToolContext,
   ToolDefinition,
-} from "@nakama/core";
-import { pathExists } from "@nakama/core";
+} from "@airin/core";
+import { pathExists } from "@airin/core";
 import { z } from "zod";
 import {
   type CustomToolRecord,
@@ -17,7 +17,7 @@ import {
 } from "./custom-tool-shared";
 import { spawnJsonTool } from "./custom-tool-subprocess";
 
-const BUN_BIN = process.env.NAKAMA_BUN_BIN ?? "bun";
+const BUN_BIN = process.env.AIRIN_BUN_BIN ?? "bun";
 
 const customToolJsonValueSchema = z.json();
 

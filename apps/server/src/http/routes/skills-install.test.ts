@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { zipSync } from "fflate";
 import { asTestFetch } from "../../providers/test-helpers";
 import { SkillsService } from "../../services/skills-service";
@@ -13,7 +13,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-skills-install-routes-test-");
+setupTestConfigDir("airin-skills-install-routes-test-");
 
 const VALID_SKILL = `---
 name: github-weather

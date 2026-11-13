@@ -24,15 +24,15 @@ describe("web search config", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     delete process.env.EXA_API_KEY;
     delete process.env.FIRECRAWL_API_KEY;
     delete process.env.SERPLY_API_KEY;
   });
 
   async function useTempConfigDir(): Promise<void> {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-web-search-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-web-search-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   }
 
   test("reports built-in search when nothing is configured", async () => {

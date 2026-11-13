@@ -22,7 +22,7 @@ export function shouldReloadAfterRouteError(
     return false;
   }
 
-  const key = "nakama:route-reload-at";
+  const key = "airin:route-reload-at";
   const stored = storage.getItem(key);
   const previous = stored === null ? null : Number(stored);
 

@@ -1,4 +1,4 @@
-import { inferArtifactMimeType } from "@nakama/core/artifact-mime";
+import { inferArtifactMimeType } from "@airin/core/artifact-mime";
 import type { ChatListItem } from "@/lib/chat-history";
 
 export const FILE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
@@ -17,9 +17,9 @@ export {
   isVideoArtifactMimeType,
   looksLikeUtf8Text,
   resolveArtifactMimeType,
-} from "@nakama/core/artifact-mime";
+} from "@airin/core/artifact-mime";
 
-const ARTIFACT_META_SUFFIX = ".nakama-meta.json";
+const ARTIFACT_META_SUFFIX = ".airin-meta.json";
 
 const ARTIFACTS_SEGMENT = "/artifacts/";
 
@@ -139,7 +139,7 @@ function isUnderArtifactsDir(resolvedPath: string): boolean {
 function isArtifactMetaRelativePath(relativePath: string): boolean {
   return (
     relativePath.endsWith(ARTIFACT_META_SUFFIX) ||
-    relativePath.includes(".nakama-meta")
+    relativePath.includes(".airin-meta")
   );
 }
 
@@ -147,7 +147,7 @@ function isArtifactMetaResolvedPath(resolvedPath: string): boolean {
   return (
     isUnderArtifactsDir(resolvedPath) &&
     (resolvedPath.endsWith(ARTIFACT_META_SUFFIX) ||
-      resolvedPath.includes(".nakama-meta"))
+      resolvedPath.includes(".airin-meta"))
   );
 }
 
@@ -163,7 +163,7 @@ export function isArtifactMetaSidecarTool(message: ChatListItem): boolean {
 
   if (
     inputPath &&
-    (inputPath.includes(".nakama-meta") ||
+    (inputPath.includes(".airin-meta") ||
       inputPath.endsWith(ARTIFACT_META_SUFFIX))
   ) {
     return true;
@@ -179,7 +179,7 @@ export function isArtifactMetaSidecarTool(message: ChatListItem): boolean {
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This guard validates decoded external data before the caller uses the domain value.
   if (typeof result?.path === "string") {
     return (
-      result.path.includes(".nakama-meta") ||
+      result.path.includes(".airin-meta") ||
       result.path.endsWith(ARTIFACT_META_SUFFIX)
     );
   }
@@ -431,7 +431,7 @@ export function extractArtifactPathsFromText(
 
 /**
  * Extract artifact chips from an assistant turn's tool messages and text.
- * Prefers content + `.nakama-meta.json` sidecar pairs; falls back to content-only
+ * Prefers content + `.airin-meta.json` sidecar pairs; falls back to content-only
  * writes under artifacts/ and `artifacts/...` mentions in assistant text.
  */
 export function extractTurnArtifacts(

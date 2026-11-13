@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { AGENT_CHANNELS, type ToolDefinition } from "@nakama/core";
+import { AGENT_CHANNELS, type ToolDefinition } from "@airin/core";
 import { buildChatSystemPrompt } from "./chat-prompt";
 
 function tool(name: string): ToolDefinition {
@@ -34,6 +34,24 @@ test.each([
 
 // Every channel, so flipping one entry of MESSAGING_CHANNEL_PROMPT between a
 // config and null fails here rather than silently changing the reply style.
+test("buildChatSystemPrompt asks for interactive HTML widgets", () => {
+  expect(prompt([])).toContain("Interactive HTML widgets");
+  expect(prompt([])).toContain("```html");
+});
+
+test("buildChatSystemPrompt injects default reply language", () => {
+  const indonesian = prompt([], { userLanguage: "id" });
+  expect(indonesian).toContain("Bahasa Indonesia");
+  expect(indonesian).toContain("unless the user clearly asks");
+
+  const english = prompt([], { userLanguage: "en" });
+  expect(english).toContain("Default reply language: English");
+  expect(english).not.toContain("Bahasa Indonesia");
+
+  // Missing preference still defaults to Indonesian for this product.
+  expect(prompt([])).toContain("Bahasa Indonesia");
+});
+
 test("buildChatSystemPrompt gives messaging style to the chat channels only", () => {
   const styled = AGENT_CHANNELS.filter((channel) =>
     prompt([], { channel }).includes("Write like texting a friend")

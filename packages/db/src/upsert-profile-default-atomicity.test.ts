@@ -36,8 +36,8 @@ describe("upsertProfile default atomicity", () => {
   });
 
   test("sqlite keeps the prior default when clear-then-upsert rolls back", async () => {
-    rootDir = await mkdtemp(join(tmpdir(), "nakama-upsert-default-"));
-    const databasePath = join(rootDir, "nakama.sqlite");
+    rootDir = await mkdtemp(join(tmpdir(), "airin-upsert-default-"));
+    const databasePath = join(rootDir, "airin.sqlite");
     const databaseUrl = `file:${databasePath}`;
     const now = "2020-01-01T00:00:00.000Z";
 
@@ -92,8 +92,8 @@ describe("upsertProfile default atomicity", () => {
   });
 
   test("sqlite concurrent default upserts leave exactly one default", async () => {
-    rootDir = await mkdtemp(join(tmpdir(), "nakama-upsert-default-race-"));
-    const databasePath = join(rootDir, "nakama.sqlite");
+    rootDir = await mkdtemp(join(tmpdir(), "airin-upsert-default-race-"));
+    const databasePath = join(rootDir, "airin.sqlite");
     const databaseUrl = `file:${databasePath}`;
     const now = "2020-01-01T00:00:00.000Z";
 

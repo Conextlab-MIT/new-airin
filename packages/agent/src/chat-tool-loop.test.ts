@@ -8,7 +8,7 @@ import type {
   GenerateChatInput,
   ProviderClient,
   ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   persistInlineAttachmentsInContent,
   readFileInputSchema,
@@ -16,7 +16,7 @@ import {
   runReadFile,
   toAnthropicUserContent,
   toOpenAIChatUserContent,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import { createAgentChatSession } from "./index";
 
@@ -367,7 +367,7 @@ describe("agent chat tool loop", () => {
   test.each([false, true])(
     "delivers read_file images after all tool results (stream: %s)",
     async (stream) => {
-      const dir = await mkdtemp(path.join(os.tmpdir(), "nakama-tool-image-"));
+      const dir = await mkdtemp(path.join(os.tmpdir(), "airin-tool-image-"));
 
       const data =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

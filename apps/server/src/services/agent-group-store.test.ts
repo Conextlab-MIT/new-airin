@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { getOrgConfigDir } from "@nakama/core";
+import { getOrgConfigDir } from "@airin/core";
 import { setupTestConfigDir } from "../test-config-dir";
 import {
   addAgentGroupHandles,
@@ -31,7 +31,7 @@ const ORG_ID = "org_test";
 // Before the config dir cleanup, which Windows refuses while a file is open.
 afterEach(closeAgentGroupDatabases);
 
-setupTestConfigDir("nakama-agent-group-store-");
+setupTestConfigDir("airin-agent-group-store-");
 
 describe("agent group store", () => {
   test("migrates existing messages without inventing memory changes", () => {

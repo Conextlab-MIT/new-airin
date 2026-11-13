@@ -3,9 +3,9 @@ import type {
   OrganizationOverviewResponse,
   OrgSharedResourceKind,
   OrgSharedResourceSummary,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardHeader, CardTitle } from "@nakama/ui/card";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardHeader, CardTitle } from "@airin/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -13,15 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
+} from "@airin/ui/select";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AiBrain01Icon,

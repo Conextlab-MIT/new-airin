@@ -1,5 +1,5 @@
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
 import { useEffect, useState } from "react";
 import { TimezoneSelect } from "@/components/TimezoneSelect";
 import { UserContextForm } from "@/components/UserContextForm";

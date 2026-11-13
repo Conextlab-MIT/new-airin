@@ -1,10 +1,10 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type {
   RunSkillCuratorRequest,
   SkillCuratorLatestResponse,
   SkillCuratorRunResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { ServerOptions } from "../context";
 import { requireOrgAdminFromContext } from "../org-guards";
 import { json, readOptionalJson } from "../shared";
@@ -45,7 +45,7 @@ export function registerOrgCuratorRoutes(
     const orgId = decodeURIComponent(c.req.param("orgId"));
 
     if (authOrgId !== orgId) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     return orgId;
@@ -53,7 +53,7 @@ export function registerOrgCuratorRoutes(
 
   function requireCurator() {
     if (!skillCuratorService) {
-      throw new NakamaApiError("Skill curator service not configured", 500);
+      throw new AirinApiError("Skill curator service not configured", 500);
     }
 
     return skillCuratorService;
@@ -61,7 +61,7 @@ export function registerOrgCuratorRoutes(
 
   function requireOrgs() {
     if (!orgService) {
-      throw new NakamaApiError("Organization service not configured", 500);
+      throw new AirinApiError("Organization service not configured", 500);
     }
 
     return orgService;

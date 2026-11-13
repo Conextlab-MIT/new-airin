@@ -4,11 +4,11 @@ import type {
   LlmToolDefinition,
   ProviderClient,
   ProviderName,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   estimateUserContentTokens,
   stripImagesForCompaction,
-} from "@nakama/core";
+} from "@airin/core";
 
 const COMPACTION_BUFFER = 20_000;
 
@@ -95,7 +95,7 @@ function estimateTokens(text: string): number {
 
 // Unsigned Gemini thinking is display-only. Signed parts are replayed and
 // counted through providerContent instead.
-// ACP agents keep their own history, so Nakama never replays thinking to them.
+// ACP agents keep their own history, so Airin never replays thinking to them.
 export function providerReplaysThinking(
   provider: ProviderName | "acp"
 ): boolean {

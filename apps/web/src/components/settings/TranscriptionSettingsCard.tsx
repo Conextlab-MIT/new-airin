@@ -1,4 +1,4 @@
-import { toast } from "@nakama/ui/toast";
+import { toast } from "@airin/ui/toast";
 import { useEffect, useMemo, useState } from "react";
 import { SettingsModelSelect } from "@/components/settings/settings-model-select";
 import { SettingsModelTile } from "@/components/settings/settings-model-tile";

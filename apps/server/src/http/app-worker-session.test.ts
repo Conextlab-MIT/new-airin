@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AuthService } from "../services/auth-service";
 import { OrgService } from "../services/org-service";
 import { setupTestConfigDir } from "../test-config-dir";
@@ -9,7 +9,7 @@ import {
   setupFreshInstallSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-http-app-test-");
+setupTestConfigDir("airin-http-app-test-");
 
 function createServerOptions() {
   const databaseAdapter = createInMemoryDatabaseAdapter();

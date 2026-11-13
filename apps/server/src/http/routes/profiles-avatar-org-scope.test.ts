@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { AuthService } from "../../services/auth-service";
 import { setupTestConfigDir } from "../../test-config-dir";
@@ -10,7 +10,7 @@ import {
   seedOrgAdmin,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-profile-avatar-org-scope-test-");
+setupTestConfigDir("airin-profile-avatar-org-scope-test-");
 
 const PASSWORD = "password123";
 

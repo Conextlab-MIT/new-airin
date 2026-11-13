@@ -1,6 +1,6 @@
-import type { ToolCall, ToolContext, ToolDefinition } from "@nakama/core";
+import type { ToolCall, ToolContext, ToolDefinition } from "@airin/core";
 
-import * as core from "@nakama/core";
+import * as core from "@airin/core";
 
 import { z } from "zod";
 

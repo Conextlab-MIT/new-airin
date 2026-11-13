@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createAgentChatSession } from "@nakama/agent";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createAgentChatSession } from "@airin/agent";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { OrgUsageQuotaService } from "./org-usage-quota-service";
 
 async function tokenLimitedOrg(orgId: string, now?: () => Date) {

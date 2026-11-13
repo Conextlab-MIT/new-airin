@@ -1,5 +1,6 @@
 import type {
   AgentBrowserStatusResponse,
+  AppLanguage,
   ComposioSettingsResponse,
   EmailSettingsResponse,
   ErrorTrackingSettingsResponse,
@@ -7,6 +8,7 @@ import type {
   GenerateImageResponse,
   ImageGenerationSettings,
   ImageGenerationSettingsResponse,
+  LanguageSettingsResponse,
   ListTimezonesResponse,
   SendEmailTestRequest,
   SendEmailTestResponse,
@@ -22,6 +24,7 @@ import type {
   UpdateEmailSettingsRequest,
   UpdateErrorTrackingSettingsRequest,
   UpdateImageGenerationRequest,
+  UpdateLanguageRequest,
   UpdateThinkingRequest,
   UpdateTimezoneRequest,
   UpdateTranscriptionRequest,
@@ -31,8 +34,8 @@ import type {
   VisionSettingsResponse,
   WebSearchProvider,
   WebSearchSettingsResponse,
-} from "@nakama/core/contract";
-import { withDisabledFetchIdle } from "@nakama/core/fetch-idle";
+} from "@airin/core/contract";
+import { withDisabledFetchIdle } from "@airin/core/fetch-idle";
 import { createApiError } from "./client-helpers";
 import { SystemClient } from "./client-system";
 import { readAgentBrowserInstallStream } from "./stream";
@@ -57,6 +60,26 @@ export class SettingsClient extends SystemClient {
     );
 
     return response.timezone;
+  }
+
+  async getLanguage(): Promise<AppLanguage> {
+    const response = await this.request<LanguageSettingsResponse>(
+      "/v1/settings/language"
+    );
+
+    return response.language;
+  }
+
+  async setLanguage(language: AppLanguage): Promise<AppLanguage> {
+    const response = await this.request<LanguageSettingsResponse>(
+      "/v1/settings/language",
+      {
+        body: JSON.stringify({ language } satisfies UpdateLanguageRequest),
+        method: "PUT",
+      }
+    );
+
+    return response.language;
   }
 
   async getThinkingSettings(): Promise<ThinkingSettings> {

@@ -7,21 +7,21 @@ import type {
   GenerateTextResult,
   ProviderClient,
   StreamChatHandlers,
-} from "@nakama/core";
+} from "@airin/core";
 import { resolveAcpAgentLaunch } from "./acp-agent-presets";
 import {
   type AcpAgentProcess,
   startAcpAgentProcess,
 } from "./acp-agent-process";
 import { isEditInsideFolder } from "./acp-edit-policy";
-import { isNakamaToolPermission, moveAcpToolAccess } from "./acp-mcp-tools";
+import { isAirinToolPermission, moveAcpToolAccess } from "./acp-mcp-tools";
 import { createAcpUpdateMapper } from "./acp-session-events";
 
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
 export interface AcpProviderOptions {
   agent: AcpAgentConfig;
-  /** Absolute path. The agent works here; Nakama never runs its own tools in it. */
+  /** Absolute path. The agent works here; Airin never runs its own tools in it. */
   cwd: string;
   /** Settings applied once when the agent session starts, such as the model and effort. */
   initialSettings?: Record<string, string>;
@@ -50,8 +50,8 @@ const liveSessions = new Map<string, LiveSession>();
 
 /**
  * Chat provider backed by an ACP agent. The agent runs its own model loop and
- * tools. Nakama sends the new user message, shows the streamed updates, and
- * gets the Nakama tools through `mcpServers`.
+ * tools. Airin sends the new user message, shows the streamed updates, and
+ * gets the Airin tools through `mcpServers`.
  */
 export function createAcpProvider(options: AcpProviderOptions): ProviderClient {
   const generateChat = async (
@@ -294,10 +294,10 @@ async function getOrStartProcess(
     acp
       .client()
       .onRequest(acp.methods.client.session.requestPermission, ({ params }) => {
-        // Approved: the chat's own Nakama tools, and edits to files inside the
+        // Approved: the chat's own Airin tools, and edits to files inside the
         // profile folder. Commands and edits outside the folder are denied.
         const approve =
-          isNakamaToolPermission(route.key, params.toolCall) ||
+          isAirinToolPermission(route.key, params.toolCall) ||
           isEditInsideFolder(options.cwd, params.toolCall);
 
         const choice = params.options.find((option) =>

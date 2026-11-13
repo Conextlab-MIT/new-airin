@@ -16,8 +16,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
-import { getPluginReleaseDir, PLUGIN_MANIFEST_API_VERSION } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { getPluginReleaseDir, PLUGIN_MANIFEST_API_VERSION } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import {
   approvedPluginPackage,
   closePluginPackageRegistry,
@@ -25,19 +25,19 @@ import {
   pluginTarball,
   publishPluginPackageVersion,
 } from "../testing/plugin-package-fixture";
-import { createSuperNakamaTools } from "../tools/super-nakama-tools";
+import { createSuperAirinTools } from "../tools/super-airin-tools";
 import { PluginService, setPluginLifecycleTestHooks } from "./plugin-service";
 import type { ProfileService } from "./profile-service";
-import { SuperNakamaSessionState } from "./super-nakama-session-state";
+import { SuperAirinSessionState } from "./super-airin-session-state";
 
 afterEach(closePluginPackageRegistry);
 
-const SIDE_EFFECT_MARKER = join(tmpdir(), "nakama-plugin-side-effect-marker");
+const SIDE_EFFECT_MARKER = join(tmpdir(), "airin-plugin-side-effect-marker");
 
 type Json = boolean | Json[] | { [key: string]: Json } | null | number | string;
 
 const identity = {
-  author: "Nakama",
+  author: "Airin",
   description: "Notes for an organization",
   id: "notes",
   license: "MIT",
@@ -65,7 +65,7 @@ function notesManifest(overrides: Record<string, Json> = {}) {
       },
     ],
     apiVersion: PLUGIN_MANIFEST_API_VERSION,
-    minNakamaVersion: "0.1.0",
+    minAirinVersion: "0.1.0",
     skills: [{ directory: "skills/notes", key: "notes" }],
     ui: {
       assetsDir: "ui/assets",
@@ -86,7 +86,7 @@ function validBundle(
   return pluginPackage(
     {
       "actions/list.js": sideEffectJs,
-      "nakama.plugin.json": JSON.stringify(manifest),
+      "airin.plugin.json": JSON.stringify(manifest),
       "side-effect.js": sideEffectJs,
       "skills/notes/SKILL.md": "# Notes\n",
       "ui/assets/app.js": "export {}",
@@ -100,7 +100,7 @@ describe("PluginService", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-plugin-u2-"));
+    configDir = await mkdtemp(join(tmpdir(), "airin-plugin-u2-"));
     await rm(SIDE_EFFECT_MARKER, { force: true });
   });
 
@@ -145,7 +145,7 @@ describe("PluginService", () => {
 
     const contents = {
       "actions/list.js": sideEffectJs,
-      "nakama.plugin.json": JSON.stringify(notesManifest()),
+      "airin.plugin.json": JSON.stringify(notesManifest()),
       "package.json": JSON.stringify({ name: "@test/notes", version: "1.0.0" }),
       "skills/notes/SKILL.md":
         "---\nname: notes\ndescription: Notes\n---\nList notes.",
@@ -168,13 +168,13 @@ describe("PluginService", () => {
     };
   }
 
-  test("submit_plugin_draft describes Super Nakama's own draft without installing it", async () => {
+  test("submit_plugin_draft describes Airin's own draft without installing it", async () => {
     const { db, directory, draft, service } = await localDraft();
 
-    const submit = createSuperNakamaTools(
+    const submit = createSuperAirinTools(
       // SAFETY: submit_plugin_draft never touches profile management.
       {} as ProfileService,
-      new SuperNakamaSessionState(),
+      new SuperAirinSessionState(),
       undefined,
       () => service
     ).find((tool) => tool.name === "submit_plugin_draft");
@@ -201,7 +201,7 @@ describe("PluginService", () => {
       type: "object",
     };
     await writeFile(
-      join(directory, "nakama.plugin.json"),
+      join(directory, "airin.plugin.json"),
       JSON.stringify(manifest)
     );
 
@@ -437,7 +437,7 @@ describe("PluginService", () => {
     });
 
     await writeFile(
-      join(directory, "nakama.plugin.json"),
+      join(directory, "airin.plugin.json"),
       JSON.stringify(manifest)
     );
     const preview = await service.previewLocalPlugin(draft, actor);
@@ -469,7 +469,7 @@ describe("PluginService", () => {
     expect(second.selectedVersion).not.toBe(enabled.selectedVersion);
     await writeFile(join(directory, "migrations/002.sql"), "INVALID SQL;");
     await writeFile(
-      join(directory, "nakama.plugin.json"),
+      join(directory, "airin.plugin.json"),
       JSON.stringify(
         notesManifest({
           database: {
@@ -503,7 +503,7 @@ describe("PluginService", () => {
     const { draft, directory, service, actor } = await localDraft();
 
     const changes: Record<string, Json>[] = [
-      { minNakamaVersion: "999.0.0" },
+      { minAirinVersion: "999.0.0" },
       { id: "workflows" },
       { version: "2.0.0" },
       { apiVersion: 999 },
@@ -511,7 +511,7 @@ describe("PluginService", () => {
 
     for (const change of changes) {
       await writeFile(
-        join(directory, "nakama.plugin.json"),
+        join(directory, "airin.plugin.json"),
         JSON.stringify(notesManifest(change))
       );
       await expect(
@@ -523,7 +523,7 @@ describe("PluginService", () => {
   test("local review rejects official IDs even when the draft ID matches", async () => {
     const { draft, directory, service, actor } = await localDraft();
     await writeFile(
-      join(directory, "nakama.plugin.json"),
+      join(directory, "airin.plugin.json"),
       JSON.stringify(notesManifest({ id: "workflows" }))
     );
     await rename(directory, join(dirname(directory), "workflows"));
@@ -654,7 +654,7 @@ describe("PluginService", () => {
     await mkdir(join(directory, "migrations"));
     await writeFile(join(directory, "migrations/001.sql"), "INVALID SQL;");
     await writeFile(
-      join(directory, "nakama.plugin.json"),
+      join(directory, "airin.plugin.json"),
       JSON.stringify(
         notesManifest({
           database: { migrations: [{ id: "001", path: "migrations/001.sql" }] },
@@ -754,7 +754,7 @@ describe("PluginService", () => {
 
     for (const capability of capabilities) {
       await writeFile(
-        join(directory, "nakama.plugin.json"),
+        join(directory, "airin.plugin.json"),
         JSON.stringify(notesManifest(capability))
       );
       await expect(
@@ -835,7 +835,7 @@ describe("PluginService", () => {
 
   for (const file of [
     "package.json",
-    "nakama.plugin.json",
+    "airin.plugin.json",
     "actions/list.js",
     "ui/index.js",
     "ui/assets/app.js",
@@ -1001,7 +1001,7 @@ describe("PluginService", () => {
       getPluginReleaseDir("notes", "1.0.0", configDir)
     );
     expect(
-      await readFile(join(installed.releaseDir, "nakama.plugin.json"), "utf8")
+      await readFile(join(installed.releaseDir, "airin.plugin.json"), "utf8")
     ).toContain('"id":"notes"');
     expect(existsSync(SIDE_EFFECT_MARKER)).toBe(false);
     expect(existsSync(join(configDir, "plugins", ".staging"))).toBe(false);
@@ -1018,12 +1018,12 @@ describe("PluginService", () => {
     const db = createInMemoryDatabaseAdapter();
     const service = new PluginService(db, configDir);
     const parent = dirname(configDir);
-    const escapeProbe = join(parent, "nakama-plugin-escape.txt");
+    const escapeProbe = join(parent, "airin-plugin-escape.txt");
     await rm(escapeProbe, { force: true });
 
     const cases = [
       ...[
-        "../nakama-plugin-escape.txt",
+        "../airin-plugin-escape.txt",
         "foo/%2e%2e/secret.js",
         "foo\\..\\secret.js",
         "/absolute.txt",
@@ -1170,7 +1170,7 @@ describe("PluginService", () => {
       code: "package_unavailable",
     });
 
-    process.env.NAKAMA_PLUGIN_NPM_TOKEN = "npm_fixture_token";
+    process.env.AIRIN_PLUGIN_NPM_TOKEN = "npm_fixture_token";
 
     try {
       const preview = await service.previewPluginPackage(source);
@@ -1200,7 +1200,7 @@ describe("PluginService", () => {
         )
       ).rejects.toMatchObject({ code: "invalid_package" });
     } finally {
-      delete process.env.NAKAMA_PLUGIN_NPM_TOKEN;
+      delete process.env.AIRIN_PLUGIN_NPM_TOKEN;
     }
   });
 
@@ -1267,7 +1267,7 @@ describe("PluginService", () => {
     const existingDir = getPluginReleaseDir("notes", "1.0.0", configDir);
 
     const existingBytes = await readFile(
-      join(existingDir, "nakama.plugin.json"),
+      join(existingDir, "airin.plugin.json"),
       "utf8"
     );
 
@@ -1285,9 +1285,9 @@ describe("PluginService", () => {
     );
     expect(existsSync(join(configDir, "plugins", ".staging"))).toBe(false);
     expect(await failingDb.getPluginRelease("notes", "1.1.0")).toBeNull();
-    expect(
-      await readFile(join(existingDir, "nakama.plugin.json"), "utf8")
-    ).toBe(existingBytes);
+    expect(await readFile(join(existingDir, "airin.plugin.json"), "utf8")).toBe(
+      existingBytes
+    );
     expect((await db.getPluginRelease("notes", "1.0.0"))?.version).toBe(
       "1.0.0"
     );
@@ -1345,7 +1345,7 @@ describe("PluginService", () => {
     const service = new PluginService(db, configDir);
 
     const archive = pluginPackage({
-      "nakama.plugin.json": JSON.stringify(notesManifest()),
+      "airin.plugin.json": JSON.stringify(notesManifest()),
       "skills/notes/SKILL.md": "# Notes\n",
     });
 

@@ -9,7 +9,7 @@ import { withMswCassette } from "./llm-msw-cassette";
 test.each(["text/event-stream; charset=utf-8", ""])(
   "SSE cassettes preserve text and content type (%s) and reject changed requests",
   async (contentType) => {
-    const cassettesDir = await mkdtemp(join(tmpdir(), "nakama-sse-"));
+    const cassettesDir = await mkdtemp(join(tmpdir(), "airin-sse-"));
 
     const body =
       'event: response.output_text.delta\ndata: {"delta":"hello","user":"synthetic-account"}\n\ndata: [DONE]\n\n';

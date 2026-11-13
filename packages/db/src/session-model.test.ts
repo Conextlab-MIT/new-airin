@@ -100,7 +100,7 @@ describe("SQLite session model persistence", () => {
 
   test("writes the profile org on insert and follows a profile move on re-upsert", async () => {
     const root = mkdtempSync(join(tmpdir(), "session-org-"));
-    const filename = join(root, "nakama.sqlite");
+    const filename = join(root, "airin.sqlite");
     const database = await createSqliteDatabase(`file:${filename}`);
     const raw = new Database(filename);
     const now = new Date().toISOString();

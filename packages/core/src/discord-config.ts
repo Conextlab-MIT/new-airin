@@ -36,7 +36,7 @@ export const SNOWFLAKE_PATTERN = /^\d{17,20}$/;
 export const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 
 export const DISCORD_USER_AGENT =
-  "DiscordBot (https://github.com/ahmadrosid/nakama, 1.0)";
+  "DiscordBot (https://github.com/ahmadrosid/airin, 1.0)";
 
 export function isDiscordSnowflake(value: string): boolean {
   return SNOWFLAKE_PATTERN.test(value);
@@ -472,7 +472,7 @@ export function resolveDiscordConfigFromSources(options: {
     handshakeExpiresAt: file?.handshakeExpiresAt ?? null,
     pairedUserIds: file?.pairedUserIds ?? [],
     profileId:
-      env.NAKAMA_DISCORD_PROFILE_ID?.trim() ||
+      env.AIRIN_DISCORD_PROFILE_ID?.trim() ||
       file?.profileId?.trim() ||
       DEFAULT_DISCORD_PROFILE_ID,
   };

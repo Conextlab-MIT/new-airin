@@ -28,7 +28,7 @@ const input = { clientId, clientSecret: secret, tenantId };
 
 const originalFetch = globalThis.fetch;
 
-const originalPublicUrl = process.env.NAKAMA_WEB_PUBLIC_URL;
+const originalPublicUrl = process.env.AIRIN_WEB_PUBLIC_URL;
 
 beforeEach(() => {
   globalThis.fetch = asTestFetch(async (url, options) => {
@@ -45,7 +45,7 @@ beforeEach(() => {
       token_type: "Bearer",
     });
   });
-  process.env.NAKAMA_WEB_PUBLIC_URL = "https://nakama.example/base/";
+  process.env.AIRIN_WEB_PUBLIC_URL = "https://airin.example/base/";
 });
 
 test("old Teams configs load without pairing state", async () => {
@@ -328,9 +328,9 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 
   if (originalPublicUrl === undefined) {
-    delete process.env.NAKAMA_WEB_PUBLIC_URL;
+    delete process.env.AIRIN_WEB_PUBLIC_URL;
   } else {
-    process.env.NAKAMA_WEB_PUBLIC_URL = originalPublicUrl;
+    process.env.AIRIN_WEB_PUBLIC_URL = originalPublicUrl;
   }
 });
 
@@ -345,7 +345,7 @@ test("saves private owner-scoped credentials and exposes no secret", async () =>
     expect(saved.allowedUserIds).toEqual([userId]);
     expect(saved.clientSecretConfigured).toBe(true);
     expect(saved.messagingEndpoint).toBe(
-      "https://nakama.example/base/v1/channels/teams/agent_a/messages"
+      "https://airin.example/base/v1/channels/teams/agent_a/messages"
     );
     expect(JSON.stringify(saved)).not.toContain(secret);
     expect(await loadTeamsConfigFile(owner)).toMatchObject({
@@ -437,9 +437,9 @@ test.each([
 ])("does not advertise an unusable public URL: %s", async (publicUrl) => {
   await withTempHome("teams-config-", async () => {
     if (publicUrl === undefined) {
-      delete process.env.NAKAMA_WEB_PUBLIC_URL;
+      delete process.env.AIRIN_WEB_PUBLIC_URL;
     } else {
-      process.env.NAKAMA_WEB_PUBLIC_URL = publicUrl;
+      process.env.AIRIN_WEB_PUBLIC_URL = publicUrl;
     }
 
     expect((await loadTeamsSettingsPublic(owner)).messagingEndpoint).toBeNull();

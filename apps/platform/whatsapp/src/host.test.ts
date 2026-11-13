@@ -14,7 +14,7 @@ let root = "";
 let hosts: ReturnType<typeof createWhatsAppHost>[] = [];
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "nakama-whatsapp-host-"));
+  root = await mkdtemp(join(tmpdir(), "airin-whatsapp-host-"));
   await mkdir(join(root, first.profileId));
   await mkdir(join(root, second.profileId));
 });

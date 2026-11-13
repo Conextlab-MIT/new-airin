@@ -1,20 +1,20 @@
-import type { UserOrgSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { UserOrgSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Input } from "@nakama/ui/input";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { Input } from "@airin/ui/input";
+import { cn } from "@airin/ui/utils";
 import { Add01Icon, ArrowDown01Icon, Edit03Icon } from "hugeicons-react";
 import { type ComponentProps, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/use-auth";

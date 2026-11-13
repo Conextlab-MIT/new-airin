@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ProviderInstance } from "@nakama/core";
+import type { ProviderInstance } from "@airin/core";
 import { createProviderForInstance } from "./create";
 import { type ProviderJsonRecord, parseJsonRecord } from "./shared";
 

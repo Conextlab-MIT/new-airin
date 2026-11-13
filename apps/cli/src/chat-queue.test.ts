@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
-import { NakamaClient } from "@nakama/client";
-import type { ModelsResponse, ProfileSummary } from "@nakama/core";
+import { AirinClient } from "@airin/client";
+import type { ModelsResponse, ProfileSummary } from "@airin/core";
 import { runChat } from "./chat";
 import * as clipboard from "./clipboard-image";
 import * as imageInput from "./image-input";
@@ -20,7 +20,7 @@ test.each(["success", "failure", "interrupted", "thinking"])(
       name: "Test",
     } as ProfileSummary;
 
-    const client = new NakamaClient();
+    const client = new AirinClient();
     const session = client.createChatSession("test", "cli");
     const ready = Promise.withResolvers<(chunk: string) => void>();
     const finished = Promise.withResolvers<void>();
@@ -229,7 +229,7 @@ test.each([
       updatedAt: "",
     };
 
-    const client = new NakamaClient();
+    const client = new AirinClient();
     const session = client.createChatSession("test", "cli");
     const ready = Promise.withResolvers<(chunk: string) => void>();
     const started = Promise.withResolvers<void>();
@@ -487,7 +487,7 @@ test("switches models without updating the profile", async () => {
     providers: [],
   };
 
-  const client = new NakamaClient();
+  const client = new AirinClient();
   const initialSession = client.createChatSession("initial", "cli");
   const switchedSession = client.createChatSession("switched", "cli");
   const ready = Promise.withResolvers<(chunk: string) => void>();

@@ -1,9 +1,9 @@
 ---
 title: "Documentation"
-description: "Documentation hub for Nakama — quickstart, deployment, concepts, channels, and reference."
+description: "Documentation hub for Airin — quickstart, deployment, concepts, channels, and reference."
 ---
 
-Nakama is a multi-tenant platform for teams of AI agents. Each profile is a bot with its own role, soul, tools, and memory — exposed through the web dashboard, CLI, Telegram, WhatsApp, or Discord from one deployment.
+Airin is a multi-tenant platform for teams of AI agents. Each profile is a bot with its own role, soul, tools, and memory — exposed through the web dashboard, CLI, Telegram, WhatsApp, or Discord from one deployment.
 
 ## Quick start
 
@@ -11,21 +11,21 @@ Pick the fastest path for you:
 
 ```bash
 # Live demo — no install
-# Open https://demo.getnakama.cloud
-# Username: demo@getnakama.cloud
+# Open https://demo.getairin.cloud
+# Username: demo@getairin.cloud
 # Password: demo1234
 
 # Managed hosting — your own instance (recommended)
-# Sign up at https://getnakama.cloud/ and open your instance URL
+# Sign up at https://getairin.cloud/ and open your instance URL
 
 # Docker — single container
-docker pull ghcr.io/ahmadrosid/nakama:latest
+docker pull ghcr.io/ahmadrosid/airin:latest
 umask 077
-printf 'NAKAMA_SECRETS_KEY=%s\n' "$(openssl rand -base64 32)" > nakama-secrets.env
-docker run -d -p 4310:4310 -v nakama-data:/nakama/data --env-file nakama-secrets.env --name nakama ghcr.io/ahmadrosid/nakama:latest
+printf 'AIRIN_SECRETS_KEY=%s\n' "$(openssl rand -base64 32)" > airin-secrets.env
+docker run -d -p 4310:4310 -v airin-data:/airin/data --env-file airin-secrets.env --name airin ghcr.io/ahmadrosid/airin:latest
 
 # Local development — from source
-git clone https://github.com/ahmadrosid/nakama.git && cd nakama
+git clone https://github.com/ahmadrosid/airin.git && cd airin
 bun install && bun run dev:web
 ```
 
@@ -45,9 +45,9 @@ Then open the dashboard, complete the setup wizard, and send your first message.
 - [Coolify](/coolify) — one-click self-hosting with automatic reverse proxy and SSL
 - [Deployment hardening](/deployment-hardening) — TLS, network exposure, secrets, backups, and verification
 - [Outbound connections](/outbound-connections) — external destinations, triggers, and data flows
-- [Live demo](https://demo.getnakama.cloud) — shared instance (`demo@getnakama.cloud` / `demo1234`)
-- [Managed hosting](https://getnakama.cloud/) — sign up and open your dedicated URL
-- [Backup and restore](/backup-restore) — export and restore your Nakama data root
+- [Live demo](https://demo.getairin.cloud) — shared instance (`demo@getairin.cloud` / `demo1234`)
+- [Managed hosting](https://getairin.cloud/) — sign up and open your dedicated URL
+- [Backup and restore](/backup-restore) — export and restore your Airin data root
 - [Error tracking](/error-tracking): ship this instance's own crashes to your Sentry, GlitchTip, Bugsink, or Rustrak project
 
 ## Concepts
@@ -60,7 +60,7 @@ Then open the dashboard, complete the setup wizard, and send your first message.
 - [Automations and tasks](/automations): scheduled prompts, run history, and channel delivery
 - [Workflows](/workflows): on-demand step recipes with receipts and summarize-from-data runs
 - [Data View](/data-view): a free-to-read copy of a Google Sheet, with edits you sync back
-- [Agent prompts](/agent-prompt) — how Nakama builds the system prompt each turn
+- [Agent prompts](/agent-prompt) — how Airin builds the system prompt each turn
 
 ## Channels
 
@@ -88,10 +88,10 @@ Then open the dashboard, complete the setup wizard, and send your first message.
 
 - [Contributing](/contributing) — run from source, test, and open a pull request
 - [Changelog](/changelog): what changed in each release, and how to read it
-- [GitHub repository](https://github.com/ahmadrosid/nakama) — source code and issues
+- [GitHub repository](https://github.com/ahmadrosid/airin) — source code and issues
 
 ## Reference
 
 - [llms.txt](/llms.txt) — documentation index for AI agents and tooling
-- [Threat model](https://github.com/ahmadrosid/nakama/blob/main/THREAT_MODEL.md) — STRIDE review by architecture component
-- [GitHub repository](https://github.com/ahmadrosid/nakama) — source code and issues
+- [Threat model](https://github.com/ahmadrosid/airin/blob/main/THREAT_MODEL.md) — STRIDE review by architecture component
+- [GitHub repository](https://github.com/ahmadrosid/airin) — source code and issues

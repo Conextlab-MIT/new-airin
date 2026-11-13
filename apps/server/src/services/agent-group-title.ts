@@ -1,4 +1,4 @@
-import { groupSessionTitle } from "@nakama/core/agent-groups";
+import { groupSessionTitle } from "@airin/core/agent-groups";
 import {
   getGroupSession,
   listAgentGroupMessages,

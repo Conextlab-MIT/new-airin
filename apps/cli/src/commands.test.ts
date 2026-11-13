@@ -3,7 +3,7 @@ import type {
   ListUserOrgsResponse,
   ModelsResponse,
   ProfileSummary,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   effortForActiveModel,
   parseModelCommandArg,

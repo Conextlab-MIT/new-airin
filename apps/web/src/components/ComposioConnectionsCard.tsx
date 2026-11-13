@@ -1,8 +1,8 @@
 import type {
   ProfileSummary,
   UpdateProfileComposioToolkitsRequest,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   ConfirmDialog,
   Dialog,
@@ -10,8 +10,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
 import { useQueries } from "@tanstack/react-query";
 import { Search01Icon } from "hugeicons-react";
 import { type ReactNode, useDeferredValue, useMemo, useState } from "react";

@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
 import { isDeepStrictEqual } from "node:util";
-import { createAgentChatSession } from "@nakama/agent";
+import { createAgentChatSession } from "@airin/agent";
 import {
   applyChatgptOAuthToInstance,
   loadUserConfig,
   type ProviderInstance,
   saveUserConfig,
-} from "@nakama/core";
-import type { StoredMcpServerRecord } from "@nakama/db";
+} from "@airin/core";
+import type { StoredMcpServerRecord } from "@airin/db";
 import { z } from "zod";
 import { createProviderForInstance } from "../providers/create";
 import { withMswCassette } from "../testing/llm-msw-cassette";
@@ -131,7 +131,7 @@ test("live MCP discovery matches eager reads, follow-up and unavailable-action o
       };
 
   if (!instance) {
-    throw new Error("Connect ChatGPT in Nakama before recording.");
+    throw new Error("Connect ChatGPT in Airin before recording.");
   }
 
   const provider = createProviderForInstance(

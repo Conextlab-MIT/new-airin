@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { persistInlineAttachmentsInContent } from "@nakama/core/attachments/content";
-import type { ChatMessage, SessionMessageMeta } from "@nakama/core/contract";
-import { AGENT_CHANNELS } from "@nakama/core/contract";
+import { persistInlineAttachmentsInContent } from "@airin/core/attachments/content";
+import type { ChatMessage, SessionMessageMeta } from "@airin/core/contract";
+import { AGENT_CHANNELS } from "@airin/core/contract";
 import { extractTurnArtifacts } from "./chat-artifacts";
 import {
   type ChatListItem,
@@ -256,7 +256,7 @@ describe("chatMessagesToListItems", () => {
 
   test("derives artifact refs from persisted write_file tool messages after hydration", () => {
     const artifactsRoot =
-      "/Users/test/.nakama/orgs/org_1/profiles/profile_1/artifacts";
+      "/Users/test/.airin/orgs/org_1/profiles/profile_1/artifacts";
 
     const metaJson = JSON.stringify({
       mimeType: "text/markdown",
@@ -277,7 +277,7 @@ describe("chatMessagesToListItems", () => {
           {
             arguments: {
               content: metaJson,
-              path: "artifacts/report.md.nakama-meta.json",
+              path: "artifacts/report.md.airin-meta.json",
             },
             id: "tool_meta",
             name: "write_file",
@@ -296,7 +296,7 @@ describe("chatMessagesToListItems", () => {
       {
         content: JSON.stringify({
           bytesWritten: metaJson.length,
-          path: `${artifactsRoot}/report.md.nakama-meta.json`,
+          path: `${artifactsRoot}/report.md.airin-meta.json`,
         }),
         name: "write_file",
         role: "tool",

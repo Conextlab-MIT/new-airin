@@ -3,7 +3,7 @@
  * Production use requires a valid AIcss license per https://www.aicss.dev/pricing
  */
 
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { ArrowDown01Icon, GlobeIcon } from "hugeicons-react";
 import type { ReactNode } from "react";
 import styles from "./WebSearch.module.css";

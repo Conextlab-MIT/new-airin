@@ -8,12 +8,12 @@ import type {
   ListAgentGroupSessionsResponse,
   ListAgentGroupsResponse,
   ListRailPinsResponse,
-} from "@nakama/core/agent-groups";
+} from "@airin/core/agent-groups";
 import type {
   DocumentAttachment,
   ImageAttachment,
   ListWorkspaceFilesResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { OrgMemoryClient } from "./client-org-memory";
 
 function agentGroupPath(groupId: string): string {

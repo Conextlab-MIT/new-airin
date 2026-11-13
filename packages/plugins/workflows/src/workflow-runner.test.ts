@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { StoredWorkflow, WorkflowStep } from "@nakama/core";
+import type { StoredWorkflow, WorkflowStep } from "@airin/core";
 import type { WorkflowBag, WorkflowRecord } from "./workflow-ops";
 import { WorkflowRunner } from "./workflow-runner";
 

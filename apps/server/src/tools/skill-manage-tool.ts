@@ -8,8 +8,8 @@ import {
   parseRawProfileSkillContent,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
-import type { SkillProposalAction } from "@nakama/db";
+} from "@airin/core";
+import type { SkillProposalAction } from "@airin/db";
 import { z } from "zod";
 import type { SkillProposalService } from "../services/skill-proposal-service";
 import type { SkillsService } from "../services/skills-service";

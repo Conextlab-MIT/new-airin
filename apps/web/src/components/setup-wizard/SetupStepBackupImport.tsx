@@ -1,8 +1,8 @@
-import type { DataImportPreviewResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card } from "@nakama/ui/card";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import type { DataImportPreviewResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card } from "@airin/ui/card";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import {
   Alert02Icon,
   CheckmarkCircle01Icon,
@@ -254,7 +254,7 @@ function SetupRestoreProgressCard({
           </p>
           <p className="text-pretty text-muted-foreground text-xs">
             {requiresRestart
-              ? "Restart Nakama, then sign in with your restored account."
+              ? "Restart Airin, then sign in with your restored account."
               : "Taking you to sign in…"}
           </p>
         </div>

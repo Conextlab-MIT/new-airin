@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/context/use-auth";
 import {
+  getInitialOwnerSidebarHidden,
   getInitialSidebarCollapsed,
+  OWNER_SIDEBAR_HIDDEN_KEY,
   pinnedPluginsStorageKey,
   readPinnedPluginIds,
   SIDEBAR_COLLAPSED_KEY,
@@ -59,6 +61,14 @@ export function useSidebarCollapsed({ shortcut = false } = {}) {
   }, [shortcut, toggle]);
 
   return flag;
+}
+
+/** Hides the Owner team sidebar below `lg` (tablet and phone). */
+export function useOwnerSidebarHidden() {
+  return useLocalStorageFlag(
+    OWNER_SIDEBAR_HIDDEN_KEY,
+    getInitialOwnerSidebarHidden
+  );
 }
 
 export function usePinnedPlugins() {

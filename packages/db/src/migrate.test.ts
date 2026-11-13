@@ -9,7 +9,7 @@ import {
   migrateArtifactDesignSkillName,
   migrateCodingDelegationSkillName,
   migrateDatabase,
-  migrateSuperNakamaNaming,
+  migrateSuperAirinNaming,
   moveProfileJoinReferences,
   resolveSchemaPath,
 } from "./migrate";
@@ -715,7 +715,7 @@ describe("legacy profile id migration", () => {
   });
 });
 
-describe("super nakama naming migration", () => {
+describe("super airin naming migration", () => {
   test("renames the stock super profile and its change events only", () => {
     const db = new Database(":memory:");
 
@@ -733,18 +733,18 @@ describe("super nakama naming migration", () => {
         VALUES ('e1', 'org_a', 'p_stock', 'super_bot', 'system_prompt', '2026-10-16T00:00:00.000Z');
       `);
 
-      migrateSuperNakamaNaming(db);
+      migrateSuperAirinNaming(db);
 
       expect(
         db.prepare("SELECT id, name FROM profiles ORDER BY id").all()
       ).toEqual([
         { id: "p_custom", name: "Atlas" },
         { id: "p_regular", name: "Super Bot" },
-        { id: "p_stock", name: "Super Nakama" },
+        { id: "p_stock", name: "Airin" },
       ]);
       expect(
         db.prepare("SELECT source FROM profile_change_events").get()
-      ).toEqual({ source: "super_nakama" });
+      ).toEqual({ source: "super_airin" });
     } finally {
       db.close();
     }
@@ -760,7 +760,7 @@ describe("save-artifact skill rename migration", () => {
           disable_model_invocation, enabled, created_at, updated_at
         ) VALUES (?, ?, '', ?, 0, 0, 1, '2026-10-16T00:00:00.000Z', '2026-10-16T00:00:00.000Z')`
       )
-      .run(id, name, `/tmp/.nakama/agent/skills/${name}/SKILL.md`);
+      .run(id, name, `/tmp/.airin/agent/skills/${name}/SKILL.md`);
 
   const insertProfile = (db: Database, id: string) =>
     db
@@ -785,7 +785,7 @@ describe("save-artifact skill rename migration", () => {
           .get("skill_artifact")
       ).toEqual({
         name: "artifact-design",
-        source_path: "/tmp/.nakama/agent/skills/artifact-design/SKILL.md",
+        source_path: "/tmp/.airin/agent/skills/artifact-design/SKILL.md",
       });
     } finally {
       db.close();
@@ -851,7 +851,7 @@ describe("coding-delegation skill rename migration", () => {
           'skill_coding',
           'coding-delegation',
           'Delegate repo work to a coding agent',
-          '/tmp/.nakama/agent/skills/coding-delegation/SKILL.md',
+          '/tmp/.airin/agent/skills/coding-delegation/SKILL.md',
           0,
           0,
           1,
@@ -870,7 +870,7 @@ describe("coding-delegation skill rename migration", () => {
 
       expect(skill?.name).toBe("coding-agent");
       expect(skill?.source_path).toBe(
-        "/tmp/.nakama/agent/skills/coding-agent/SKILL.md"
+        "/tmp/.airin/agent/skills/coding-agent/SKILL.md"
       );
     } finally {
       db.close();
@@ -902,7 +902,7 @@ describe("coding-delegation skill rename migration", () => {
             'skill_legacy',
             'coding-delegation',
             'Legacy coding delegation',
-            '/tmp/.nakama/agent/skills/coding-delegation/SKILL.md',
+            '/tmp/.airin/agent/skills/coding-delegation/SKILL.md',
             0,
             0,
             1,
@@ -913,7 +913,7 @@ describe("coding-delegation skill rename migration", () => {
             'skill_canonical',
             'coding-agent',
             'Coding agent',
-            '/tmp/.nakama/agent/skills/coding-agent/SKILL.md',
+            '/tmp/.airin/agent/skills/coding-agent/SKILL.md',
             0,
             0,
             1,
@@ -1042,9 +1042,9 @@ describe("install-wide name uniqueness", () => {
 
 describe("skill org id backfill", () => {
   test("recovers the owning org from source_path and leaves global skills alone", () => {
-    const configDir = mkdtempSync(join(tmpdir(), "nakama-skill-org-backfill-"));
-    const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = mkdtempSync(join(tmpdir(), "airin-skill-org-backfill-"));
+    const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const db = new Database(":memory:");
 
     try {
@@ -1114,9 +1114,9 @@ describe("skill org id backfill", () => {
       rmSync(configDir, { force: true, recursive: true });
 
       if (originalConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+        process.env.AIRIN_CONFIG_DIR = originalConfigDir;
       }
     }
   });
@@ -1760,7 +1760,7 @@ describe("organization schema migration", () => {
 describe("migration SQL hardening", () => {
   test("rejects unexpected tenant table names before SQLite can run injected ATTACH statements", () => {
     const db = new Database(":memory:");
-    const attachPath = "/tmp/nakama-migrate-attach-test.sqlite";
+    const attachPath = "/tmp/airin-migrate-attach-test.sqlite";
 
     rmSync(attachPath, { force: true });
 
@@ -2120,7 +2120,7 @@ test("pre-org profile retention: legacy profiles and their history survive until
 });
 
 test("file pins migrate existing databases, survive reopen and cascade with profiles", () => {
-  const directory = mkdtempSync(join(tmpdir(), "nakama-file-pins-"));
+  const directory = mkdtempSync(join(tmpdir(), "airin-file-pins-"));
   const filename = join(directory, "pins.sqlite");
   let db = new Database(filename);
 

@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
 import { useEffect, useState } from "react";
 import {
   useSaveWebPublicUrl,
@@ -178,7 +178,7 @@ export function WebPublicUrlSettingsRow() {
               }
             }
           }}
-          placeholder="https://nakama.example.com"
+          placeholder="https://airin.example.com"
           readOnly={saveMutation.isPending}
           value={value}
         />

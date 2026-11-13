@@ -1,4 +1,4 @@
-import { MAX_IMAGE_BYTES } from "@nakama/core/message-content";
+import { MAX_IMAGE_BYTES } from "@airin/core/message-content";
 import { readFileAsDataUrl } from "@/lib/read-file-as-data-url";
 
 export const COMPRESS_IMAGE_OVER_BYTES = 1024 * 1024;

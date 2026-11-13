@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test";
-import type { OrgMemberSummary } from "@nakama/core/contract";
+import type { OrgMemberSummary } from "@airin/core/contract";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { OrgMembersTable } from "./org-members-table";

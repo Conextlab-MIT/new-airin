@@ -1,10 +1,10 @@
 import { toArtifactsRelativePath } from "@/lib/chat-artifacts";
 
-const ARTIFACT_META_SUFFIX = ".nakama-meta.json";
+const ARTIFACT_META_SUFFIX = ".airin-meta.json";
 
 /**
  * Shortest distinctive prefix of the meta suffix we reject while the path is
- * still streaming (e.g. `report.md.nak` before `.nakama-meta.json` completes).
+ * still streaming (e.g. `report.md.nak` before `.airin-meta.json` completes).
  */
 const ARTIFACT_META_PREFIX = ".nak";
 
@@ -29,13 +29,13 @@ interface JsonStringValue {
 
 function isArtifactMetaRelativePath(relativePath: string): boolean {
   if (
-    relativePath.includes(".nakama-meta") ||
+    relativePath.includes(".airin-meta") ||
     relativePath.endsWith(ARTIFACT_META_SUFFIX)
   ) {
     return true;
   }
 
-  // While path is still streaming, reject prefixes like `.nak` / `.nakama-m`.
+  // While path is still streaming, reject prefixes like `.nak` / `.airin-m`.
   for (
     let length = ARTIFACT_META_PREFIX.length;
     length < ARTIFACT_META_SUFFIX.length;
@@ -197,7 +197,7 @@ export function parseStreamingArtifactToolInput(
   }
 
   // Path must be a complete JSON string. Otherwise a sidecar write briefly looks
-  // like `artifacts/report.md` before `.nakama-meta.json` is appended, and the
+  // like `artifacts/report.md` before `.airin-meta.json` is appended, and the
   // preview panel would open on internal metadata.
   if (!rawPath.complete) {
     return {

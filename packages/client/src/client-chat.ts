@@ -21,8 +21,8 @@ import type {
   UpdateSessionRequest,
   UpdateUserContextRequest,
   UserContextStatusResponse,
-} from "@nakama/core/contract";
-import { withDisabledFetchIdle } from "@nakama/core/fetch-idle";
+} from "@airin/core/contract";
+import { withDisabledFetchIdle } from "@airin/core/fetch-idle";
 import { createApiError, readBoundedFile } from "./client-helpers";
 import { ProfileFilesClient } from "./client-profile-files";
 import {
@@ -405,7 +405,7 @@ export class ChatClient extends ProfileFilesClient {
 
         if (options?.whatsappContextToken) {
           headers.set(
-            "X-Nakama-WhatsApp-Context-Token",
+            "X-Airin-WhatsApp-Context-Token",
             options.whatsappContextToken
           );
         }

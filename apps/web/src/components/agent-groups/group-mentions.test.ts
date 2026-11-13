@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { ProfileSummary } from "@nakama/core";
-import { groupRoster } from "@nakama/core/agent-groups";
+import type { ProfileSummary } from "@airin/core";
+import { groupRoster } from "@airin/core/agent-groups";
 import { markMentions } from "./group-mentions";
 
 // SAFETY: mentions read only a profile's id and name.

@@ -1,7 +1,7 @@
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import {
   Analytics01Icon,
   Building03Icon,
@@ -33,6 +33,8 @@ const GOAL_OPTIONS = GOAL_SUGGESTIONS.map((label, index) => ({
   icon: GOAL_ICONS[index] ?? PlusSignIcon,
   label,
 }));
+
+export type GoalOption = { icon: IconComponent; label: string };
 
 const CUSTOM_GOAL = "custom";
 
@@ -80,17 +82,23 @@ function GoalCard({
   );
 }
 
-/** First-run question on the empty chat: what the user wants Nakama for. */
+/** First-run question on the empty chat: what the user wants Airin for. */
 export function ChatGoalPrompt({
   error,
+  goalOptions = GOAL_OPTIONS,
   onSave,
   onSkip,
   saving,
+  subtitle,
+  title = "What is your goal?",
 }: {
   error: string | null;
+  goalOptions?: GoalOption[];
   onSave: (goal: string) => void;
   onSkip: () => void;
   saving: boolean;
+  subtitle?: string;
+  title?: string;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [customGoal, setCustomGoal] = useState("");
@@ -110,12 +118,19 @@ export function ChatGoalPrompt({
         }
       }}
     >
-      <h2 className="type-section-title text-2xl tracking-tight">
-        What is your goal?
-      </h2>
+      <div className="space-y-2">
+        <h2 className="font-semibold text-2xl tracking-tight sm:text-3xl">
+          {title}
+        </h2>
+        {subtitle ? (
+          <p className="text-base text-muted-foreground leading-relaxed">
+            {subtitle}
+          </p>
+        ) : null}
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {GOAL_OPTIONS.map((option) => (
+        {goalOptions.map((option) => (
           <GoalCard
             icon={option.icon}
             key={option.label}

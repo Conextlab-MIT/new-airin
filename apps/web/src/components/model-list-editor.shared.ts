@@ -1,4 +1,4 @@
-import type { CustomModelEntry } from "@nakama/core/contract";
+import type { CustomModelEntry } from "@airin/core/contract";
 import { createContext } from "react";
 import type { ModelListRow } from "@/components/ModelListEditor";
 

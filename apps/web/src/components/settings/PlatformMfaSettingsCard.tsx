@@ -1,7 +1,7 @@
-import type { MfaPolicyResponse, OrgRole } from "@nakama/core/contract";
-import { Card, CardContent } from "@nakama/ui/card";
-import { ConfirmDialog } from "@nakama/ui/dialog";
-import { cn } from "@nakama/ui/utils";
+import type { MfaPolicyResponse, OrgRole } from "@airin/core/contract";
+import { Card, CardContent } from "@airin/ui/card";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { cn } from "@airin/ui/utils";
 import { useEffect, useRef, useState } from "react";
 import { client, formatError } from "@/lib/client";
 
@@ -20,7 +20,7 @@ const modes: Array<{ description: string; label: string; value: Mode }> = [
     value: "optional",
   },
   {
-    description: "Chosen roles must set one up before they can use Nakama.",
+    description: "Chosen roles must set one up before they can use Airin.",
     label: "Required",
     value: "required",
   },
@@ -43,13 +43,13 @@ const CONFIRMS = {
   require: {
     confirmLabel: "Require",
     description:
-      "Users in the selected roles must set up an authenticator before they can use Nakama.",
+      "Users in the selected roles must set up an authenticator before they can use Airin.",
     title: "Require MFA to sign in?",
   },
   roles: {
     confirmLabel: "Require",
     description:
-      "Users in the added roles must set up an authenticator before they can use Nakama.",
+      "Users in the added roles must set up an authenticator before they can use Airin.",
     title: "Require MFA for more roles?",
   },
 } as const;
@@ -187,7 +187,7 @@ export function PlatformMfaSettingsCard() {
     ? pendingConfirm.kind === "require"
       ? {
           ...CONFIRMS.require,
-          description: `${roleNames} must set up an authenticator before they can use Nakama. Platform admins always need it.`,
+          description: `${roleNames} must set up an authenticator before they can use Airin. Platform admins always need it.`,
         }
       : CONFIRMS[pendingConfirm.kind]
     : null;

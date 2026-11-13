@@ -1,5 +1,5 @@
-import type { ChannelOwner } from "@nakama/core/channel-config-shared";
-import { loadWhatsAppConfigFile } from "@nakama/core/whatsapp-config";
+import type { ChannelOwner } from "@airin/core/channel-config-shared";
+import { loadWhatsAppConfigFile } from "@airin/core/whatsapp-config";
 
 export interface WhatsAppBridgeConfig {
   orgId?: string | null;

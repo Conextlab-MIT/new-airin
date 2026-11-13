@@ -1,7 +1,7 @@
-import { MAX_SESSION_SEARCH_LENGTH } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
-import { cn } from "@nakama/ui/utils";
+import { MAX_SESSION_SEARCH_LENGTH } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
+import { cn } from "@airin/ui/utils";
 import {
   ArrowDown01Icon,
   Cancel01Icon,

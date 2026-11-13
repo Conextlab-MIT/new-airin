@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getProfileSoulDir, NakamaApiError } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { AirinApiError, getProfileSoulDir } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { SkillProposalService } from "./skill-proposal-service";
 import { SkillsService } from "./skills-service";
 import {
@@ -23,12 +23,12 @@ describe("SkillProposalService", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-proposals-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-proposals-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("shared references reject proposals and approval while preserving pending records and files", async () => {
@@ -309,7 +309,7 @@ describe("SkillProposalService", () => {
           profileId: profile.id,
           skillName: "deploy-notes",
         })
-      ).rejects.toMatchObject({ name: "NakamaApiError", status: 409 });
+      ).rejects.toMatchObject({ name: "AirinApiError", status: 409 });
     }
 
     expect(await db.listSkillProposals(ORG_ID, { status: "pending" })).toEqual(
@@ -349,7 +349,7 @@ describe("SkillProposalService", () => {
 
     await expect(
       service.approveProposal(ORG_ID, staged.proposalId!, "admin_user")
-    ).rejects.toMatchObject({ name: "NakamaApiError", status: 409 });
+    ).rejects.toMatchObject({ name: "AirinApiError", status: 409 });
     expect(
       (await db.getSkillProposal(ORG_ID, staged.proposalId!))?.status
     ).toBe("pending");
@@ -389,7 +389,7 @@ describe("SkillProposalService", () => {
         profileId: profile.id,
         skillName: "deploy-notes",
       })
-    ).rejects.toMatchObject({ name: "NakamaApiError", status: 400 });
+    ).rejects.toMatchObject({ name: "AirinApiError", status: 400 });
     await expect(
       service.stageProposal({
         action: "patch",
@@ -399,7 +399,7 @@ describe("SkillProposalService", () => {
         profileId: profile.id,
         skillName: "deploy-notes",
       })
-    ).rejects.toMatchObject({ name: "NakamaApiError", status: 409 });
+    ).rejects.toMatchObject({ name: "AirinApiError", status: 409 });
     expect(
       (await db.listSkillProposals(ORG_ID, { status: "pending" })).map(
         (proposal) => proposal.id
@@ -488,7 +488,7 @@ describe("SkillProposalService", () => {
 
     await expect(
       service.approveProposal("org_other", staged.proposalId!, "admin_user")
-    ).rejects.toBeInstanceOf(NakamaApiError);
+    ).rejects.toBeInstanceOf(AirinApiError);
     await expect(
       service.approveProposal("org_other", staged.proposalId!, "admin_user")
     ).rejects.toMatchObject({ status: 404 });
@@ -496,7 +496,7 @@ describe("SkillProposalService", () => {
 
   test("stage and approve write_file creates supporting file", async () => {
     const { readFile } = await import("node:fs/promises");
-    const { getProfileSkillsDir } = await import("@nakama/core");
+    const { getProfileSkillsDir } = await import("@airin/core");
 
     const db = createInMemoryDatabaseAdapter();
     const profile = await seedOrg(db);
@@ -539,10 +539,10 @@ describe("SkillProposalService", () => {
   });
 
   test("approve edit with consolidate losers archives them without delete", async () => {
-    const { pathExists } = await import("@nakama/core");
+    const { pathExists } = await import("@airin/core");
 
     const { getProfileSkillsArchiveDir, getProfileSkillsDir } = await import(
-      "@nakama/core"
+      "@airin/core"
     );
 
     const db = createInMemoryDatabaseAdapter();

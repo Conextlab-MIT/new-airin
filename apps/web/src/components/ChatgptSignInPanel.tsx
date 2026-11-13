@@ -2,10 +2,10 @@ import type {
   ChatgptOAuthCredentials,
   CustomModelEntry,
   XaiOAuthCredentials,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { FormField } from "@nakama/ui/form-field";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { FormField } from "@airin/ui/form-field";
+import { Spinner } from "@airin/ui/spinner";
 import { useEffect, useRef, useState } from "react";
 import {
   CHATGPT_SIGN_IN,
@@ -158,8 +158,8 @@ function SubscriptionSignInPanel<T>({
           </p>
         ) : label === "ChatGPT" ? (
           <p className="text-muted-foreground text-xs">
-            One ChatGPT Plus/Pro account for this Nakama instance. Uses your
-            plan quota, not OpenAI API credits.
+            One ChatGPT Plus/Pro account for this Airin instance. Uses your plan
+            quota, not OpenAI API credits.
           </p>
         ) : null
       }

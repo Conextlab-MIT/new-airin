@@ -1,5 +1,5 @@
-import type { SkillSummary } from "@nakama/core/contract";
-import { cn } from "@nakama/ui/utils";
+import type { SkillSummary } from "@airin/core/contract";
+import { cn } from "@airin/ui/utils";
 import { useEffect, useRef } from "react";
 import type { ComposerSuggestion } from "@/lib/chat-composer-skills";
 

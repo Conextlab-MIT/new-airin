@@ -231,7 +231,7 @@ describe("runTimedInstallCommand", () => {
   test.skipIf(process.platform === "win32")(
     "a timed-out install stops the processes it started, not just the one it spawned",
     async () => {
-      const marker = join(tmpdir(), `nakama-install-grandchild-${Date.now()}`);
+      const marker = join(tmpdir(), `airin-install-grandchild-${Date.now()}`);
       rmSync(marker, { force: true });
 
       const result = await runTimedInstallCommand(
@@ -266,7 +266,7 @@ describe("runTimedInstallCommand", () => {
   test.skipIf(process.platform !== "win32")(
     "a stopped install on Windows ends the node process under a .cmd shim",
     async () => {
-      const dir = mkdtempSync(join(tmpdir(), "nakama-install-shim-"));
+      const dir = mkdtempSync(join(tmpdir(), "airin-install-shim-"));
       const marker = join(dir, "alive");
       const grandchild = join(dir, "grandchild.js");
       const shim = join(dir, "installer.cmd");
@@ -334,7 +334,7 @@ describe("runTimedInstallCommand", () => {
 const SHA512_OF_ABC =
   "sha512-3a81oZNherrMQXNJriBBMRLm+k6JqX6iCp7u5ktV05ohkpkqJ0/BqDa6PCOj/uu9RU1EI2Q86A4qmslPpUyknw==";
 
-const TARBALL_BYTES = Buffer.from("nakama pinned tarball fixture");
+const TARBALL_BYTES = Buffer.from("airin pinned tarball fixture");
 
 const PINNED_FIXTURE: PinnedNpmPackage = {
   integrity: `sha512-${createHash("sha512").update(TARBALL_BYTES).digest("base64")}`,
@@ -517,12 +517,12 @@ describe("pinned package verification", () => {
 
   test("keeps installer plumbing and drops server secrets from the env", () => {
     const restricted = buildRestrictedInstallEnv({
+      AIRIN_SESSION_SECRET: "super-secret",
       AWS_SECRET_ACCESS_KEY: "super-secret",
       constructor: "super-secret",
-      HOME: "/home/nakama",
+      HOME: "/home/airin",
       HTTPS_PROXY: "http://proxy.test",
       LANG: undefined,
-      NAKAMA_SESSION_SECRET: "super-secret",
       "npm_config_//registry.test/:_authToken": "super-secret",
       npm_config_registry: "https://registry.test",
       PATH: "/usr/bin",
@@ -530,7 +530,7 @@ describe("pinned package verification", () => {
     });
 
     expect(restricted).toEqual({
-      HOME: "/home/nakama",
+      HOME: "/home/airin",
       HTTPS_PROXY: "http://proxy.test",
       npm_config_registry: "https://registry.test",
       PATH: "/usr/bin",
@@ -541,20 +541,20 @@ describe("pinned package verification", () => {
   test.skipIf(process.platform === "win32")(
     "installs the verified tarball under a restricted env",
     async () => {
-      const binDir = await mkdtemp(join(tmpdir(), "nakama-pinned-bin-"));
+      const binDir = await mkdtemp(join(tmpdir(), "airin-pinned-bin-"));
       const argsLog = join(binDir, "install.args");
       const envLog = join(binDir, "install.env");
-      const originalDisableFixPath = process.env.NAKAMA_DISABLE_FIX_PATH;
+      const originalDisableFixPath = process.env.AIRIN_DISABLE_FIX_PATH;
       const originalPath = process.env.PATH;
-      const originalSecret = process.env.NAKAMA_TEST_PROVIDER_KEY;
+      const originalSecret = process.env.AIRIN_TEST_PROVIDER_KEY;
 
       await writeFile(
         join(binDir, "npm"),
         `#!/bin/sh\nprintf '%s' "$*" > ${argsLog}\nenv > ${envLog}\n`
       );
       await chmod(join(binDir, "npm"), 0o755);
-      process.env.NAKAMA_DISABLE_FIX_PATH = "1";
-      process.env.NAKAMA_TEST_PROVIDER_KEY = "super-secret";
+      process.env.AIRIN_DISABLE_FIX_PATH = "1";
+      process.env.AIRIN_TEST_PROVIDER_KEY = "super-secret";
       process.env.PATH = `${binDir}:${originalPath ?? ""}`;
 
       const registry = startFakeRegistry(servingPinnedHash, TARBALL_BYTES);
@@ -575,7 +575,7 @@ describe("pinned package verification", () => {
           `install -g ${tarball.path}`
         );
         expect(readFileSync(envLog, "utf8")).not.toContain(
-          "NAKAMA_TEST_PROVIDER_KEY"
+          "AIRIN_TEST_PROVIDER_KEY"
         );
 
         await tarball.cleanup();
@@ -585,15 +585,15 @@ describe("pinned package verification", () => {
         process.env.PATH = originalPath;
 
         if (originalDisableFixPath === undefined) {
-          delete process.env.NAKAMA_DISABLE_FIX_PATH;
+          delete process.env.AIRIN_DISABLE_FIX_PATH;
         } else {
-          process.env.NAKAMA_DISABLE_FIX_PATH = originalDisableFixPath;
+          process.env.AIRIN_DISABLE_FIX_PATH = originalDisableFixPath;
         }
 
         if (originalSecret === undefined) {
-          delete process.env.NAKAMA_TEST_PROVIDER_KEY;
+          delete process.env.AIRIN_TEST_PROVIDER_KEY;
         } else {
-          process.env.NAKAMA_TEST_PROVIDER_KEY = originalSecret;
+          process.env.AIRIN_TEST_PROVIDER_KEY = originalSecret;
         }
 
         await rm(binDir, { force: true, recursive: true });

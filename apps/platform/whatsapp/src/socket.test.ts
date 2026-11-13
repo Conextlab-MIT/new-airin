@@ -13,8 +13,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { pathExists } from "@nakama/core/fs";
-import { getWhatsAppQrCodePath } from "@nakama/core/whatsapp-worker";
+import { pathExists } from "@airin/core/fs";
+import { getWhatsAppQrCodePath } from "@airin/core/whatsapp-worker";
 import * as baileys from "@whiskeysockets/baileys";
 import processMessage from "@whiskeysockets/baileys/lib/Utils/process-message.js";
 import { usePrivateMultiFileAuthState } from "./auth-state";
@@ -212,9 +212,9 @@ describe("WhatsApp socket reconnect", () => {
   let tempConfigDir: string;
 
   beforeEach(async () => {
-    previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    tempConfigDir = await mkdtemp(join(tmpdir(), "nakama-wa-socket-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    tempConfigDir = await mkdtemp(join(tmpdir(), "airin-wa-socket-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     // Load the version once on real timers, so its timeout is not a reconnect delay.
     resetWhatsAppWebVersionForTests();
     const warnOnce = spyOn(console, "warn").mockImplementation(() => {});
@@ -246,9 +246,9 @@ describe("WhatsApp socket reconnect", () => {
     timeoutSpy.mockRestore();
 
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     await rm(tempConfigDir, { force: true, recursive: true });
@@ -780,9 +780,9 @@ describe("WhatsApp Web version", () => {
     fetchVersion.mockReset();
     fetchVersion.mockImplementation(fetchVersionOffline);
     resetWhatsAppWebVersionForTests();
-    previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    tempConfigDir = await mkdtemp(join(tmpdir(), "nakama-wa-version-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    tempConfigDir = await mkdtemp(join(tmpdir(), "airin-wa-version-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
     warnSpy = spyOn(console, "warn").mockImplementation(() => {});
   });
 
@@ -792,9 +792,9 @@ describe("WhatsApp Web version", () => {
     resetWhatsAppWebVersionForTests();
 
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     await rm(tempConfigDir, { force: true, recursive: true });

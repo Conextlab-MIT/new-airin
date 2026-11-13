@@ -1,17 +1,17 @@
-import { NakamaApiError } from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+import { AirinApiError } from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import type { AuthService } from "./services/auth-service";
 import type { OrgService } from "./services/org-service";
 
-const SEED_ADMIN_EMAIL = "NAKAMA_SEED_ADMIN_EMAIL";
+const SEED_ADMIN_EMAIL = "AIRIN_SEED_ADMIN_EMAIL";
 
-const SEED_ADMIN_NAME = "NAKAMA_SEED_ADMIN_NAME";
+const SEED_ADMIN_NAME = "AIRIN_SEED_ADMIN_NAME";
 
-const SEED_ADMIN_PASSWORD = "NAKAMA_SEED_ADMIN_PASSWORD";
+const SEED_ADMIN_PASSWORD = "AIRIN_SEED_ADMIN_PASSWORD";
 
-const SEED_ADMIN_PASSWORD_HASH = "NAKAMA_SEED_ADMIN_PASSWORD_HASH";
+const SEED_ADMIN_PASSWORD_HASH = "AIRIN_SEED_ADMIN_PASSWORD_HASH";
 
-const SEED_ORG_NAME = "NAKAMA_SEED_ORG_NAME";
+const SEED_ORG_NAME = "AIRIN_SEED_ORG_NAME";
 
 const SEED_ENV_KEYS = [
   SEED_ADMIN_EMAIL,
@@ -103,7 +103,7 @@ export async function runFirstBootSeed(
       },
     });
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       throw new Error(`First-boot seed failed: ${error.message}`);
     }
 

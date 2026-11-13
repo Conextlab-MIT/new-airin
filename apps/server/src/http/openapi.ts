@@ -1,4 +1,4 @@
-import { DEFAULT_SERVER_URL, NAKAMA_API_VERSION } from "@nakama/core";
+import { AIRIN_API_VERSION, DEFAULT_SERVER_URL } from "@airin/core";
 import type { HonoApp } from "./types";
 
 /** Rendered by the /docs reference as the Slack section's guide. */
@@ -11,7 +11,7 @@ A Slack connection belongs to one agent, like the other channels, and one Slack 
 1. Click **Copy manifest**, open [Slack apps](https://api.slack.com/apps?new_app=1), choose **From a manifest**, and paste it.
 2. **Install App → Install to Workspace**, then copy the **Bot User OAuth Token** (\`xoxb-\`).
 3. **Basic Information → App-Level Tokens**, generate one with the \`connections:write\` scope (\`xapp-\`).
-4. Paste both tokens and save. Nakama checks them with Slack first.
+4. Paste both tokens and save. Airin checks them with Slack first.
 5. Start the worker, then send the pairing code to the app's **Messages** tab in Slack.
 
 **Using it**
@@ -25,9 +25,9 @@ The endpoints below back the connection card. They take the agent as \`?profileI
 function buildHttpOpenApiSpec(app: HonoApp, serverUrl?: string) {
   return app.getOpenAPI31Document({
     info: {
-      description: "HTTP API for the Nakama personal AI assistant.",
-      title: "Nakama API",
-      version: String(NAKAMA_API_VERSION),
+      description: "HTTP API for the Airin personal AI assistant.",
+      title: "Airin API",
+      version: String(AIRIN_API_VERSION),
     },
     openapi: "3.1.0",
     servers: [

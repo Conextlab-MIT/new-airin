@@ -7,7 +7,7 @@ import {
 import type { ChatMessage, JsonValue } from "./contract";
 
 const ARTIFACTS_ROOT =
-  "/Users/test/.nakama/orgs/org_1/profiles/profile_1/artifacts";
+  "/Users/test/.airin/orgs/org_1/profiles/profile_1/artifacts";
 
 const metaJson = JSON.stringify({
   mimeType: "text/markdown",
@@ -46,7 +46,7 @@ function toolMessage(input: {
 describe("extractPairedTurnArtifacts", () => {
   test("pairs content and sidecar writes into one artifact ref", () => {
     const contentPath = `${ARTIFACTS_ROOT}/report.md`;
-    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.nakama-meta.json`;
+    const sidecarPath = `${ARTIFACTS_ROOT}/report.md.airin-meta.json`;
 
     const messages: ChatMessage[] = [
       { content: "save report", role: "user" },
@@ -59,7 +59,7 @@ describe("extractPairedTurnArtifacts", () => {
         {
           arguments: {
             content: metaJson,
-            path: "artifacts/report.md.nakama-meta.json",
+            path: "artifacts/report.md.airin-meta.json",
           },
           id: "tool_2",
           name: "write_file",
@@ -75,7 +75,7 @@ describe("extractPairedTurnArtifacts", () => {
         id: "tool_2",
         input: {
           content: metaJson,
-          path: "artifacts/report.md.nakama-meta.json",
+          path: "artifacts/report.md.airin-meta.json",
         },
         name: "write_file",
         result: { bytesWritten: metaJson.length, path: sidecarPath },
@@ -134,7 +134,7 @@ describe("extractPairedTurnArtifacts", () => {
         {
           arguments: {
             content: '{"mimeType":"text/csv"}',
-            path: "artifacts/report.csv.nakama-meta.json",
+            path: "artifacts/report.csv.airin-meta.json",
           },
           id: "meta",
           name: "write_file",
@@ -150,7 +150,7 @@ describe("extractPairedTurnArtifacts", () => {
         id: "meta",
         input: {},
         name: "write_file",
-        result: { bytesWritten: 23, path: `${contentPath}.nakama-meta.json` },
+        result: { bytesWritten: 23, path: `${contentPath}.airin-meta.json` },
       }),
     ];
 
@@ -242,7 +242,7 @@ describe("extractPairedTurnArtifacts", () => {
         {
           arguments: {
             content: metaJson,
-            path: "artifacts/a.md.nakama-meta.json",
+            path: "artifacts/a.md.airin-meta.json",
           },
           id: "tool_2",
           name: "write_file",
@@ -255,7 +255,7 @@ describe("extractPairedTurnArtifacts", () => {
         {
           arguments: {
             content: metaJson,
-            path: "artifacts/b.md.nakama-meta.json",
+            path: "artifacts/b.md.airin-meta.json",
           },
           id: "tool_4",
           name: "write_file",
@@ -269,11 +269,11 @@ describe("extractPairedTurnArtifacts", () => {
       }),
       toolMessage({
         id: "tool_2",
-        input: { content: metaJson, path: "artifacts/a.md.nakama-meta.json" },
+        input: { content: metaJson, path: "artifacts/a.md.airin-meta.json" },
         name: "write_file",
         result: {
           bytesWritten: metaJson.length,
-          path: `${ARTIFACTS_ROOT}/a.md.nakama-meta.json`,
+          path: `${ARTIFACTS_ROOT}/a.md.airin-meta.json`,
         },
       }),
       toolMessage({
@@ -284,11 +284,11 @@ describe("extractPairedTurnArtifacts", () => {
       }),
       toolMessage({
         id: "tool_4",
-        input: { content: metaJson, path: "artifacts/b.md.nakama-meta.json" },
+        input: { content: metaJson, path: "artifacts/b.md.airin-meta.json" },
         name: "write_file",
         result: {
           bytesWritten: metaJson.length,
-          path: `${ARTIFACTS_ROOT}/b.md.nakama-meta.json`,
+          path: `${ARTIFACTS_ROOT}/b.md.airin-meta.json`,
         },
       }),
     ];
@@ -450,7 +450,7 @@ describe("extractPairedTurnArtifacts", () => {
         {
           arguments: {
             content: metaJson,
-            path: "artifacts/a.md.nakama-meta.json",
+            path: "artifacts/a.md.airin-meta.json",
           },
           id: "tool_2",
           name: "write_file",
@@ -469,11 +469,11 @@ describe("extractPairedTurnArtifacts", () => {
       }),
       toolMessage({
         id: "tool_2",
-        input: { content: metaJson, path: "artifacts/a.md.nakama-meta.json" },
+        input: { content: metaJson, path: "artifacts/a.md.airin-meta.json" },
         name: "write_file",
         result: {
           bytesWritten: metaJson.length,
-          path: `${ARTIFACTS_ROOT}/a.md.nakama-meta.json`,
+          path: `${ARTIFACTS_ROOT}/a.md.airin-meta.json`,
         },
       }),
       toolMessage({

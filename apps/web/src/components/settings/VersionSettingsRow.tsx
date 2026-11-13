@@ -1,27 +1,27 @@
-import type { NakamaUpgradeResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { ConfirmDialog } from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+import type { AirinUpgradeResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/use-auth";
 import {
-  useNakamaUpgradeQuery,
-  useNakamaVersionQuery,
-  useStartNakamaUpgrade,
+  useAirinUpgradeQuery,
+  useAirinVersionQuery,
+  useStartAirinUpgrade,
 } from "@/hooks/use-app-queries";
 import { formatError } from "@/lib/client";
 import { queryKeys } from "@/lib/query-keys";
 
-type UpgradeStatus = NakamaUpgradeResponse["status"];
+type UpgradeStatus = AirinUpgradeResponse["status"];
 
 const UPGRADE_DOCS_URL =
-  "https://ahmadrosid.github.io/nakama/docker#upgrade-a-docker-run-install";
+  "https://ahmadrosid.github.io/airin/docker#upgrade-a-docker-run-install";
 
 function VersionStatus({
   query,
 }: {
-  query: ReturnType<typeof useNakamaVersionQuery>;
+  query: ReturnType<typeof useAirinVersionQuery>;
 }) {
   if (query.error) {
     return (
@@ -63,13 +63,13 @@ function UpgradeAction({
   latest: string;
   running: boolean;
 }) {
-  const start = useStartNakamaUpgrade();
+  const start = useStartAirinUpgrade();
 
   if (!available) {
     return (
       <div className="space-y-1">
         <pre className="overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs">
-          {`sed -i 's/^NAKAMA_VERSION=.*/NAKAMA_VERSION=${latest}/' .env\ndocker compose pull && docker compose up -d`}
+          {`sed -i 's/^AIRIN_VERSION=.*/AIRIN_VERSION=${latest}/' .env\ndocker compose pull && docker compose up -d`}
         </pre>
         <a
           className="text-xs underline underline-offset-2"
@@ -108,9 +108,9 @@ function UpgradeAction({
 function RollbackAction({
   rollbacks,
 }: {
-  rollbacks: NakamaUpgradeResponse["rollbacks"];
+  rollbacks: AirinUpgradeResponse["rollbacks"];
 }) {
-  const start = useStartNakamaUpgrade();
+  const start = useStartAirinUpgrade();
 
   const [target, setTarget] = useState<(typeof rollbacks)[number] | null>(null);
 
@@ -137,7 +137,7 @@ function RollbackAction({
       {target ? (
         <ConfirmDialog
           confirmLabel="Restore"
-          description={`Nakama goes back to ${target.version} with its data from ${new Date(target.at).toLocaleString()}. The current data is archived, so you can restore it from this list.`}
+          description={`Airin goes back to ${target.version} with its data from ${new Date(target.at).toLocaleString()}. The current data is archived, so you can restore it from this list.`}
           onClose={() => setTarget(null)}
           onConfirm={() =>
             start.mutateAsync({ rollback: true, version: target.version })
@@ -184,7 +184,7 @@ function useRefreshAfterUpgrade(status: UpgradeStatus) {
   useEffect(() => {
     if (doneAt) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.health });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.nakamaVersion });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.airinVersion });
     }
   }, [doneAt, queryClient]);
 }
@@ -198,8 +198,8 @@ export function VersionSettingsRow({
 }) {
   const isPlatformAdmin = useAuth().user?.isPlatformAdmin === true;
   const canCheck = updateCheckEnabled && isPlatformAdmin;
-  const query = useNakamaVersionQuery(canCheck);
-  const upgrade = useNakamaUpgradeQuery(canCheck);
+  const query = useAirinVersionQuery(canCheck);
+  const upgrade = useAirinUpgradeQuery(canCheck);
   const status = upgrade.data?.status ?? null;
   const latest = query.data?.updateAvailable ? query.data.latest : null;
 

@@ -1,8 +1,8 @@
-import { parseUserContext, renderUserContext } from "@nakama/core/user-context";
-import { FormField } from "@nakama/ui/form-field";
-import { Input } from "@nakama/ui/input";
-import { Textarea } from "@nakama/ui/textarea";
-import { cn } from "@nakama/ui/utils";
+import { parseUserContext, renderUserContext } from "@airin/core/user-context";
+import { FormField } from "@airin/ui/form-field";
+import { Input } from "@airin/ui/input";
+import { Textarea } from "@airin/ui/textarea";
+import { cn } from "@airin/ui/utils";
 import { type ReactNode, useState } from "react";
 import { GOAL_SUGGESTIONS } from "@/components/user-context-presets";
 
@@ -163,10 +163,10 @@ export function UserContextForm({
 
       <details className="space-y-3">
         <summary className="cursor-pointer rounded-sm text-sm focus-visible:outline-ring">
-          What Nakama will remember
+          What Airin will remember
         </summary>
         <Textarea
-          aria-label="What Nakama will remember"
+          aria-label="What Airin will remember"
           className="min-h-40 text-sm"
           disabled={disabled}
           onChange={(event) => {

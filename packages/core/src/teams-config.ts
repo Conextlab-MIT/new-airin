@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { z } from "zod";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import {
   assertChannelPath,
   type ChannelOwner,
@@ -91,7 +91,7 @@ export async function loadTeamsConfigFile(
 
 function messagingEndpoint(owner: ChannelOwner): string | null {
   try {
-    const url = new URL(process.env.NAKAMA_WEB_PUBLIC_URL?.trim() ?? "");
+    const url = new URL(process.env.AIRIN_WEB_PUBLIC_URL?.trim() ?? "");
 
     if (
       url.protocol !== "https:" ||
@@ -260,7 +260,7 @@ export async function saveTeamsConfig(
       config.tenantId !== requested.tenantId ||
       config.clientSecret !== requested.clientSecret
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Teams settings changed while saving. Try again.",
         409
       );
@@ -334,7 +334,7 @@ export async function regenerateTeamsHandshake(
     const config = await loadTeamsConfigFile(owner);
 
     if (!config) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Save the Teams connection before generating a pairing code.",
         400
       );

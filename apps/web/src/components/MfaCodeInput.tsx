@@ -1,4 +1,4 @@
-import { Input } from "@nakama/ui/input";
+import { Input } from "@airin/ui/input";
 
 const CODE_LENGTH = 6;
 

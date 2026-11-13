@@ -1,4 +1,4 @@
-import type { ImageAttachment, SendMessageInput } from "@nakama/core";
+import type { ImageAttachment, SendMessageInput } from "@airin/core";
 import { splitInputDisplayLines } from "./prompt-display";
 import { visibleLength } from "./text-measure";
 

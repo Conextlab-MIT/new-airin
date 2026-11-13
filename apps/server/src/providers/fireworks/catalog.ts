@@ -1,4 +1,4 @@
-import type { CustomModelEntry } from "@nakama/core";
+import type { CustomModelEntry } from "@airin/core";
 import { buildProviderHttpError } from "../shared";
 
 const FIREWORKS_GATEWAY_BASE_URL = "https://api.fireworks.ai/v1";

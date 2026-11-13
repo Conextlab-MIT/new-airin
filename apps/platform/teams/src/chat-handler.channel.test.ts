@@ -1,5 +1,5 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { withTempHome } from "@nakama/core/channel-test-helpers";
+import { withTempHome } from "@airin/core/channel-test-helpers";
 import { ALLOWED, activity, CONFIG, createHarness } from "./test-helpers";
 
 // The thread cap tests run 500 turns, and each one saves the whole session
@@ -20,19 +20,19 @@ describe("teams chat handler in a channel thread", () => {
   }
 
   test("a mention in a channel thread gets the reply in that thread", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir);
 
-      await handle(mention({ text: " what is nakama" }));
-      await handle(activity({ text: "what is nakama" }));
+      await handle(mention({ text: " what is airin" }));
+      await handle(activity({ text: "what is airin" }));
 
       // The channel turn carries more than the text, so the agent can be told
       // its answer is public; the personal turn is the text alone.
       const [channelTurn, personalTurn] = turns.map((turn) => turn.message);
 
-      expect(channelTurn?.endsWith("\nwhat is nakama")).toBe(true);
-      expect(channelTurn).not.toBe("what is nakama");
-      expect(personalTurn).toBe("what is nakama");
+      expect(channelTurn?.endsWith("\nwhat is airin")).toBe(true);
+      expect(channelTurn).not.toBe("what is airin");
+      expect(personalTurn).toBe("what is airin");
       expect(replies.map((entry) => entry.conversationId)).toEqual([
         THREAD_A,
         "conv_1",
@@ -41,7 +41,7 @@ describe("teams chat handler in a channel thread", () => {
   });
 
   test("each channel thread keeps its own session", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { createdSessions, handle, turns } = createHarness(homeDir);
 
       await handle(mention({ conversationId: THREAD_A }));
@@ -58,7 +58,7 @@ describe("teams chat handler in a channel thread", () => {
   });
 
   test("each sender in a thread keeps their own session", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const other = "55555555-5555-4555-8555-555555555555";
 
       const { createdSessions, handle, turns } = createHarness(homeDir, {
@@ -79,7 +79,7 @@ describe("teams chat handler in a channel thread", () => {
   });
 
   test("only the newest thread sessions are kept", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, sessionStore } = createHarness(homeDir);
 
       await handle(activity({ conversationId: "conv_personal" }));
@@ -103,7 +103,7 @@ describe("teams chat handler in a channel thread", () => {
   });
 
   test("a thread in use is kept over one made later", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, sessionStore } = createHarness(homeDir);
 
       const thread = (index: number) =>
@@ -129,7 +129,7 @@ describe("teams chat handler in a channel thread", () => {
   });
 
   test("a bare mention says how to start and runs no turn", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir);
 
       await handle(mention({ text: "" }));
@@ -140,7 +140,7 @@ describe("teams chat handler in a channel thread", () => {
   });
 
   test("!status in a channel shows nothing about the agent", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       let healthChecks = 0;
 
       const { handle, replies } = createHarness(homeDir, {
@@ -162,7 +162,7 @@ describe("teams chat handler in a channel thread", () => {
   });
 
   test("a channel mention delivered twice is answered once", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir);
       const duplicate = mention({ text: "only once" });
 
@@ -174,7 +174,7 @@ describe("teams chat handler in a channel thread", () => {
   });
 
   test("an unlinked sender's channel mention is told to pair in a personal chat", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir);
 
       await handle(

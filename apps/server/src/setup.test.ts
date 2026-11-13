@@ -7,7 +7,7 @@ import {
   getUserConfigPath,
   isProviderConfigured,
   loadUserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import { ensureProviderConfigured } from "./setup";
 
 describe("isProviderConfigured", () => {
@@ -34,7 +34,7 @@ describe("isProviderConfigured", () => {
   });
 
   test("treats a mounted API key file as configured", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "nakama-provider-key-"));
+    const directory = await mkdtemp(join(tmpdir(), "airin-provider-key-"));
     const keyPath = join(directory, "openai");
     await writeFile(keyPath, "sk-mounted\n");
     const id = createProviderInstanceId();
@@ -67,8 +67,8 @@ describe("ensureProviderConfigured", () => {
   let configDir = "";
 
   const envKeys = [
-    "NAKAMA_CONFIG_DIR",
-    "NAKAMA_PROVIDER",
+    "AIRIN_CONFIG_DIR",
+    "AIRIN_PROVIDER",
     "OPENAI_API_KEY",
     "OPENAI_API_KEY_FILE",
     "ANTHROPIC_API_KEY",
@@ -107,9 +107,9 @@ describe("ensureProviderConfigured", () => {
 
   test("bootstraps provider config from env vars when config.ini is missing", async () => {
     snapshotEnv();
-    configDir = await mkdtemp(join(tmpdir(), "nakama-setup-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-    process.env.NAKAMA_PROVIDER = "openai";
+    configDir = await mkdtemp(join(tmpdir(), "airin-setup-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    process.env.AIRIN_PROVIDER = "openai";
     process.env.OPENAI_API_KEY = "sk-test";
 
     const { provider, userConfig } = await ensureProviderConfigured();
@@ -128,11 +128,11 @@ describe("ensureProviderConfigured", () => {
 
   test("bootstraps from a mounted API key without persisting the secret", async () => {
     snapshotEnv();
-    configDir = await mkdtemp(join(tmpdir(), "nakama-setup-key-file-"));
+    configDir = await mkdtemp(join(tmpdir(), "airin-setup-key-file-"));
     const keyPath = join(configDir, "openai-secret");
     await writeFile(keyPath, "sk-mounted\n");
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-    process.env.NAKAMA_PROVIDER = "openai";
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    process.env.AIRIN_PROVIDER = "openai";
     process.env.OPENAI_API_KEY_FILE = keyPath;
 
     const { provider, userConfig } = await ensureProviderConfigured();
@@ -150,8 +150,8 @@ describe("ensureProviderConfigured", () => {
     "deepseek/deepseek-v4.1-flash",
   ])("starts Netra V4.1 for saved model %s", async (model) => {
     snapshotEnv();
-    configDir = await mkdtemp(join(tmpdir(), "nakama-setup-netra-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-setup-netra-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     process.env.NETRA_API_KEY = "netra-test-key";
 
     if (model) {
@@ -174,8 +174,8 @@ describe("ensureProviderConfigured", () => {
 
   test("starts Netra with a model set by hand in NETRA_MODEL", async () => {
     snapshotEnv();
-    configDir = await mkdtemp(join(tmpdir(), "nakama-setup-netra-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-setup-netra-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     process.env.NETRA_API_KEY = "netra-test-key";
     process.env.NETRA_MODEL = "qwen/qwen3-coder";
 

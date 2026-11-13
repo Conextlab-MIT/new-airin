@@ -1,6 +1,6 @@
-import type { PasskeyCredentialResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
+import type { PasskeyCredentialResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
 import {
   ConfirmDialog,
   Dialog,
@@ -9,9 +9,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { toast } from "@airin/ui/toast";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
 import { MfaCodeInput } from "@/components/MfaCodeInput";

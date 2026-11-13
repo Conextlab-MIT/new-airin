@@ -12,7 +12,7 @@ import {
 import { join, relative, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import { getManagedSecretWriter, resolveManagedSecret } from "./config";
 import {
   parseIni,
@@ -440,7 +440,7 @@ export function resolveHandshakeOnSave<TId extends string | number>(
 
 export type BotTokenSecretRef = { name: string; scope: string };
 
-/** Where a bot token lives in managed secrets once NAKAMA_SECRETS_KEY is set. */
+/** Where a bot token lives in managed secrets once AIRIN_SECRETS_KEY is set. */
 export function botTokenSecretRef(
   platform: "telegram" | "discord",
   scope: ChannelConfigScope
@@ -570,7 +570,7 @@ export function readBotTokensFromServer(
         return token;
       } catch (error) {
         // No answer or 429/503 can heal; any other status will not.
-        const status = error instanceof NakamaApiError ? error.status : null;
+        const status = error instanceof AirinApiError ? error.status : null;
 
         if (
           attempt === 10 ||
@@ -646,7 +646,7 @@ export async function writeBotChannelIniConfig<
   const managed = Boolean(secrets || (secret && config.botTokenManaged));
 
   const lines = [
-    `# Nakama ${options.label} bridge`,
+    `# Airin ${options.label} bridge`,
     managed ? MANAGED_BOT_TOKEN_LINE : `bot_token=${config.botToken}`,
     `profile_id=${config.profileId}`,
     ...(config.handshakeCode
@@ -763,7 +763,7 @@ export async function verifyAndPairBotChannelUser<
       await options.write({ ...config, ...SPENT_HANDSHAKE, pairedUserIds });
 
       return {
-        message: "Linked successfully. You can chat with Nakama now.",
+        message: "Linked successfully. You can chat with Airin now.",
         ok: true,
       };
     });
@@ -788,8 +788,8 @@ function toHandshakeSecret(secret: PairingCodeSecret): HandshakeSecret {
 export function channelOwnerFromEnv(
   env: Record<string, string | undefined> = process.env
 ): ChannelOwner {
-  const orgId = env.NAKAMA_CHANNEL_ORG_ID?.trim();
-  const profileId = env.NAKAMA_CHANNEL_PROFILE_ID?.trim();
+  const orgId = env.AIRIN_CHANNEL_ORG_ID?.trim();
+  const profileId = env.AIRIN_CHANNEL_PROFILE_ID?.trim();
 
   if (!(orgId && profileId)) {
     throw new Error("Channel workers require an organization and agent scope.");

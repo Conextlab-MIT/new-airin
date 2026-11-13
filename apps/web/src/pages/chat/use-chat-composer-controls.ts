@@ -1,8 +1,5 @@
-import type {
-  ProviderModelOption,
-  ThinkingEffort,
-} from "@nakama/core/contract";
-import { clampThinkingEffort } from "@nakama/core/thinking-effort";
+import type { ProviderModelOption, ThinkingEffort } from "@airin/core/contract";
+import { clampThinkingEffort } from "@airin/core/thinking-effort";
 import { useMemo } from "react";
 import { useAcpChatControls } from "@/hooks/use-acp-settings";
 import {

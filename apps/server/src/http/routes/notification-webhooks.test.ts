@@ -6,21 +6,21 @@ import {
   getDiscordConfigPath,
   getWhatsAppConfigPath,
   saveTelegramConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import { asTestFetch } from "../../providers/test-helpers";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { seedOrgAdmin } from "../test-session-helpers";
 
 describe("notification webhook routes", () => {
   let tempHome = "";
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
   let homedirSpy: ReturnType<typeof spyOn<typeof os, "homedir">> | null = null;
 
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     homedirSpy?.mockRestore();
@@ -33,9 +33,9 @@ describe("notification webhook routes", () => {
   });
 
   async function createApp() {
-    tempHome = await mkdtemp(path.join(os.tmpdir(), "nakama-notify-webhook-"));
+    tempHome = await mkdtemp(path.join(os.tmpdir(), "airin-notify-webhook-"));
     homedirSpy = spyOn(os, "homedir").mockReturnValue(tempHome);
-    process.env.NAKAMA_CONFIG_DIR = path.join(tempHome, ".nakama");
+    process.env.AIRIN_CONFIG_DIR = path.join(tempHome, ".airin");
     await saveTelegramConfig(
       { orgId: "org_1", profileId: "agent_1" },
       { botToken: "1234567890:TEST" }
@@ -160,7 +160,7 @@ describe("notification webhook routes", () => {
         );
         expect(
           calls[0]?.headers.get(
-            channel === "discord" ? "authorization" : "x-nakama-token"
+            channel === "discord" ? "authorization" : "x-airin-token"
           )
         ).toBe(
           channel === "discord" ? "Bot test_discord_token" : "test_worker_token"
@@ -282,7 +282,7 @@ describe("notification webhook routes", () => {
       "getNotificationDestination"
     ).mockImplementation(() => {
       throw new Error(
-        "SQLITE_IOERR: disk I/O error at /home/nakama/.config/nakama/nakama.db"
+        "SQLITE_IOERR: disk I/O error at /home/airin/.config/airin/airin.db"
       );
     });
 

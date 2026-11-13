@@ -524,7 +524,7 @@ export function resolveTelegramConfigFromSources(options: {
     handshakeExpiresAt: file?.handshakeExpiresAt ?? null,
     pairedUserIds: file?.pairedUserIds ?? [],
     profileId:
-      env.NAKAMA_TELEGRAM_PROFILE_ID?.trim() ||
+      env.AIRIN_TELEGRAM_PROFILE_ID?.trim() ||
       file?.profileId?.trim() ||
       DEFAULT_TELEGRAM_PROFILE_ID,
   };

@@ -1,9 +1,9 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { deleteAttachmentBytes } from "@nakama/core/attachments/store";
+import { deleteAttachmentBytes } from "@airin/core/attachments/store";
 import {
   createInMemoryDatabaseAdapter,
-  seedOrgSuperNakamaProfile,
-} from "@nakama/db";
+  seedOrgSuperAirinProfile,
+} from "@airin/db";
 import { asTestFetch, streamFromChunks } from "../../providers/test-helpers";
 import { AgentService } from "../../services/agent-service";
 import { createAttachmentSaver } from "../../services/attachment-service";
@@ -11,7 +11,7 @@ import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { loginUserSession, seedOrgAdmin } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-sessions-org-scope-test-");
+setupTestConfigDir("airin-sessions-org-scope-test-");
 
 const PASSWORD = "password123";
 
@@ -723,8 +723,8 @@ describe("session routes are scoped to the caller's active org", () => {
   });
 });
 
-describe("Super Nakama sessions stay admin-only after they are created", () => {
-  async function createSuperNakamaScenario() {
+describe("Airin sessions stay admin-only after they are created", () => {
+  async function createSuperAirinScenario() {
     const scenario = await createScenario();
     await seedOrgAdmin(scenario.databaseAdapter, {
       email: "member@example.com",
@@ -734,7 +734,7 @@ describe("Super Nakama sessions stay admin-only after they are created", () => {
       userId: "user_member",
     });
 
-    const superProfile = await seedOrgSuperNakamaProfile(
+    const superProfile = await seedOrgSuperAirinProfile(
       scenario.databaseAdapter,
       VICTIM_ORG
     );
@@ -772,9 +772,9 @@ describe("Super Nakama sessions stay admin-only after they are created", () => {
     };
   }
 
-  test("Super Nakama images use the same profile access guard as chat history", async () => {
+  test("Airin images use the same profile access guard as chat history", async () => {
     const { app, databaseAdapter, member, superProfileId, superSessionId } =
-      await createSuperNakamaScenario();
+      await createSuperAirinScenario();
 
     const saved = await createAttachmentSaver(databaseAdapter, {
       channel: "web",
@@ -810,7 +810,7 @@ describe("Super Nakama sessions stay admin-only after they are created", () => {
   for (const route of CROSS_ORG_ROUTES) {
     test(`${route.method} ${route.path(":id")} -> 403 for a member`, async () => {
       const { app, databaseAdapter, member, superSessionId } =
-        await createSuperNakamaScenario();
+        await createSuperAirinScenario();
 
       const response = await app.fetch(
         new Request(`http://localhost:4310${route.path(superSessionId)}`, {
@@ -827,9 +827,9 @@ describe("Super Nakama sessions stay admin-only after they are created", () => {
     });
   }
 
-  test("a member cannot list Super Nakama sessions, an admin still can", async () => {
+  test("a member cannot list Airin sessions, an admin still can", async () => {
     const { app, member, superProfileId, superSessionId } =
-      await createSuperNakamaScenario();
+      await createSuperAirinScenario();
 
     const admin = await loginUserSession(
       app,

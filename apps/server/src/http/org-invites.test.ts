@@ -7,7 +7,7 @@ import {
   setupFreshInstallSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-org-invites-test-");
+setupTestConfigDir("airin-org-invites-test-");
 
 describe("direct org member provisioning", () => {
   test("domain settings reach admins, and a platform admin can still invite and add directly", async () => {

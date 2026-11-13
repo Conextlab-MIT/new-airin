@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import { decodeArchiveRequestData } from "./data-portability";
 import {
   assertBackupDirOutsideRoot,
@@ -27,10 +27,10 @@ const key = randomBytes(32);
 
 const dirs: string[] = [];
 
-const savedKey = process.env.NAKAMA_SECRETS_KEY;
+const savedKey = process.env.AIRIN_SECRETS_KEY;
 
 async function tempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "nakama-backup-"));
+  const dir = await mkdtemp(join(tmpdir(), "airin-backup-"));
   dirs.push(dir);
 
   return dir;
@@ -62,9 +62,9 @@ async function hasBackup(dir: string) {
 
 afterEach(async () => {
   if (savedKey === undefined) {
-    delete process.env.NAKAMA_SECRETS_KEY;
+    delete process.env.AIRIN_SECRETS_KEY;
   } else {
-    process.env.NAKAMA_SECRETS_KEY = savedKey;
+    process.env.AIRIN_SECRETS_KEY = savedKey;
   }
 
   for (const dir of dirs.splice(0)) {
@@ -77,10 +77,10 @@ describe("scheduled backups", () => {
     const zip = Buffer.from("PK zip bytes");
     const data = encryptBackup(zip, key).toString("base64");
 
-    process.env.NAKAMA_SECRETS_KEY = key.toString("base64");
+    process.env.AIRIN_SECRETS_KEY = key.toString("base64");
     expect(decodeArchiveRequestData(data)).toEqual(zip);
 
-    process.env.NAKAMA_SECRETS_KEY = randomBytes(32).toString("base64");
+    process.env.AIRIN_SECRETS_KEY = randomBytes(32).toString("base64");
     expect(() => decodeArchiveRequestData(data)).toThrow(
       expect.objectContaining({ status: 400 })
     );
@@ -100,15 +100,15 @@ describe("scheduled backups", () => {
 
     const names = await readdir(dir);
     expect(names).toHaveLength(7);
-    expect(names.sort()[0]).toBe("nakama-2026-10-03T000000Z.zip.enc");
+    expect(names.sort()[0]).toBe("airin-2026-10-03T000000Z.zip.enc");
   });
 
   test("refuses a backup dir inside the data root", () => {
     expect(() =>
-      assertBackupDirOutsideRoot("/srv/nakama/backups", "/srv/nakama")
+      assertBackupDirOutsideRoot("/srv/airin/backups", "/srv/airin")
     ).toThrow();
     expect(() =>
-      assertBackupDirOutsideRoot("/srv/backups", "/srv/nakama")
+      assertBackupDirOutsideRoot("/srv/backups", "/srv/airin")
     ).not.toThrow();
   });
 
@@ -196,7 +196,7 @@ describe("scheduled backups", () => {
     };
 
     const recent = await tempDir();
-    await writeFile(join(recent, "nakama-2026-10-26T000000Z.zip.enc"), "x");
+    await writeFile(join(recent, "airin-2026-10-26T000000Z.zip.enc"), "x");
 
     const stopRecent = await startScheduledBackups({
       dir: recent,
@@ -224,12 +224,12 @@ describe("scheduled backups", () => {
   test("keeps the last failed run for Settings until the next good backup", async () => {
     const dir = await tempDir();
 
-    const blocked = new NakamaApiError(
+    const blocked = new AirinApiError(
       "Cannot export a restorable backup: the server cannot read config.ini.",
       409
     );
 
-    const tooBig = new NakamaApiError(
+    const tooBig = new AirinApiError(
       "Cannot export a restorable backup: ZIP exceeds the import limit.",
       413
     );
@@ -280,7 +280,7 @@ describe("scheduled backups", () => {
 
     // Seven old "backups" that are folders: unlink refuses them, so rotation fails
     for (let day = 1; day <= 7; day += 1) {
-      const path = join(dir, `nakama-2000-01-0${day}T000000Z.zip.enc`);
+      const path = join(dir, `airin-2000-01-0${day}T000000Z.zip.enc`);
       await mkdir(path);
       await utimes(path, old, old);
     }
@@ -313,7 +313,7 @@ describe("scheduled backups", () => {
     // A folder with content where the temp record goes: the record write fails
     await mkdir(join(`${file}.tmp`, "x"), { recursive: true });
 
-    const blocked = new NakamaApiError("disk is full", 409);
+    const blocked = new AirinApiError("disk is full", 409);
     const errors = spyOn(console, "error").mockImplementation(() => {});
 
     try {

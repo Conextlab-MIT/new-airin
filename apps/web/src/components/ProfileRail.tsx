@@ -1,11 +1,11 @@
+import type { ProfileSummary } from "@airin/core";
+import type { AgentGroup } from "@airin/core/agent-groups";
+import type { AcpAgentPresetSummary, ToolSummary } from "@airin/core/contract";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { DropdownMenuItem } from "@airin/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import { ContextMenu } from "@base-ui/react/context-menu";
-import type { ProfileSummary } from "@nakama/core";
-import type { AgentGroup } from "@nakama/core/agent-groups";
-import type { AcpAgentPresetSummary, ToolSummary } from "@nakama/core/contract";
-import { ConfirmDialog } from "@nakama/ui/dialog";
-import { DropdownMenuItem } from "@nakama/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
 import {
   Delete02Icon,
   PencilEdit02Icon,
@@ -20,7 +20,6 @@ import { GroupDialog } from "@/components/agent-groups/group-dialog";
 import { ProfileAdminPlusButton } from "@/components/ProfileAdminPlusButton";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ProfileCreateDialog } from "@/components/ProfileCreateDialog";
-import { SidebarUserMenu } from "@/components/SidebarUserMenu";
 import { useActiveChatProfile } from "@/context/use-active-chat-profile";
 import { useAuth } from "@/context/use-auth";
 import { useTheme } from "@/context/use-theme";
@@ -278,7 +277,7 @@ export function ProfileRail({ onNavigate }: { onNavigate?: () => void } = {}) {
     >
       <div className="flex size-7 shrink-0 items-center justify-center">
         <img
-          alt="Nakama"
+          alt="Airin"
           className="size-5.5 -translate-y-px object-contain"
           src={logoSrc}
         />
@@ -315,10 +314,6 @@ export function ProfileRail({ onNavigate }: { onNavigate?: () => void } = {}) {
           tools={NO_TOOLS}
         />
       )}
-
-      <div className="flex shrink-0 flex-col items-center gap-1">
-        <SidebarUserMenu />
-      </div>
 
       {editingGroup ? (
         <GroupDialog

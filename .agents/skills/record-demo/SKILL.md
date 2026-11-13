@@ -1,7 +1,7 @@
 ---
 name: record-demo
 description: >-
-  Record an MP4 product demo of a Nakama flow in BrowserOS (browseros-neo MCP)
+  Record an MP4 product demo of an Airin flow in BrowserOS (browseros-neo MCP)
   on the user's dev app at http://localhost:3003. Use when the user says
   /record-demo, "make a demo video", "record a demo of X", or asks for an mp4
   that shows a feature working end to end (for example connecting an MCP
@@ -23,7 +23,7 @@ in Canva.
 
 1. Use the user's app on `http://localhost:3003` and their BrowserOS sign-ins.
    Do not start another server. If 3003 gives 502, start the API with
-   `NAKAMA_PORT=4310 bun run dev:server`.
+   `AIRIN_PORT=4310 bun run dev:server`.
 2. Never type a password. If a sign-in page needs one, stop and ask the user
    to sign in in BrowserOS. A consent click ("Allow") is OK only when the user
    asked you to do the sign-in.

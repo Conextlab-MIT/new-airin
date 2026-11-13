@@ -1,4 +1,4 @@
-import type { StreamEvent, ToolContext, ToolDefinition } from "@nakama/core";
+import type { StreamEvent, ToolContext, ToolDefinition } from "@airin/core";
 import { z } from "zod";
 import type { AgentService } from "../services/agent-service";
 import { formatToolActivityLabel } from "./sub-agent-activity";

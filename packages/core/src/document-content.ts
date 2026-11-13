@@ -1,4 +1,4 @@
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import type {
   DocumentAttachment,
   MessageContentPart,
@@ -161,7 +161,7 @@ export async function resolveDocumentPartForProvider(
     };
   }
 
-  throw new NakamaApiError(
+  throw new AirinApiError(
     `Provider "${provider}" does not support ${part.mediaType} documents natively.`,
     400
   );

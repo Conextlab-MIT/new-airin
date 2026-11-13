@@ -1,28 +1,28 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
-  NakamaClient,
+  AirinClient,
   SendMessageArg,
   StreamHandlers,
-} from "@nakama/client";
+} from "@airin/client";
 import {
   assertBridgeClientMethods,
   parseListProfilesResponse,
   parseListUserOrgsResponse,
-} from "@nakama/core/bridge-api";
-import type { ChannelOrgStore } from "@nakama/core/channel-org";
+} from "@airin/core/bridge-api";
+import type { ChannelOrgStore } from "@airin/core/channel-org";
 import {
   createDefaultTestOrgs,
   createMultiTestOrgs,
   createTestOrgStore as createSharedTestOrgStore,
   withTempHome as withSharedTempHome,
-} from "@nakama/core/channel-test-helpers";
+} from "@airin/core/channel-test-helpers";
 import type {
   AgentQuestionnaire,
   AgentTodo,
   ChatMessage,
   UserOrgSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import type { Context } from "grammy";
 import type { TelegramBotInfo } from "./group-message";
 
@@ -476,7 +476,7 @@ export function createMockClient(
   };
 
   // SAFETY: Tests call only the client methods supplied by this mock.
-  const typedClient = client as NakamaClient;
+  const typedClient = client as AirinClient;
 
   assertBridgeClientMethods(typedClient);
 
@@ -504,11 +504,11 @@ export async function writeTelegramConfigIni(
     allowedUserIds?: number[];
   }
 ): Promise<void> {
-  const dir = path.join(homeDir, ".nakama", "telegram");
+  const dir = path.join(homeDir, ".airin", "telegram");
   await mkdir(dir, { recursive: true });
 
   const lines = [
-    "# Nakama Telegram bridge",
+    "# Airin Telegram bridge",
     `bot_token=${config.botToken}`,
     `profile_id=${config.profileId ?? "default"}`,
   ];
@@ -542,5 +542,5 @@ export function createTestOrgStore(homeDir: string): ChannelOrgStore {
 export async function withTempHome<T>(
   run: (homeDir: string) => Promise<T>
 ): Promise<T> {
-  return withSharedTempHome("nakama-telegram-home-", run);
+  return withSharedTempHome("airin-telegram-home-", run);
 }

@@ -2,13 +2,13 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ToolContext } from "@nakama/core";
+import type { ToolContext } from "@airin/core";
 import {
   attachSharedKnowledgeBaseDocument,
   uploadKnowledgeBaseDocument,
   uploadOrganizationKnowledgeBaseDocument,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { z } from "zod";
 import { OrgMemoryService } from "../services/org-memory-service";
 import { createOrgMemoryTools } from "./org-memory-tools";
@@ -81,13 +81,13 @@ describe("org memory tools", () => {
     const orgId = "org_a";
     const profileId = "profile_kb";
     let tempConfigDir = "";
-    const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+    const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
     afterEach(async () => {
       if (previousConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+        process.env.AIRIN_CONFIG_DIR = previousConfigDir;
       }
 
       if (tempConfigDir) {
@@ -97,8 +97,8 @@ describe("org memory tools", () => {
     });
 
     async function setupKb(): Promise<string> {
-      tempConfigDir = await mkdtemp(join(tmpdir(), "nakama-org-memory-kb-"));
-      process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+      tempConfigDir = await mkdtemp(join(tmpdir(), "airin-org-memory-kb-"));
+      process.env.AIRIN_CONFIG_DIR = tempConfigDir;
       await mkdir(join(tempConfigDir, "orgs", orgId, "profiles", profileId), {
         recursive: true,
       });

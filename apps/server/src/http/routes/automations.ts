@@ -1,4 +1,3 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   AutomationResponse,
   DraftAutomationResponse,
@@ -7,8 +6,9 @@ import type {
   ListAutomationsResponse,
   MarkAutomationRunsReadResponse,
   RunAutomationResponse,
-} from "@nakama/core";
-import { AGENT_CHANNELS } from "@nakama/core";
+} from "@airin/core";
+import { AGENT_CHANNELS } from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { ServerOptions } from "../context";
 import {
   requireActiveOrgIdFromContext,

@@ -3,8 +3,8 @@ import {
   normalizeBaseUrl,
   type ProviderName,
   type UserConfig,
-} from "@nakama/core";
-import type { StoredCodingAgentHarnessKind } from "@nakama/db";
+} from "@airin/core";
+import type { StoredCodingAgentHarnessKind } from "@airin/db";
 import {
   createHarnessConfigDir,
   writeCodexConfigToml,
@@ -128,12 +128,12 @@ const CODING_AGENT_CREDENTIAL_ENV_KEYS = [
 ] as const;
 
 /**
- * Maps a Nakama provider type to the pi CLI provider name.
+ * Maps an Airin provider type to the pi CLI provider name.
  * pi has its own provider system with named providers (see `pi --list-models`).
  *
  * When the base URL is the default for the provider type, we use the built-in
  * pi provider name (e.g. "anthropic", "openai"). When the base URL is custom
- * (proxy/gateway), we use "nakama" — matching the custom provider entry in
+ * (proxy/gateway), we use "airin" — matching the custom provider entry in
  * models.json that uses the OpenAI Chat Completions API.
  */
 const PI_PROVIDER_NAME: Partial<Record<ProviderName, string>> = {
@@ -143,7 +143,7 @@ const PI_PROVIDER_NAME: Partial<Record<ProviderName, string>> = {
   fireworks: "fireworks",
   ollama: "ollama",
   openai: "openai",
-  openai_compatible: "nakama",
+  openai_compatible: "airin",
   opencode_go: "opencode",
   openrouter: "openrouter",
 };
@@ -157,7 +157,7 @@ const PI_DEFAULT_BASE_URLS: Partial<Record<ProviderName, string>> = {
   openrouter: "https://openrouter.ai/api/v1",
 };
 
-export function mapNakamaProviderToPi(
+export function mapAirinProviderToPi(
   providerType: ProviderName,
   baseUrl?: string | null
 ): string | null {
@@ -168,7 +168,7 @@ export function mapNakamaProviderToPi(
   }
 
   // For providers with a non-default base URL (proxy/gateway), use the custom
-  // "nakama" provider entry from models.json instead of the built-in provider.
+  // "airin" provider entry from models.json instead of the built-in provider.
   if (baseUrl) {
     const defaultUrl = PI_DEFAULT_BASE_URLS[providerType];
 
@@ -176,7 +176,7 @@ export function mapNakamaProviderToPi(
       defaultUrl &&
       normalizeBaseUrl(baseUrl) !== normalizeBaseUrl(defaultUrl)
     ) {
-      return "nakama";
+      return "airin";
     }
   }
 
@@ -242,13 +242,13 @@ async function buildOpenCodeSpawnEnv(
     return { env: {} };
   }
 
-  const configDir = await createHarnessConfigDir("nakama-opencode-config-");
+  const configDir = await createHarnessConfigDir("airin-opencode-config-");
   await writeOpenCodeConfig(configDir.dir, routing, "opencode", providerType);
 
   return {
     cleanup: configDir.cleanup,
     env: {
-      NAKAMA_HARNESS_API_KEY: routing.apiKey,
+      AIRIN_HARNESS_API_KEY: routing.apiKey,
       XDG_CONFIG_HOME: configDir.dir,
     },
   };
@@ -266,13 +266,13 @@ export async function buildPiSpawnEnv(
   // The base URL is hardcoded per built-in provider and can only be overridden
   // via models.json in the pi config directory (PI_CODING_AGENT_DIR).
   // The temp models.json names an environment variable; it never stores the key.
-  const configDir = await createHarnessConfigDir("nakama-pi-config-");
+  const configDir = await createHarnessConfigDir("airin-pi-config-");
   await writePiModelsJson(configDir.dir, routing, providerType);
 
   return {
     cleanup: configDir.cleanup,
     env: {
-      NAKAMA_HARNESS_API_KEY: routing.apiKey,
+      AIRIN_HARNESS_API_KEY: routing.apiKey,
       PI_CODING_AGENT_DIR: configDir.dir,
     },
   };
@@ -283,7 +283,7 @@ export async function buildSpawnEnvForHarness(
   routing: CodingAgentProviderRouting,
   providerType: ProviderName = "openai"
 ): Promise<CodingAgentSpawnEnvResult> {
-  // Cursor Agent uses host Cursor auth — never merge Nakama provider credentials.
+  // Cursor Agent uses host Cursor auth — never merge Airin provider credentials.
   if (kind === "cursor_agent") {
     return { env: {} };
   }
@@ -307,7 +307,7 @@ export async function buildSpawnEnvForHarness(
       return { env };
     }
 
-    const configDir = await createHarnessConfigDir("nakama-codex-config-");
+    const configDir = await createHarnessConfigDir("airin-codex-config-");
     await writeCodexConfigToml(configDir.dir, routing, "codex", providerType);
 
     const codexEnv: CodingAgentSpawnEnvResult["env"] = {
@@ -315,7 +315,7 @@ export async function buildSpawnEnvForHarness(
     };
 
     if (routing.apiKey) {
-      codexEnv.NAKAMA_HARNESS_API_KEY = routing.apiKey;
+      codexEnv.AIRIN_HARNESS_API_KEY = routing.apiKey;
     }
 
     return { cleanup: configDir.cleanup, env: codexEnv };
@@ -358,12 +358,12 @@ export function mergeCodingAgentSpawnEnv(
     if (
       !(
         HIJACKING_ENV_KEY.test(key) ||
-        key.startsWith("NAKAMA_PROVIDER_API_KEY_") ||
-        key.startsWith("NAKAMA_TOOL_API_KEY_")
+        key.startsWith("AIRIN_PROVIDER_API_KEY_") ||
+        key.startsWith("AIRIN_TOOL_API_KEY_")
       ) &&
-      key !== "NAKAMA_SECRETS_KEY" &&
-      key !== "NAKAMA_SECRETS_KEY_NEXT" &&
-      key !== "NAKAMA_EMAIL_PASSWORD"
+      key !== "AIRIN_SECRETS_KEY" &&
+      key !== "AIRIN_SECRETS_KEY_NEXT" &&
+      key !== "AIRIN_EMAIL_PASSWORD"
     ) {
       merged[key] = value;
     }

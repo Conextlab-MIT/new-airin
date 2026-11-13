@@ -1,8 +1,8 @@
-import type { AgentGroup } from "@nakama/core/agent-groups";
-import { NakamaApiError } from "@nakama/core/api-error";
-import { Button, Textarea } from "@nakama/ui";
-import { Spinner } from "@nakama/ui/spinner";
-import { toast } from "@nakama/ui/toast";
+import type { AgentGroup } from "@airin/core/agent-groups";
+import { AirinApiError } from "@airin/core/api-error";
+import { Button, Textarea } from "@airin/ui";
+import { Spinner } from "@airin/ui/spinner";
+import { toast } from "@airin/ui/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -113,7 +113,7 @@ function GroupMemoryEditor({ groupId }: { groupId: string }) {
       setDraft(null);
     } catch (saveError) {
       const changed =
-        saveError instanceof NakamaApiError && saveError.status === 409;
+        saveError instanceof AirinApiError && saveError.status === 409;
 
       toast(
         changed

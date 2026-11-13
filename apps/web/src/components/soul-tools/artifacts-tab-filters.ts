@@ -1,4 +1,4 @@
-import type { ArtifactFile } from "@nakama/core/contract";
+import type { ArtifactFile } from "@airin/core/contract";
 import {
   isDocxFile,
   isHtmlArtifactMimeType,

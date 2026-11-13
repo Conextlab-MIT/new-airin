@@ -1,5 +1,5 @@
-import type { ArtifactFile } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ArtifactFile } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import { useState } from "react";
 import { formatError } from "@/lib/client";
 import type { FilesViewMode } from "@/lib/files-page.shared";

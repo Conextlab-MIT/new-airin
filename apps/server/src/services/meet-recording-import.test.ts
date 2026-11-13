@@ -4,14 +4,14 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { MeetImportProgress } from "@nakama/core/google-meet";
+import type { MeetImportProgress } from "@airin/core/google-meet";
 import { importMeetRecording } from "./meet-recording-import";
 
 test("recorded video becomes a Whisper transcript and temporary media is removed", async () => {
   const directory = await mkdtemp(join(tmpdir(), "meet-import-test-"));
 
   const before = (await readdir(tmpdir())).filter((name) =>
-    name.startsWith("nakama-meet-")
+    name.startsWith("airin-meet-")
   );
 
   const originalFetch = globalThis.fetch;
@@ -76,7 +76,7 @@ test("recorded video becomes a Whisper transcript and temporary media is removed
     expect(requests).toBe(1);
 
     const after = (await readdir(tmpdir())).filter((name) =>
-      name.startsWith("nakama-meet-")
+      name.startsWith("airin-meet-")
     );
 
     expect(after).toEqual(before);
@@ -150,9 +150,7 @@ test("recorded video becomes a Whisper transcript and temporary media is removed
       new Response("{}", { status: 500 })) as typeof fetch;
     await expect(importRecording()).rejects.toThrow();
     expect(
-      (await readdir(tmpdir())).filter((name) =>
-        name.startsWith("nakama-meet-")
-      )
+      (await readdir(tmpdir())).filter((name) => name.startsWith("airin-meet-"))
     ).toEqual(before);
   } finally {
     globalThis.fetch = originalFetch;

@@ -1,23 +1,23 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   type BackupStatusResponse,
   type DataImportPreviewResponse,
-  NakamaApiError,
   type PreviewDataImportRequest,
   type RestoreDataImportRequest,
   type RestoreDataImportResponse,
-} from "@nakama/core";
+} from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   type CreateDataExportFileResult,
-  createNakamaDataExportFile,
-  createNakamaOrgDataExport,
-  createNakamaUserDataExport,
+  createAirinDataExportFile,
+  createAirinOrgDataExport,
+  createAirinUserDataExport,
   decodeArchiveRequestData,
   getDataImportLimits,
   type ImportLimits,
   openImportArchive,
-  previewNakamaDataImportFile,
-  restoreNakamaDataImportFile,
+  previewAirinDataImportFile,
+  restoreAirinDataImportFile,
   spoolImportArchive,
   writeTempImportArchive,
 } from "../../services/data-portability";
@@ -71,7 +71,7 @@ export async function readImportRequest(
     : Math.min(jsonBodyLimit, MAX_HTTP_REQUEST_BODY_LIMIT_BYTES);
 
   if (Number.isFinite(declaredLength) && declaredLength > bodyLimit) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       tooLargeMessage ??
         `Import archive must be at most ${Math.floor(
           limits.archiveBytes / (1024 * 1024)
@@ -95,7 +95,7 @@ export async function readImportRequest(
   }
 
   if (!request.body) {
-    throw new NakamaApiError("Import archive data is required.", 400);
+    throw new AirinApiError("Import archive data is required.", 400);
   }
 
   const spooled = await readUntilClientGone(
@@ -247,7 +247,7 @@ export function registerDataPortabilityRoutes(
               schema: z.string().openapi({ format: "binary", type: "string" }),
             },
           },
-          description: "Nakama data export ZIP",
+          description: "Airin data export ZIP",
         },
         403: {
           content: { "application/json": { schema: errorSchema } },
@@ -258,7 +258,7 @@ export function registerDataPortabilityRoutes(
           description: "Error",
         },
       },
-      summary: "Export Nakama data",
+      summary: "Export Airin data",
       tags: ["Platform"],
     })
   );
@@ -333,7 +333,7 @@ export function registerDataPortabilityRoutes(
           description: "Error",
         },
       },
-      summary: "Preview Nakama data import",
+      summary: "Preview Airin data import",
       tags: ["Platform"],
     })
   );
@@ -375,7 +375,7 @@ export function registerDataPortabilityRoutes(
           description: "Error",
         },
       },
-      summary: "Restore Nakama data import",
+      summary: "Restore Airin data import",
       tags: ["Platform"],
     })
   );
@@ -384,7 +384,7 @@ export function registerDataPortabilityRoutes(
     requirePlatformAdminFromContext(c);
     const orgId = decodeURIComponent(c.req.param("orgId"));
 
-    const result = await createNakamaOrgDataExport(databaseAdapter, orgId);
+    const result = await createAirinOrgDataExport(databaseAdapter, orgId);
 
     return new Response(new Uint8Array(result.data), {
       headers: {
@@ -398,7 +398,7 @@ export function registerDataPortabilityRoutes(
     requirePlatformAdminFromContext(c);
     const userId = decodeURIComponent(c.req.param("userId"));
 
-    const result = await createNakamaUserDataExport(databaseAdapter, userId);
+    const result = await createAirinUserDataExport(databaseAdapter, userId);
 
     return new Response(new Uint8Array(result.data), {
       headers: {
@@ -413,16 +413,16 @@ export function registerDataPortabilityRoutes(
 
     const result = options.googleMeetService
       ? await options.googleMeetService.withSnapshot(() =>
-          createNakamaDataExportFile()
+          createAirinDataExportFile()
         )
-      : await createNakamaDataExportFile();
+      : await createAirinDataExportFile();
 
     return serveExportFile(result);
   });
 
   app.get("/v1/platform/data/backup-status", async (c) => {
     requirePlatformAdminFromContext(c);
-    const dir = process.env.NAKAMA_BACKUP_DIR?.trim();
+    const dir = process.env.AIRIN_BACKUP_DIR?.trim();
 
     return json<BackupStatusResponse>({
       lastError: dir ? await readBackupError(dir) : null,
@@ -445,7 +445,7 @@ export function registerDataPortabilityRoutes(
     );
 
     try {
-      const preview = await previewNakamaDataImportFile(archive.path);
+      const preview = await previewAirinDataImportFile(archive.path);
 
       return json<DataImportPreviewResponse>(preview);
     } catch (error) {
@@ -478,7 +478,7 @@ export function registerDataPortabilityRoutes(
             const { onBeforeDataRestore } = options;
             let databaseReleased = false;
 
-            const result = await restoreNakamaDataImportFile(archive.path, {
+            const result = await restoreAirinDataImportFile(archive.path, {
               afterFailedReplace: options.onDataRestored,
               beforeReplace: onBeforeDataRestore
                 ? async () => {

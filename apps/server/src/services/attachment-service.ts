@@ -2,13 +2,13 @@ import type {
   AgentChannel,
   LoadAttachmentBytes,
   SaveInlineAttachment,
-} from "@nakama/core";
-import { createId } from "@nakama/core";
+} from "@airin/core";
+import { createId } from "@airin/core";
 import {
   readAttachmentBytes,
   saveAttachmentBytes,
-} from "@nakama/core/attachments/store";
-import type { DatabaseAdapter, StoredAttachmentRecord } from "@nakama/db";
+} from "@airin/core/attachments/store";
+import type { DatabaseAdapter, StoredAttachmentRecord } from "@airin/db";
 
 export interface AttachmentServiceContext {
   channel: AgentChannel;

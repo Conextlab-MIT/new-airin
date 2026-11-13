@@ -1,4 +1,4 @@
-import { renderTelegramRichText } from "@nakama/core/telegram-rich-text";
+import { renderTelegramRichText } from "@airin/core/telegram-rich-text";
 import type { Context } from "grammy";
 import { prepareTelegramFallbackReply } from "./format";
 

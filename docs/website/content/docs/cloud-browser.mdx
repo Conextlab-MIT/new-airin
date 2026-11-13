@@ -12,7 +12,7 @@ The cloud browser gives each user their own browser on [Kernel](https://www.kern
 - **You sign in once.** Sign in to a site in the live browser. Your later chats, with any agent, start signed in.
 - **You can watch and help.** The **Browser** panel in the chat shows the agent's browser live. You can type and click in it.
 - **Your logins stay yours.** Each user has their own browser in each organization. Other members never see or use your logins.
-- **Nothing to install.** The browser runs on Kernel, not on the Nakama server.
+- **Nothing to install.** The browser runs on Kernel, not on the Airin server.
 - **Nothing goes out without your yes.** Before the agent sends a message, a connection request, a post, or a comment, it shows you the exact text and where it goes, and waits for your yes in chat.
 
 ## Set up Kernel (platform admins)
@@ -24,7 +24,7 @@ The cloud browser gives each user their own browser on [Kernel](https://www.kern
 Docker and Kubernetes can set the same thing with host env instead. Env values take priority over the saved key:
 
 ```bash
-NAKAMA_BROWSER_PROVIDER=kernel
+AIRIN_BROWSER_PROVIDER=kernel
 KERNEL_API_KEY=your-kernel-api-key
 ```
 
@@ -61,7 +61,7 @@ If you do not stop it, Kernel stops and saves the browser after about 10 minutes
 
 ## Good to know
 
-- **One browser per user.** All your chats share it. Each chat works in its own tab, and Nakama closes the oldest chat tabs so that only a few stay open.
+- **One browser per user.** All your chats share it. Each chat works in its own tab, and Airin closes the oldest chat tabs so that only a few stay open.
 - **Viewers** get no Browser panel, because the live view can control the browser.
 - **Automations** have no signed-in user, so they cannot use the cloud browser.
 - **Bot checks:** some sites still block automated browsers. The cloud browser does not promise to get past CAPTCHAs.
@@ -71,11 +71,11 @@ If you do not stop it, Kernel stops and saves the browser after about 10 minutes
 | Symptom | What to check |
 |---------|---------------|
 | **Cloud browser** is not in **Add tool** | A platform admin must set up Kernel under **AI Providers → Browser runtime** |
-| The agent says the browser runtime is not set up | Same as above. Also check `NAKAMA_BROWSER_PROVIDER` and `KERNEL_API_KEY` if you use env |
+| The agent says the browser runtime is not set up | Same as above. Also check `AIRIN_BROWSER_PROVIDER` and `KERNEL_API_KEY` if you use env |
 | The site shows its login page again | The previous browser was not stopped and saved yet. Sign in once in the panel, then select **Stop browser** |
 | The Browser panel is empty or dark | Close the panel and ask the agent to open the page again. The live view can take a few seconds to connect |
 
 ## Next steps
 
-- [Agent browser](/agent-browser): drive Chrome on the Nakama server with `bash` and the agent-browser skill
+- [Agent browser](/agent-browser): drive Chrome on the Airin server with `bash` and the agent-browser skill
 - [Builtin tools](/builtin-tools): other tools you can give an agent

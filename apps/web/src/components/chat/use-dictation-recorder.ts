@@ -1,4 +1,4 @@
-import { toast } from "@nakama/ui/toast";
+import { toast } from "@airin/ui/toast";
 import { useEffect, useRef, useState } from "react";
 import { usePromptInputController } from "@/components/ai-elements/prompt-input-context";
 import { client, formatError } from "@/lib/client";

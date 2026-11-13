@@ -1,4 +1,4 @@
-import type { JsonSchema } from "@nakama/core/contract";
+import type { JsonSchema } from "@airin/core/contract";
 
 type ExampleValue =
   | string

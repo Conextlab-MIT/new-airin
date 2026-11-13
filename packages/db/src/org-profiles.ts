@@ -1,8 +1,8 @@
 import {
   DEFAULT_BUNDLED_SKILL_NAMES,
   nanoid,
-  SUPER_NAKAMA_BUNDLED_SKILL_NAMES,
-} from "@nakama/core";
+  SUPER_AIRIN_BUNDLED_SKILL_NAMES,
+} from "@airin/core";
 import {
   BASH_TOOL_ID,
   BROWSER_TOOL_IDS,
@@ -12,8 +12,8 @@ import {
   LIST_PROFILE_SESSIONS_TOOL_ID,
   READ_PROFILE_SESSION_TOOL_ID,
   SAVE_ARTIFACT_TOOL_ID,
-} from "@nakama/core/tools/protected";
-import { SUPER_NAKAMA_SYSTEM_PROMPT } from "./constants";
+} from "@airin/core/tools/protected";
+import { SUPER_AIRIN_SYSTEM_PROMPT } from "./constants";
 import type { DatabaseAdapter, StoredProfileRecord } from "./types";
 
 // The mailbox is one config for the whole install, so email is opt-in. This
@@ -59,11 +59,11 @@ export async function ensureProfileDefaultBundledSkills(
   }
 }
 
-export async function ensureProfileSuperNakamaBundledSkills(
+export async function ensureProfileSuperAirinBundledSkills(
   db: DatabaseAdapter,
   profileId: string
 ): Promise<void> {
-  for (const name of SUPER_NAKAMA_BUNDLED_SKILL_NAMES) {
+  for (const name of SUPER_AIRIN_BUNDLED_SKILL_NAMES) {
     const skill = await db.getSkillByName(name);
 
     if (skill) {
@@ -92,9 +92,9 @@ export async function ensureBundledSkillsAssigned(
 
     await ensureProfileDefaultBundledSkills(db, profile.id);
 
-    // Boot seeds Super Nakamas before skill rows sync, so a new skill lands here.
+    // Boot seeds Airin before skill rows sync, so a new skill lands here.
     if (profile.isSuper) {
-      await ensureProfileSuperNakamaBundledSkills(db, profile.id);
+      await ensureProfileSuperAirinBundledSkills(db, profile.id);
     }
   }
 }
@@ -133,10 +133,10 @@ export async function seedOrgDefaultProfile(
   return profile;
 }
 
-export async function seedOrgSuperNakamaProfile(
+export async function seedOrgSuperAirinProfile(
   db: DatabaseAdapter,
   orgId: string,
-  options: SuperNakamaSeedOptions = {}
+  options: SuperAirinSeedOptions = {}
 ): Promise<StoredProfileRecord> {
   const existing = (await db.listProfilesForOrg(orgId)).find(
     (profile) => profile.isSuper
@@ -150,9 +150,9 @@ export async function seedOrgSuperNakamaProfile(
     isDefault: false,
     isSuper: true,
     model: null,
-    name: "Super Nakama",
+    name: "Airin",
     orgId,
-    systemPrompt: SUPER_NAKAMA_SYSTEM_PROMPT,
+    systemPrompt: SUPER_AIRIN_SYSTEM_PROMPT,
     updatedAt: now,
   };
 
@@ -162,17 +162,17 @@ export async function seedOrgSuperNakamaProfile(
 
   await ensureProfileDefaultBuiltinTools(db, profile.id, !!existing);
   await db.unassignToolFromProfile(profile.id, BUILTIN_TOOL_IDS.delete_file);
-  await ensureSuperNakamaBashTool(db, profile.id, options.grantBash);
-  await ensureSuperNakamaSessionTools(db, profile.id);
+  await ensureSuperAirinBashTool(db, profile.id, options.grantBash);
+  await ensureSuperAirinSessionTools(db, profile.id);
   await ensureProfileDefaultBundledSkills(db, profile.id);
-  await ensureProfileSuperNakamaBundledSkills(db, profile.id);
+  await ensureProfileSuperAirinBundledSkills(db, profile.id);
 
   return profile;
 }
 
-export async function ensureOrgSuperNakamaProfiles(
+export async function ensureOrgSuperAirinProfiles(
   db: DatabaseAdapter,
-  options: SuperNakamaSeedOptions = {}
+  options: SuperAirinSeedOptions = {}
 ): Promise<void> {
   const orgs = await db.listOrganizations();
 
@@ -181,7 +181,7 @@ export async function ensureOrgSuperNakamaProfiles(
       continue;
     }
 
-    await seedOrgSuperNakamaProfile(db, org.id, options);
+    await seedOrgSuperAirinProfile(db, org.id, options);
   }
 }
 
@@ -357,7 +357,7 @@ export async function ensureBrowserToolDefinitions(
   }
 }
 
-export async function ensureSuperNakamaSessionTools(
+export async function ensureSuperAirinSessionTools(
   db: DatabaseAdapter,
   profileId: string
 ): Promise<void> {
@@ -366,12 +366,12 @@ export async function ensureSuperNakamaSessionTools(
   await db.assignToolToProfile(profileId, READ_PROFILE_SESSION_TOOL_ID);
 }
 
-export interface SuperNakamaSeedOptions {
-  /** False when the deployment turned bash off (NAKAMA_TENANT_BASH=0). */
+export interface SuperAirinSeedOptions {
+  /** False when the deployment turned bash off (AIRIN_TENANT_BASH=0). */
   grantBash?: boolean;
 }
 
-export async function ensureSuperNakamaBashTool(
+export async function ensureSuperAirinBashTool(
   db: DatabaseAdapter,
   profileId: string,
   grantBash = true

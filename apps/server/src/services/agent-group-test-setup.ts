@@ -1,4 +1,4 @@
-import type { ProfileSummary } from "@nakama/core";
+import type { ProfileSummary } from "@airin/core";
 import type { GroupTurnRunInput } from "../tools/sub-agent-shared";
 import { AgentGroupService } from "./agent-group-service";
 

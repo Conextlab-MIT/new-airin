@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { formatAgentQuestionnaireAnswersMessage } from "@nakama/core/agent-questionnaire";
-import type { DatabaseAdapter, StoredRegressionCaseRecord } from "@nakama/db";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { formatAgentQuestionnaireAnswersMessage } from "@airin/core/agent-questionnaire";
+import type { DatabaseAdapter, StoredRegressionCaseRecord } from "@airin/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { AuthService } from "../../services/auth-service";
 import { sessionTurnRegistry } from "../../services/session-turn-registry";

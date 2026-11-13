@@ -1,8 +1,8 @@
-import { z } from "@hono/zod-openapi";
 import type {
   SkillInstallPreviewResponse,
   SkillsMarketplaceResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
+import { z } from "@hono/zod-openapi";
 import {
   previewSkillInstall,
   searchSkillsMarketplace,

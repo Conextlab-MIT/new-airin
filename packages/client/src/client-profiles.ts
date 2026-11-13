@@ -5,7 +5,7 @@ import type {
   CloneProfileRequest,
   CreateMcpServerRequest,
   CreateProfileRequest,
-  CreateProfileWithSuperNakamaRequest,
+  CreateProfileWithSuperAirinRequest,
   CreateRegressionCaseRequest,
   CreateSkillRequest,
   CreateToolRequest,
@@ -42,7 +42,7 @@ import type {
   ToolSourceResponse,
   UpdateMcpServerRequest,
   UpdateProfileRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { SettingsClient } from "./client-settings";
 
 /** Agents and what they carry: tools, MCP servers, skills. */
@@ -92,10 +92,10 @@ export class ProfilesClient extends SettingsClient {
     });
   }
 
-  async createProfileWithSuperNakama(
-    request: CreateProfileWithSuperNakamaRequest
+  async createProfileWithSuperAirin(
+    request: CreateProfileWithSuperAirinRequest
   ): Promise<ProfileResponse> {
-    return this.request<ProfileResponse>("/v1/profiles/with-super-nakama", {
+    return this.request<ProfileResponse>("/v1/profiles/with-super-airin", {
       body: JSON.stringify(request),
       method: "POST",
     });
@@ -574,6 +574,29 @@ export class ProfilesClient extends SettingsClient {
   ): Promise<ListRegressionCasesResponse> {
     return this.request<ListRegressionCasesResponse>(
       `/v1/profiles/${encodeURIComponent(profileId)}/regression-cases?offset=${offset}`
+    );
+  }
+
+  async listAgentMarketplace(): Promise<{
+    agents: Array<{
+      category: string;
+      characterId: string;
+      composioApps: string[];
+      description: string;
+      id: string;
+      installed: boolean;
+      name: string;
+    }>;
+  }> {
+    return this.request("/v1/agent-marketplace");
+  }
+
+  async installAgentMarketplaceAgent(
+    catalogId: string
+  ): Promise<{ profile: ProfileResponse }> {
+    return this.request(
+      `/v1/agent-marketplace/${encodeURIComponent(catalogId)}/install`,
+      { method: "POST" }
     );
   }
 }

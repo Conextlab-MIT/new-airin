@@ -1,6 +1,6 @@
-import { NakamaClient } from "@nakama/client";
-import { formatClientError } from "@nakama/core/api-error";
+import { AirinClient } from "@airin/client";
+import { formatClientError } from "@airin/core/api-error";
 
-export const client = new NakamaClient({ baseUrl: "" });
+export const client = new AirinClient({ baseUrl: "" });
 
 export { formatClientError as formatError };

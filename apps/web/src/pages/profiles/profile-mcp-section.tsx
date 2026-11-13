@@ -1,5 +1,5 @@
-import type { McpServerSummary, ProfileDetail } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { McpServerSummary, ProfileDetail } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Add01Icon,

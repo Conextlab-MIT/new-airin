@@ -1,5 +1,5 @@
-import { Button } from "@nakama/ui/button";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { cn } from "@airin/ui/utils";
 import { Cancel01Icon } from "hugeicons-react";
 import {
   type PointerEvent,

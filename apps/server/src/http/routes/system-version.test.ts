@@ -2,10 +2,10 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getNakamaVersion } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { getAirinVersion } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { asTestFetch } from "../../providers/test-helpers";
-import { checkNakamaVersion } from "../../services/system-status-service";
+import { checkAirinVersion } from "../../services/system-status-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import {
@@ -14,14 +14,14 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-system-version-routes-test-");
+setupTestConfigDir("airin-system-version-routes-test-");
 
 describe("GET /v1/system/version", () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    delete process.env.NAKAMA_DISABLE_UPDATE_CHECK;
+    delete process.env.AIRIN_DISABLE_UPDATE_CHECK;
   });
 
   test("compares the running version with the newest release, platform admins only", async () => {
@@ -49,9 +49,9 @@ describe("GET /v1/system/version", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      current: getNakamaVersion(),
+      current: getAirinVersion(),
       latest: "999.0.0",
-      releaseUrl: "https://github.com/ahmadrosid/nakama/releases/tag/v999.0.0",
+      releaseUrl: "https://github.com/ahmadrosid/airin/releases/tag/v999.0.0",
       updateAvailable: true,
     });
 
@@ -72,8 +72,8 @@ describe("GET /v1/system/version", () => {
     expect((await check(tenantSession, tenantAdmin.orgId)).status).toBe(403);
   });
 
-  test("NAKAMA_DISABLE_UPDATE_CHECK answers 404 without fetching the latest version", async () => {
-    process.env.NAKAMA_DISABLE_UPDATE_CHECK = "true";
+  test("AIRIN_DISABLE_UPDATE_CHECK answers 404 without fetching the latest version", async () => {
+    process.env.AIRIN_DISABLE_UPDATE_CHECK = "true";
 
     const { app, databaseAdapter } = createMinimalHonoApp({
       agent: { listProfiles: async () => ({ profiles: [] }) },
@@ -111,7 +111,7 @@ describe("GET /v1/system/version", () => {
     const updates = await Promise.all(
       ["0.4.60", "0.4.59", "0.3.99", "0.4.61", "dev"].map(
         async (current) =>
-          (await checkNakamaVersion(current, later)).updateAvailable
+          (await checkAirinVersion(current, later)).updateAvailable
       )
     );
 
@@ -125,11 +125,11 @@ describe("GET /v1/system/version", () => {
     const down = mock(async () => new Response("down", { status: 503 }));
     globalThis.fetch = asTestFetch(down);
 
-    await expect(checkNakamaVersion("0.4.59", start)).rejects.toMatchObject({
+    await expect(checkAirinVersion("0.4.59", start)).rejects.toMatchObject({
       status: 502,
     });
     await expect(
-      checkNakamaVersion("0.4.59", start + 30_000)
+      checkAirinVersion("0.4.59", start + 30_000)
     ).rejects.toMatchObject({ status: 502 });
 
     expect(down).toHaveBeenCalledTimes(1);
@@ -143,15 +143,15 @@ describe("GET /v1/system/version", () => {
     globalThis.fetch = asTestFetch(mock(async () => new Response(broken)));
 
     await expect(
-      checkNakamaVersion("0.4.59", start + 2 * 60_000)
+      checkAirinVersion("0.4.59", start + 2 * 60_000)
     ).rejects.toMatchObject({ status: 502 });
 
     globalThis.fetch = asTestFetch(mock(async () => new Response("v0.4.60\n")));
 
-    expect(await checkNakamaVersion("0.4.59", start + 4 * 60_000)).toEqual({
+    expect(await checkAirinVersion("0.4.59", start + 4 * 60_000)).toEqual({
       current: "0.4.59",
       latest: "0.4.60",
-      releaseUrl: "https://github.com/ahmadrosid/nakama/releases/tag/v0.4.60",
+      releaseUrl: "https://github.com/ahmadrosid/airin/releases/tag/v0.4.60",
       updateAvailable: true,
     });
   });
@@ -188,20 +188,20 @@ describe("GET /v1/system/version", () => {
         })
       );
 
-    const dir = mkdtempSync(join(tmpdir(), "nakama-updates-"));
-    const backups = mkdtempSync(join(tmpdir(), "nakama-backups-"));
+    const dir = mkdtempSync(join(tmpdir(), "airin-updates-"));
+    const backups = mkdtempSync(join(tmpdir(), "airin-backups-"));
 
     for (const name of [
       "pre-upgrade-0.4.59-20261020T010000Z.tar.gz",
       "pre-upgrade-0.4.59-20261027T033509Z.tar.gz",
-      `pre-upgrade-${getNakamaVersion()}-20261027T040000Z.tar.gz`,
-      "nakama-2026-10-27T033320Z.zip.enc",
+      `pre-upgrade-${getAirinVersion()}-20261027T040000Z.tar.gz`,
+      "airin-2026-10-27T033320Z.zip.enc",
     ]) {
       writeFileSync(join(backups, name), "");
     }
 
-    process.env.NAKAMA_UPDATER_DIR = dir;
-    process.env.NAKAMA_BACKUP_DIR = backups;
+    process.env.AIRIN_UPDATER_DIR = dir;
+    process.env.AIRIN_BACKUP_DIR = backups;
 
     try {
       expect((await upgrade(admin, admin.orgId!, "999.0.0")).status).toBe(409);
@@ -279,8 +279,8 @@ describe("GET /v1/system/version", () => {
         );
       }
     } finally {
-      delete process.env.NAKAMA_UPDATER_DIR;
-      delete process.env.NAKAMA_BACKUP_DIR;
+      delete process.env.AIRIN_UPDATER_DIR;
+      delete process.env.AIRIN_BACKUP_DIR;
     }
   });
 });

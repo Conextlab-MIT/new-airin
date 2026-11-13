@@ -4,9 +4,9 @@ import {
   InputGroupAddon,
   InputGroupButton,
   InputGroupTextarea,
-} from "@nakama/ui/input-group";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/input-group";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { ArrowTurnDownIcon, Cancel01Icon, SquareIcon } from "hugeicons-react";
 import type {
   ChangeEvent,

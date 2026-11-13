@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import type { ComposioToolkitSummary } from "@nakama/core/contract";
+import type { ComposioToolkitSummary } from "@airin/core/contract";
 import { client } from "@/lib/client";
 import {
   connectComposioApp,

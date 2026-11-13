@@ -1,15 +1,15 @@
 import { copyFile, lstat, mkdir, open, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import type { AgentChatSession } from "@nakama/agent";
-import type { ChatMessage, ToolDefinition } from "@nakama/core";
+import type { AgentChatSession } from "@airin/agent";
+import type { ChatMessage, ToolDefinition } from "@airin/core";
 import {
   assertArtifactShareStoragePath,
   createId,
   getProfileSoulDir,
   getUserConfigDir,
   jsonSchemaFromZod,
-} from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import { z } from "zod";
 
 // Serialize archive mutations per org, including profile deletion and its cascade.

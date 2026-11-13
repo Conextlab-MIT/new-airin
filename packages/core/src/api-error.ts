@@ -11,7 +11,7 @@ const ApiErrorPayloadSchema = z.object({
 
 const ErrorMessageSchema = z.object({ message: z.string() });
 
-export class NakamaApiError extends Error {
+export class AirinApiError extends Error {
   readonly code?: string;
   readonly status: number;
   readonly path?: string;
@@ -26,7 +26,7 @@ export class NakamaApiError extends Error {
     options?: Pick<ApiErrorResponse, "code" | "totpEnabled">
   ) {
     super(message);
-    this.name = "NakamaApiError";
+    this.name = "AirinApiError";
     this.code = options?.code;
     this.status = status;
     this.path = path;
@@ -36,10 +36,10 @@ export class NakamaApiError extends Error {
 }
 
 /** 401 after local-token reload did not yield a different token (or file missing). */
-export class NakamaAuthExpiredError extends NakamaApiError {
+export class AirinAuthExpiredError extends AirinApiError {
   constructor(message: string, path?: string) {
     super(message, 401, path);
-    this.name = "NakamaAuthExpiredError";
+    this.name = "AirinAuthExpiredError";
   }
 }
 
@@ -48,7 +48,7 @@ export const MODEL_CONNECTION_CLOSED_MESSAGE =
   "The model connection closed before the reply finished. Try again.";
 
 /** A provider stream broke after it started. One more try can work. */
-export class ProviderStreamInterruptedError extends NakamaApiError {
+export class ProviderStreamInterruptedError extends AirinApiError {
   constructor(message: string) {
     super(message, 502);
     this.name = "ProviderStreamInterruptedError";
@@ -125,10 +125,10 @@ export function fallbackApiErrorMessage(status: number): string {
     case 502:
     case 503:
     case 504:
-      return "The Nakama server is unavailable. Make sure it is running.";
+      return "The Airin server is unavailable. Make sure it is running.";
     default:
       if (status >= 500) {
-        return "The server encountered an error. Try again or restart the Nakama server.";
+        return "The server encountered an error. Try again or restart the Airin server.";
       }
 
       return `Request failed (${status}).`;
@@ -136,17 +136,17 @@ export function fallbackApiErrorMessage(status: number): string {
 }
 
 export function formatClientError<ErrorValue>(error: ErrorValue): string {
-  if (error instanceof NakamaApiError) {
+  if (error instanceof AirinApiError) {
     return error.message;
   }
 
   if (error instanceof Error) {
     if (isNetworkError(error)) {
-      return "Could not reach the Nakama server. Make sure it is running.";
+      return "Could not reach the Airin server. Make sure it is running.";
     }
 
     if (isStreamDisconnectError(error)) {
-      return "The connection closed before the agent finished. Restart the Nakama server, then try again. Long automations can take a minute or more.";
+      return "The connection closed before the agent finished. Restart the Airin server, then try again. Long automations can take a minute or more.";
     }
 
     const message = error.message.trim();
@@ -194,7 +194,7 @@ export function formatAutomationRunError<ErrorValue>(
 }
 
 export function formatServerError<ErrorValue>(error: ErrorValue): string {
-  if (error instanceof NakamaApiError) {
+  if (error instanceof AirinApiError) {
     return error.message;
   }
 

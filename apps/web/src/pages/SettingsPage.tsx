@@ -1,6 +1,6 @@
-import { DEMO_LOGIN_HOST } from "@nakama/core/demo-login";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
+import { DEMO_LOGIN_HOST } from "@airin/core/demo-login";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -8,13 +8,21 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ComposioSettingsCard } from "@/components/ComposioSettingsCard";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { LocalAuthTokenCard } from "@/components/LocalAuthTokenCard";
+import { WebPushToggle } from "@/components/notifications/web-push-toggle";
 import { BrowserRuntimeSettingsCard } from "@/components/settings/BrowserRuntimeSettingsCard";
 import { BrowserSessionsCard } from "@/components/settings/BrowserSessionsCard";
 import { DataPortabilityPanel } from "@/components/settings/DataPortabilityPanel";
@@ -32,9 +40,13 @@ import { TimezoneSelect } from "@/components/TimezoneSelect";
 import { UserContextSettings } from "@/components/UserContextCard";
 import { useAppContext } from "@/context/use-app-context";
 import { useAuth } from "@/context/use-auth";
+import { useLocale } from "@/context/use-locale";
 import { useChatUsageVisible } from "@/hooks/use-chat-usage-visible";
+import { useSaveUserLanguage, useUserLanguage } from "@/hooks/use-language";
 import { useSaveUserTimezone, useUserTimezone } from "@/hooks/use-timezones";
 import { formatError } from "@/lib/client";
+import type { AppLocale } from "@/lib/locale";
+import { needsMfaEnrollment } from "@/lib/mfa";
 import { getBrowserTimezone } from "@/lib/timezones";
 
 function isDemoLoginHost(
@@ -59,6 +71,8 @@ export function SettingsPage() {
 
   const chatUsage = useChatUsageVisible();
   const version = health?.version?.trim();
+  const { t } = useLocale();
+  const mfaPending = needsMfaEnrollment(user);
 
   return (
     <>
@@ -77,7 +91,7 @@ export function SettingsPage() {
               <DialogTitle>Multi-factor authentication required</DialogTitle>
               <DialogDescription>
                 Your platform requires multi-factor authentication. Set up an
-                authenticator app below to continue using Nakama.
+                authenticator app below to continue using Airin.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -95,40 +109,68 @@ export function SettingsPage() {
         ) : null}
       </Dialog>
       <div className="mx-auto max-w-3xl space-y-10">
-        <SettingsSection title="General">
-          <Card className="w-full shadow-none">
-            <CardContent className="divide-y divide-border p-0">
-              <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3">
-                <p className="text-foreground text-sm">Appearance</p>
-                <ThemeToggle />
-              </div>
+        {mfaPending ? (
+          <SettingsSection title={t("settings.security")}>
+            <Card className="w-full shadow-none">
+              <CardContent className="px-4 py-3">
+                <p className="text-foreground text-sm">
+                  Multi-factor authentication is required on this platform. Set
+                  up a passkey or authenticator app below to continue.
+                </p>
+              </CardContent>
+            </Card>
+            <MfaSettingsCard />
+            <section id="sessions">
+              <BrowserSessionsCard />
+            </section>
+          </SettingsSection>
+        ) : (
+          <SettingsSection title={t("settings.general")}>
+            <Card className="w-full shadow-none">
+              <CardContent className="divide-y divide-border p-0">
+                <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3">
+                  <p className="text-foreground text-sm">
+                    {t("settings.appearance")}
+                  </p>
+                  <ThemeToggle />
+                </div>
 
-              <UserContextSettings />
+                <LanguageSettingsRow />
 
-              <div
-                className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3"
-                id="chat-usage-setting"
-              >
-                <p className="text-foreground text-sm">Token usage in chat</p>
-                <Switch
-                  aria-label="Token usage in chat"
-                  checked={chatUsage.visible}
-                  onCheckedChange={chatUsage.toggle}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </SettingsSection>
+                <UserContextSettings />
 
-        <SettingsSection title="Security">
-          <section id="sessions">
-            <BrowserSessionsCard />
-          </section>
+                <div
+                  className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3"
+                  id="chat-usage-setting"
+                >
+                  <p className="text-foreground text-sm">
+                    {t("settings.tokenUsage")}
+                  </p>
+                  <Switch
+                    aria-label={t("settings.tokenUsage")}
+                    checked={chatUsage.visible}
+                    onCheckedChange={chatUsage.toggle}
+                  />
+                </div>
 
-          <MfaSettingsCard />
-        </SettingsSection>
+                <div className="px-2.5 py-2" id="notifications-setting">
+                  <p className="mb-1 px-1.5 text-foreground text-sm">
+                    {t("settings.notifications")}
+                  </p>
+                  <WebPushToggle showTest />
+                </div>
+              </CardContent>
+            </Card>
 
-        {version || isPlatformAdmin ? (
+            <section id="sessions">
+              <BrowserSessionsCard />
+            </section>
+
+            <MfaSettingsCard />
+          </SettingsSection>
+        )}
+
+        {!mfaPending && (version || isPlatformAdmin) ? (
           <InstanceSettings
             isDemo={isDemo}
             isPlatformAdmin={isPlatformAdmin}
@@ -141,7 +183,93 @@ export function SettingsPage() {
   );
 }
 
+export function LanguageSettingsRow() {
+  const { locale, setLocale, t } = useLocale();
+  const [hint, setHint] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { data: savedLanguage } = useUserLanguage();
+  const saveLanguageMutation = useSaveUserLanguage();
+  const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (!savedLanguage || hydratedRef.current) {
+      return;
+    }
+
+    hydratedRef.current = true;
+    setLocale(savedLanguage);
+  }, [savedLanguage, setLocale]);
+
+  useEffect(() => {
+    if (!hint) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setHint(null), 2500);
+
+    return () => window.clearTimeout(timeout);
+  }, [hint]);
+
+  const handleChange = useCallback(
+    (next: AppLocale) => {
+      const previous = locale;
+      setError(null);
+      setHint(null);
+      setLocale(next);
+
+      saveLanguageMutation.mutate(next, {
+        onError: (err) => {
+          setLocale(savedLanguage ?? previous);
+          setError(formatError(err));
+        },
+        onSuccess: (saved) => {
+          setLocale(saved);
+          setHint(t("settings.saved"));
+        },
+      });
+    },
+    [locale, saveLanguageMutation, savedLanguage, setLocale, t]
+  );
+
+  return (
+    <div
+      aria-busy={saveLanguageMutation.isPending || undefined}
+      className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3"
+    >
+      <div className="min-w-0 space-y-0.5">
+        <p className="text-foreground text-sm">{t("settings.language")}</p>
+        <p className="text-muted-foreground text-xs">
+          {t("settings.languageHint")}
+        </p>
+        {error ? (
+          <p className="text-destructive text-xs" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {hint ? (
+          <p
+            className="text-emerald-700 text-xs dark:text-emerald-300"
+            role="status"
+          >
+            {hint}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-2">
+        {saveLanguageMutation.isPending ? (
+          <Spinner className="size-4 text-muted-foreground" />
+        ) : null}
+        <LanguageToggle
+          disabled={saveLanguageMutation.isPending}
+          onSelect={handleChange}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function TimezoneSettingsRow() {
+  const { t } = useLocale();
   const [timezone, setTimezone] = useState(() => getBrowserTimezone());
   const [hint, setHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -178,11 +306,11 @@ export function TimezoneSettingsRow() {
         },
         onSuccess: (saved) => {
           setTimezone(saved);
-          setHint("Saved");
+          setHint(t("settings.saved"));
         },
       });
     },
-    [saveTimezoneMutation, savedTimezone]
+    [saveTimezoneMutation, savedTimezone, t]
   );
 
   return (
@@ -191,7 +319,7 @@ export function TimezoneSettingsRow() {
       className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3"
     >
       <div className="min-w-0 space-y-0.5">
-        <p className="text-foreground text-sm">Timezone</p>
+        <p className="text-foreground text-sm">{t("settings.timezone")}</p>
         {error ? (
           <p className="text-destructive text-xs" role="alert">
             {error}
@@ -241,8 +369,10 @@ function InstanceSettings({
   updateCheckEnabled: boolean;
   version: string | undefined;
 }) {
+  const { t } = useLocale();
+
   return (
-    <SettingsSection title="Instance">
+    <SettingsSection title={t("settings.instance")}>
       <Card className="w-full shadow-none">
         <CardContent className="divide-y divide-border p-0">
           {version ? (
@@ -256,6 +386,18 @@ function InstanceSettings({
 
           {/* Install-wide: the callback/share base for every organization. */}
           {isPlatformAdmin ? <WebPublicUrlSettingsRow /> : null}
+
+          {isPlatformAdmin ? (
+            <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <p className="text-foreground text-sm">Platform overview</p>
+              <Link
+                className="text-primary text-sm underline-offset-4 hover:underline"
+                to="/platform"
+              >
+                Open
+              </Link>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

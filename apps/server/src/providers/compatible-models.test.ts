@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core";
-import { USER_PROVIDER_NAMES } from "@nakama/core/provider-resolution";
+import { AirinApiError } from "@airin/core";
+import { USER_PROVIDER_NAMES } from "@airin/core/provider-resolution";
 import { serve } from "bun";
 import {
   customModelEntryFromRemoteRecord,
@@ -405,15 +405,15 @@ for (const status of [401, 403, 503] as const) {
       );
       expect.unreachable("expected discovery to fail");
     } catch (error) {
-      expect(error).toBeInstanceOf(NakamaApiError);
+      expect(error).toBeInstanceOf(AirinApiError);
       // SAFETY: The test reaches this branch with the named error type from the provider contract.
-      expect((error as NakamaApiError).status).toBe(status === 503 ? 502 : 400);
+      expect((error as AirinApiError).status).toBe(status === 503 ? 502 : 400);
       // SAFETY: The test reaches this branch with the named error type from the provider contract.
-      expect((error as NakamaApiError).message).not.toContain(upstreamBody);
+      expect((error as AirinApiError).message).not.toContain(upstreamBody);
 
       if (status !== 503) {
         // SAFETY: The test reaches this branch with the named error type from the provider contract.
-        expect((error as NakamaApiError).message).toContain("API key");
+        expect((error as AirinApiError).message).toContain("API key");
       }
     } finally {
       warn.mockRestore();

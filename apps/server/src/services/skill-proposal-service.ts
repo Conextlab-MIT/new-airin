@@ -1,24 +1,24 @@
 import { readFile } from "node:fs/promises";
 import {
+  AirinApiError,
   archiveSkillDirectory,
   detectOrgMemoryInjectionWarnings,
   isGlobalSkillSourcePath,
   isPathWithinProfileSkillsDir,
-  NakamaApiError,
   parseRawProfileSkillContent,
   resolveProfileSkillSupportingFilePath,
-} from "@nakama/core";
-import type { SkillProposal } from "@nakama/core/contract";
+} from "@airin/core";
+import type { SkillProposal } from "@airin/core/contract";
 import {
   assertNotBundledSkillName,
   assertValidSkillName,
   prepareSkillPatch,
-} from "@nakama/core/skills/write";
+} from "@airin/core/skills/write";
 import type {
   DatabaseAdapter,
   SkillProposalAction,
   StoredSkillProposal,
-} from "@nakama/db";
+} from "@airin/db";
 import { isSkillWriteApprovalRequired } from "./skill-write-approval";
 import type { SkillsService } from "./skills-service";
 
@@ -84,11 +84,11 @@ export class SkillProposalService {
     const profile = await db.getProfileForOrg(input.profileId, input.orgId);
 
     if (!profile) {
-      throw new NakamaApiError("Profile not found.", 404);
+      throw new AirinApiError("Profile not found.", 404);
     }
 
     if (await db.getSharedAgentInstance(input.orgId, input.profileId)) {
-      throw new NakamaApiError("Shared agent skills are read-only.", 403);
+      throw new AirinApiError("Shared agent skills are read-only.", 403);
     }
 
     if (input.action === "create") {
@@ -153,11 +153,11 @@ export class SkillProposalService {
     }
 
     if (proposal.status !== "pending") {
-      throw new NakamaApiError("Only pending proposals can be approved.", 400);
+      throw new AirinApiError("Only pending proposals can be approved.", 400);
     }
 
     if (await db.getSharedAgentInstance(orgId, proposal.profileId)) {
-      throw new NakamaApiError("Shared agent skills are read-only.", 403);
+      throw new AirinApiError("Shared agent skills are read-only.", 403);
     }
 
     const changeMeta = {
@@ -169,7 +169,7 @@ export class SkillProposalService {
       const content = proposal.content;
 
       if (!content?.trim()) {
-        throw new NakamaApiError("Create proposal is missing content.", 400);
+        throw new AirinApiError("Create proposal is missing content.", 400);
       }
 
       parseRawProfileSkillContent(content, orgId, proposal.profileId);
@@ -190,10 +190,7 @@ export class SkillProposalService {
       const newString = proposal.patchNewString;
 
       if (oldString === null || oldString === "" || newString === null) {
-        throw new NakamaApiError(
-          "Patch proposal is missing patch fields.",
-          400
-        );
+        throw new AirinApiError("Patch proposal is missing patch fields.", 400);
       }
 
       await skills.patchAssignedProfileSkill(
@@ -208,7 +205,7 @@ export class SkillProposalService {
       const content = proposal.content;
 
       if (!content?.trim()) {
-        throw new NakamaApiError("Edit proposal is missing content.", 400);
+        throw new AirinApiError("Edit proposal is missing content.", 400);
       }
 
       await skills.editAssignedProfileSkill(
@@ -224,7 +221,7 @@ export class SkillProposalService {
       const relativePath = proposal.relativePath;
 
       if (content === null || !relativePath?.trim()) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Write-file proposal is missing path or content.",
           400
         );
@@ -241,7 +238,7 @@ export class SkillProposalService {
       const relativePath = proposal.relativePath;
 
       if (!relativePath?.trim()) {
-        throw new NakamaApiError("Remove-file proposal is missing path.", 400);
+        throw new AirinApiError("Remove-file proposal is missing path.", 400);
       }
 
       await skills.removeAssignedProfileSkillSupportingFile(
@@ -260,7 +257,7 @@ export class SkillProposalService {
       );
 
       if ((await readFile(absolutePath, "utf8")) !== proposal.content) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Skill code changed since review was requested.",
           409
         );
@@ -302,7 +299,7 @@ export class SkillProposalService {
     }
 
     if (proposal.status !== "pending") {
-      throw new NakamaApiError("Only pending proposals can be rejected.", 400);
+      throw new AirinApiError("Only pending proposals can be rejected.", 400);
     }
 
     const reviewedAt = new Date().toISOString();
@@ -330,14 +327,14 @@ export class SkillProposalService {
     const content = input.content;
 
     if (!content?.trim()) {
-      throw new NakamaApiError("content is required for create.", 400);
+      throw new AirinApiError("content is required for create.", 400);
     }
 
     this.assertContentSize(content);
     let supportingBytes = 0;
 
     if ((input.supportingFiles?.length ?? 0) > 500) {
-      throw new NakamaApiError("Too many supporting files.", 400);
+      throw new AirinApiError("Too many supporting files.", 400);
     }
 
     const parsed = parseRawProfileSkillContent(
@@ -357,7 +354,7 @@ export class SkillProposalService {
     }
 
     if (supportingBytes > 10 * 1024 * 1024) {
-      throw new NakamaApiError("Skill supporting files are too large.", 400);
+      throw new AirinApiError("Skill supporting files are too large.", 400);
     }
 
     const { name } = parsed;
@@ -373,7 +370,7 @@ export class SkillProposalService {
         existingByName.sourcePath
       )
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Skill "${name}" already exists globally or in another profile and cannot be created here.`,
         400
       );
@@ -423,11 +420,11 @@ export class SkillProposalService {
     const newString = input.newString;
 
     if (oldString === undefined || oldString === "") {
-      throw new NakamaApiError("old_string is required for patch.", 400);
+      throw new AirinApiError("old_string is required for patch.", 400);
     }
 
     if (newString === undefined) {
-      throw new NakamaApiError("new_string is required for patch.", 400);
+      throw new AirinApiError("new_string is required for patch.", 400);
     }
 
     this.assertPatchFieldSize(oldString);
@@ -541,7 +538,7 @@ export class SkillProposalService {
     const content = input.content;
 
     if (!content?.trim()) {
-      throw new NakamaApiError("content is required for edit.", 400);
+      throw new AirinApiError("content is required for edit.", 400);
     }
 
     this.assertContentSize(content);
@@ -553,7 +550,7 @@ export class SkillProposalService {
     );
 
     if (parsedName !== name) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Frontmatter name "${parsedName}" must match skill name "${name}".`,
         400
       );
@@ -594,13 +591,13 @@ export class SkillProposalService {
     const relativePath = input.relativePath?.trim();
 
     if (!relativePath) {
-      throw new NakamaApiError("path is required for write_file.", 400);
+      throw new AirinApiError("path is required for write_file.", 400);
     }
 
     const content = input.content;
 
     if (content === undefined) {
-      throw new NakamaApiError("content is required for write_file.", 400);
+      throw new AirinApiError("content is required for write_file.", 400);
     }
 
     this.assertContentSize(content);
@@ -648,7 +645,7 @@ export class SkillProposalService {
     const relativePath = input.relativePath?.trim();
 
     if (!relativePath) {
-      throw new NakamaApiError("path is required for remove_file.", 400);
+      throw new AirinApiError("path is required for remove_file.", 400);
     }
 
     resolveProfileSkillSupportingFilePath(
@@ -690,7 +687,7 @@ export class SkillProposalService {
     const relativePath = input.relativePath?.trim() ?? "";
 
     if (!/\.(?:py|js|ts|mjs|cjs|jsx|tsx)$/i.test(relativePath)) {
-      throw new NakamaApiError("Choose a skill code file to review.", 400);
+      throw new AirinApiError("Choose a skill code file to review.", 400);
     }
 
     const { absolutePath } = resolveProfileSkillSupportingFilePath(
@@ -818,7 +815,7 @@ export class SkillProposalService {
       const skill = byName.get(loserName);
 
       if (!skill) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           `Consolidate loser skill "${loserName}" is not assigned to this profile.`,
           400
         );
@@ -847,7 +844,7 @@ export class SkillProposalService {
     const proposal = await db.getSkillProposal(orgId, proposalId);
 
     if (!proposal) {
-      throw new NakamaApiError("Skill proposal not found.", 404);
+      throw new AirinApiError("Skill proposal not found.", 404);
     }
 
     return proposal;
@@ -863,18 +860,18 @@ export class SkillProposalService {
     const record = await db.getSkillByName(name, orgId);
 
     if (!record) {
-      throw new NakamaApiError(`Skill "${name}" not found.`, 404);
+      throw new AirinApiError(`Skill "${name}" not found.`, 404);
     }
 
     if (isGlobalSkillSourcePath(record.sourcePath)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Global skills cannot be modified by agents.",
         403
       );
     }
 
     if (!isPathWithinProfileSkillsDir(orgId, profileId, record.sourcePath)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Skill "${name}" is not owned by this profile.`,
         403
       );
@@ -885,7 +882,7 @@ export class SkillProposalService {
     const name = input.skillName?.trim();
 
     if (!name) {
-      throw new NakamaApiError("name is required.", 400);
+      throw new AirinApiError("name is required.", 400);
     }
 
     return assertValidSkillName(name);
@@ -893,7 +890,7 @@ export class SkillProposalService {
 
   private assertContentSize(content: string): void {
     if (Buffer.byteLength(content, "utf8") > MAX_SKILL_PROPOSAL_CONTENT_BYTES) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "SKILL.md content exceeds the proposal size limit.",
         400
       );
@@ -902,7 +899,7 @@ export class SkillProposalService {
 
   private assertPatchFieldSize(value: string): void {
     if (Buffer.byteLength(value, "utf8") > MAX_SKILL_PATCH_FIELD_LENGTH) {
-      throw new NakamaApiError("Patch field exceeds the size limit.", 400);
+      throw new AirinApiError("Patch field exceeds the size limit.", 400);
     }
   }
 
@@ -958,7 +955,7 @@ export class SkillProposalService {
 
   private requireDatabase(): DatabaseAdapter {
     if (!this.database) {
-      throw new NakamaApiError("Database not configured.", 500);
+      throw new AirinApiError("Database not configured.", 500);
     }
 
     return this.database;
@@ -966,7 +963,7 @@ export class SkillProposalService {
 
   private requireSkillsService(): SkillsService {
     if (!this.skillsService) {
-      throw new NakamaApiError("Skills service not configured.", 500);
+      throw new AirinApiError("Skills service not configured.", 500);
     }
 
     return this.skillsService;

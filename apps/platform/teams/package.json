@@ -1,5 +1,5 @@
 {
-  "name": "@nakama/teams",
+  "name": "@airin/teams",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,9 +9,9 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@airin/client": "workspace:*",
+    "@airin/core": "workspace:*",
     "@microsoft/teams.apps": "2.2.0",
-    "@nakama/client": "workspace:*",
-    "@nakama/core": "workspace:*",
     "zod": "^4.6.5"
   }
 }

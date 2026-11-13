@@ -1,9 +1,6 @@
-import type {
-  McpServerResponse,
-  McpServerSummary,
-} from "@nakama/core/contract";
-import { isPreinstalledMcpServerId } from "@nakama/core/mcp/preinstalled";
-import { Button } from "@nakama/ui/button";
+import type { McpServerResponse, McpServerSummary } from "@airin/core/contract";
+import { isPreinstalledMcpServerId } from "@airin/core/mcp/preinstalled";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +8,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 import { useEffect, useState } from "react";
 import { McpServerAuthorizeDialog } from "@/components/soul-tools/mcp-tab/McpServerAuthorizeDialog";
 import { McpServerDialog } from "@/components/soul-tools/mcp-tab/McpServerDialog";

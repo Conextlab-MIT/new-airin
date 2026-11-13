@@ -1,8 +1,8 @@
-import { buttonVariants } from "@nakama/ui/button-variants";
-import { cn } from "@nakama/ui/utils";
+import { buttonVariants } from "@airin/ui/button-variants";
+import { cn } from "@airin/ui/utils";
 import { PairingStepTile } from "@/components/integration-settings.shared";
 
-const DISCORD_SETUP_GUIDE_URL = "https://ahmadrosid.github.io/nakama/discord";
+const DISCORD_SETUP_GUIDE_URL = "https://ahmadrosid.github.io/airin/discord";
 
 const DISCORD_DEVELOPER_PORTAL_URL =
   "https://discord.com/developers/applications";

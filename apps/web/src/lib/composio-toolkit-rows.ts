@@ -3,7 +3,7 @@ import type {
   ComposioToolkitSummary,
   ComposioUserConnectionSummary,
   ListComposioToolkitsResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
 /**
  * The catalog is 200 apps, which buries the ones a team actually asks for. The

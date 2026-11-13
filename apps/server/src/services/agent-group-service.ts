@@ -1,5 +1,5 @@
-import type { ImageAttachment, OrgRole, ProfileSummary } from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
+import type { ImageAttachment, OrgRole, ProfileSummary } from "@airin/core";
+import { AirinApiError } from "@airin/core";
 import {
   type AgentGroup,
   type AgentGroupMessage,
@@ -11,10 +11,10 @@ import {
   type GroupRoster,
   groupRoster,
   groupSessionTitle,
-} from "@nakama/core/agent-groups";
-import { validateImageAttachments } from "@nakama/core/message-content";
-import { filterProfilesForChatAccess } from "@nakama/core/profiles";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core/agent-groups";
+import { validateImageAttachments } from "@airin/core/message-content";
+import { filterProfilesForChatAccess } from "@airin/core/profiles";
+import type { DatabaseAdapter } from "@airin/db";
 import {
   requireGroup,
   requireSession,
@@ -154,7 +154,7 @@ export class AgentGroupService {
 
   delete(orgId: string, userId: string, groupId: string): void {
     if (!deleteAgentGroup(orgId, userId, groupId)) {
-      throw new NakamaApiError("Group not found", 404);
+      throw new AirinApiError("Group not found", 404);
     }
 
     for (const run of this.runs.values()) {
@@ -187,7 +187,7 @@ export class AgentGroupService {
         Buffer.from(base64, "base64")
       )
     ) {
-      throw new NakamaApiError("Group not found", 404);
+      throw new AirinApiError("Group not found", 404);
     }
   }
 
@@ -199,7 +199,7 @@ export class AgentGroupService {
     const avatar = getAgentGroupAvatar(orgId, userId, groupId);
 
     if (!avatar) {
-      throw new NakamaApiError("Group image not found", 404);
+      throw new AirinApiError("Group image not found", 404);
     }
 
     return avatar;
@@ -390,7 +390,7 @@ export class AgentGroupService {
     changes: { pinned?: boolean; title?: string }
   ): void {
     if (!updateGroupSession(orgId, userId, groupId, sessionId, changes)) {
-      throw new NakamaApiError("Session not found", 404);
+      throw new AirinApiError("Session not found", 404);
     }
   }
 
@@ -403,7 +403,7 @@ export class AgentGroupService {
     const uploads = listGroupSessionUploads(orgId, sessionId);
 
     if (!deleteGroupSession(orgId, userId, groupId, sessionId)) {
-      throw new NakamaApiError("Session not found", 404);
+      throw new AirinApiError("Session not found", 404);
     }
 
     this.stopRun(sessionId);
@@ -620,7 +620,7 @@ export class AgentGroupService {
     kept: Partial<Pick<AgentGroup, "handles" | "memberIds">>
   ): Promise<Record<string, string>> {
     if (new Set(memberIds).size !== memberIds.length) {
-      throw new NakamaApiError("Each agent can join a group once.", 400);
+      throw new AirinApiError("Each agent can join a group once.", 400);
     }
 
     const { profiles } = await this.access(orgId, userId);
@@ -630,7 +630,7 @@ export class AgentGroupService {
     );
 
     if (!allowed) {
-      throw new NakamaApiError("You cannot use one of these agents.", 403);
+      throw new AirinApiError("You cannot use one of these agents.", 403);
     }
 
     // A group saved before handles were kept gets its old ones first, in the
@@ -686,7 +686,7 @@ export class AgentGroupService {
     return {
       orgRole: member.role,
       profiles: filterProfilesForChatAccess(profiles, {
-        excludeSuperNakama: true,
+        excludeSuperAirin: true,
         isPlatformAdmin: user.isPlatformAdmin === true,
         orgRole: member.role,
         userId,

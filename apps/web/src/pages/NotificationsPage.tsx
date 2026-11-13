@@ -1,5 +1,5 @@
-import { Card } from "@nakama/ui/card";
-import { Spinner } from "@nakama/ui/spinner";
+import { Card } from "@airin/ui/card";
+import { Spinner } from "@airin/ui/spinner";
 import { NotificationList } from "@/components/notifications/notification-list";
 import { WebPushToggle } from "@/components/notifications/web-push-toggle";
 import { useNotifications } from "@/hooks/use-notifications";

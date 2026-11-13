@@ -7,7 +7,7 @@ import { z } from "zod";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { base, cleanups, setup } from "./google-meet-extension-setup";
 
-setupTestConfigDir("nakama-meet-extension-test-");
+setupTestConfigDir("airin-meet-extension-test-");
 
 afterEach(async () => {
   setSystemTime();

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import { asTestFetch, streamFromChunks } from "../test-helpers";
 import { createAnthropicProvider } from "./index";
 
@@ -185,7 +185,7 @@ describe("Anthropic provider streaming", () => {
 
     const billing = refuse(402);
 
-    await expect(billing).rejects.toBeInstanceOf(NakamaApiError);
+    await expect(billing).rejects.toBeInstanceOf(AirinApiError);
     await expect(billing).rejects.toMatchObject({ status: 400 });
 
     // Anthropic sends an empty balance as a 400, not a 402.
@@ -198,7 +198,7 @@ describe("Anthropic provider streaming", () => {
 
     const invalid = refuse(400);
 
-    await expect(invalid).rejects.toBeInstanceOf(NakamaApiError);
+    await expect(invalid).rejects.toBeInstanceOf(AirinApiError);
     await expect(invalid).rejects.toMatchObject({ status: 502 });
   });
 });

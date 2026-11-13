@@ -1,4 +1,4 @@
-import type { AgentChannel, ToolDefinition } from "@nakama/core";
+import type { AgentChannel, ToolDefinition } from "@airin/core";
 import { SKILL_MANAGE_CHANNELS } from "../tools/skill-manage-tool";
 import type { SessionKind } from "./session-runtime";
 

@@ -1,4 +1,4 @@
-import { parseUserContext, renderUserContext } from "@nakama/core/user-context";
+import { parseUserContext, renderUserContext } from "@airin/core/user-context";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "@/context/use-app-context";
@@ -12,6 +12,12 @@ import {
   useUserContextQuery,
   useWriteUserContextMutation,
 } from "@/hooks/use-resource-mutations";
+import {
+  type BusinessVerticalId,
+  findLaundryWorkspaceOrg,
+  readBusinessVertical,
+  writeBusinessVertical,
+} from "@/lib/business-vertical";
 import { client, formatError } from "@/lib/client";
 import { pathForPage } from "@/lib/navigation";
 import {
@@ -37,8 +43,9 @@ function pickOnboardingView(input: {
   enabled: boolean;
   hasChecklist: boolean;
   phase: OnboardingPhase;
+  showBusinessType: boolean;
   showGoal: boolean;
-}): "checklist" | "finding" | "goal" | null {
+}): "business-type" | "checklist" | "finding" | "goal" | null {
   if (!input.enabled) {
     return null;
   }
@@ -49,6 +56,10 @@ function pickOnboardingView(input: {
 
   if (input.phase === "checklist" && input.hasChecklist) {
     return "checklist";
+  }
+
+  if (input.showBusinessType) {
+    return "business-type";
   }
 
   return input.showGoal ? "goal" : null;
@@ -147,6 +158,7 @@ function useSetupActions(profileId: string, openAboutYou: () => void) {
 }
 
 /** The empty chat's first-run path: goal prompt → finding steps → checklist. */
+// oxlint-disable-next-line react-doctor/no-high-complexity-react-function -- First-run steps share one hook so view state stays coherent.
 export function useOnboarding({
   cognito,
   cognitoLocked,
@@ -161,7 +173,7 @@ export function useOnboarding({
   readOnlySession: boolean;
 }) {
   const { health } = useAppContext();
-  const { activeOrg, user } = useAuth();
+  const { activeOrg, orgs, switchOrg, user } = useAuth();
 
   const enabled =
     health?.onboardingEnabled === true &&
@@ -173,6 +185,15 @@ export function useOnboarding({
   const orgId = activeOrg?.id ?? "";
   const userId = user?.id ?? "";
   const [goalSkipped, setGoalSkipped] = useState(false);
+  const [businessTypeSkipped, setBusinessTypeSkipped] = useState(false);
+  const [businessTypeError, setBusinessTypeError] = useState<string | null>(
+    null
+  );
+  const [businessTypePending, setBusinessTypePending] = useState(false);
+  const [businessVertical, setBusinessVertical] =
+    useState<BusinessVerticalId | null>(() =>
+      userId ? readBusinessVertical(userId) : null
+    );
   const [pendingGoal, setPendingGoal] = useState<string | null>(null);
   const [phase, setPhase] = useState<OnboardingPhase>("idle");
   const [aboutYouOpen, setAboutYouOpen] = useState(false);
@@ -222,12 +243,50 @@ export function useOnboarding({
     setPhase("idle");
   };
 
+  const showBusinessType =
+    enabled &&
+    Boolean(userId) &&
+    !businessTypeSkipped &&
+    businessVertical === null &&
+    phase === "idle";
+
   const view = pickOnboardingView({
     enabled,
     hasChecklist: stored !== null,
     phase,
+    showBusinessType,
     showGoal,
   });
+
+  const commitBusinessVertical = async (vertical: BusinessVerticalId) => {
+    if (!userId) {
+      return;
+    }
+
+    setBusinessTypeError(null);
+    setBusinessTypePending(true);
+
+    try {
+      if (vertical === "laundry") {
+        const laundryOrg = findLaundryWorkspaceOrg(orgs);
+
+        if (laundryOrg && laundryOrg.id !== activeOrg?.id) {
+          await switchOrg(laundryOrg.id);
+        } else if (!laundryOrg) {
+          setBusinessTypeError(
+            "No Laundry demo workspace on this install yet. You can still chat with your current agents."
+          );
+        }
+      }
+
+      writeBusinessVertical(userId, vertical);
+      setBusinessVertical(vertical);
+    } catch (cause) {
+      setBusinessTypeError(formatError(cause));
+    } finally {
+      setBusinessTypePending(false);
+    }
+  };
 
   const showPill =
     enabled && view === null && rows.some((row) => row.status === "open");
@@ -235,6 +294,9 @@ export function useOnboarding({
   return {
     aboutYouOpen,
     actionError: actions.error,
+    businessTypeError,
+    businessTypePending,
+    businessVertical,
     busyKey: actions.busyKey,
     finish: () => setPhase("idle"),
     goal: stored?.goal ?? pendingGoal,
@@ -244,6 +306,9 @@ export function useOnboarding({
     markAboutYouSaved: () =>
       stored && update({ ...stored, done: [...stored.done, "context:org"] }),
     openChecklist: () => setPhase("checklist"),
+    pickBusinessType: (vertical: BusinessVerticalId) => {
+      void commitBusinessVertical(vertical);
+    },
     pill: showPill
       ? {
           done: rows.filter((row) => row.status === "done").length,
@@ -263,6 +328,14 @@ export function useOnboarding({
     },
     savingGoal: writeUserContext.isPending,
     setAboutYouOpen,
+    skipBusinessType: () => {
+      setBusinessTypeSkipped(true);
+
+      if (userId) {
+        writeBusinessVertical(userId, "generic");
+        setBusinessVertical("generic");
+      }
+    },
     skipGoal: () => setGoalSkipped(true),
     skipRest: () => {
       if (stored) {

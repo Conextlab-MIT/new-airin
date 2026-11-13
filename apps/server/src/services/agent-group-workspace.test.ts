@@ -9,7 +9,7 @@ let root = "";
 let sharedDir = "";
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "nakama-group-workspace-"));
+  root = mkdtempSync(join(tmpdir(), "airin-group-workspace-"));
   sharedDir = join(root, "group", "shared");
 });
 

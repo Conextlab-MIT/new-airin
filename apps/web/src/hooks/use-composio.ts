@@ -1,11 +1,11 @@
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import {
   COMPOSIO_CUSTOM_AUTH_REQUIRED,
   type ListComposioToolkitsResponse,
   type UpdateComposioSettingsRequest,
   type UpdateProfileComposioToolkitsRequest,
-} from "@nakama/core/contract";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/core/contract";
+import { toast } from "@airin/ui/toast";
 import {
   queryOptions,
   useMutation,
@@ -20,7 +20,13 @@ import { queryKeys } from "@/lib/query-keys";
  * Composio OAuth connect links are hosted on composio.dev (and subdomains such
  * as backend.composio.dev). Reject anything else before assigning location.href.
  */
-export function isAllowedComposioRedirectUrl(url: string): boolean {
+export function isAllowedComposioRedirectUrl(
+  url: string | null | undefined
+): boolean {
+  if (!url) {
+    return false;
+  }
+
   try {
     const parsed = new URL(url);
 
@@ -114,10 +120,20 @@ export function useDisableComposioToolkit() {
 }
 
 export function useConnectComposioToolkit() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: (toolkitSlug: string) =>
       client.connectComposioToolkit(toolkitSlug),
     onSuccess: (response) => {
+      // No-auth toolkits finish in this call; OAuth ones leave for Composio.
+      if (response.connected || !response.redirectUrl) {
+        invalidateQueries(queryClient, queryKeys.composio.toolkits);
+        toast("Connected.");
+
+        return;
+      }
+
       // Composio hosts the account picker and consent, then redirects back to
       // /integrations through our OAuth callback.
       if (!isAllowedComposioRedirectUrl(response.redirectUrl)) {
@@ -134,7 +150,7 @@ export function useConnectComposioToolkit() {
 /** Composio has no managed OAuth app for this toolkit (for example Google Forms). */
 export function needsComposioCustomAuth(error: Error) {
   return (
-    error instanceof NakamaApiError &&
+    error instanceof AirinApiError &&
     error.code === COMPOSIO_CUSTOM_AUTH_REQUIRED
   );
 }
@@ -191,10 +207,14 @@ export async function connectComposioApp(input: {
     return null;
   }
 
-  const { redirectUrl } = await client.connectComposioToolkit(
+  const { connected, redirectUrl } = await client.connectComposioToolkit(
     input.toolkitSlug,
     { returnTo: input.returnTo }
   );
+
+  if (connected || !redirectUrl) {
+    return null;
+  }
 
   if (!isAllowedComposioRedirectUrl(redirectUrl)) {
     throw new Error("Blocked an unexpected Composio redirect URL.");

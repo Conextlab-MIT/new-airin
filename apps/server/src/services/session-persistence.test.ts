@@ -1,12 +1,12 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { createAgentChatSession } from "@nakama/agent";
-import type { ChatMessage, ProviderClient } from "@nakama/core";
+import { createAgentChatSession } from "@airin/agent";
+import type { ChatMessage, ProviderClient } from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   createSqliteDatabase,
   type DatabaseAdapter,
-} from "@nakama/db";
+} from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 import {
@@ -113,7 +113,7 @@ async function openDatabaseWithProfiles(
 }
 
 describe("session persistence", () => {
-  setupTestConfigDir("nakama-history-archive-");
+  setupTestConfigDir("airin-history-archive-");
 
   test("cached sessions and history tools recheck eligibility before exposing history", async () => {
     const db = createInMemoryDatabaseAdapter();

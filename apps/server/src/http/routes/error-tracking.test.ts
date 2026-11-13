@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { setupFreshInstallSession } from "../test-session-helpers";
@@ -10,8 +10,8 @@ import { setupFreshInstallSession } from "../test-session-helpers";
 const DSN = "https://publickey@errors.example.com/42";
 
 async function createApp() {
-  process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
-    join(tmpdir(), "nakama-error-tracking-route-")
+  process.env.AIRIN_CONFIG_DIR = await mkdtemp(
+    join(tmpdir(), "airin-error-tracking-route-")
   );
 
   const databaseAdapter = createInMemoryDatabaseAdapter();

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { ProviderClient, ToolDefinition } from "@nakama/core";
-import { webSearchTool } from "@nakama/core";
+import type { ProviderClient, ToolDefinition } from "@airin/core";
+import { webSearchTool } from "@airin/core";
 import { createAgentChatSession } from "./index";
 import { createCapturingProvider } from "./test-helpers";
 

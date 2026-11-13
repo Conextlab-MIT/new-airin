@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { WorkflowRunRecord } from "@nakama/core";
+import type { WorkflowRunRecord } from "@airin/core";
 import {
   buildWorkflowRunCard,
   parseRunWorkflowResult,

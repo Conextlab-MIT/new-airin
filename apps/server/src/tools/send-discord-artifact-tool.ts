@@ -11,13 +11,13 @@ import {
   type ToolContext,
   type ToolDefinition,
   WHATSAPP_ARTIFACT_DOCUMENT_MAX_BYTES,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   DISCORD_ARTIFACT_ATTACHMENT_MAX_BYTES,
   formatDiscordAttachmentSizeLimitMessage,
   formatDiscordUnsupportedAttachmentMessage,
   isDiscordAttachableArtifact,
-} from "@nakama/core/discord-attachment";
+} from "@airin/core/discord-attachment";
 
 const SEND_DISCORD_ARTIFACT_TOOL_NAME = "send_discord_artifact";
 
@@ -158,7 +158,7 @@ export const sendDiscordArtifactTool: ToolDefinition<
     properties: {
       path: {
         description:
-          "Artifact path relative to the profile artifacts folder (e.g. nakama-pitch-deck.pdf or artifacts/nakama-pitch-deck.pdf).",
+          "Artifact path relative to the profile artifacts folder (e.g. airin-pitch-deck.pdf or artifacts/airin-pitch-deck.pdf).",
         type: "string",
       },
     },

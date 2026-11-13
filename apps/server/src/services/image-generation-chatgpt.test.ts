@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError, type UserConfig } from "@nakama/core";
+import { AirinApiError, type UserConfig } from "@airin/core";
 import {
   generateImageWithOpenAI,
   resolveImageGenerationSelection,
@@ -169,7 +169,7 @@ describe("resolveImageGenerationSelection on a ChatGPT subscription", () => {
           chatgptRefreshToken: "",
         })),
       })
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 });
 
@@ -377,7 +377,7 @@ describe("generateImageWithOpenAI on a ChatGPT subscription", () => {
     };
 
     try {
-      await expect(run("free")).rejects.toBeInstanceOf(NakamaApiError);
+      await expect(run("free")).rejects.toBeInstanceOf(AirinApiError);
       await expect(run("free")).rejects.toMatchObject({ status: 400 });
       await expect(run("free")).rejects.not.toThrow(upstream);
       await expect(run("plus")).rejects.toThrow(upstream);
@@ -430,7 +430,7 @@ describe("generateImageWithOpenAI on a ChatGPT subscription", () => {
           model: "gpt-6-sol",
           prompt: "a cat",
         })
-      ).rejects.toThrow(NakamaApiError);
+      ).rejects.toThrow(AirinApiError);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -452,7 +452,7 @@ describe("generateImageWithOpenAI on a ChatGPT subscription", () => {
           model: "gpt-6-sol",
           prompt: "a cat",
         })
-      ).rejects.toThrow(NakamaApiError);
+      ).rejects.toThrow(AirinApiError);
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ToolContext } from "@nakama/core";
+import type { ToolContext } from "@airin/core";
 import {
   GROUP_MEMORY_CHARS,
   groupWorkspace,
@@ -14,7 +14,7 @@ let root = "";
 let sharedDir = "";
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "nakama-group-memory-"));
+  root = mkdtempSync(join(tmpdir(), "airin-group-memory-"));
   sharedDir = join(root, "shared");
 });
 

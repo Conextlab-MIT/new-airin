@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { writeFileTool } from "@nakama/core";
+import { writeFileTool } from "@airin/core";
 import {
   cassetteFilePath,
   withMswCassette,

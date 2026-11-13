@@ -3,7 +3,7 @@ name: adhd-pr-description
 description: >-
   Write or rewrite GitHub PR descriptions in a scannable ADHD-friendly format:
   outcome-first lead, two-line before/after, short why-safe list, residual one-liner,
-  tight test plan, and UI proof (a screenshot) when the PR changes the UI. Default for all Nakama PR bodies (agents and humans). Use when
+  tight test plan, and UI proof (a screenshot) when the PR changes the UI. Default for all Airin PR bodies (agents and humans). Use when
   writing, improving, or rewriting a PR description, opening a PR via ce-commit-push-pr,
   or when the user mentions ADHD PR / adhd-pr-description. Prefer this shape over long
   narrative PR prose.
@@ -13,7 +13,7 @@ description: >-
 
 **Default PR body format for this repo.** Reviewers should finish the description in one glance. The diff is already on GitHub — do not restate file moves.
 
-Agents: load this skill whenever composing or rewriting a Nakama PR description (including via `ce-commit-push-pr`). Body **shape** comes from here; still gather real claims from the diff (outcome, risk, what you verified).
+Agents: load this skill whenever composing or rewriting an Airin PR description (including via `ce-commit-push-pr`). Body **shape** comes from here; still gather real claims from the diff (outcome, risk, what you verified).
 
 ## Shape (required)
 

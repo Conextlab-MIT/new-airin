@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError, type UserConfig } from "@nakama/core";
+import { AirinApiError, type UserConfig } from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   mergeWorkspaceSettings,
   WORKSPACE_SETTINGS_ID,
-} from "@nakama/db";
+} from "@airin/db";
 import { IMAGE_GENERATION_SELECTION } from "../providers/models";
 import { estimateUsageCostUsd } from "../providers/pricing";
 import { asTestFetch } from "../providers/test-helpers";
@@ -81,7 +81,7 @@ describe("resolveImageGenerationSelection", () => {
       resolveImageGenerationSelection(
         openaiConfig({ imageModel: "openai::dall-e-3" })
       )
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("resolves openai_compatible::gpt-image-2 with a baseUrl", () => {
@@ -120,7 +120,7 @@ describe("resolveImageGenerationSelection", () => {
           },
         ],
       })
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("resolves <providerId>::<modelId> on an OpenAI-compatible provider", () => {
@@ -167,7 +167,7 @@ describe("resolveImageGenerationSelection", () => {
       resolveImageGenerationSelection(
         gatewayConfig({ imageModel: "p-gateway::cb/dall-e-3" })
       )
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("rejects <providerId>::<modelId> on a provider that is not OpenAI-compatible", () => {
@@ -175,7 +175,7 @@ describe("resolveImageGenerationSelection", () => {
       resolveImageGenerationSelection(
         gatewayConfig({ imageModel: "p-openai::gpt-image-2" })
       )
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("rejects a compatible provider without a baseUrl", () => {
@@ -188,7 +188,7 @@ describe("resolveImageGenerationSelection", () => {
           baseUrl: undefined,
         })),
       })
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("fails when OpenAI API key is missing", () => {
@@ -208,7 +208,7 @@ describe("resolveImageGenerationSelection", () => {
         }),
         {}
       )
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 });
 
@@ -216,7 +216,7 @@ describe("normalizeImageGenerationSize / token helpers", () => {
   test("defaults size and rejects unknown sizes", () => {
     expect(normalizeImageGenerationSize(undefined)).toBe("1024x1024");
     expect(() => normalizeImageGenerationSize("512x512")).toThrow(
-      NakamaApiError
+      AirinApiError
     );
   });
 
@@ -243,7 +243,7 @@ describe("generateImageWithOpenAI", () => {
   test("rejects empty prompt before fetch", async () => {
     await expect(
       generateImageWithOpenAI({ apiKey: "test-key", prompt: "  " })
-    ).rejects.toThrow(NakamaApiError);
+    ).rejects.toThrow(AirinApiError);
   });
 
   test("rejects non-gpt-image-2 model before fetch", async () => {
@@ -253,7 +253,7 @@ describe("generateImageWithOpenAI", () => {
         model: "dall-e-3",
         prompt: "a cat",
       })
-    ).rejects.toThrow(NakamaApiError);
+    ).rejects.toThrow(AirinApiError);
   });
 
   test("routes to the configured baseUrl instead of api.openai.com", async () => {
@@ -356,7 +356,7 @@ describe("generateImageWithOpenAI", () => {
         prompt: "a cat",
       }).catch((cause: unknown) => cause);
 
-      expect(error).toBeInstanceOf(NakamaApiError);
+      expect(error).toBeInstanceOf(AirinApiError);
       expect(error).toMatchObject({ status: 502 });
     } finally {
       globalThis.fetch = originalFetch;
@@ -440,7 +440,7 @@ describe("AgentService image generation settings", () => {
 
     await expect(
       service.setImageGenerationSettings({ model: "openai::dall-e-3" })
-    ).rejects.toThrow(NakamaApiError);
+    ).rejects.toThrow(AirinApiError);
 
     expect(await db.getWorkspaceSettings()).toMatchObject({
       imageModel: IMAGE_GENERATION_SELECTION,

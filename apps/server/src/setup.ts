@@ -10,11 +10,11 @@ import {
   resolveProvider,
   saveUserConfig,
   type UserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   NETRA_AGENT_MODEL_ID,
   resolveNetraModelId,
-} from "@nakama/core/discovery-providers";
+} from "@airin/core/discovery-providers";
 import { createProviderFromActiveConfig } from "./providers";
 import {
   type ManagedSecrets,

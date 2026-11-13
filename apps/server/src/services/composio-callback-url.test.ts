@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NakamaApiError, saveUserWebPublicUrl } from "@nakama/core";
+import { AirinApiError, saveUserWebPublicUrl } from "@airin/core";
 import {
   isLoopbackComposioCallbackBaseUrl,
   persistWebPublicUrl,
@@ -12,10 +12,10 @@ import {
 
 describe("composio-callback-url", () => {
   const previous = {
-    configDir: process.env.NAKAMA_CONFIG_DIR,
-    publicUrl: process.env.NAKAMA_PUBLIC_URL,
-    trustProxy: process.env.NAKAMA_TRUST_PROXY,
-    webPublicUrl: process.env.NAKAMA_WEB_PUBLIC_URL,
+    configDir: process.env.AIRIN_CONFIG_DIR,
+    publicUrl: process.env.AIRIN_PUBLIC_URL,
+    trustProxy: process.env.AIRIN_TRUST_PROXY,
+    webPublicUrl: process.env.AIRIN_WEB_PUBLIC_URL,
   };
 
   let isolatedConfigDir = "";
@@ -23,47 +23,47 @@ describe("composio-callback-url", () => {
   beforeEach(() => {
     isolatedConfigDir = join(
       tmpdir(),
-      `nakama-callback-url-${crypto.randomUUID()}`
+      `airin-callback-url-${crypto.randomUUID()}`
     );
     mkdirSync(isolatedConfigDir, { recursive: true });
-    process.env.NAKAMA_CONFIG_DIR = isolatedConfigDir;
-    delete process.env.NAKAMA_PUBLIC_URL;
-    delete process.env.NAKAMA_WEB_PUBLIC_URL;
-    delete process.env.NAKAMA_TRUST_PROXY;
+    process.env.AIRIN_CONFIG_DIR = isolatedConfigDir;
+    delete process.env.AIRIN_PUBLIC_URL;
+    delete process.env.AIRIN_WEB_PUBLIC_URL;
+    delete process.env.AIRIN_TRUST_PROXY;
   });
 
   afterEach(() => {
     rmSync(isolatedConfigDir, { force: true, recursive: true });
 
     if (previous.configDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous.configDir;
+      process.env.AIRIN_CONFIG_DIR = previous.configDir;
     }
 
     if (previous.publicUrl === undefined) {
-      delete process.env.NAKAMA_PUBLIC_URL;
+      delete process.env.AIRIN_PUBLIC_URL;
     } else {
-      process.env.NAKAMA_PUBLIC_URL = previous.publicUrl;
+      process.env.AIRIN_PUBLIC_URL = previous.publicUrl;
     }
 
     if (previous.webPublicUrl === undefined) {
-      delete process.env.NAKAMA_WEB_PUBLIC_URL;
+      delete process.env.AIRIN_WEB_PUBLIC_URL;
     } else {
-      process.env.NAKAMA_WEB_PUBLIC_URL = previous.webPublicUrl;
+      process.env.AIRIN_WEB_PUBLIC_URL = previous.webPublicUrl;
     }
 
     if (previous.trustProxy === undefined) {
-      delete process.env.NAKAMA_TRUST_PROXY;
+      delete process.env.AIRIN_TRUST_PROXY;
     } else {
-      process.env.NAKAMA_TRUST_PROXY = previous.trustProxy;
+      process.env.AIRIN_TRUST_PROXY = previous.trustProxy;
     }
   });
 
   test("resolveRequestClientOrigin prefers explicit origin", () => {
     // The precedence test needs an origin the request may name: behind a
     // trusted proxy the listener host vouches for the explicit origin.
-    process.env.NAKAMA_TRUST_PROXY = "true";
+    process.env.AIRIN_TRUST_PROXY = "true";
 
     const request = new Request(
       "http://app.example.com/v1/composio/toolkits/gmail/connect",
@@ -77,7 +77,7 @@ describe("composio-callback-url", () => {
         resolveRequestClientOrigin(request, "https://app.example.com/")
       ).toBe("https://app.example.com");
     } finally {
-      delete process.env.NAKAMA_TRUST_PROXY;
+      delete process.env.AIRIN_TRUST_PROXY;
     }
   });
 
@@ -119,14 +119,14 @@ describe("composio-callback-url", () => {
     expect(isLoopbackComposioCallbackBaseUrl("http://localhost:3003")).toBe(
       true
     );
-    expect(
-      isLoopbackComposioCallbackBaseUrl("https://nakama.example.com")
-    ).toBe(false);
+    expect(isLoopbackComposioCallbackBaseUrl("https://airin.example.com")).toBe(
+      false
+    );
   });
 
   test("resolveComposioCallbackBaseUrl falls back to env when no request", () => {
-    const previous = process.env.NAKAMA_WEB_PUBLIC_URL;
-    process.env.NAKAMA_WEB_PUBLIC_URL = "https://deployed.example.com/";
+    const previous = process.env.AIRIN_WEB_PUBLIC_URL;
+    process.env.AIRIN_WEB_PUBLIC_URL = "https://deployed.example.com/";
 
     try {
       expect(resolveComposioCallbackBaseUrl()).toBe(
@@ -134,16 +134,16 @@ describe("composio-callback-url", () => {
       );
     } finally {
       if (previous === undefined) {
-        delete process.env.NAKAMA_WEB_PUBLIC_URL;
+        delete process.env.AIRIN_WEB_PUBLIC_URL;
       } else {
-        process.env.NAKAMA_WEB_PUBLIC_URL = previous;
+        process.env.AIRIN_WEB_PUBLIC_URL = previous;
       }
     }
   });
 
   test("caller headers off the configured URL are refused", () => {
-    const previous = process.env.NAKAMA_WEB_PUBLIC_URL;
-    process.env.NAKAMA_WEB_PUBLIC_URL = "https://deployed.example.com";
+    const previous = process.env.AIRIN_WEB_PUBLIC_URL;
+    process.env.AIRIN_WEB_PUBLIC_URL = "https://deployed.example.com";
 
     const request = new Request(
       "http://127.0.0.1:4310/v1/composio/toolkits/gmail/connect",
@@ -166,9 +166,9 @@ describe("composio-callback-url", () => {
       ).toThrow("Origin is not allowed.");
     } finally {
       if (previous === undefined) {
-        delete process.env.NAKAMA_WEB_PUBLIC_URL;
+        delete process.env.AIRIN_WEB_PUBLIC_URL;
       } else {
-        process.env.NAKAMA_WEB_PUBLIC_URL = previous;
+        process.env.AIRIN_WEB_PUBLIC_URL = previous;
       }
     }
   });
@@ -213,9 +213,9 @@ describe("composio-callback-url", () => {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(NakamaApiError);
+    expect(thrown).toBeInstanceOf(AirinApiError);
     // SAFETY: The instanceof check above narrows the caught error.
-    expect((thrown as NakamaApiError).status).toBe(400);
+    expect((thrown as AirinApiError).status).toBe(400);
   });
 
   test("a spoofed request host cannot vouch for a remote claim", () => {
@@ -234,9 +234,9 @@ describe("composio-callback-url", () => {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(NakamaApiError);
+    expect(thrown).toBeInstanceOf(AirinApiError);
     // SAFETY: The instanceof check above narrows the caught error.
-    expect((thrown as NakamaApiError).status).toBe(400);
+    expect((thrown as AirinApiError).status).toBe(400);
   });
 
   test("an unflagged install fails closed to loopback for a spoofed host", () => {
@@ -251,13 +251,13 @@ describe("composio-callback-url", () => {
   });
 
   test("a trusted proxy names the callback base and scheme", () => {
-    process.env.NAKAMA_TRUST_PROXY = "true";
+    process.env.AIRIN_TRUST_PROXY = "true";
 
     const request = new Request(
       "http://internal:4310/v1/composio/toolkits/gmail/connect",
       {
         headers: {
-          "X-Forwarded-Host": "nakama.example.com",
+          "X-Forwarded-Host": "airin.example.com",
           "X-Forwarded-Proto": "https",
         },
         method: "POST",
@@ -266,22 +266,22 @@ describe("composio-callback-url", () => {
 
     try {
       expect(resolveComposioCallbackBaseUrl({ request })).toBe(
-        "https://nakama.example.com"
+        "https://airin.example.com"
       );
     } finally {
-      delete process.env.NAKAMA_TRUST_PROXY;
+      delete process.env.AIRIN_TRUST_PROXY;
     }
   });
 
   test("a trusted proxy may vouch for the origin it names", () => {
-    process.env.NAKAMA_TRUST_PROXY = "true";
+    process.env.AIRIN_TRUST_PROXY = "true";
 
     const request = new Request(
       "http://internal:4310/v1/composio/toolkits/gmail/connect",
       {
         headers: {
-          Origin: "https://nakama.example.com",
-          "X-Forwarded-Host": "nakama.example.com",
+          Origin: "https://airin.example.com",
+          "X-Forwarded-Host": "airin.example.com",
           "X-Forwarded-Proto": "https",
         },
         method: "POST",
@@ -290,15 +290,15 @@ describe("composio-callback-url", () => {
 
     try {
       expect(resolveRequestClientOrigin(request)).toBe(
-        "https://nakama.example.com"
+        "https://airin.example.com"
       );
     } finally {
-      delete process.env.NAKAMA_TRUST_PROXY;
+      delete process.env.AIRIN_TRUST_PROXY;
     }
   });
 
   test("a claimed origin matching the listener host is accepted behind a trusted proxy", () => {
-    process.env.NAKAMA_TRUST_PROXY = "true";
+    process.env.AIRIN_TRUST_PROXY = "true";
 
     const request = new Request(
       "http://api.example.com/v1/composio/toolkits/gmail/connect",
@@ -310,16 +310,16 @@ describe("composio-callback-url", () => {
         "http://api.example.com"
       );
     } finally {
-      delete process.env.NAKAMA_TRUST_PROXY;
+      delete process.env.AIRIN_TRUST_PROXY;
     }
   });
 
   test("the desktop app ignores a public URL restored from another install", async () => {
     // A backup restored into the desktop app carries the web install's URL,
     // but the desktop UI is only ever served on loopback.
-    await saveUserWebPublicUrl("https://nakama.example.com");
-    const previousDesktop = process.env.NAKAMA_DESKTOP;
-    process.env.NAKAMA_DESKTOP = "1";
+    await saveUserWebPublicUrl("https://airin.example.com");
+    const previousDesktop = process.env.AIRIN_DESKTOP;
+    process.env.AIRIN_DESKTOP = "1";
 
     const request = new Request(
       "http://127.0.0.1:50839/v1/sessions/session-1/messages",
@@ -335,15 +335,15 @@ describe("composio-callback-url", () => {
       );
     } finally {
       if (previousDesktop === undefined) {
-        delete process.env.NAKAMA_DESKTOP;
+        delete process.env.AIRIN_DESKTOP;
       } else {
-        process.env.NAKAMA_DESKTOP = previousDesktop;
+        process.env.AIRIN_DESKTOP = previousDesktop;
       }
     }
   });
 
   test("outside the desktop app a saved public URL still refuses loopback", async () => {
-    await saveUserWebPublicUrl("https://nakama.example.com");
+    await saveUserWebPublicUrl("https://airin.example.com");
 
     const request = new Request(
       "http://127.0.0.1:50839/v1/sessions/session-1/messages",
@@ -356,7 +356,7 @@ describe("composio-callback-url", () => {
   });
 
   test("a saved loopback URL accepts the loopback origin on a new port", () => {
-    process.env.NAKAMA_WEB_PUBLIC_URL = "http://127.0.0.1:4391";
+    process.env.AIRIN_WEB_PUBLIC_URL = "http://127.0.0.1:4391";
 
     const request = new Request(
       "http://127.0.0.1:4392/v1/sessions/s1/messages",
@@ -373,12 +373,12 @@ describe("composio-callback-url", () => {
   });
 
   test("an unparseable clientOrigin is refused, not silently dropped", () => {
-    const configDir = join(tmpdir(), `nakama-callback-url-unset-${Date.now()}`);
+    const configDir = join(tmpdir(), `airin-callback-url-unset-${Date.now()}`);
     mkdirSync(configDir, { recursive: true });
-    const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    const previousPublicUrl = process.env.NAKAMA_WEB_PUBLIC_URL;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-    delete process.env.NAKAMA_WEB_PUBLIC_URL;
+    const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    const previousPublicUrl = process.env.AIRIN_WEB_PUBLIC_URL;
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    delete process.env.AIRIN_WEB_PUBLIC_URL;
 
     const request = new Request(
       "http://127.0.0.1:4310/v1/composio/toolkits/gmail/connect",
@@ -394,13 +394,13 @@ describe("composio-callback-url", () => {
       ).toThrow("Origin must be an http or https URL.");
     } finally {
       if (previousConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+        process.env.AIRIN_CONFIG_DIR = previousConfigDir;
       }
 
       if (previousPublicUrl !== undefined) {
-        process.env.NAKAMA_WEB_PUBLIC_URL = previousPublicUrl;
+        process.env.AIRIN_WEB_PUBLIC_URL = previousPublicUrl;
       }
 
       rmSync(configDir, { force: true, recursive: true });
@@ -408,10 +408,10 @@ describe("composio-callback-url", () => {
   });
 
   test("persistWebPublicUrl preserves path segments", async () => {
-    const configDir = join(tmpdir(), `nakama-callback-url-test-${Date.now()}`);
+    const configDir = join(tmpdir(), `airin-callback-url-test-${Date.now()}`);
     mkdirSync(configDir, { recursive: true });
-    const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       expect(
@@ -425,9 +425,9 @@ describe("composio-callback-url", () => {
       );
     } finally {
       if (previousConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+        process.env.AIRIN_CONFIG_DIR = previousConfigDir;
       }
 
       rmSync(configDir, { force: true, recursive: true });
@@ -435,12 +435,12 @@ describe("composio-callback-url", () => {
   });
 
   test("persistWebPublicUrl refuses a host the deployment does not serve", async () => {
-    const configDir = join(tmpdir(), `nakama-callback-url-host-${Date.now()}`);
+    const configDir = join(tmpdir(), `airin-callback-url-host-${Date.now()}`);
     mkdirSync(configDir, { recursive: true });
-    const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    const previousPublicUrl = process.env.NAKAMA_WEB_PUBLIC_URL;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-    delete process.env.NAKAMA_WEB_PUBLIC_URL;
+    const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    const previousPublicUrl = process.env.AIRIN_WEB_PUBLIC_URL;
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    delete process.env.AIRIN_WEB_PUBLIC_URL;
 
     try {
       await expect(
@@ -454,7 +454,7 @@ describe("composio-callback-url", () => {
 
       // The env override is how a deployment that serves the web app from
       // another host names it.
-      process.env.NAKAMA_WEB_PUBLIC_URL = "https://app.example.com";
+      process.env.AIRIN_WEB_PUBLIC_URL = "https://app.example.com";
       expect(
         await persistWebPublicUrl(
           "https://app.example.com",
@@ -463,15 +463,15 @@ describe("composio-callback-url", () => {
       ).toBe("https://app.example.com");
     } finally {
       if (previousConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+        process.env.AIRIN_CONFIG_DIR = previousConfigDir;
       }
 
       if (previousPublicUrl === undefined) {
-        delete process.env.NAKAMA_WEB_PUBLIC_URL;
+        delete process.env.AIRIN_WEB_PUBLIC_URL;
       } else {
-        process.env.NAKAMA_WEB_PUBLIC_URL = previousPublicUrl;
+        process.env.AIRIN_WEB_PUBLIC_URL = previousPublicUrl;
       }
 
       rmSync(configDir, { force: true, recursive: true });

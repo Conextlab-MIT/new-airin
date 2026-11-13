@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import type { StoredMcpServerRecord } from "@airin/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type { StoredMcpServerRecord } from "@nakama/db";
 import { McpClientManager } from "./mcp-client-manager";
 
 type ToolCallResult = Awaited<ReturnType<Client["callTool"]>>;

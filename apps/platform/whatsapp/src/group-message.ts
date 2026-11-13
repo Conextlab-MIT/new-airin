@@ -17,9 +17,9 @@ export interface GroupMessageHandlingDecision {
   shouldHandle: boolean;
 }
 
-// IDs of messages Nakama sent. The linked account is often the user's own
-// number, so a quote of that number is only a reply to Nakama when the quoted
-// message is one Nakama sent. Bounded; lost on restart (fails closed).
+// IDs of messages Airin sent. The linked account is often the user's own
+// number, so a quote of that number is only a reply to Airin when the quoted
+// message is one Airin sent. Bounded; lost on restart (fails closed).
 const MAX_BOT_MESSAGE_IDS = 2000;
 
 const botMessageIds = new Set<string>();

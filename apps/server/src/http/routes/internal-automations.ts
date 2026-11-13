@@ -3,7 +3,7 @@ import {
   isWorkerSchedulable,
   resolveManagedSecret,
   type StoredAutomation,
-} from "@nakama/core";
+} from "@airin/core";
 import type { ServerOptions } from "../context";
 import { errorResponse, json } from "../shared";
 import type { HonoApp } from "../types";
@@ -114,7 +114,7 @@ export function registerInternalAutomationRoutes(
     return new Response(null, { status: 204 });
   });
 
-  // Channel workers never get NAKAMA_SECRETS_KEY (#2021), so they read their
+  // Channel workers never get AIRIN_SECRETS_KEY (#2021), so they read their
   // encrypted bot token through the server instead.
   app.get("/v1/internal/channel-bot-token", async (c) => {
     const auth = c.get("auth");

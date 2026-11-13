@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { DatabaseAdapter } from "@nakama/db";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { DatabaseAdapter } from "@airin/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { AuthService } from "../../services/auth-service";
 import { createMinimalHonoApp } from "../test-app-helpers";

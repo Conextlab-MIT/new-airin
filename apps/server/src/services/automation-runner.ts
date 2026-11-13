@@ -2,7 +2,7 @@ import {
   type ChatMessage,
   formatAutomationRunError,
   type StoredAutomation,
-} from "@nakama/core";
+} from "@airin/core";
 import type { AgentService } from "./agent-service";
 import type { AutomationDeliveryService } from "./automation-delivery-service";
 import type { AutomationService } from "./automation-service";

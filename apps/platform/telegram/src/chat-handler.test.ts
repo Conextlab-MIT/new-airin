@@ -7,14 +7,14 @@ import {
   test,
 } from "bun:test";
 import path from "node:path";
-import type { NakamaClient } from "@nakama/client";
+import type { AirinClient } from "@airin/client";
 import {
   hasActiveStreams,
   resetActiveStreamsForTests,
-} from "@nakama/core/channel-active-stream";
-import { ChannelSessionStore as SessionStore } from "@nakama/core/channel-session-store";
-import type { AgentQuestionnaire, ChatMessage } from "@nakama/core/contract";
-import { listTelegramAccessRequests } from "@nakama/core/telegram-config";
+} from "@airin/core/channel-active-stream";
+import { ChannelSessionStore as SessionStore } from "@airin/core/channel-session-store";
+import type { AgentQuestionnaire, ChatMessage } from "@airin/core/contract";
+import { listTelegramAccessRequests } from "@airin/core/telegram-config";
 import type { Context } from "grammy";
 import {
   UNSUPPORTED_DOCUMENT_TYPES_REPLY,
@@ -70,7 +70,7 @@ async function createTestHandler(
   const mock = createMockClient(clientOptions);
 
   const sessionStore = new SessionStore(
-    path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+    path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
   );
 
   const orgStore = createTestOrgStore(homeDir);
@@ -113,8 +113,8 @@ describe("createChatHandler group chats", () => {
   test("ignores plain group messages without mention", async () => {
     await withTempHome(async (homeDir) => {
       const privateMessage = "private 🔒 message";
-      const previousDebug = process.env.NAKAMA_CH_DEBUG;
-      process.env.NAKAMA_CH_DEBUG = "1";
+      const previousDebug = process.env.AIRIN_CH_DEBUG;
+      process.env.AIRIN_CH_DEBUG = "1";
       const log = spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -152,9 +152,9 @@ describe("createChatHandler group chats", () => {
         log.mockRestore();
 
         if (previousDebug === undefined) {
-          delete process.env.NAKAMA_CH_DEBUG;
+          delete process.env.AIRIN_CH_DEBUG;
         } else {
-          process.env.NAKAMA_CH_DEBUG = previousDebug;
+          process.env.AIRIN_CH_DEBUG = previousDebug;
         }
       }
     });
@@ -526,7 +526,7 @@ describe("createChatHandler group chats", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -578,7 +578,7 @@ describe("createChatHandler group chats", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -876,7 +876,7 @@ describe("createChatHandler security", () => {
       await handleMessage(pairAttempt.ctx);
 
       expect(pairAttempt.replies).toEqual([
-        "Linked successfully. You can chat with Nakama now.",
+        "Linked successfully. You can chat with Airin now.",
       ]);
       expect(authStore.isAuthorized(1001)).toBe(true);
       expect(authStore.getConfig()?.handshakeCode).toBeNull();
@@ -1981,7 +1981,7 @@ describe("createChatHandler security", () => {
       );
 
       const { ctx, replies } = createMessageContext({
-        text: "/start@NakamaBot",
+        text: "/start@AirinBot",
         userId: 4242,
       });
 
@@ -2179,7 +2179,7 @@ describe("bridge API integration", () => {
     });
   });
 
-  test("/profile hides super nakama from channel profile switches", async () => {
+  test("/profile hides super airin from channel profile switches", async () => {
     await withTempHome(async (homeDir) => {
       await writeTelegramConfigIni(homeDir, {
         botToken: "1234567890:TEST",
@@ -2194,7 +2194,7 @@ describe("bridge API integration", () => {
         {
           profiles: [
             { id: "default", isDefault: true, name: "Default Bot" },
-            { id: "super_nakama", isSuper: true, name: "Super Nakama" },
+            { id: "super_airin", isSuper: true, name: "Airin" },
           ],
         }
       );
@@ -2208,7 +2208,7 @@ describe("bridge API integration", () => {
 
       const text = replies.join("\n");
       expect(text).toContain("Default Bot");
-      expect(text).not.toContain("Super Nakama");
+      expect(text).not.toContain("Airin");
     });
   });
 
@@ -2276,7 +2276,7 @@ describe("bridge API integration", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -2326,7 +2326,7 @@ describe("bridge API integration", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -2383,7 +2383,7 @@ describe("bridge API integration", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -2465,7 +2465,7 @@ describe("createChatHandler document attachments", () => {
       const { client, calls, getLastStreamInput } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -2554,7 +2554,7 @@ describe("createChatHandler document attachments", () => {
       const { client, calls, getLastStreamInput } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -2634,7 +2634,7 @@ describe("createChatHandler artifact delivery", () => {
         {
           arguments: {
             content: metaJson,
-            path: "artifacts/report.md.nakama-meta.json",
+            path: "artifacts/report.md.airin-meta.json",
           },
           id: "tool_2",
           name: "write_file",
@@ -2644,7 +2644,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: 8,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md",
       }),
       name: "write_file",
       role: "tool",
@@ -2653,7 +2653,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: metaJson.length,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md.nakama-meta.json",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md.airin-meta.json",
       }),
       name: "write_file",
       role: "tool",
@@ -2677,7 +2677,7 @@ describe("createChatHandler artifact delivery", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -2737,7 +2737,7 @@ describe("createChatHandler artifact delivery", () => {
           {
             content: JSON.stringify({
               bytesWritten: 5,
-              path: "/home/.nakama/orgs/org/profiles/default/artifacts/draft.md",
+              path: "/home/.airin/orgs/org/profiles/default/artifacts/draft.md",
             }),
             name: "write_file",
             role: "tool",
@@ -2747,7 +2747,7 @@ describe("createChatHandler artifact delivery", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -2792,7 +2792,7 @@ describe("createChatHandler artifact delivery", () => {
       const { client, calls } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -2864,7 +2864,7 @@ describe("stream cleanup", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -2913,7 +2913,7 @@ describe("createChatHandler session hot cache", () => {
       const { client, calls } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "telegram", "chat-sessions.json")
+        path.join(homeDir, ".airin", "telegram", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -3062,7 +3062,7 @@ describe("concurrent chats in different orgs", () => {
       let orgSets = 0;
 
       const track = (
-        target: NakamaClient,
+        target: AirinClient,
         getOrg: () => string | null,
         setOrg: (orgId: string | null) => void
       ) => {
@@ -3104,7 +3104,7 @@ describe("concurrent chats in different orgs", () => {
 
       client.forOrg = () => {
         // The scope inherits every mock method from the base client.
-        const scoped: NakamaClient = Object.create(client);
+        const scoped: AirinClient = Object.create(client);
         let scopedOrg: string | null = baseOrg;
 
         track(

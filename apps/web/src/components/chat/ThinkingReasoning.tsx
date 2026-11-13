@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { BrainIcon } from "hugeicons-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";

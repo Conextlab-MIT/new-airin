@@ -1,16 +1,16 @@
 import type {
   EmailSettingsResponse,
   UpdateEmailSettingsRequest,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useReducer } from "react";
 import { EmailSettingsFooter } from "@/components/email-settings-footer";

@@ -1,13 +1,13 @@
 import { dirname } from "node:path";
-import type { NakamaClient, RemoteChatSession } from "@nakama/client";
-import { formatClientError } from "@nakama/core/api-error";
+import type { AirinClient, RemoteChatSession } from "@airin/client";
+import { formatClientError } from "@airin/core/api-error";
 import {
   clearActiveStream,
   isAbortError,
   registerActiveStream,
   stopActiveStream,
-} from "@nakama/core/channel-active-stream";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
+} from "@airin/core/channel-active-stream";
+import { createChatLock } from "@airin/core/channel-chat-lock";
 import {
   channelCommandHelp,
   channelCommandWord,
@@ -15,10 +15,10 @@ import {
   describeChannelStatus,
   parseChannelCommand,
   runChannelCommand,
-} from "@nakama/core/channel-commands";
-import type { ChannelOwner } from "@nakama/core/channel-config-shared";
-import type { ChannelSessionStore } from "@nakama/core/channel-session-store";
-import { readTextOrNull, writeTextFile } from "@nakama/core/fs";
+} from "@airin/core/channel-commands";
+import type { ChannelOwner } from "@airin/core/channel-config-shared";
+import type { ChannelSessionStore } from "@airin/core/channel-session-store";
+import { readTextOrNull, writeTextFile } from "@airin/core/fs";
 import {
   hasActiveHandshakeCode,
   isSlackUserAuthorized,
@@ -27,7 +27,7 @@ import {
   looksLikePairingCode,
   type SlackMember,
   verifyAndPairSlackUser,
-} from "@nakama/core/slack-config";
+} from "@airin/core/slack-config";
 import type { SlackMessageEvent } from "./socket";
 
 /** What the handler needs from Slack's Web API; faked in tests. */
@@ -43,7 +43,7 @@ export interface ChatHandlerDeps {
   /** The bot's own workspace; the only team the workspace gate lets in. */
   botTeamId: string;
   botUserId: string;
-  client: NakamaClient;
+  client: AirinClient;
   /** The agent this Slack app is connected to; every chat runs as it. */
   owner: ChannelOwner;
   sessionStore: ChannelSessionStore;
@@ -72,16 +72,16 @@ const CHANNEL_MESSAGE_PREFIX =
   "[Slack channel thread. Your reply is visible to everyone in this channel.]\n";
 
 const PAIRING_PROMPT =
-  "Welcome to Nakama.\n\n" +
+  "Welcome to Airin.\n\n" +
   "Paste your pairing code from Integrations → Slack in the web dashboard. " +
   "You only need to do this once.";
 
 // Pairing codes stay out of channels: anyone reading could use the code first.
 const LINK_IN_DM_REPLY =
-  "I can't answer you yet. Link your account first: open Nakama under Apps in the Slack sidebar, go to its Messages tab, and send the pairing code from Integrations → Slack there.";
+  "I can't answer you yet. Link your account first: open Airin under Apps in the Slack sidebar, go to its Messages tab, and send the pairing code from Integrations → Slack there.";
 
 const NO_CODE_PROMPT =
-  "This bot is not linked yet. Open Nakama Integrations → Slack, generate a pairing code, then send it here.";
+  "This bot is not linked yet. Open Airin Integrations → Slack, generate a pairing code, then send it here.";
 
 const HELP_TEXT = `Chat with me in this DM, or @mention me in a channel. I reply in a thread and follow it after that.\n\n${channelCommandHelp()}`;
 
@@ -217,7 +217,7 @@ export function createSlackEventHandler(deps: {
   return {
     /** The socket acks once this resolves. */
     accept: async (event: SlackMessageEvent, eventId: string) => {
-      if (process.env.NAKAMA_CH_DEBUG === "1") {
+      if (process.env.AIRIN_CH_DEBUG === "1") {
         console.log(
           `[slack] ${event.type} channel_type=${event.channel_type} subtype=${event.subtype ?? "-"} user=${event.user ?? "-"} thread=${event.thread_ts ? "yes" : "no"}`
         );
@@ -446,7 +446,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
     }
 
     async function runTurn(
-      client: NakamaClient,
+      client: AirinClient,
       inbound: SlackMessageEvent,
       sessionKey: string,
       message: string,
@@ -537,7 +537,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
   };
 
   function describeStatus(
-    client: NakamaClient,
+    client: AirinClient,
     sessionKey: string
   ): Promise<string> {
     return describeChannelStatus(client, {
@@ -552,7 +552,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
   }
 
   /** The owning agent, or an error when it was deleted after the connection was saved. */
-  async function resolveOwnerProfile(client: NakamaClient) {
+  async function resolveOwnerProfile(client: AirinClient) {
     const { profiles } = await client.listProfiles(owner.orgId);
     const profile = profiles.find((entry) => entry.id === owner.profileId);
 
@@ -564,7 +564,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
   }
 
   async function resolveSession(
-    client: NakamaClient,
+    client: AirinClient,
     sessionKey: string
   ): Promise<RemoteChatSession> {
     // A session saved for another agent never continues under this one.
@@ -597,7 +597,7 @@ export function createChatHandler(deps: ChatHandlerDeps) {
   }
 
   async function createAndBindSession(
-    client: NakamaClient,
+    client: AirinClient,
     sessionKey: string
   ): Promise<RemoteChatSession> {
     const { id: profileId } = await resolveOwnerProfile(client);

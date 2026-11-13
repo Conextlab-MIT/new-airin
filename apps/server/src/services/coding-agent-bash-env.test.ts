@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createInMemoryDatabaseAdapter,
   mergeWorkspaceSettings,
-} from "@nakama/db";
+} from "@airin/db";
 import { enrichCodingAgentBashInput } from "./coding-agent-bash-env";
 import {
   makeAnthropicProvider,

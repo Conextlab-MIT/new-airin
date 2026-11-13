@@ -30,9 +30,9 @@ These instructions are loaded directly when this skill is active.
 Avoid generic defaults: cream with terracotta accents, purple gradients, Inter for every subject, emoji, and grids of boxed items (a dashboard's stat-card row is the one exception).
 Organize content with spacing, rules, and typography; show features and phases as rows divided by `--rule`, without a per-item background or border. Keep an established brand's choices when they fit the request.
 
-## Nakama style recipes
+## Airin style recipes
 
-When no other brand is supplied, use Nakama's neutral surfaces, amber accents, and clear typography.
+When no other brand is supplied, use Airin's neutral surfaces, amber accents, and clear typography.
 Choose one recipe; adapt it to the subject. These names are design guides, not labels to put on the page.
 
 | Style | Use and layout | Token overrides |
@@ -42,7 +42,7 @@ Choose one recipe; adapt it to the subject. These names are design guides, not l
 | **Feature** | Launch pages and explainers: a large heading beside one useful subject visual, then open sections. Stack columns on phones. | `--width: 72rem; --title: clamp(2.5rem, 7vw, 5rem);` |
 
 Use this shared token example, then apply only the chosen overrides. Every color alias follows the active theme.
-Inter is intentional for Nakama styling; use other typefaces when the subject calls for them.
+Inter is intentional for Airin styling; use other typefaces when the subject calls for them.
 Load named fonts through Google Fonts or use the fallbacks. Artifacts do not inherit app fonts or CSS.
 
 ```css
@@ -111,7 +111,7 @@ PDF export renders the HTML without a browser, on A4 paper, in the light theme, 
 
 ## Resources and frame limits
 
-Treat these as authoring requirements. Do not claim that Nakama enforces them merely because the page follows these instructions.
+Treat these as authoring requirements. Do not claim that Airin enforces them merely because the page follows these instructions.
 
 - Keep styles, application code, images, and other assets inside the HTML. Use inline SVG or data URLs for images.
 - External scripts may use HTTPS only from `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`, `cdn.tailwindcss.com`, or `code.jquery.com`.
@@ -120,7 +120,7 @@ Treat these as authoring requirements. Do not claim that Nakama enforces them me
 - Do not use `window.print()`, `alert()`, `confirm()`, `prompt()`, popups, or page-triggered downloads. Use inline feedback for interactions.
 - Do not request camera or microphone access unless the runtime explicitly grants that capability for the requested task.
 - Do not depend on parent-page access, host credentials, or persistent browser storage. Keep ordinary interaction state in page memory.
-- Use Nakama's artifact controls for downloads and sharing. Never add secrets or credentials to an artifact.
+- Use Airin's artifact controls for downloads and sharing. Never add secrets or credentials to an artifact.
 
 ## Workflow
 

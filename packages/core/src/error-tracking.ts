@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { NAKAMA_API_VERSION } from "./contract";
+import { AIRIN_API_VERSION } from "./contract";
 import { isErrorTrackingEnabled } from "./error-tracking-config";
 import {
   appendPendingErrorReport,
@@ -61,7 +61,7 @@ function normalizeMessage(message: string): string {
         /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
         "<uuid>"
       )
-      // Mixed letter-and-digit runs are nakama ids (prof_01J..., nanoid). Leaving them in
+      // Mixed letter-and-digit runs are airin ids (prof_01J..., nanoid). Leaving them in
       // gives every occurrence its own fingerprint, which is the one failure mode that
       // makes deduplication useless. Over-merging is the safer direction: name and top
       // frame still keep genuinely different bugs apart.
@@ -226,7 +226,7 @@ export function buildErrorReport(
     message: scrubText(parts.message),
     name: parts.name,
     runtime: {
-      apiVersion: NAKAMA_API_VERSION,
+      apiVersion: AIRIN_API_VERSION,
       arch: process.arch,
       bun: Bun.version,
       platform: process.platform,
@@ -269,7 +269,7 @@ export async function reportError(
     // Unscrubbed on purpose: this never leaves the machine, and a redacted local log
     // is useless to the person debugging their own install.
     console.error(
-      `[nakama:${report.kind}] ${report.source} ${report.fingerprint}`,
+      `[airin:${report.kind}] ${report.source} ${report.fingerprint}`,
       error
     );
   } catch {

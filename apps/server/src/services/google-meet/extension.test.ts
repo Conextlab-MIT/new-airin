@@ -16,6 +16,7 @@ interface ExtensionRequest {
 }
 
 interface StoreData {
+  airinOrigin?: string;
   captureSession?: {
     captureUrl: string;
     error?: string;
@@ -26,7 +27,6 @@ interface StoreData {
     tabId: number;
   };
   meetKey?: string;
-  nakamaOrigin?: string;
   pairError?: string;
   pairing?: { code: string };
 }
@@ -37,7 +37,7 @@ interface MessageInput {
   origin?: string;
 }
 
-const ORIGIN = "https://nakama.example";
+const ORIGIN = "https://airin.example";
 
 const MEET_URL = "https://meet.google.com/abc-defg-hij?authuser=0";
 
@@ -145,7 +145,7 @@ function extension(server: { captureProtocol?: number } = {}) {
 
     if (target.pathname === "/v1/meet/extension/start") {
       return Response.json({
-        captureUrl: "wss://nakama.example/v1/meet/capture",
+        captureUrl: "wss://airin.example/v1/meet/capture",
         meetingId: "meeting",
         ticket: "ticket",
       });
@@ -300,7 +300,7 @@ function extension(server: { captureProtocol?: number } = {}) {
     },
     connected() {
       local.meetKey = "nmk_test";
-      local.nakamaOrigin = ORIGIN;
+      local.airinOrigin = ORIGIN;
     },
     dispatch(type: string, input: MessageInput = {}) {
       return new Promise<any>((resolve) =>
@@ -358,18 +358,18 @@ function extension(server: { captureProtocol?: number } = {}) {
 
 test("pairing stores the key only after approval, then stops polling", async () => {
   const ext = extension();
-  expect(await ext.dispatch("CONNECT", { origin: "nakama.example/" })).toEqual({
+  expect(await ext.dispatch("CONNECT", { origin: "airin.example/" })).toEqual({
     code: "K7Q-4M2",
   });
   expect(ext.openedTabs).toEqual([`${ORIGIN}/google-meet?pair=K7Q-4M2`]);
-  expect(ext.local).toEqual({ nakamaOrigin: ORIGIN });
+  expect(ext.local).toEqual({ airinOrigin: ORIGIN });
   expect((await ext.dispatch("STATE")).pairing).toEqual({ code: "K7Q-4M2" });
   await ext.advance(2000);
   expect(ext.requests.at(-1)?.path).toBe("/v1/meet/extension/pair/p1");
   expect(ext.local.meetKey).toBeUndefined();
   ext.pair("approved");
   await ext.advance(2000);
-  expect(ext.local).toEqual({ meetKey: "nmk_test", nakamaOrigin: ORIGIN });
+  expect(ext.local).toEqual({ airinOrigin: ORIGIN, meetKey: "nmk_test" });
   expect(ext.session.pairing).toBeUndefined();
   const count = ext.requests.length;
   await ext.advance(60_000);
@@ -412,7 +412,7 @@ test("pairing gives up after 5 minutes and needs site access first", async () =>
   });
 });
 
-test("pairing stops when Nakama forgets the code", async () => {
+test("pairing stops when Airin forgets the code", async () => {
   const ext = extension();
   await ext.dispatch("CONNECT", { origin: ORIGIN });
   ext.pair("gone");
@@ -424,7 +424,7 @@ test("pairing stops when Nakama forgets the code", async () => {
   expect(ext.session.pairError).toBeDefined();
 });
 
-test("start captures the tab first, then calls Nakama with the key", async () => {
+test("start captures the tab first, then calls Airin with the key", async () => {
   const ext = extension();
   ext.connected();
   expect(await ext.dispatch("START")).toEqual({ ok: true });
@@ -440,7 +440,7 @@ test("start captures the tab first, then calls Nakama with the key", async () =>
     url: "https://meet.google.com/abc-defg-hij",
   });
   expect(ext.runtimeMessages.at(-1)).toEqual({
-    captureUrl: "wss://nakama.example/v1/meet/capture",
+    captureUrl: "wss://airin.example/v1/meet/capture",
     meetingId: "meeting",
     streamId: "stream",
     ticket: "ticket",
@@ -473,7 +473,7 @@ test("start captures the tab first, then calls Nakama with the key", async () =>
   });
 });
 
-test("start accepts a /meet/<code> tab and sends Nakama the short URL", async () => {
+test("start accepts a /meet/<code> tab and sends Airin the short URL", async () => {
   const ext = extension();
   ext.connected();
   ext.setTabUrl(2, "https://meet.google.com/meet/rbi-wghm-grt?authuser=0");
@@ -490,16 +490,16 @@ test("start without the toolbar click on the tab asks for it and calls no route"
   ext.connected();
   ext.invoke(false);
   expect((await ext.dispatch("START")).error).toBe(
-    "Click the Nakama icon in the toolbar on this Meet tab, then start again."
+    "Click the Airin icon in the toolbar on this Meet tab, then start again."
   );
   expect(ext.requests).toHaveLength(0);
   expect(ext.session.captureSession).toBeUndefined();
 });
 
-test("start refuses a Nakama that does not speak capture protocol 3", async () => {
+test("start refuses an Airin that does not speak capture protocol 3", async () => {
   const ext = extension({ captureProtocol: 2 });
   ext.connected();
-  expect((await ext.dispatch("START")).error).toBe("Update Nakama first.");
+  expect((await ext.dispatch("START")).error).toBe("Update Airin first.");
   expect(ext.order).toEqual([
     "getMediaStreamId",
     "GET /v1/meet/extension/status",
@@ -559,7 +559,7 @@ test("disconnect deletes the key and an open pairing", async () => {
   expect((await ext.dispatch("STATE")).connected).toBe(false);
 });
 
-test("disconnect revokes the key on Nakama, and says so when Nakama cannot", async () => {
+test("disconnect revokes the key on Airin, and says so when Airin cannot", async () => {
   const ext = extension();
   ext.connected();
   expect(await ext.dispatch("DISCONNECT")).toEqual({ ok: true });
@@ -571,20 +571,20 @@ test("disconnect revokes the key on Nakama, and says so when Nakama cannot", asy
   });
   expect(ext.local.meetKey).toBeUndefined();
 
-  // Nakama is down: the key still goes from this browser.
+  // Airin is down: the key still goes from this browser.
   ext.connected();
   ext.respondWith(503);
   expect((await ext.dispatch("DISCONNECT")).error).toBeDefined();
   expect(ext.local.meetKey).toBeUndefined();
 
-  // Nakama already revoked the key.
+  // Airin already revoked the key.
   ext.connected();
   ext.respondWith(401);
   expect(await ext.dispatch("DISCONNECT")).toEqual({ ok: true });
   expect(ext.local.meetKey).toBeUndefined();
 });
 
-test("connecting again revokes the old key on the old Nakama", async () => {
+test("connecting again revokes the old key on the old Airin", async () => {
   const ext = extension();
   ext.connected();
   expect(await ext.dispatch("CONNECT", { origin: "other.example" })).toEqual({
@@ -598,7 +598,7 @@ test("connecting again revokes the old key on the old Nakama", async () => {
     authorization: "Bearer nmk_test",
     origin: ORIGIN,
   });
-  expect(ext.local).toEqual({ nakamaOrigin: "https://other.example" });
+  expect(ext.local).toEqual({ airinOrigin: "https://other.example" });
 });
 
 test("the Meet tab can read only its recording state, not the transcript or captions", async () => {
@@ -789,7 +789,7 @@ test("side panel shows setup progress and only the available capture action", as
                 {
                   url: onMeet
                     ? "https://meet.google.com/abc-defg-hij"
-                    : "https://nakama.example/google-meet",
+                    : "https://airin.example/google-meet",
                 },
               ];
             },
@@ -831,7 +831,7 @@ test.each([false, true])(
       },
     };
 
-    const captureUrl = "wss://nakama.example/v1/meet/capture";
+    const captureUrl = "wss://airin.example/v1/meet/capture";
     runInNewContext(
       readFileSync(
         new URL(
@@ -993,7 +993,7 @@ test("side panel transcript access is bound to its captured meeting and unavaila
   expect(ext.requests.at(-1)?.path).toStartWith(
     "/v1/meet/extension/transcript"
   );
-  ext.local.nakamaOrigin = "https://other.example";
+  ext.local.airinOrigin = "https://other.example";
   const count = ext.requests.length;
   expect(await ext.dispatch("TRANSCRIPT")).toBeNull();
   expect(ext.requests).toHaveLength(count);

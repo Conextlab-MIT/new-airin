@@ -2,9 +2,9 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ToolContext } from "@nakama/core";
-import { pathExists, runWriteFile } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { ToolContext } from "@airin/core";
+import { pathExists, runWriteFile } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { zipSync } from "fflate";
 import { SkillProposalService } from "../services/skill-proposal-service";
 import { SkillsService } from "../services/skills-service";
@@ -57,7 +57,7 @@ describe("skill_manage tool", () => {
   let configDir: string;
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (configDir) {
       await rm(configDir, { force: true, recursive: true });
@@ -65,8 +65,8 @@ describe("skill_manage tool", () => {
   });
 
   async function setup() {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-manage-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-manage-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const db = createInMemoryDatabaseAdapter();
     const service = new SkillsService(db);
 
@@ -654,8 +654,8 @@ Profile body.
   });
 
   test("gate on stages create without writing disk", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-manage-gate-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-manage-gate-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const db = createInMemoryDatabaseAdapter();
     const profile = await seedOrgProfile(db, { orgSkillsWriteApproval: true });
     const service = new SkillsService(db);

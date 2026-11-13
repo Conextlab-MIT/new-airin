@@ -6,7 +6,7 @@ import {
   createId,
   normalizeAutomationDelivery,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 
 const GeneratedTriggerSchema = z.discriminatedUnion("type", [

@@ -1,4 +1,4 @@
-import type { AgentTodo } from "@nakama/core/contract";
+import type { AgentTodo } from "@airin/core/contract";
 import type { WASocket } from "@whiskeysockets/baileys";
 import { renderWhatsAppTodoStatus } from "./format";
 import { rememberWhatsAppOutbound } from "./inbound-message";

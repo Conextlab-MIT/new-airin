@@ -1,5 +1,5 @@
 import type * as acp from "@agentclientprotocol/sdk";
-import type { AcpSessionSetting } from "@nakama/core";
+import type { AcpSessionSetting } from "@airin/core";
 
 /**
  * Keeps the settings the composer can change: select lists such as the model

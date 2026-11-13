@@ -111,8 +111,8 @@ async function refresh() {
   document.querySelector("#connect-step").textContent = connected ? "✓" : "1";
   document.querySelector("#connect-step").dataset.done = String(connected);
   document.querySelector("#connect-label").textContent = connected
-    ? "Nakama connected"
-    : "Connect Nakama";
+    ? "Airin connected"
+    : "Connect Airin";
   document.querySelector("#meet-step").textContent =
     recording || onMeet ? "✓" : "2";
   document.querySelector("#meet-step").dataset.done = String(
@@ -161,8 +161,8 @@ async function refresh() {
           ? "Ready."
           : "Open the extension in your Meet tab."
         : pairing
-          ? "Approve this code in the Nakama tab."
-          : "Enter your Nakama address, then connect.");
+          ? "Approve this code in the Airin tab."
+          : "Enter your Airin address, then connect.");
   renderResult();
 }
 
@@ -195,7 +195,7 @@ function renderResult() {
   document.querySelector("#done-title").textContent = saved
     ? onMeetNow
       ? "Transcript saved"
-      : "Transcript saved in Nakama"
+      : "Transcript saved in Airin"
     : "Finishing transcript";
   document.querySelector("#done-meta").textContent = [
     code,
@@ -256,7 +256,7 @@ connectForm.onsubmit = async (event) => {
   try {
     url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
   } catch {
-    status.textContent = "Enter your Nakama address.";
+    status.textContent = "Enter your Airin address.";
 
     return;
   }
@@ -267,7 +267,7 @@ connectForm.onsubmit = async (event) => {
   });
 
   if (!granted) {
-    status.textContent = "Allow access to your Nakama address to connect.";
+    status.textContent = "Allow access to your Airin address to connect.";
 
     return;
   }
@@ -297,8 +297,8 @@ document.querySelector("#copy-text").onclick = () => {
       status.textContent = "Transcript copied.";
     })
     .catch((error) => {
-      console.warn("[Nakama Meet] copy failed", error.message);
-      status.textContent = "Could not copy. Open the transcript in Nakama.";
+      console.warn("[Airin Meet] copy failed", error.message);
+      status.textContent = "Could not copy. Open the transcript in Airin.";
     });
 };
 
@@ -326,7 +326,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     !busy &&
     ((area === "session" &&
       (changes.captureSession || changes.pairing || changes.pairError)) ||
-      (area === "local" && (changes.meetKey || changes.nakamaOrigin)))
+      (area === "local" && (changes.meetKey || changes.airinOrigin)))
   ) {
     refresh().catch((error) => {
       status.textContent = error.message;
@@ -374,7 +374,7 @@ function resetTranscript() {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (
-    (area === "local" && (changes.meetKey || changes.nakamaOrigin)) ||
+    (area === "local" && (changes.meetKey || changes.airinOrigin)) ||
     (area === "session" &&
       changes.captureSession?.newValue?.meetingId !==
         changes.captureSession?.oldValue?.meetingId)
@@ -486,7 +486,7 @@ async function refreshTranscript() {
       status.textContent = "Finishing transcript…";
     } else if (result.meeting.state === "finished") {
       status.textContent =
-        "You can close this panel. The transcript stays in Nakama.";
+        "You can close this panel. The transcript stays in Airin.";
     } else if (turnIds.size === 0) {
       status.textContent = "Waiting for the first transcript…";
     } else if (result.meeting.state === "recording") {

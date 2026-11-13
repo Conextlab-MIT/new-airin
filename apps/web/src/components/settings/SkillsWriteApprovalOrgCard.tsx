@@ -1,8 +1,8 @@
-import { Card } from "@nakama/ui/card";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { toast } from "@nakama/ui/toast";
-import { cn } from "@nakama/ui/utils";
+import { Card } from "@airin/ui/card";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { toast } from "@airin/ui/toast";
+import { cn } from "@airin/ui/utils";
 import { type ReactNode, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { OrgSettingsProfileBooleanOverrideField } from "@/components/profiles/ProfileOrgBooleanOverrideField";

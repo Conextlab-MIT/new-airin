@@ -33,7 +33,7 @@ afterEach(async () => {
 });
 
 async function createAuthDirectory(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "nakama-whatsapp-auth-state-"));
+  const root = await mkdtemp(join(tmpdir(), "airin-whatsapp-auth-state-"));
   temporaryDirectories.push(root);
 
   return join(root, "auth");

@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { NakamaApiError, type StreamEvent } from "@nakama/core";
-import type { StoredSessionRecord } from "@nakama/db";
+import { AirinApiError, type StreamEvent } from "@airin/core";
+import type { StoredSessionRecord } from "@airin/db";
 import { createOpenAICompatibleProvider } from "../providers/openai-compatible";
 import { asTestFetch, streamFromChunks } from "../providers/test-helpers";
 import { SessionTurnRegistry } from "./session-turn-registry";
@@ -225,7 +225,7 @@ describe("TurnRunner", () => {
 
   test("a 4xx refusal is not reported", async () => {
     const { fake } = chat(async () => {
-      throw new NakamaApiError("Forbidden", 403);
+      throw new AirinApiError("Forbidden", 403);
     });
 
     const { reported, run } = setup(fake);
@@ -239,7 +239,7 @@ describe("TurnRunner", () => {
 
     const { registry, runner } = setup(fake, {
       prepare: async () => {
-        throw new NakamaApiError("Select a configured model.", 400);
+        throw new AirinApiError("Select a configured model.", 400);
       },
     });
 

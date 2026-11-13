@@ -1,8 +1,8 @@
-import { Button } from "@nakama/ui/button";
-import { CodeBlock } from "@nakama/ui/code-block";
-import { Spinner } from "@nakama/ui/spinner";
-import { toast } from "@nakama/ui/toast";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { CodeBlock } from "@airin/ui/code-block";
+import { Spinner } from "@airin/ui/spinner";
+import { toast } from "@airin/ui/toast";
+import { cn } from "@airin/ui/utils";
 import {
   ArrowLeft02Icon,
   ArrowRight01Icon,
@@ -407,7 +407,7 @@ function PageState({ message }: { message: string }) {
   );
 }
 
-import type { SkillFilesResponse, SkillVersion } from "@nakama/core/contract";
+import type { SkillFilesResponse, SkillVersion } from "@airin/core/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { buildFileDiffRows, FileDiff } from "@/components/file-diff";
 import {
@@ -429,7 +429,7 @@ const versionSourceLabels: Record<
   dashboard: "Dashboard",
   pack_import: "Pack import",
   skill_manage: "Agent",
-  super_nakama: "Super Nakama",
+  super_airin: "Airin",
 };
 
 function versionAuthor(version: SkillVersion): string {

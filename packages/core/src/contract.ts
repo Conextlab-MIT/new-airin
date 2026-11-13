@@ -217,12 +217,12 @@ export function parseAgentChannel(value: string): AgentChannel | null {
   return AGENT_CHANNELS.find((channel) => channel === value) ?? null;
 }
 
-export const NAKAMA_API_VERSION = 1;
+export const AIRIN_API_VERSION = 1;
 
 export interface HealthResponse {
-  apiVersion: typeof NAKAMA_API_VERSION;
+  apiVersion: typeof AIRIN_API_VERSION;
   /**
-   * Whether Nakama can reach the Composio API with the saved key.
+   * Whether Airin can reach the Composio API with the saved key.
    * Probed only on `GET /v1/system/status` (`server.composioAvailable`).
    * `GET /health` always returns `false` so liveness stays local and fast.
    */
@@ -230,13 +230,13 @@ export interface HealthResponse {
   /** A Composio project API key is saved on this server. */
   composioConfigured: boolean;
   ok: true;
-  /** `NAKAMA_ENABLE_ONBOARDING` is on: a new user gets the goal prompt. */
+  /** `AIRIN_ENABLE_ONBOARDING` is on: a new user gets the goal prompt. */
   onboardingEnabled: boolean;
   providerConfigured: boolean;
-  /** `NAKAMA_DISABLE_UPDATE_CHECK` is not set: platform admins see newer releases. */
+  /** `AIRIN_DISABLE_UPDATE_CHECK` is not set: platform admins see newer releases. */
   updateCheckEnabled: boolean;
   userConfigured: boolean;
-  /** App version (`NAKAMA_VERSION` or package.json). Not `apiVersion`. */
+  /** App version (`AIRIN_VERSION` or package.json). Not `apiVersion`. */
   version: string;
 }
 
@@ -424,10 +424,10 @@ export interface DataExportSkippedItem {
 }
 
 export interface DataExportManifest {
-  apiVersion: typeof NAKAMA_API_VERSION;
+  apiVersion: typeof AIRIN_API_VERSION;
   createdAt: string;
   fileCount: number;
-  kind: "nakama-export";
+  kind: "airin-export";
   skipped: DataExportSkippedItem[];
   sourceRootName: string;
   topLevelPaths: string[];
@@ -464,7 +464,7 @@ export interface SetupRestoreDataImportResponse
 }
 
 /**
- * Single-profile "pack" portability, distinct from full-root `nakama-export`.
+ * Single-profile "pack" portability, distinct from full-root `airin-export`.
  * Contains only one profile's portable workspace + name-based assignment
  * references — never provider keys, MCP config, or Composio connections.
  */
@@ -503,9 +503,9 @@ export interface ProfilePackMeta {
 }
 
 export interface ProfilePackManifest {
-  apiVersion: typeof NAKAMA_API_VERSION;
+  apiVersion: typeof AIRIN_API_VERSION;
   createdAt: string;
-  kind: "nakama-profile-export";
+  kind: "airin-profile-export";
   meta: ProfilePackMeta;
   skipped: ProfilePackSkippedItem[];
   sourceProfileId: string;
@@ -556,14 +556,14 @@ export interface UpdateWebPublicUrlRequest {
   webPublicUrl: string;
 }
 
-export interface NakamaVersionResponse {
+export interface AirinVersionResponse {
   current: string;
   latest: string;
   releaseUrl: string;
   updateAvailable: boolean;
 }
 
-export interface NakamaUpgradeResponse {
+export interface AirinUpgradeResponse {
   /** False until the Compose updater service is running. */
   available: boolean;
   /** Versions with an archive of their data, newest first, current excluded. */
@@ -584,7 +584,7 @@ export interface BackupStatusResponse {
 }
 
 export interface WebPublicUrlSettingsResponse {
-  /** Set when NAKAMA_WEB_PUBLIC_URL / NAKAMA_PUBLIC_URL overrides the saved value. */
+  /** Set when AIRIN_WEB_PUBLIC_URL / AIRIN_PUBLIC_URL overrides the saved value. */
   envOverride: string | null;
   webPublicUrl: string | null;
 }
@@ -688,6 +688,25 @@ export interface OrganizationSummary {
   skillsWriteApproval?: boolean;
   slug: string;
   updatedAt: string;
+}
+
+/** Platform-admin install overview (orgs, users, LLM rollup). */
+export interface PlatformOverviewOrgRow {
+  estimatedCostUsd: number;
+  id: string;
+  name: string;
+  slug: string;
+  totalTokens: number;
+}
+
+export interface PlatformOverviewResponse {
+  organizations: PlatformOverviewOrgRow[];
+  totals: {
+    estimatedCostUsd: number;
+    organizationCount: number;
+    totalTokens: number;
+    userCount: number;
+  };
 }
 
 export interface CreateOrganizationRequest {
@@ -852,7 +871,7 @@ export interface OrgUsageLeader {
 }
 
 export interface OrgUsageSummaryResponse {
-  /** Every agent by requests, Super Nakama excluded. */
+  /** Every agent by requests, Airin excluded. */
   agents: OrgUsageLeader[];
   /** Estimated spend over the last 30 UTC days. */
   costUsd30d: number;
@@ -1702,6 +1721,16 @@ export interface UpdateTimezoneRequest {
   timezone: string;
 }
 
+export type AppLanguage = "id" | "en";
+
+export interface LanguageSettingsResponse {
+  language: AppLanguage;
+}
+
+export interface UpdateLanguageRequest {
+  language: AppLanguage;
+}
+
 export type ThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ThinkingSettings {
@@ -2086,7 +2115,7 @@ export interface AgentBrowserStatusResponse {
   installCommand: string;
   installed: boolean;
   nextStep: "install" | null;
-  /** null means agent-browser launches Chrome on the Nakama host. */
+  /** null means agent-browser launches Chrome on the Airin host. */
   provider: AgentBrowserProvider | null;
   ready: boolean;
   statusMessage: string | null;
@@ -2354,7 +2383,7 @@ export interface AcpSessionSettingsResponse {
   settings: AcpSessionSetting[];
 }
 
-/** An agent Nakama ships with, ready to save on a profile. */
+/** An agent Airin ships with, ready to save on a profile. */
 export interface AcpAgentPresetSummary {
   agent: AcpAgentConfig;
   id: string;
@@ -2706,7 +2735,7 @@ export interface ProfileResponse {
   profile: ProfileDetail;
 }
 
-export interface CreateProfileWithSuperNakamaRequest {
+export interface CreateProfileWithSuperAirinRequest {
   name?: string;
   prompt: string;
 }
@@ -2748,7 +2777,7 @@ export interface UpdateProfileRequest {
 
 export type ProfileChangeSource =
   | "dashboard"
-  | "super_nakama"
+  | "super_airin"
   | "skill_manage"
   | "pack_import";
 
@@ -3418,7 +3447,7 @@ export interface ToolContext {
    * refuse paths matching skills/<name>/SKILL.md under the profile workspace.
    */
   forbidProfileSkillMarkdownWrites?: boolean;
-  /** Platform admin flag for Super Nakama bind checks (same as HTTP ProfileAccess). */
+  /** Platform admin flag for Airin bind checks (same as HTTP ProfileAccess). */
   isPlatformAdmin?: boolean;
   listPublishedKnowledgeDocuments?: () => Promise<
     PublishedKnowledgeBaseDocument[]
@@ -3485,7 +3514,7 @@ export interface ToolContext {
   };
   workflowId?: string;
   workflowRunId?: string;
-  /** Profile workspace root (~/.nakama/orgs/{orgId}/profiles/{profileId}/). */
+  /** Profile workspace root (~/.airin/orgs/{orgId}/profiles/{profileId}/). */
   workspaceRoot?: string;
 }
 
@@ -3587,7 +3616,7 @@ export interface ListComposioToolkitsResponse {
   catalogError: string | null;
   /** @deprecated Use composioReachable. */
   composioAvailable: boolean;
-  /** Nakama can reach the Composio API with the saved key. */
+  /** Airin can reach the Composio API with the saved key. */
   composioReachable: boolean;
   /** A Composio project API key is saved on this server. */
   configured: boolean;
@@ -3607,7 +3636,13 @@ export interface ComposioConnectRequest {
 }
 
 export interface ComposioConnectResponse {
-  redirectUrl: string;
+  /** True when the account is ready without an OAuth redirect. */
+  connected?: boolean;
+  /**
+   * Composio OAuth URL when the toolkit needs sign-in. Null when the toolkit
+   * needs no auth (or is already ready) and tools were synced in this call.
+   */
+  redirectUrl: string | null;
 }
 
 /** Composio has no managed OAuth app for the toolkit, for example Google Forms. */

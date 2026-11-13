@@ -7,8 +7,8 @@ import type {
   ToolCall,
   ToolContext,
   ToolDefinition,
-} from "@nakama/core";
-import { NakamaApiError, ProviderStreamInterruptedError } from "@nakama/core";
+} from "@airin/core";
+import { AirinApiError, ProviderStreamInterruptedError } from "@airin/core";
 import { createAgentChatSession } from "./index";
 
 function createCountingProvider(responses: ChatCompletionResult[]) {
@@ -271,8 +271,7 @@ describe("agent chat stream interruption", () => {
     // later request can fail after the first one streamed text.
     const { calls, provider } = breakingProvider(
       1,
-      () =>
-        new NakamaApiError("Anthropic request failed (529): Overloaded", 502)
+      () => new AirinApiError("Anthropic request failed (529): Overloaded", 502)
     );
 
     const ended: string[] = [];

@@ -7,9 +7,9 @@ import { useChatAttachmentPanel } from "@/context/use-chat-attachment-panel";
 
 const CHAT = "test-session";
 
-const PANELS_KEY = "nakama:chat-panels";
+const PANELS_KEY = "airin:chat-panels";
 
-const WIDTH_KEY = "nakama:attachment-panel-width";
+const WIDTH_KEY = "airin:attachment-panel-width";
 
 const ARTIFACT = "profile:artifacts/a.html";
 

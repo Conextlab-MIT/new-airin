@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   generateSkillPostTurnReview,
   type SkillPostTurnReviewOutcome,
-} from "@nakama/agent";
+} from "@airin/agent";
 import {
   type AgentChannel,
   type ChatMessage,
@@ -15,10 +15,10 @@ import {
   resolveProfileOrgBooleanOverride,
   SKILL_FILE_NAME,
   type UserConfig,
-} from "@nakama/core";
-import { resolveProfileSkillDirectory } from "@nakama/core/skills/write";
-import { comparablePath, resolveWithRealpath } from "@nakama/core/tools/paths";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { resolveProfileSkillDirectory } from "@airin/core/skills/write";
+import { comparablePath, resolveWithRealpath } from "@airin/core/tools/paths";
+import type { DatabaseAdapter } from "@airin/db";
 import { z } from "zod";
 import { createProviderForProfile } from "./provider-instance-helpers";
 

@@ -9,9 +9,9 @@
   <title id="title">What runs when someone uses a plugin</title>
   <desc id="desc">
     A member on the plugin page, or a profile in chat, starts a plugin action.
-    Nakama checks the organization, role, and assignment, then runs the action
-    on the server. The action uses its organization data and can use the
-    profile's assigned tools.
+    Airin checks the organization, role, and assignment, then runs the action on
+    the server. The action uses its organization data and can use the profile's
+    assigned tools.
   </desc>
   <style>
   .bg {
@@ -143,7 +143,7 @@
 
   <rect class="gate" height="56" rx="8" width="340" x="170" y="142" />
   <text class="title gate-t" text-anchor="middle" x="340" y="165">
-    Nakama checks access
+    Airin checks access
   </text>
   <text class="sub gate-s" text-anchor="middle" x="340" y="184">
     Organization, role, assignment, plugin on
@@ -155,7 +155,7 @@
     Plugin action runs
   </text>
   <text class="sub" text-anchor="middle" x="340" y="274">
-    On the Nakama server
+    On the Airin server
   </text>
   <path class="arr" d="M300 288 L205 318" marker-end="url(#a)" />
   <path class="arr" d="M380 288 L475 318" marker-end="url(#a)" />

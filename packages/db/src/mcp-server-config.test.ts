@@ -33,23 +33,23 @@ describe("MCP server config at rest", () => {
   let previousConfigDir: string | undefined;
 
   beforeEach(async () => {
-    rootDir = await mkdtemp(join(tmpdir(), "nakama-mcp-config-"));
-    previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = rootDir;
+    rootDir = await mkdtemp(join(tmpdir(), "airin-mcp-config-"));
+    previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = rootDir;
   });
 
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     await rm(rootDir, { force: true, recursive: true });
   });
 
   test("stores config encrypted and reads it back in plain form", async () => {
-    const sqlitePath = join(rootDir, "nakama.sqlite");
+    const sqlitePath = join(rootDir, "airin.sqlite");
     const database = await createDatabase(`file:${sqlitePath}`);
     const record = serverRecord("mcp-1");
 
@@ -78,7 +78,7 @@ describe("MCP server config at rest", () => {
   });
 
   test("reads a config saved before encryption", async () => {
-    const sqlitePath = join(rootDir, "nakama.sqlite");
+    const sqlitePath = join(rootDir, "airin.sqlite");
     const database = await createDatabase(`file:${sqlitePath}`);
     const record = serverRecord("mcp-legacy");
 
@@ -99,7 +99,7 @@ describe("MCP server config at rest", () => {
   });
 
   test("a config copied to another server row does not decrypt", async () => {
-    const sqlitePath = join(rootDir, "nakama.sqlite");
+    const sqlitePath = join(rootDir, "airin.sqlite");
     const database = await createDatabase(`file:${sqlitePath}`);
 
     await database.adapter.upsertMcpServer(serverRecord("mcp-a"));

@@ -1,4 +1,4 @@
-import type { ProviderModelOption as ContractProviderModelOption } from "@nakama/core/contract";
+import type { ProviderModelOption as ContractProviderModelOption } from "@airin/core/contract";
 
 export type ProviderModelOption = ContractProviderModelOption & {
   contextWindow: number;

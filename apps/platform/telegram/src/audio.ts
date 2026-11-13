@@ -1,5 +1,5 @@
-import type { NakamaClient } from "@nakama/client";
-import type { SendMessageInput } from "@nakama/core/contract";
+import type { AirinClient } from "@airin/client";
+import type { SendMessageInput } from "@airin/core/contract";
 import type { Context } from "grammy";
 import {
   downloadTelegramFile,
@@ -16,7 +16,7 @@ export function hasTelegramAudio(ctx: Context): boolean {
 
 export async function buildTelegramAudioInput(
   ctx: Context,
-  client: NakamaClient
+  client: AirinClient
 ): Promise<SendMessageInput | null> {
   const voice = ctx.message?.voice;
   const audio = ctx.message?.audio;

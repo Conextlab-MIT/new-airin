@@ -4,12 +4,12 @@ import { runBash } from "./bash";
 import { TENANT_BASH_DISABLED } from "./bash-config";
 
 const ENV_KEYS = [
-  "NAKAMA_BASH_BACKEND",
-  "NAKAMA_BASH_REMOTE_URL",
-  "NAKAMA_BASH_REMOTE_TOKEN",
-  "NAKAMA_BASH_SANDBOX_NETWORK",
-  "NAKAMA_TENANT_BASH",
-  "NAKAMA_TEST_SERVER_SECRET",
+  "AIRIN_BASH_BACKEND",
+  "AIRIN_BASH_REMOTE_URL",
+  "AIRIN_BASH_REMOTE_TOKEN",
+  "AIRIN_BASH_SANDBOX_NETWORK",
+  "AIRIN_TENANT_BASH",
+  "AIRIN_TEST_SERVER_SECRET",
 ] as const;
 
 const context = { orgId: "org_a", profileId: "profile_b" };
@@ -27,11 +27,11 @@ describe("remote bash backend", () => {
       saved.set(key, process.env[key]);
     }
 
-    process.env.NAKAMA_BASH_BACKEND = "remote";
-    process.env.NAKAMA_BASH_REMOTE_URL = "https://sandbox.test/v1/exec";
-    process.env.NAKAMA_BASH_REMOTE_TOKEN = "remote-token";
-    delete process.env.NAKAMA_BASH_SANDBOX_NETWORK;
-    delete process.env.NAKAMA_TENANT_BASH;
+    process.env.AIRIN_BASH_BACKEND = "remote";
+    process.env.AIRIN_BASH_REMOTE_URL = "https://sandbox.test/v1/exec";
+    process.env.AIRIN_BASH_REMOTE_TOKEN = "remote-token";
+    delete process.env.AIRIN_BASH_SANDBOX_NETWORK;
+    delete process.env.AIRIN_TENANT_BASH;
 
     calls = [];
     respond = async () => Response.json(okOutput);
@@ -73,13 +73,13 @@ describe("remote bash backend", () => {
       cwd: "/workspace/src/app",
       env: {},
       network: "off",
-      sandboxId: "nakama-org_a-profile_b",
+      sandboxId: "airin-org_a-profile_b",
       timeoutMs: 5000,
     });
   });
 
   test("sends only the call's env with secret-shaped keys removed", async () => {
-    process.env.NAKAMA_TEST_SERVER_SECRET = "server-only";
+    process.env.AIRIN_TEST_SERVER_SECRET = "server-only";
 
     await runBash(
       {
@@ -151,13 +151,13 @@ describe("remote bash backend", () => {
   test("fails closed without falling back to host bash", async () => {
     const failures: Array<() => void> = [
       () => {
-        delete process.env.NAKAMA_BASH_REMOTE_URL;
+        delete process.env.AIRIN_BASH_REMOTE_URL;
       },
       () => {
-        delete process.env.NAKAMA_BASH_REMOTE_TOKEN;
+        delete process.env.AIRIN_BASH_REMOTE_TOKEN;
       },
       () => {
-        process.env.NAKAMA_BASH_REMOTE_URL = "file:///tmp/sock";
+        process.env.AIRIN_BASH_REMOTE_URL = "file:///tmp/sock";
       },
       () => {
         respond = async () => new Response("no", { status: 401 });
@@ -174,8 +174,8 @@ describe("remote bash backend", () => {
     ];
 
     for (const breakConfig of failures) {
-      process.env.NAKAMA_BASH_REMOTE_URL = "https://sandbox.test/v1/exec";
-      process.env.NAKAMA_BASH_REMOTE_TOKEN = "remote-token";
+      process.env.AIRIN_BASH_REMOTE_URL = "https://sandbox.test/v1/exec";
+      process.env.AIRIN_BASH_REMOTE_TOKEN = "remote-token";
       breakConfig();
 
       await expect(
@@ -191,8 +191,8 @@ describe("remote bash backend", () => {
     expect(calls).toHaveLength(0);
   });
 
-  test("keeps the NAKAMA_TENANT_BASH gate", async () => {
-    process.env.NAKAMA_TENANT_BASH = "0";
+  test("keeps the AIRIN_TENANT_BASH gate", async () => {
+    process.env.AIRIN_TENANT_BASH = "0";
 
     await expect(runBash({ command: "echo hi" }, context)).rejects.toThrow(
       TENANT_BASH_DISABLED
@@ -211,16 +211,16 @@ describe("remote bash backend", () => {
   });
 
   test("sends network public only when the operator opts in", async () => {
-    process.env.NAKAMA_BASH_SANDBOX_NETWORK = "public";
+    process.env.AIRIN_BASH_SANDBOX_NETWORK = "public";
     await runBash({ command: "curl example.com" }, context);
     expect(calls[0]?.body).toMatchObject({ network: "public" });
 
-    process.env.NAKAMA_BASH_SANDBOX_NETWORK = "on";
+    process.env.AIRIN_BASH_SANDBOX_NETWORK = "on";
     await expect(runBash({ command: "true" }, context)).rejects.toThrow();
   });
 
   test("rejects an unknown backend", async () => {
-    process.env.NAKAMA_BASH_BACKEND = "microsandbox";
+    process.env.AIRIN_BASH_BACKEND = "microsandbox";
 
     await expect(runBash({ command: "true" }, context)).rejects.toThrow();
     expect(calls).toHaveLength(0);

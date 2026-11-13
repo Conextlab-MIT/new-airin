@@ -3,7 +3,7 @@ import { createWriteStream, type WriteStream } from "node:fs";
 import { join } from "node:path";
 import { finished } from "node:stream/promises";
 import { format } from "node:util";
-import type { ChannelOwner } from "@nakama/core/channel-config-shared";
+import type { ChannelOwner } from "@airin/core/channel-config-shared";
 
 interface ChannelLogs {
   key: string;

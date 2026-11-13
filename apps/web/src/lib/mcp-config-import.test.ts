@@ -90,9 +90,9 @@ describe("parseMcpConfigJson", () => {
     const remote = parseMcpConfigJson(`{
       "$schema": "https://opencode.ai/config.json",
       "mcp": {
-        "nakama-owner": {
+        "airin-owner": {
           "type": "remote",
-          "url": "https://withnakama.com/mcp/owner",
+          "url": "https://withairin.com/mcp/owner",
           "enabled": true,
           "headers": { "Authorization": "Bearer token" }
         }
@@ -105,9 +105,9 @@ describe("parseMcpConfigJson", () => {
       server: {
         config: {
           headers: { Authorization: "Bearer token" },
-          url: "https://withnakama.com/mcp/owner",
+          url: "https://withairin.com/mcp/owner",
         },
-        name: "nakama-owner",
+        name: "airin-owner",
         transport: "http",
       },
     });

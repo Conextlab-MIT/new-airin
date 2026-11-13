@@ -4,10 +4,10 @@ import type {
   LlmUsageStats,
   LlmUsageStatus,
   SystemStatusResponse,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { cn } from "@airin/ui/utils";
 import type { Clock01Icon } from "hugeicons-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -344,7 +344,7 @@ function llmUsageCostNote(
       return `Based on pricing saved in Settings for ${modelLabel}. Actual billing may differ.`;
     }
 
-    return "Estimated cost uses Nakama's built-in model prices. Your provider may charge a different amount.";
+    return "Estimated cost uses Airin's built-in model prices. Your provider may charge a different amount.";
   }
 
   if (usesBrowsePricingHint(usage.provider)) {

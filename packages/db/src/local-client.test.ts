@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   LOCAL_CLIENT_EMAIL,
   LOCAL_CLIENT_USER_ID,
-} from "@nakama/core/local-auth";
+} from "@airin/core/local-auth";
 import { createInMemoryDatabaseAdapter } from "./index";
 import { ensureLocalClientAccess } from "./local-client";
 

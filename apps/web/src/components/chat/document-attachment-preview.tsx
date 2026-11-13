@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   ArrowExpand01Icon,
   ArrowShrink02Icon,

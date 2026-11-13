@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { Switch } from "@nakama/ui/switch";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { Switch } from "@airin/ui/switch";
 import {
   ChannelConnectionStep,
   ChannelSettings,

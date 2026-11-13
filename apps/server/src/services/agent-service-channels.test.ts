@@ -7,8 +7,8 @@ import {
   loadTelegramConfigFile,
   loadWhatsAppConfigFile,
   saveWhatsAppConfig,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { createMinimalHonoApp } from "../http/test-app-helpers";
 import { setupFreshInstallSession } from "../http/test-session-helpers";
 import { asTestFetch } from "../providers/test-helpers";
@@ -25,13 +25,13 @@ describe("AgentService bot token validation", () => {
   let configDir = "";
 
   beforeEach(async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-bot-token-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-bot-token-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(async () => {
     globalThis.fetch = originalFetch;
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     await rm(configDir, { force: true, recursive: true });
   });
 
@@ -300,12 +300,12 @@ describe("AgentService WhatsApp allowed phones", () => {
   let configDir = "";
 
   beforeEach(async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-wa-allowed-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-wa-allowed-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     await rm(configDir, { force: true, recursive: true });
   });
 

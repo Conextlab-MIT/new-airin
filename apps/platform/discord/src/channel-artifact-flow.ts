@@ -1,4 +1,4 @@
-import type { NakamaClient, RemoteChatSession } from "@nakama/client";
+import type { AirinClient, RemoteChatSession } from "@airin/client";
 import {
   type DeliverableChannelArtifact,
   deliverTurnArtifactShares,
@@ -6,9 +6,9 @@ import {
   isAttachOnlyCommand,
   pushDeliverableArtifact,
   resolveArtifactForAttach,
-} from "@nakama/core";
-import type { ChannelSessionStore } from "@nakama/core/channel-session-store";
-import { DISCORD_ARTIFACT_ATTACHMENT_MAX_BYTES } from "@nakama/core/discord-attachment";
+} from "@airin/core";
+import type { ChannelSessionStore } from "@airin/core/channel-session-store";
+import { DISCORD_ARTIFACT_ATTACHMENT_MAX_BYTES } from "@airin/core/discord-attachment";
 import type { TextBasedChannel } from "discord.js";
 import { z } from "zod";
 import type { DiscordMessenger } from "./messenger";
@@ -16,7 +16,7 @@ import { sendDiscordArtifactAttachment } from "./send-artifact-attachment";
 
 async function uploadArtifactBytes(input: {
   channel: TextBasedChannel;
-  client: NakamaClient;
+  client: AirinClient;
   profileId: string;
   path: string;
   filename: string;
@@ -53,7 +53,7 @@ async function uploadArtifactBytes(input: {
 
 export async function uploadDiscordArtifactFromToolResult(input: {
   channel: TextBasedChannel;
-  client: NakamaClient;
+  client: AirinClient;
   messenger: DiscordMessenger;
   profileId: string;
   result: unknown;
@@ -86,7 +86,7 @@ export async function uploadDiscordArtifactFromToolResult(input: {
 
 export async function maybeSendRequestedDiscordArtifactAttachment(input: {
   channel: TextBasedChannel;
-  client: NakamaClient;
+  client: AirinClient;
   conversationKey: string;
   profileId: string;
   /** Raw user text before group-context prefixing. */
@@ -103,7 +103,7 @@ export async function maybeSendRequestedDiscordArtifactAttachment(input: {
   );
 
   let listed: Awaited<
-    ReturnType<NakamaClient["listProfileArtifacts"]>
+    ReturnType<AirinClient["listProfileArtifacts"]>
   >["artifacts"] = [];
 
   if (registry.length === 0) {
@@ -150,7 +150,7 @@ export async function maybeSendRequestedDiscordArtifactAttachment(input: {
 
 export async function deliverDiscordTurnArtifactShares(input: {
   channel: TextBasedChannel;
-  client: NakamaClient;
+  client: AirinClient;
   session: RemoteChatSession;
   conversationKey: string;
   profileId: string;
@@ -179,7 +179,7 @@ export async function deliverDiscordTurnArtifactShares(input: {
 
 async function tryUploadDiscordArtifact(input: {
   channel: TextBasedChannel;
-  client: NakamaClient;
+  client: AirinClient;
   profileId: string;
   artifact: DeliverableChannelArtifact;
 }): Promise<boolean> {

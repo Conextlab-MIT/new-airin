@@ -1,10 +1,10 @@
 import {
+  AirinApiError,
   IMAGE_VISION_SYSTEM_PROMPT,
   type MessageContentPart,
-  NakamaApiError,
   type ProviderClient,
   type UserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import { modelSupportsVision } from "../providers/models";
 import {
   modelExistsOnInstance,
@@ -32,7 +32,7 @@ export function resolveVisionProviderSelection(
   }
 
   if (!modelExistsOnInstance(selected.instance, selected.modelId)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Configured image parsing model is unavailable. Update it in Settings → AI Providers (/settings/providers#image-parsing).",
       400
     );
@@ -45,7 +45,7 @@ export function resolveVisionProviderSelection(
   });
 
   if (!resolved) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Configured image parsing model is unavailable. Update it in Settings → AI Providers (/settings/providers#image-parsing).",
       400
     );
@@ -58,7 +58,7 @@ export function resolveVisionProviderSelection(
   );
 
   if (supportsVision !== true) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Configured image parsing model "${resolved.model}" does not support vision.`,
       400
     );

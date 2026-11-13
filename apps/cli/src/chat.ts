@@ -1,9 +1,9 @@
 import type {
-  NakamaClient,
+  AirinClient,
   RemoteChatSession,
   SendMessageArg,
   StreamHandlers,
-} from "@nakama/client";
+} from "@airin/client";
 import {
   type AgentChannel,
   formatClientError,
@@ -17,9 +17,9 @@ import {
   type SoulStatusResponse,
   type ThinkingEffort,
   type UserContextStatusResponse,
-} from "@nakama/core";
-import { isAbortError } from "@nakama/core/channel-active-stream";
-import { isThinkingEffort } from "@nakama/core/thinking-effort";
+} from "@airin/core";
+import { isAbortError } from "@airin/core/channel-active-stream";
+import { isThinkingEffort } from "@airin/core/thinking-effort";
 import { loadSavedCliOrgId, saveCliProfileId } from "./cli-config";
 import {
   effectiveModelState,
@@ -155,7 +155,7 @@ export function formatToolCall(
 
 interface RunChatOptions {
   channel: AgentChannel;
-  client: NakamaClient;
+  client: AirinClient;
   codingWorkspaceRoot?: string;
   offline?: boolean;
   profileId?: CliProfileOptions["profileId"];
@@ -1505,7 +1505,7 @@ async function runBlockingChat(context: ChatContext): Promise<void> {
 }
 
 async function printCurrentModel(
-  client: NakamaClient,
+  client: AirinClient,
   write: (text: string) => void = printLine,
   profile: ProfileSummary,
   cachedModels: ModelsResponse | null = null
@@ -1554,7 +1554,7 @@ function formatStatusLines(
 }
 
 async function printStatus(
-  client: NakamaClient,
+  client: AirinClient,
   write: (text: string) => void,
   profile: ProfileSummary | null,
   cachedModels: ModelsResponse | null

@@ -16,19 +16,16 @@ import {
   getOrgPluginDatabasePath,
   getOrgPluginDataDir,
   pathExists,
-} from "@nakama/core";
-import {
-  createInMemoryDatabaseAdapter,
-  createSqliteDatabase,
-} from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter, createSqliteDatabase } from "@airin/db";
 import { unzipSync } from "fflate";
 import {
   closePluginPackageRegistry,
   pluginPackage,
 } from "../testing/plugin-package-fixture";
 import {
-  createNakamaDataExport,
-  restoreNakamaDataImport,
+  createAirinDataExport,
+  restoreAirinDataImport,
 } from "./data-portability";
 import {
   PluginService,
@@ -59,8 +56,7 @@ function notesBundle(): ReturnType<typeof pluginPackage> {
     "actions/list.js": Buffer.from(
       "export function run() { return { notes: [] }; }"
     ),
-    "migrations/001.sql": Buffer.from("CREATE TABLE notes (title TEXT);"),
-    "nakama.plugin.json": Buffer.from(
+    "airin.plugin.json": Buffer.from(
       JSON.stringify({
         actions: ["list", "create"].map((key) => ({
           access: "member",
@@ -72,17 +68,18 @@ function notesBundle(): ReturnType<typeof pluginPackage> {
           key,
         })),
         apiVersion: 1,
-        author: "Nakama",
+        author: "Airin",
         database: { migrations: [{ id: "001", path: "migrations/001.sql" }] },
         description: "Portability test fixture",
         id: "notes",
         license: "MIT",
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         name: "Notes",
         skills: [{ directory: "skills/notes", key: "notes" }],
         version: "1.0.0",
       })
     ),
+    "migrations/001.sql": Buffer.from("CREATE TABLE notes (title TEXT);"),
     "skills/notes/SKILL.md": Buffer.from(
       "---\nname: notes\ndescription: Test plugin skill\n---\nList notes.\n"
     ),
@@ -97,8 +94,7 @@ export async function run(input, context) {
   await new Promise(() => {});
 }
 `),
-    "migrations/001.sql": Buffer.from("CREATE TABLE items (id TEXT);\n"),
-    "nakama.plugin.json": Buffer.from(
+    "airin.plugin.json": Buffer.from(
       JSON.stringify({
         actions: [
           {
@@ -112,19 +108,20 @@ export async function run(input, context) {
           },
         ],
         apiVersion: 1,
-        author: "Nakama",
+        author: "Airin",
         database: {
           migrations: [{ id: "001", path: "migrations/001.sql" }],
         },
         description: "Hang",
         id: "hang",
         license: "MIT",
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         name: "Hang",
         skills: [],
         version: "1.0.0",
       })
     ),
+    "migrations/001.sql": Buffer.from("CREATE TABLE items (id TEXT);\n"),
   });
 }
 
@@ -141,10 +138,7 @@ export async function run(input, context) {
   return { ok: true };
 }
 `),
-    "migrations/001.sql": Buffer.from(
-      "CREATE TABLE items (id TEXT PRIMARY KEY NOT NULL, body TEXT NOT NULL);\n"
-    ),
-    "nakama.plugin.json": Buffer.from(
+    "airin.plugin.json": Buffer.from(
       JSON.stringify({
         actions: [
           {
@@ -165,30 +159,33 @@ export async function run(input, context) {
           },
         ],
         apiVersion: 1,
-        author: "Nakama",
+        author: "Airin",
         database: {
           migrations: [{ id: "001", path: "migrations/001.sql" }],
         },
         description: "Slow write",
         id: "slow",
         license: "MIT",
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         name: "Slow",
         skills: [],
         version: "1.0.0",
       })
+    ),
+    "migrations/001.sql": Buffer.from(
+      "CREATE TABLE items (id TEXT PRIMARY KEY NOT NULL, body TEXT NOT NULL);\n"
     ),
   });
 }
 
 describe("plugin portability", () => {
   let configDir = "";
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
   beforeEach(async () => {
     await resetPluginAdmissionForTests();
-    configDir = await mkdtemp(join(tmpdir(), "nakama-plugin-u8-port-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-plugin-u8-port-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   // Wait for admission to drain before deleting files; retry transient Windows locks.
@@ -196,9 +193,9 @@ describe("plugin portability", () => {
     await resetPluginAdmissionForTests();
 
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     await rm(configDir, {
@@ -211,11 +208,11 @@ describe("plugin portability", () => {
 
   test("Supermemory backup preserves namespace and restricts restored credentials", async () => {
     const source = await createSqliteDatabase(
-      `file:${join(configDir, "nakama.db")}`
+      `file:${join(configDir, "airin.db")}`
     );
 
     const restoreRoot = await mkdtemp(
-      join(tmpdir(), "nakama-supermemory-restore-")
+      join(tmpdir(), "airin-supermemory-restore-")
     );
 
     let restored: Awaited<ReturnType<typeof createSqliteDatabase>> | undefined;
@@ -273,14 +270,14 @@ describe("plugin portability", () => {
         .get();
 
       sourcePlugin.close(true);
-      const exported = await createNakamaDataExport({ rootDir: configDir });
-      await restoreNakamaDataImport(exported.data, {
+      const exported = await createAirinDataExport({ rootDir: configDir });
+      await restoreAirinDataImport(exported.data, {
         confirm: true,
-        databasePath: join(restoreRoot, "nakama.db"),
+        databasePath: join(restoreRoot, "airin.db"),
         rootDir: restoreRoot,
       });
       restored = await createSqliteDatabase(
-        `file:${join(restoreRoot, "nakama.db")}`
+        `file:${join(restoreRoot, "airin.db")}`
       );
 
       const restoredService = new PluginService(
@@ -382,7 +379,7 @@ describe("plugin portability", () => {
   });
 
   test("export during a plugin write snapshots consistently and restore leaves plugins disabled", async () => {
-    const databasePath = join(configDir, "nakama.db");
+    const databasePath = join(configDir, "airin.db");
     const database = await createSqliteDatabase(`file:${databasePath}`);
     await database.adapter.upsertOrganization({
       createdAt: new Date().toISOString(),
@@ -416,23 +413,23 @@ describe("plugin portability", () => {
 
     await Promise.race([started.promise, write]);
 
-    const exported = await createNakamaDataExport({
+    const exported = await createAirinDataExport({
       drainTimeoutMs: 2000,
       rootDir: configDir,
     });
 
     await write;
 
-    const restoreRoot = await mkdtemp(join(tmpdir(), "nakama-plugin-restore-"));
+    const restoreRoot = await mkdtemp(join(tmpdir(), "airin-plugin-restore-"));
 
     try {
-      await restoreNakamaDataImport(exported.data, {
+      await restoreAirinDataImport(exported.data, {
         confirm: true,
-        databasePath: join(restoreRoot, "nakama.db"),
+        databasePath: join(restoreRoot, "airin.db"),
         rootDir: restoreRoot,
       });
 
-      const restoredDb = new Database(join(restoreRoot, "nakama.db"));
+      const restoredDb = new Database(join(restoreRoot, "airin.db"));
 
       // SAFETY: The test fixture matches the contract used by this test.
       const install = restoredDb
@@ -450,7 +447,7 @@ describe("plugin portability", () => {
       restoredDb.close(true);
 
       const restoredAdapter = await createSqliteDatabase(
-        `file:${join(restoreRoot, "nakama.db")}`
+        `file:${join(restoreRoot, "airin.db")}`
       );
 
       const restoredService = new PluginService(
@@ -491,7 +488,7 @@ describe("plugin portability", () => {
   test.each(["explicit", "configured"])(
     "export snapshots %s main database WAL rows and preserves unrelated sidecars",
     async (pathSource) => {
-      const databasePath = join(configDir, "nakama.db");
+      const databasePath = join(configDir, "airin.db");
       const previousDatabaseUrl = process.env.DATABASE_URL;
 
       if (pathSource === "configured") {
@@ -501,7 +498,7 @@ describe("plugin portability", () => {
       const live = new Database(databasePath);
       const otherPath = join(configDir, "other.db");
       const other = new Database(otherPath);
-      const restoreRoot = await mkdtemp(join(tmpdir(), "nakama-wal-restore-"));
+      const restoreRoot = await mkdtemp(join(tmpdir(), "airin-wal-restore-"));
 
       try {
         for (const db of [live, other]) {
@@ -513,7 +510,7 @@ describe("plugin portability", () => {
         `);
         }
 
-        const exportOptions: Parameters<typeof createNakamaDataExport>[0] = {
+        const exportOptions: Parameters<typeof createAirinDataExport>[0] = {
           rootDir: configDir,
         };
 
@@ -521,17 +518,17 @@ describe("plugin portability", () => {
           exportOptions.databasePath = databasePath;
         }
 
-        const exported = await createNakamaDataExport(exportOptions);
+        const exported = await createAirinDataExport(exportOptions);
 
         const entries = unzipSync(exported.data);
-        expect(entries["nakama.db-wal"]).toBeUndefined();
+        expect(entries["airin.db-wal"]).toBeUndefined();
         expect(entries["other.db-wal"]).toBeDefined();
-        await restoreNakamaDataImport(exported.data, {
+        await restoreAirinDataImport(exported.data, {
           confirm: true,
           rootDir: restoreRoot,
         });
 
-        for (const name of ["nakama.db", "other.db"]) {
+        for (const name of ["airin.db", "other.db"]) {
           const restored = new Database(join(restoreRoot, name));
 
           try {
@@ -662,7 +659,7 @@ describe("plugin portability", () => {
   });
 
   test("invalid restored package hashes stay unavailable", async () => {
-    const databasePath = join(configDir, "nakama.db");
+    const databasePath = join(configDir, "airin.db");
     const database = await createSqliteDatabase(`file:${databasePath}`);
     await database.adapter.upsertOrganization({
       createdAt: new Date().toISOString(),
@@ -674,15 +671,15 @@ describe("plugin portability", () => {
     const service = new PluginService(database.adapter, configDir);
     await service.installPluginPackage(notesBundle());
     await service.addOrgPlugin(ORG, "notes");
-    const exported = await createNakamaDataExport({ rootDir: configDir });
+    const exported = await createAirinDataExport({ rootDir: configDir });
     await database.close();
 
-    const restoreRoot = await mkdtemp(join(tmpdir(), "nakama-plugin-badhash-"));
+    const restoreRoot = await mkdtemp(join(tmpdir(), "airin-plugin-badhash-"));
 
     try {
-      await restoreNakamaDataImport(exported.data, {
+      await restoreAirinDataImport(exported.data, {
         confirm: true,
-        databasePath: join(restoreRoot, "nakama.db"),
+        databasePath: join(restoreRoot, "airin.db"),
         rootDir: restoreRoot,
       });
       await writeFile(
@@ -692,7 +689,7 @@ describe("plugin portability", () => {
       await quarantineInvalidPluginReleases(restoreRoot);
 
       const restored = await createSqliteDatabase(
-        `file:${join(restoreRoot, "nakama.db")}`
+        `file:${join(restoreRoot, "airin.db")}`
       );
 
       const restoredService = new PluginService(restored.adapter, restoreRoot);
@@ -710,7 +707,7 @@ describe("plugin portability", () => {
   });
 
   test("orphan restored integrity markers are removed without failing quarantine", async () => {
-    const databasePath = join(configDir, "nakama.db");
+    const databasePath = join(configDir, "airin.db");
     const database = await createSqliteDatabase(`file:${databasePath}`);
     const now = new Date().toISOString();
     await database.adapter.upsertOrganization({
@@ -792,7 +789,7 @@ describe("plugin portability", () => {
     try {
       await Promise.race([started.promise, hung]);
       await expect(
-        createNakamaDataExport({ drainTimeoutMs: 80, rootDir: configDir })
+        createAirinDataExport({ drainTimeoutMs: 80, rootDir: configDir })
       ).rejects.toMatchObject({ status: 503 });
 
       started = Promise.withResolvers<void>();

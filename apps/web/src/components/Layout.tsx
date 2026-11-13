@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { TooltipProvider } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { TooltipProvider } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import {
   ArrowLeft01Icon,
   ArrowLeft02Icon,
@@ -19,13 +19,17 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { MobileNavDrawer } from "@/components/MobileNavDrawer";
 import { WebPushPrompt } from "@/components/notifications/web-push-prompt";
+import { OwnerSidebarReopen } from "@/components/OwnerSidebarReopen";
+import { OwnerTeamSidebar } from "@/components/OwnerTeamSidebar";
 import { ProfileRail } from "@/components/ProfileRail";
 import { RouteBoundary } from "@/components/RouteBoundary";
 import { useBtwChatStore } from "@/context/btw-chat-store";
 import { useAppContext } from "@/context/use-app-context";
+import { useUiMode } from "@/context/use-ui-mode";
 import { useAgentGroupQuery } from "@/hooks/use-agent-groups";
 import { useOrgPlugins } from "@/hooks/use-plugins";
 import { useChatSessionSummary } from "@/hooks/use-resource-mutations";
+import { useOwnerSidebarHidden } from "@/hooks/use-sidebar-collapsed";
 import { useOrgFromNotification, usePushPresence } from "@/hooks/use-web-push";
 import {
   enabledPluginNavEntries,
@@ -50,6 +54,10 @@ export function Layout() {
   usePushPresence();
   const switchingOrg = useOrgFromNotification();
   const btwOpen = useBtwChatStore((store) => store.chat !== null);
+  const { uiMode } = useUiMode();
+  const ownerMode = uiMode === "owner";
+  const { collapsed: ownerSidebarHidden, toggle: toggleOwnerSidebar } =
+    useOwnerSidebarHidden();
 
   return (
     <TooltipProvider delay={0}>
@@ -61,13 +69,25 @@ export function Layout() {
         >
           Skip to content
         </button>
-        <DesktopTitleBar />
+        <DesktopTitleBar ownerMode={ownerMode} />
         <div className="flex min-h-0 flex-1 overflow-hidden pl-[env(safe-area-inset-left)]">
           {/* The rail and sidebar cost a fixed 296px, so on a phone they live
-            in MobileNavDrawer instead of the layout. */}
-          <div className="hidden h-full sm:flex">
-            <ProfileRail />
-            <AppSidebar />
+            in MobileNavDrawer instead of the layout. Below lg, Owner can hide
+            the tablet sidebar and reopen it from the chat bar. */}
+          <div
+            className={cn(
+              "hidden h-full sm:flex",
+              ownerMode && ownerSidebarHidden && "max-lg:hidden"
+            )}
+          >
+            {ownerMode ? (
+              <OwnerTeamSidebar onHide={toggleOwnerSidebar} />
+            ) : (
+              <>
+                <ProfileRail />
+                <AppSidebar />
+              </>
+            )}
           </div>
           <div
             className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pr-[env(safe-area-inset-right)]"
@@ -75,11 +95,13 @@ export function Layout() {
           >
             <AppShellHeader
               hideDesktop={
+                ownerMode ||
                 shell.pathname.startsWith(`${PAGE_PATHS.profiles}/skills/`) ||
                 // A group chat takes the full desktop column, like agent chat.
                 groupRouteFromPath(shell.pathname) !== null
               }
               label={shell.headerLabel}
+              ownerMode={ownerMode}
               page={shell.page}
             />
             <AppShellError error={shell.error} />
@@ -95,7 +117,7 @@ export function Layout() {
           </div>
         </div>
       </div>
-      <CommandPalette />
+      {ownerMode ? null : <CommandPalette />}
       <WebPushPrompt />
       {btwOpen ? (
         <Suspense fallback={null}>
@@ -110,7 +132,7 @@ export function Layout() {
  * The desktop app's window title bar. CSS shows it only under
  * `html[data-desktop]`, which the Electron preload sets.
  */
-function DesktopTitleBar() {
+function DesktopTitleBar({ ownerMode }: { ownerMode: boolean }) {
   const navigate = useNavigate();
   const shortcut = navigator.userAgent.includes("Mac") ? "⌘K" : "Ctrl K";
 
@@ -136,20 +158,22 @@ function DesktopTitleBar() {
       >
         <ArrowRight01Icon aria-hidden="true" className="size-4" />
       </Button>
-      <button
-        className="desktop-title-bar-search"
-        // CommandPalette owns its open state and listens for this shortcut.
-        onClick={() =>
-          window.dispatchEvent(
-            new KeyboardEvent("keydown", { ctrlKey: true, key: "k" })
-          )
-        }
-        type="button"
-      >
-        <Search01Icon aria-hidden="true" className="size-3.5" />
-        <span className="flex-1 text-left">Search</span>
-        <kbd className="font-sans text-2xs">{shortcut}</kbd>
-      </button>
+      {ownerMode ? null : (
+        <button
+          className="desktop-title-bar-search"
+          // CommandPalette owns its open state and listens for this shortcut.
+          onClick={() =>
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", { ctrlKey: true, key: "k" })
+            )
+          }
+          type="button"
+        >
+          <Search01Icon aria-hidden="true" className="size-3.5" />
+          <span className="flex-1 text-left">Search</span>
+          <kbd className="font-sans text-2xs">{shortcut}</kbd>
+        </button>
+      )}
     </div>
   );
 }
@@ -227,10 +251,12 @@ function appShellMainClassName(page: PageId, pathname: string): string {
 function AppShellHeader({
   hideDesktop,
   label,
+  ownerMode,
   page,
 }: {
   hideDesktop: boolean;
   label: string | undefined;
+  ownerMode: boolean;
   page: PageId;
 }) {
   const hideTitle = page === "soul";
@@ -265,6 +291,7 @@ function AppShellHeader({
       )}
     >
       <MobileNavDrawer className="sm:hidden" />
+      {ownerMode ? <OwnerSidebarReopen /> : null}
       {(showCustomizeBack || page === "customize") && (
         <Button
           aria-label={backLabel}

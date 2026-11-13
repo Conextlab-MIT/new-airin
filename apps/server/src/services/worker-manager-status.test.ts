@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readWorkerDesiredState, setWorkerDesiredRunning } from "@nakama/core";
-import { getChannelConfigDir } from "@nakama/core/channel-config-shared";
-import { saveWhatsAppConfig } from "@nakama/core/whatsapp-config";
-import { createWorkerHeartbeatStore } from "@nakama/core/worker-heartbeat";
+import { readWorkerDesiredState, setWorkerDesiredRunning } from "@airin/core";
+import { getChannelConfigDir } from "@airin/core/channel-config-shared";
+import { saveWhatsAppConfig } from "@airin/core/whatsapp-config";
+import { createWorkerHeartbeatStore } from "@airin/core/worker-heartbeat";
 import { WorkerManagerService } from "./worker-manager-service";
 
 type Pm2Client = NonNullable<
@@ -40,8 +40,8 @@ const projectRoot = "/tmp/test-project";
 let configDir: string | null = null;
 
 beforeEach(async () => {
-  configDir = await mkdtemp(join(tmpdir(), "nakama-worker-manager-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  configDir = await mkdtemp(join(tmpdir(), "airin-worker-manager-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
 });
 
 afterEach(async () => {
@@ -50,7 +50,7 @@ afterEach(async () => {
     configDir = null;
   }
 
-  delete process.env.NAKAMA_CONFIG_DIR;
+  delete process.env.AIRIN_CONFIG_DIR;
 });
 
 describe("WorkerManagerService", () => {
@@ -110,7 +110,7 @@ describe("WorkerManagerService", () => {
 
   describe("getWorkerLogs", () => {
     test("returns last N lines of stdout and stderr", async () => {
-      const tmpDir = await mkdtemp(join(tmpdir(), "nakama-logs-"));
+      const tmpDir = await mkdtemp(join(tmpdir(), "airin-logs-"));
       const outPath = join(tmpDir, "out.log");
       const errPath = join(tmpDir, "err.log");
       await writeFile(outPath, "line1\nline2\nline3\nline4\nline5\n");
@@ -252,8 +252,8 @@ describe("WorkerManagerService", () => {
       for (const [env, starts] of [
         [{}, 1],
         // 2 read the bot token only from config.ini.
-        [{ NAKAMA_WORKER_ENV: "2" }, 1],
-        [{ NAKAMA_WORKER_ENV: "3" }, 0],
+        [{ AIRIN_WORKER_ENV: "2" }, 1],
+        [{ AIRIN_WORKER_ENV: "3" }, 0],
       ] as const) {
         const mockPm2 = createMockPm2();
         mockPm2.list = mock((cb: Parameters<Pm2Client["list"]>[0]) =>

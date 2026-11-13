@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import { withTempHome } from "@nakama/core/channel-test-helpers";
+import { withTempHome } from "@airin/core/channel-test-helpers";
 import {
   loadTeamsConfigFile,
   saveTeamsConfig,
   saveTeamsInboundPort,
-} from "@nakama/core/teams-config";
-import { createTeamsWorkerHeartbeat } from "@nakama/core/teams-worker";
+} from "@airin/core/teams-config";
+import { createTeamsWorkerHeartbeat } from "@airin/core/teams-worker";
 
 const OWNER = { orgId: "org_test", profileId: "agent_teams" };
 
@@ -54,10 +54,10 @@ function spawnWorker() {
     ],
     env: {
       ...process.env,
+      AIRIN_CHANNEL_ORG_ID: OWNER.orgId,
+      AIRIN_CHANNEL_PROFILE_ID: OWNER.profileId,
       HTTPS_PROXY: "http://127.0.0.1:9",
       https_proxy: "http://127.0.0.1:9",
-      NAKAMA_CHANNEL_ORG_ID: OWNER.orgId,
-      NAKAMA_CHANNEL_PROFILE_ID: OWNER.profileId,
       NO_PROXY: "",
       no_proxy: "",
     },
@@ -67,7 +67,7 @@ function spawnWorker() {
 }
 
 test("a second worker that refuses to start leaves the running worker's port alone", async () => {
-  await withTempHome("nakama-teams-entry-", async () => {
+  await withTempHome("airin-teams-entry-", async () => {
     await saveWithTokenEndpointStubbed();
 
     // The running worker: this test process holds the lock, a fresh
@@ -91,7 +91,7 @@ test("a second worker that refuses to start leaves the running worker's port alo
 });
 
 test("a fresh heartbeat whose pid now belongs to another process does not block a new worker", async () => {
-  await withTempHome("nakama-teams-entry-", async () => {
+  await withTempHome("airin-teams-entry-", async () => {
     await saveWithTokenEndpointStubbed();
 
     // After a restart the old heartbeat names a live pid (this test process)

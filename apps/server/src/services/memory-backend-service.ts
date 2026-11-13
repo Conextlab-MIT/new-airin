@@ -9,14 +9,14 @@ import {
   getUserConfigDir,
   listKnowledgeBaseDocuments,
   type ToolContext,
-} from "@nakama/core";
-import { writeTextFile } from "@nakama/core/fs";
+} from "@airin/core";
+import { writeTextFile } from "@airin/core/fs";
 import {
   normalizeUrl,
   SupermemoryClient,
   SupermemoryError,
-} from "@nakama/core/supermemory-client";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core/supermemory-client";
+import type { DatabaseAdapter } from "@airin/db";
 import { withPluginDataLock } from "./plugin-service";
 
 interface Entry {
@@ -372,7 +372,7 @@ export class MemoryBackendService {
         if (selected) {
           searchRequest.filters = {
             OR: searched.map(([, doc]) => ({
-              key: "nakamaOperation",
+              key: "airinOperation",
               value: doc.customId,
             })),
           };
@@ -405,8 +405,8 @@ export class MemoryBackendService {
 
           if (
             !match ||
-            metadata?.nakamaContainer !== tag ||
-            metadata.nakamaOperation !== match.doc.customId
+            metadata?.airinContainer !== tag ||
+            metadata.airinOperation !== match.doc.customId
           ) {
             continue;
           }
@@ -523,7 +523,7 @@ export class MemoryBackendService {
         await writeTextFile(statePath, JSON.stringify(state));
       }
 
-      const tag = `nakama_backend_${hash(JSON.stringify([state.namespace, orgId, scope]))}`;
+      const tag = `airin_backend_${hash(JSON.stringify([state.namespace, orgId, scope]))}`;
       const receipts = state.scopes[scope] ?? {};
       state.scopes[scope] = receipts;
       const documents = new Map<string, SupermemoryDocument>();
@@ -633,7 +633,7 @@ export class MemoryBackendService {
               containerTags: [tag],
               content: entry.content || "\n",
               customId,
-              metadata: { nakamaContainer: tag, nakamaOperation: customId },
+              metadata: { airinContainer: tag, airinOperation: customId },
               taskType: scope.startsWith("knowledge:") ? "superrag" : "memory",
             })
           );

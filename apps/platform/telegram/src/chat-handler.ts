@@ -1,36 +1,36 @@
 import { randomInt, randomUUID } from "node:crypto";
-import type { NakamaClient, RemoteChatSession } from "@nakama/client";
-import { deliverTurnArtifactShares } from "@nakama/core";
+import type { AirinClient, RemoteChatSession } from "@airin/client";
+import { deliverTurnArtifactShares } from "@airin/core";
 import {
   formatAgentQuestionnaireAnswersMessage,
   hasActiveAgentQuestionnaire,
-} from "@nakama/core/agent-questionnaire";
-import { formatClientError } from "@nakama/core/api-error";
+} from "@airin/core/agent-questionnaire";
+import { formatClientError } from "@airin/core/api-error";
 import {
   clearActiveStream,
   isAbortError,
   registerActiveStream,
   stopActiveStream,
-} from "@nakama/core/channel-active-stream";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
-import { describeChannelStatus } from "@nakama/core/channel-commands";
+} from "@airin/core/channel-active-stream";
+import { createChatLock } from "@airin/core/channel-chat-lock";
+import { describeChannelStatus } from "@airin/core/channel-commands";
 import {
   type ChannelOrgStore,
   findOrgBySelectionInput,
   formatOrgSelectionPrompt,
   formatOrgSwitchConfirmation,
   prepareChannelOrgContext,
-} from "@nakama/core/channel-org";
+} from "@airin/core/channel-org";
 import type {
   ChannelOpenQuestions,
   ChannelSessionStore,
-} from "@nakama/core/channel-session-store";
-import { createTypingLoop } from "@nakama/core/channel-typing-loop";
+} from "@airin/core/channel-session-store";
+import { createTypingLoop } from "@airin/core/channel-typing-loop";
 import type {
   AgentQuestionItem,
   AgentQuestionnaire,
   SendMessageInput,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   filterProfilesForChatAccess,
   formatProfileSelectionPrompt,
@@ -40,16 +40,16 @@ import {
   pickProfileForOrg,
   resolveProfileInput,
   resolveProfileInScopes,
-} from "@nakama/core/profiles";
+} from "@airin/core/profiles";
 import {
   hasActiveHandshakeCode,
   looksLikePairingCode,
-} from "@nakama/core/telegram-config";
+} from "@airin/core/telegram-config";
 import {
   renderTelegramPlainText,
   renderTelegramRichText,
   splitTelegramRichChunks,
-} from "@nakama/core/telegram-rich-text";
+} from "@airin/core/telegram-rich-text";
 import { type Context, InlineKeyboard } from "grammy";
 import {
   buildTelegramDocumentInput,
@@ -117,13 +117,13 @@ const LINK_IN_PRIVATE_REPLY =
   "Link your account in a private chat with this bot first.";
 
 const PAIRING_PROMPT =
-  "Welcome to Nakama.\n\n" +
+  "Welcome to Airin.\n\n" +
   "Paste your pairing code from Integrations → Telegram in the web dashboard. " +
   "You only need to do this once for this chat.";
 
 const NO_CODE_PROMPT =
   "This bot is not linked yet.\n\n" +
-  "Open Nakama Integrations → Telegram, save your bot token, and copy the pairing code. " +
+  "Open Airin Integrations → Telegram, save your bot token, and copy the pairing code. " +
   "Then send that code here.";
 
 const ACCESS_REQUESTED_NOTE =
@@ -131,7 +131,7 @@ const ACCESS_REQUESTED_NOTE =
 
 export interface ChatHandlerDeps {
   authStore: TelegramAuthStore;
-  client: NakamaClient;
+  client: AirinClient;
   config: TelegramBridgeConfig;
   dispatchTurn?: (
     key: string,
@@ -192,7 +192,7 @@ function createScopedChatHandler(deps: ChatHandlerDeps) {
       : null;
 
     if (groupDecision && !groupDecision.shouldHandle) {
-      if (process.env.NAKAMA_CH_DEBUG !== "1") {
+      if (process.env.AIRIN_CH_DEBUG !== "1") {
         return;
       }
 
@@ -1120,7 +1120,7 @@ function createScopedChatHandler(deps: ChatHandlerDeps) {
   async function listSelectableProfiles(orgId?: string) {
     const { profiles } = await client.listProfiles(orgId);
 
-    return filterProfilesForChatAccess(profiles, { excludeSuperNakama: true });
+    return filterProfilesForChatAccess(profiles, { excludeSuperAirin: true });
   }
 
   async function replyStatus(

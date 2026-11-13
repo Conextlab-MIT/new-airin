@@ -71,7 +71,7 @@ describeSharedChannelConfigTests({
 
 describe("per-org telegram config", () => {
   test("claims a bot once even with concurrent rotated tokens", async () => {
-    await withTempHomedir("nakama-telegram-claim-race-", async () => {
+    await withTempHomedir("airin-telegram-claim-race-", async () => {
       const results = await Promise.allSettled([
         saveTelegramConfig(
           { orgId: "org_a", profileId: "a" },
@@ -90,7 +90,7 @@ describe("per-org telegram config", () => {
   });
 
   test("refuses symlinked credential directories", async () => {
-    await withTempHomedir("nakama-telegram-symlink-", async (home) => {
+    await withTempHomedir("airin-telegram-symlink-", async (home) => {
       const owner = { orgId: "org_a", profileId: "a" };
       const directory = getTelegramConfigDir(owner);
       await mkdir(join(directory, ".."), { recursive: true });
@@ -102,7 +102,7 @@ describe("per-org telegram config", () => {
   });
 
   test("isolates agent credentials and pairing within an organization", async () => {
-    await withTempHomedir("nakama-telegram-profile-", async () => {
+    await withTempHomedir("airin-telegram-profile-", async () => {
       const first = { orgId: "org_a", profileId: "agent_a" };
       const second = { orgId: "org_a", profileId: "agent_b" };
       const saved = await saveTelegramConfig(first, { botToken: "111:AAA" });
@@ -124,7 +124,7 @@ describe("per-org telegram config", () => {
   });
 
   test("keeps each org's credentials out of the other scopes", async () => {
-    await withTempHomedir("nakama-telegram-org-", async () => {
+    await withTempHomedir("airin-telegram-org-", async () => {
       await saveTelegramConfig("org_a", { botToken: "111:AAA" });
 
       expect(await loadTelegramConfigFile("org_b")).toBeNull();
@@ -135,7 +135,7 @@ describe("per-org telegram config", () => {
   });
 
   test("refuses a bot token another scope already runs", async () => {
-    await withTempHomedir("nakama-telegram-dup-", async () => {
+    await withTempHomedir("airin-telegram-dup-", async () => {
       await saveTelegramConfig(null, { botToken: "111:AAA" });
 
       await expect(
@@ -153,7 +153,7 @@ describe("per-org telegram config", () => {
 
 describe("telegram access requests", () => {
   test("records each sender once and removes on resolve", async () => {
-    await withTempHomedir("nakama-telegram-requests-", async () => {
+    await withTempHomedir("airin-telegram-requests-", async () => {
       await recordTelegramAccessRequest(null, { userId: 7, username: "jane" });
       await recordTelegramAccessRequest(null, { userId: 7, username: "other" });
       await recordTelegramAccessRequest(null, { userId: 8 });
@@ -170,7 +170,7 @@ describe("telegram access requests", () => {
   });
 
   test("drops new senders once the list is full", async () => {
-    await withTempHomedir("nakama-telegram-requests-cap-", async () => {
+    await withTempHomedir("airin-telegram-requests-cap-", async () => {
       for (let userId = 1; userId <= 20; userId += 1) {
         await recordTelegramAccessRequest(null, { userId });
       }
@@ -188,7 +188,7 @@ describe("telegram bot claims", () => {
   const token = "123456789:AAEexampletoken";
 
   test("a claim with no connection behind it is taken over", async () => {
-    await withTempHome("nakama-telegram-stale-claim-", async () => {
+    await withTempHome("airin-telegram-stale-claim-", async () => {
       const dir = join(getUserConfigDir(), "channel-claims", "telegram");
 
       const claim = join(
@@ -217,7 +217,7 @@ describe("telegram bot claims", () => {
   });
 
   test("a live connection still blocks, and says which org holds it", async () => {
-    await withTempHome("nakama-telegram-live-claim-", async () => {
+    await withTempHome("airin-telegram-live-claim-", async () => {
       await saveTelegramConfig(
         { orgId: "org_a", profileId: "alpha" },
         { botToken: token }

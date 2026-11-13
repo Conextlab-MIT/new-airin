@@ -31,13 +31,13 @@ interface DocumentFixture {
 
 describe("knowledge_base_search tool", () => {
   let tempConfigDir = "";
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
 
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     if (tempConfigDir) {
@@ -69,8 +69,8 @@ describe("knowledge_base_search tool", () => {
     /** Listed in the manifest as failed, with no extracted file on disk. */
     unreadable?: { filename: string; id: string }[];
   }): Promise<string> {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-kb-search-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-kb-search-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const profileKnowledgeBaseDir = getKnowledgeBaseDir(ORG_ID, PROFILE_ID);
     await mkdir(profileKnowledgeBaseDir, { recursive: true });

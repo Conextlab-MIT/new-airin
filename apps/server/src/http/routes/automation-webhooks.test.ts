@@ -10,7 +10,7 @@ import {
   type RouteTestFixture,
 } from "./automation-route-test-fixtures";
 
-setupTestConfigDir("nakama-automation-webhook-routes-");
+setupTestConfigDir("airin-automation-webhook-routes-");
 
 const TEST_SECRETS_KEY = Buffer.alloc(32, 7).toString("base64");
 
@@ -625,7 +625,7 @@ describe("automation webhook", () => {
     await waitUntilIdle(fixture, id);
   });
 
-  test("creating a secret without NAKAMA_SECRETS_KEY gets 400", async () => {
+  test("creating a secret without AIRIN_SECRETS_KEY gets 400", async () => {
     const fixture = createWebhookFixture({ secretsKey: "" });
     const { orgId, session } = await loginMember(fixture);
 

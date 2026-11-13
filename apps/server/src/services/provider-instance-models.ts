@@ -1,5 +1,5 @@
-import { findCustomModel, type ProviderInstance } from "@nakama/core";
-import { resolveNetraModelId } from "@nakama/core/discovery-providers";
+import { findCustomModel, type ProviderInstance } from "@airin/core";
+import { resolveNetraModelId } from "@airin/core/discovery-providers";
 import {
   getModelById,
   getModelsForProvider,

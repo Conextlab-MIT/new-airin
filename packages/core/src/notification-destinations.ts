@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import type {
   CreateNotificationDestinationRequest,
   NotificationDestinationChannel,
@@ -99,19 +99,19 @@ export function normalizeNotificationWebhookRequest<Value>(
   const record = readObject(value);
 
   if (!record) {
-    throw new NakamaApiError("notification payload must be an object.", 400);
+    throw new AirinApiError("notification payload must be an object.", 400);
   }
 
   const body = readTrimmedString(record.body);
 
   if (!body) {
-    throw new NakamaApiError("body must be a non-empty string.", 400);
+    throw new AirinApiError("body must be a non-empty string.", 400);
   }
 
   const title = record.title;
 
   if (title !== undefined && !readTrimmedString(title)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "title must be a non-empty string when provided.",
       400
     );

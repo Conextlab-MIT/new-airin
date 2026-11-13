@@ -1,4 +1,4 @@
-import { Spinner } from "@nakama/ui/spinner";
+import { Spinner } from "@airin/ui/spinner";
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { SetupLayout } from "@/components/SetupLayout";

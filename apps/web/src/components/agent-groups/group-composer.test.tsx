@@ -1,7 +1,7 @@
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
-import type { ProfileSummary } from "@nakama/core";
-import { groupRoster } from "@nakama/core/agent-groups";
-import type { DocumentAttachment } from "@nakama/core/contract";
+import type { ProfileSummary } from "@airin/core";
+import { groupRoster } from "@airin/core/agent-groups";
+import type { DocumentAttachment } from "@airin/core/contract";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { GroupComposer } from "./group-composer";

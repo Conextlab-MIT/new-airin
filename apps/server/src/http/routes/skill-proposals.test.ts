@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { SkillProposalService } from "../../services/skill-proposal-service";
 import { SkillsService } from "../../services/skills-service";
 import { setupTestConfigDir } from "../../test-config-dir";
@@ -9,7 +9,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-skill-proposals-routes-test-");
+setupTestConfigDir("airin-skill-proposals-routes-test-");
 
 const sampleSkillMarkdown = `---
 name: deploy-notes

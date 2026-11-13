@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import {
   type ComponentProps,
   type MouseEvent,
@@ -21,7 +21,7 @@ type MarkdownAProps = ComponentProps<"a"> & {
   node?: unknown;
 };
 
-/** Streamdown `a` override: embed YouTube URLs, route Nakama pages in-app, keep link-safety for everything else. */
+/** Streamdown `a` override: embed YouTube URLs, route Airin pages in-app, keep link-safety for everything else. */
 export function MarkdownA({
   href,
   children,

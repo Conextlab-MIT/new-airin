@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import {
   createInMemoryDatabaseAdapter,
   type StoredMcpServerRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { ManagedSecrets } from "./managed-secrets";
 import { installMcpSecretStore } from "./mcp-secret-store";
 

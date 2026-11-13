@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core/api-error";
-import * as ui from "@nakama/ui";
+import { AirinApiError } from "@airin/core/api-error";
+import * as ui from "@airin/ui";
 import * as React from "react";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
@@ -380,7 +380,7 @@ describe("plugin host calls", () => {
             calls++;
 
             if (calls === 1) {
-              throw new NakamaApiError("busy", 429);
+              throw new AirinApiError("busy", 429);
             }
 
             return ["workflow"];
@@ -412,7 +412,7 @@ describe("plugin host calls", () => {
           call: () => {
             calls++;
 
-            return Promise.reject(new NakamaApiError("forbidden", 403));
+            return Promise.reject(new AirinApiError("forbidden", 403));
           },
         },
       }
@@ -444,7 +444,7 @@ describe("plugin host calls", () => {
           call: () => {
             calls++;
 
-            return Promise.reject(new NakamaApiError("busy", 429));
+            return Promise.reject(new AirinApiError("busy", 429));
           },
         },
       }

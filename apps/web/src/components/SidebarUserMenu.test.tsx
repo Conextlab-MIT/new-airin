@@ -9,7 +9,10 @@ import {
   AuthContext,
   type AuthContextValue,
 } from "@/context/auth-context-shared";
+import { LocaleContext } from "@/context/locale-context-shared";
 import { ThemeContext } from "@/context/theme-context-shared";
+import { UiModeContext } from "@/context/ui-mode-context-shared";
+import { translate } from "@/lib/i18n";
 
 async function openMenuWithVersion(version: string): Promise<string | null> {
   // SAFETY: The menu reads only user, activeOrg, logout and refreshSession.
@@ -44,7 +47,22 @@ async function openMenuWithVersion(version: string): Promise<string | null> {
                     toggleTheme: () => {},
                   }}
                 >
-                  <SidebarUserMenu />
+                  <LocaleContext.Provider
+                    value={{
+                      locale: "en",
+                      setLocale: () => {},
+                      t: (key, vars) => translate("en", key, vars),
+                    }}
+                  >
+                    <UiModeContext.Provider
+                      value={{
+                        setUiMode: () => {},
+                        uiMode: "owner",
+                      }}
+                    >
+                      <SidebarUserMenu />
+                    </UiModeContext.Provider>
+                  </LocaleContext.Provider>
                 </ThemeContext.Provider>
               </AppContext.Provider>
             </AuthContext.Provider>
@@ -75,12 +93,12 @@ async function openMenuWithVersion(version: string): Promise<string | null> {
 
 test("What's new opens the release notes of the running version", async () => {
   expect(await openMenuWithVersion("0.4.69")).toBe(
-    "https://github.com/ahmadrosid/nakama/releases/tag/v0.4.69"
+    "https://github.com/ahmadrosid/airin/releases/tag/v0.4.69"
   );
 });
 
 test("What's new opens the release list for a build with no release", async () => {
   expect(await openMenuWithVersion("0.4.69-dev")).toBe(
-    "https://github.com/ahmadrosid/nakama/releases"
+    "https://github.com/ahmadrosid/airin/releases"
   );
 });

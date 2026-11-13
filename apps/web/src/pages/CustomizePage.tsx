@@ -1,8 +1,8 @@
-import type { ProfileSummary, SkillSummary } from "@nakama/core/contract";
-import { BUNDLED_SKILL_NAMES } from "@nakama/core/skills/bundled-names";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { Input } from "@nakama/ui/input";
+import type { ProfileSummary, SkillSummary } from "@airin/core/contract";
+import { BUNDLED_SKILL_NAMES } from "@airin/core/skills/bundled-names";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { Input } from "@airin/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight01Icon } from "hugeicons-react";
 import { useState } from "react";

@@ -81,7 +81,7 @@ export const knowledgeBaseSearchTool: ToolDefinition<
   KnowledgeBaseSearchOutput
 > = {
   description:
-    "Search uploaded knowledge base documents for relevant facts. Includes profile documents, organization documents attached to this profile, and published parent documents available to this team. Parent results identify their publication and source organization. Does not search inherited URL sources such as Nakama documentation — use web_fetch on llms.txt and specific .md pages for product docs. When the result carries `unreadable`, those documents are attached but hold no searchable text, so report them as unreadable instead of telling the user nothing covers the topic.",
+    "Search uploaded knowledge base documents for relevant facts. Includes profile documents, organization documents attached to this profile, and published parent documents available to this team. Parent results identify their publication and source organization. Does not search inherited URL sources such as Airin documentation — use web_fetch on llms.txt and specific .md pages for product docs. When the result carries `unreadable`, those documents are attached but hold no searchable text, so report them as unreadable instead of telling the user nothing covers the topic.",
   name: "knowledge_base_search",
   parallelSafe: true,
   parameters: jsonSchemaFromZod(knowledgeBaseSearchInputSchema),

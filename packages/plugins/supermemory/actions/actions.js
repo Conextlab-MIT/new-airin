@@ -5265,7 +5265,7 @@ async function run(input, context) {
     if (action === "check_connection") {
       await client.request("POST", "/v3/documents/list", {
         containerTags: [
-          `nakama_${hash([namespace, context.orgId, "connection-check"])}`
+          `airin_${hash([namespace, context.orgId, "connection-check"])}`
         ],
         limit: 1
       });
@@ -5285,12 +5285,12 @@ async function run(input, context) {
       "list_memories",
       "forget_memory"
     ].includes(action ?? "") ? "memory" : "knowledge";
-    const tag = `nakama_${hash([namespace, context.orgId, profileId, kind])}`;
-    const ownsMemory = (entry, row) => entry.id === row.upstream_id && metadata(entry.metadata).nakamaContainer === tag && metadata(entry.metadata).nakamaOperation === row.custom_id;
+    const tag = `airin_${hash([namespace, context.orgId, profileId, kind])}`;
+    const ownsMemory = (entry, row) => entry.id === row.upstream_id && metadata(entry.metadata).airinContainer === tag && metadata(entry.metadata).airinOperation === row.custom_id;
     async function memoryPage(row) {
       const response = await client.request("POST", "/v4/memories/list", {
         containerTags: [tag],
-        filters: { AND: [{ key: "nakamaOperation", value: row.custom_id }] },
+        filters: { AND: [{ key: "airinOperation", value: row.custom_id }] },
         limit: 20
       });
       return records(response.memoryEntries);
@@ -5300,7 +5300,7 @@ async function run(input, context) {
       if (!upstreamId) {
         const listed = await client.request("POST", "/v3/documents/list", {
           containerTags: [tag],
-          filters: { AND: [{ key: "nakamaOperation", value: row.custom_id }] },
+          filters: { AND: [{ key: "airinOperation", value: row.custom_id }] },
           limit: 2
         });
         const matches = records(listed.memories);
@@ -5336,7 +5336,7 @@ async function run(input, context) {
       if (!["unknown", "submitting"].includes(row.state)) {
         return row;
       }
-      const matches = (await memoryPage(row)).filter((entry) => metadata(entry.metadata).nakamaContainer === tag && metadata(entry.metadata).nakamaOperation === row.custom_id);
+      const matches = (await memoryPage(row)).filter((entry) => metadata(entry.metadata).airinContainer === tag && metadata(entry.metadata).airinOperation === row.custom_id);
       if (matches.length !== 1) {
         return update(row, "unknown");
       }
@@ -5370,8 +5370,8 @@ async function run(input, context) {
       }
       const row = reserved.row;
       const meta = {
-        nakamaContainer: tag,
-        nakamaOperation: row.custom_id,
+        airinContainer: tag,
+        airinOperation: row.custom_id,
         source,
         title
       };
@@ -5454,7 +5454,7 @@ async function run(input, context) {
             excerpt: entry.memory.slice(0, 1e4)
           });
         } else {
-          if (metadata(entry.metadata).nakamaContainer !== tag || metadata(entry.metadata).nakamaOperation !== row.custom_id) {
+          if (metadata(entry.metadata).airinContainer !== tag || metadata(entry.metadata).airinOperation !== row.custom_id) {
             continue;
           }
           const excerpt = records(entry.chunks).flatMap((chunk) => chunk.isRelevant !== false && isJsonString(chunk.content) ? [chunk.content] : []).join(`

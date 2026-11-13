@@ -1,17 +1,17 @@
-import type { ChannelConfigScope } from "@nakama/core/channel-config-shared";
+import type { ChannelConfigScope } from "@airin/core/channel-config-shared";
 import {
   ChannelIdentityInUseError,
   type ChannelOwner,
   isChannelOwner,
-} from "@nakama/core/channel-config-shared";
+} from "@airin/core/channel-config-shared";
 import {
   getWhatsAppConfigDir,
   syncWhatsAppOwnerPairing,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 import {
   clearWhatsAppQrCode,
   writeWhatsAppQrCode,
-} from "@nakama/core/whatsapp-worker";
+} from "@airin/core/whatsapp-worker";
 import {
   DEFAULT_CONNECTION_CONFIG,
   DisconnectReason,
@@ -39,7 +39,7 @@ import { maskWhatsAppJid } from "./log-metadata";
 
 /** Optional verbose channel worker logging (per-message structural info). */
 function isChannelDebugEnabled(): boolean {
-  return process.env.NAKAMA_CH_DEBUG === "1";
+  return process.env.AIRIN_CH_DEBUG === "1";
 }
 
 export interface WhatsAppSocketDeps {
@@ -205,7 +205,7 @@ export async function createWhatsAppSocket(
 
       const next = makeWASocket({
         auth: state,
-        browser: ["Nakama", "Chrome", "4.0.0"],
+        browser: ["Airin", "Chrome", "4.0.0"],
         connectTimeoutMs: 30_000,
         logger: baileysLogger,
         makeSignalRepository(auth, logger, pnToLIDFunc) {

@@ -129,7 +129,7 @@ describe("loadDiscordSettingsPublic", () => {
   });
 
   test("includes an invite URL when Discord returns the application id", async () => {
-    await withTempHomedir("nakama-core-discord-home-", async (tempHome) => {
+    await withTempHomedir("airin-core-discord-home-", async (tempHome) => {
       await writeChannelIniConfig(tempHome, "discord", {
         botToken: "discord-bot-token",
       });
@@ -202,7 +202,7 @@ describe("per-owner Discord config", () => {
   });
 
   test("claims one application ID across concurrent owners", async () => {
-    await withTempHomedir("nakama-discord-claim-race-", async () => {
+    await withTempHomedir("airin-discord-claim-race-", async () => {
       globalThis.fetch = asTestFetch(
         async () =>
           new Response(JSON.stringify({ id: "1525937133096013954" }), {

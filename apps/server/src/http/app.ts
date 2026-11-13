@@ -1,11 +1,11 @@
-import { OpenAPIHono } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   formatServerError,
   log,
-  NakamaApiError,
   reportError,
-} from "@nakama/core";
-import { isHtmlArtifactMimeType } from "@nakama/core/artifact-mime";
+} from "@airin/core";
+import { isHtmlArtifactMimeType } from "@airin/core/artifact-mime";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import { bodyLimit } from "hono/body-limit";
 import { compress } from "hono/compress";
 import { requestId } from "hono/request-id";
@@ -24,6 +24,7 @@ export { MAX_HTTP_REQUEST_BODY_LIMIT_BYTES } from "./shared";
 
 import { registerAcpMcpRoutes } from "./routes/acp-mcp";
 import { registerAgentGroupRoutes } from "./routes/agent-groups";
+import { registerAgentMarketplaceRoutes } from "./routes/agent-marketplace";
 import { registerArtifactShareRoutes } from "./routes/artifact-shares";
 import { registerAuditEventRoutes } from "./routes/audit-events";
 import { registerAuthRoutes } from "./routes/auth";
@@ -35,6 +36,7 @@ import {
   registerComposioRoutes,
 } from "./routes/composio";
 import { registerDataPortabilityRoutes } from "./routes/data-portability";
+import { registerDemoWaitlistRoutes } from "./routes/demo-waitlist";
 import { registerGoogleMeetRoutes } from "./routes/google-meet";
 import { registerInternalAutomationRoutes } from "./routes/internal-automations";
 import { registerInternalCuratorRoutes } from "./routes/internal-curator";
@@ -187,7 +189,7 @@ export function createHonoApp(options: ServerOptions) {
       }
     }
   });
-  const metricsEnabled = process.env.NAKAMA_METRICS === "true";
+  const metricsEnabled = process.env.AIRIN_METRICS === "true";
   let requests = 0;
   let serverErrors = 0;
 
@@ -219,7 +221,7 @@ export function createHonoApp(options: ServerOptions) {
   });
 
   app.onError((err) => {
-    if (err instanceof NakamaApiError) {
+    if (err instanceof AirinApiError) {
       if (err.status >= 500) {
         void reportError(err, { kind: "http", source: "server" });
       }
@@ -241,7 +243,7 @@ export function createHonoApp(options: ServerOptions) {
       return errorResponse("Invalid URL encoding.", 400);
     }
 
-    // A NakamaApiError is a refusal the route chose. Anything that reaches here
+    // A AirinApiError is a refusal the route chose. Anything that reaches here
     // is a bug the caller only sees as a generic 500, so the tracker must see it.
     void reportError(err, { kind: "http", source: "server" });
 
@@ -409,12 +411,12 @@ export function createHonoApp(options: ServerOptions) {
 
     return c.body(
       [
-        "# HELP nakama_http_requests_total HTTP responses served by this process.",
-        "# TYPE nakama_http_requests_total counter",
-        `nakama_http_requests_total ${requests}`,
-        "# HELP nakama_http_server_errors_total HTTP responses with a 5xx status.",
-        "# TYPE nakama_http_server_errors_total counter",
-        `nakama_http_server_errors_total ${serverErrors}`,
+        "# HELP airin_http_requests_total HTTP responses served by this process.",
+        "# TYPE airin_http_requests_total counter",
+        `airin_http_requests_total ${requests}`,
+        "# HELP airin_http_server_errors_total HTTP responses with a 5xx status.",
+        "# TYPE airin_http_server_errors_total counter",
+        `airin_http_server_errors_total ${serverErrors}`,
         "",
       ].join("\n")
     );
@@ -425,11 +427,13 @@ export function createHonoApp(options: ServerOptions) {
   app.use(
     "*",
     createRateLimitMiddleware({
-      authMax: readPositiveEnv("NAKAMA_RATE_LIMIT_AUTH_MAX"),
-      max: readPositiveEnv("NAKAMA_RATE_LIMIT_MAX"),
-      trustProxy: process.env.NAKAMA_TRUST_PROXY === "true",
+      authMax: readPositiveEnv("AIRIN_RATE_LIMIT_AUTH_MAX"),
+      max: readPositiveEnv("AIRIN_RATE_LIMIT_MAX"),
+      trustProxy: process.env.AIRIN_TRUST_PROXY === "true",
     })
   );
+
+  registerDemoWaitlistRoutes(app, options);
 
   app.use("*", createAuthMiddleware(options));
   registerInternalAutomationRoutes(app, options);
@@ -465,6 +469,7 @@ export function createHonoApp(options: ServerOptions) {
   registerPluginRoutes(app, options);
   registerGoogleMeetRoutes(app, options);
   registerAgentGroupRoutes(app, options);
+  registerAgentMarketplaceRoutes(app, options);
   registerAutomationRoutes(app, options);
   registerNotificationDestinationRoutes(app, options);
   registerWebPushRoutes(app);

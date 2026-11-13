@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "nakama",
+      "name": "airin",
       "devDependencies": {
         "@biomejs/biome": "2.5.14",
         "@oxlint/plugins": "1.87.0",
@@ -17,17 +17,17 @@
       },
     },
     "apps/cli": {
-      "name": "@nakama/cli",
+      "name": "@airin/cli",
       "dependencies": {
+        "@airin/client": "workspace:*",
+        "@airin/core": "workspace:*",
         "@crosscopy/clipboard": "^0.3.6",
         "@earendil-works/pi-tui": "0.85.1",
         "@leeoniya/ufuzzy": "^1.0.19",
-        "@nakama/client": "workspace:*",
-        "@nakama/core": "workspace:*",
       },
     },
     "apps/desktop": {
-      "name": "@nakama/desktop",
+      "name": "@airin/desktop",
       "version": "0.1.9",
       "dependencies": {
         "electron-updater": "^6.8.11",
@@ -38,68 +38,68 @@
       },
     },
     "apps/platform/automation": {
-      "name": "@nakama/automation",
+      "name": "@airin/automation",
       "dependencies": {
-        "@nakama/client": "workspace:*",
-        "@nakama/core": "workspace:*",
+        "@airin/client": "workspace:*",
+        "@airin/core": "workspace:*",
       },
     },
     "apps/platform/discord": {
-      "name": "@nakama/discord",
+      "name": "@airin/discord",
       "dependencies": {
-        "@nakama/client": "workspace:*",
-        "@nakama/core": "workspace:*",
+        "@airin/client": "workspace:*",
+        "@airin/core": "workspace:*",
         "discord.js": "^14.18.0",
         "zod": "^4.6.5",
       },
     },
     "apps/platform/slack": {
-      "name": "@nakama/slack",
+      "name": "@airin/slack",
       "dependencies": {
-        "@nakama/client": "workspace:*",
-        "@nakama/core": "workspace:*",
+        "@airin/client": "workspace:*",
+        "@airin/core": "workspace:*",
       },
     },
     "apps/platform/teams": {
-      "name": "@nakama/teams",
+      "name": "@airin/teams",
       "dependencies": {
+        "@airin/client": "workspace:*",
+        "@airin/core": "workspace:*",
         "@microsoft/teams.apps": "2.2.0",
-        "@nakama/client": "workspace:*",
-        "@nakama/core": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "apps/platform/telegram": {
-      "name": "@nakama/telegram",
+      "name": "@airin/telegram",
       "dependencies": {
+        "@airin/client": "workspace:*",
+        "@airin/core": "workspace:*",
         "@grammyjs/runner": "2.0.3",
-        "@nakama/client": "workspace:*",
-        "@nakama/core": "workspace:*",
         "grammy": "^1.46.0",
       },
     },
     "apps/platform/whatsapp": {
-      "name": "@nakama/whatsapp",
+      "name": "@airin/whatsapp",
       "dependencies": {
-        "@nakama/client": "workspace:*",
-        "@nakama/core": "workspace:*",
+        "@airin/client": "workspace:*",
+        "@airin/core": "workspace:*",
         "@whiskeysockets/baileys": "7.0.0-rc14",
       },
     },
     "apps/server": {
-      "name": "@nakama/server",
+      "name": "@airin/server",
       "dependencies": {
         "@agentclientprotocol/claude-agent-acp": "0.102.0",
         "@agentclientprotocol/codex-acp": "2.5.0",
         "@agentclientprotocol/sdk": "2.0.2",
+        "@airin/agent": "workspace:*",
+        "@airin/core": "workspace:*",
+        "@airin/db": "workspace:*",
         "@anthropic-ai/sdk": "^0.135.0",
         "@composio/core": "^0.28.0",
         "@google/genai": "^2.7.0",
         "@hono/zod-openapi": "^1.6.3",
         "@modelcontextprotocol/sdk": "^1.32.2",
-        "@nakama/agent": "workspace:*",
-        "@nakama/core": "workspace:*",
-        "@nakama/db": "workspace:*",
         "@openrouter/sdk": "^1.5.34",
         "@simplewebauthn/server": "^14.1.0",
         "fflate": "^0.8.3",
@@ -118,15 +118,15 @@
       },
     },
     "apps/web": {
-      "name": "@nakama/web",
+      "name": "@airin/web",
       "dependencies": {
+        "@airin/client": "workspace:*",
+        "@airin/core": "workspace:*",
+        "@airin/ui": "workspace:*",
         "@base-ui/react": "^1.8.0",
         "@fontsource-variable/inter": "^5.3.0",
         "@fontsource-variable/jetbrains-mono": "^5.2.8",
         "@leeoniya/ufuzzy": "^1.0.19",
-        "@nakama/client": "workspace:*",
-        "@nakama/core": "workspace:*",
-        "@nakama/ui": "workspace:*",
         "@simplewebauthn/browser": "14.0.0",
         "@streamdown/cjk": "^1.0.4",
         "@streamdown/code": "^1.1.1",
@@ -159,20 +159,20 @@
       },
     },
     "packages/agent": {
-      "name": "@nakama/agent",
+      "name": "@airin/agent",
       "dependencies": {
-        "@nakama/core": "workspace:*",
+        "@airin/core": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/client": {
-      "name": "@nakama/client",
+      "name": "@airin/client",
       "dependencies": {
-        "@nakama/core": "workspace:*",
+        "@airin/core": "workspace:*",
       },
     },
     "packages/core": {
-      "name": "@nakama/core",
+      "name": "@airin/core",
       "dependencies": {
         "@firecrawl/anydoc": "0.2.4",
         "@vscode/ripgrep": "^1.18.0",
@@ -193,41 +193,41 @@
       },
     },
     "packages/db": {
-      "name": "@nakama/db",
+      "name": "@airin/db",
       "dependencies": {
-        "@nakama/core": "workspace:*",
+        "@airin/core": "workspace:*",
       },
     },
     "packages/plugins/data-view": {
-      "name": "@nakama/plugin-data-view",
+      "name": "@airin/plugin-data-view",
       "version": "0.1.0",
       "devDependencies": {
-        "@nakama/core": "workspace:*",
-        "@nakama/ui": "workspace:*",
+        "@airin/core": "workspace:*",
+        "@airin/ui": "workspace:*",
         "@types/react": "^19.3.0",
       },
     },
     "packages/plugins/supermemory": {
-      "name": "@nakama/plugin-supermemory",
+      "name": "@airin/plugin-supermemory",
       "version": "0.1.0",
       "devDependencies": {
-        "@nakama/core": "workspace:*",
-        "@nakama/ui": "workspace:*",
+        "@airin/core": "workspace:*",
+        "@airin/ui": "workspace:*",
         "@types/react": "^19.3.0",
         "react": "^19.3.0",
       },
     },
     "packages/plugins/workflows": {
-      "name": "@nakama/plugin-workflows",
+      "name": "@airin/plugin-workflows",
       "version": "1.0.1",
       "devDependencies": {
-        "@nakama/core": "workspace:*",
-        "@nakama/ui": "workspace:*",
+        "@airin/core": "workspace:*",
+        "@airin/ui": "workspace:*",
         "@types/react": "^19.3.0",
       },
     },
     "packages/ui": {
-      "name": "@nakama/ui",
+      "name": "@airin/ui",
       "dependencies": {
         "@base-ui/react": "^1.5.0",
         "class-variance-authority": "^0.7.1",
@@ -262,6 +262,42 @@
     "@agentclientprotocol/codex-acp": ["@agentclientprotocol/codex-acp@2.5.0", "", { "dependencies": { "@agentclientprotocol/sdk": "~2.1.0", "@openai/codex": "^0.165.0", "cross-spawn": "^7.0.6", "diff": "^9.0.0", "open": "^11.0.1", "vscode-jsonrpc": "^9.0.1", "zod": "^4.0.0" }, "bin": { "codex-acp": "dist/index.js" } }, "sha512-7e/4OhJwpvSTqsjiokoVYRV7O1XGem1CAsQgO1opmGYbRD5LvmydwDlJrldzQYO5TcPWueGzQ2Jdvyvp6l3qDw=="],
 
     "@agentclientprotocol/sdk": ["@agentclientprotocol/sdk@2.0.2", "", { "peerDependencies": { "zod": "^3.25.76 || ^4.0.0" } }, "sha512-jLywRB42hZMRMc4aUgt0uRjkY9FQnMdybv4XgLl+ddi75QuJn8Vbl0+CHcVHJDC0+WDfi1KQXRWtHaR5vp6gHw=="],
+
+    "@airin/agent": ["@airin/agent@workspace:packages/agent"],
+
+    "@airin/automation": ["@airin/automation@workspace:apps/platform/automation"],
+
+    "@airin/cli": ["@airin/cli@workspace:apps/cli"],
+
+    "@airin/client": ["@airin/client@workspace:packages/client"],
+
+    "@airin/core": ["@airin/core@workspace:packages/core"],
+
+    "@airin/db": ["@airin/db@workspace:packages/db"],
+
+    "@airin/desktop": ["@airin/desktop@workspace:apps/desktop"],
+
+    "@airin/discord": ["@airin/discord@workspace:apps/platform/discord"],
+
+    "@airin/plugin-data-view": ["@airin/plugin-data-view@workspace:packages/plugins/data-view"],
+
+    "@airin/plugin-supermemory": ["@airin/plugin-supermemory@workspace:packages/plugins/supermemory"],
+
+    "@airin/plugin-workflows": ["@airin/plugin-workflows@workspace:packages/plugins/workflows"],
+
+    "@airin/server": ["@airin/server@workspace:apps/server"],
+
+    "@airin/slack": ["@airin/slack@workspace:apps/platform/slack"],
+
+    "@airin/teams": ["@airin/teams@workspace:apps/platform/teams"],
+
+    "@airin/telegram": ["@airin/telegram@workspace:apps/platform/telegram"],
+
+    "@airin/ui": ["@airin/ui@workspace:packages/ui"],
+
+    "@airin/web": ["@airin/web@workspace:apps/web"],
+
+    "@airin/whatsapp": ["@airin/whatsapp@workspace:apps/platform/whatsapp"],
 
     "@antfu/install-pkg": ["@antfu/install-pkg@1.1.0", "", { "dependencies": { "package-manager-detector": "^1.3.0", "tinyexec": "^1.0.1" } }, "sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ=="],
 
@@ -608,42 +644,6 @@
     "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.32.2", "", { "dependencies": { "@hono/node-server": "^1.19.9 || ^2.0.5", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "content-type": "^1.0.5", "cors": "^2.8.5", "cross-spawn": "^7.0.5", "eventsource": "^3.0.2", "eventsource-parser": "^3.0.0", "express": "^5.2.1", "express-rate-limit": "^8.2.1", "hono": "^4.11.4", "jose": "^6.1.3", "json-schema-typed": "^8.0.2", "pkce-challenge": "^5.0.0", "raw-body": "^3.0.0", "zod": "^3.25 || ^4.0", "zod-to-json-schema": "^3.25.1" }, "peerDependencies": { "@cfworker/json-schema": "^4.1.1" }, "optionalPeers": ["@cfworker/json-schema"] }, "sha512-SWsVtH/0vULSQStoZ6xxH2K09Li8fXYTMC64ZeogCdpZ3XSi1eCPOByV1OpuJxuI3OcmHhosDWYyii07tpPsLw=="],
 
     "@mswjs/interceptors": ["@mswjs/interceptors@0.41.9", "", { "dependencies": { "@open-draft/deferred-promise": "^2.2.0", "@open-draft/logger": "^0.3.0", "@open-draft/until": "^2.0.0", "is-node-process": "^1.2.0", "outvariant": "^1.4.3", "strict-event-emitter": "^0.5.1" } }, "sha512-VVPPgHyQ6ShqnrmDWuxjmUIsO9gWyOZFmuOfLd9LfBGQJwZfy0gvv9pbHSJuoFNIYC7ZDX9aoFwowjcdSC4E8w=="],
-
-    "@nakama/agent": ["@nakama/agent@workspace:packages/agent"],
-
-    "@nakama/automation": ["@nakama/automation@workspace:apps/platform/automation"],
-
-    "@nakama/cli": ["@nakama/cli@workspace:apps/cli"],
-
-    "@nakama/client": ["@nakama/client@workspace:packages/client"],
-
-    "@nakama/core": ["@nakama/core@workspace:packages/core"],
-
-    "@nakama/db": ["@nakama/db@workspace:packages/db"],
-
-    "@nakama/desktop": ["@nakama/desktop@workspace:apps/desktop"],
-
-    "@nakama/discord": ["@nakama/discord@workspace:apps/platform/discord"],
-
-    "@nakama/plugin-data-view": ["@nakama/plugin-data-view@workspace:packages/plugins/data-view"],
-
-    "@nakama/plugin-supermemory": ["@nakama/plugin-supermemory@workspace:packages/plugins/supermemory"],
-
-    "@nakama/plugin-workflows": ["@nakama/plugin-workflows@workspace:packages/plugins/workflows"],
-
-    "@nakama/server": ["@nakama/server@workspace:apps/server"],
-
-    "@nakama/slack": ["@nakama/slack@workspace:apps/platform/slack"],
-
-    "@nakama/teams": ["@nakama/teams@workspace:apps/platform/teams"],
-
-    "@nakama/telegram": ["@nakama/telegram@workspace:apps/platform/telegram"],
-
-    "@nakama/ui": ["@nakama/ui@workspace:packages/ui"],
-
-    "@nakama/web": ["@nakama/web@workspace:apps/web"],
-
-    "@nakama/whatsapp": ["@nakama/whatsapp@workspace:apps/platform/whatsapp"],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.3", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || ^2.0.0-alpha.4", "@emnapi/runtime": "^1.7.1 || ^2.0.0-alpha.4" } }, "sha512-UMduMbqO5s5zF2NkNacMT/yK5Y5QiKvWr2+50bzIIxFDwVJ2h49b+oyjaCGPhJxd2/gC2x39EHv/gHVuu36x2Q=="],
 

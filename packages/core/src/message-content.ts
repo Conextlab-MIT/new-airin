@@ -1,4 +1,4 @@
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import type {
   ChatMessage,
   DocumentAttachment,
@@ -125,7 +125,7 @@ export function normalizeUserContent(
   }
 
   if (parts.length === 0) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Message must include text or at least one attachment.",
       400
     );
@@ -141,7 +141,7 @@ export function validateCombinedAttachmentCount(
   const total = imageCount + documentCount;
 
   if (total > MAX_ATTACHMENTS_PER_MESSAGE) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `At most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments per message.`,
       400
     );
@@ -150,7 +150,7 @@ export function validateCombinedAttachmentCount(
 
 export function validateImageAttachments(images: ImageAttachment[]): void {
   if (images.length > MAX_ATTACHMENTS_PER_MESSAGE) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `At most ${MAX_ATTACHMENTS_PER_MESSAGE} images per message.`,
       400
     );
@@ -158,7 +158,7 @@ export function validateImageAttachments(images: ImageAttachment[]): void {
 
   for (const image of images) {
     if (!ALLOWED_IMAGE_MEDIA_TYPES.has(image.mediaType)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Unsupported image type: ${image.mediaType}. Allowed: jpeg, png, gif, webp.`,
         400
       );
@@ -172,7 +172,7 @@ export function validateDocumentAttachments(
   documents: DocumentAttachment[]
 ): void {
   if (documents.length > MAX_ATTACHMENTS_PER_MESSAGE) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `At most ${MAX_ATTACHMENTS_PER_MESSAGE} documents per message.`,
       400
     );
@@ -182,13 +182,13 @@ export function validateDocumentAttachments(
     const filename = document.filename.trim();
 
     if (!filename) {
-      throw new NakamaApiError("Document filename must not be empty.", 400);
+      throw new AirinApiError("Document filename must not be empty.", 400);
     }
 
     const mediaType = normalizeDocumentMediaType(document.mediaType, filename);
 
     if (!ALLOWED_DOCUMENT_MEDIA_TYPES.has(mediaType)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Unsupported document type: ${document.mediaType}. Allowed: pdf, docx, xls, xlsx, xlsm, xlsb, csv, txt, md.`,
         400
       );
@@ -233,24 +233,24 @@ export function normalizeAttachmentBase64(
   const raw = data.trim();
 
   if (!raw) {
-    throw new NakamaApiError(`${label} data must not be empty.`, 400);
+    throw new AirinApiError(`${label} data must not be empty.`, 400);
   }
 
   const dataUrl = /^data:[^,]*;base64,([^,]+)$/is.exec(raw);
   const base64 = dataUrl?.[1] ?? raw;
 
   if (!(base64.length % 4 === 0 && BASE64_PATTERN.test(base64))) {
-    throw new NakamaApiError(`${label} data must be valid base64.`, 400);
+    throw new AirinApiError(`${label} data must be valid base64.`, 400);
   }
 
   const byteLength = estimateBase64DecodedLength(base64);
 
   if (byteLength === 0) {
-    throw new NakamaApiError(`${label} data must not be empty.`, 400);
+    throw new AirinApiError(`${label} data must not be empty.`, 400);
   }
 
   if (byteLength > maxBytes) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Each ${label} must be at most ${maxBytes / (1024 * 1024)} MB.`,
       400
     );
@@ -263,7 +263,7 @@ export function normalizeAttachmentBase64(
       throw new Error("noncanonical base64");
     }
   } catch {
-    throw new NakamaApiError(`${label} data must be valid base64.`, 400);
+    throw new AirinApiError(`${label} data must be valid base64.`, 400);
   }
 
   return base64;

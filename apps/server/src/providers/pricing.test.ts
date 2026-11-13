@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { CustomModelEntry } from "@nakama/core";
+import type { CustomModelEntry } from "@airin/core";
 import {
   estimateUsageCostUsd,
   getExplicitModelPricing,

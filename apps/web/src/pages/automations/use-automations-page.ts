@@ -1,5 +1,5 @@
+import type { StoredAutomation } from "@airin/core/contract";
 import uFuzzy from "@leeoniya/ufuzzy";
-import type { StoredAutomation } from "@nakama/core/contract";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useActiveChatProfile } from "@/context/use-active-chat-profile";
@@ -15,7 +15,7 @@ import {
 } from "@/hooks/use-automations";
 import { useProfileComposioToolkits } from "@/hooks/use-composio";
 import { formatError } from "@/lib/client";
-import { findSuperNakamaProfile } from "@/lib/profiles";
+import { findSuperAirinProfile } from "@/lib/profiles";
 import type { AutomationToolOptions } from "@/pages/automations/automations-components";
 
 const EMPTY_AUTOMATIONS: StoredAutomation[] = [];
@@ -45,15 +45,15 @@ export function useAutomationsPage() {
   const { data: profiles = [], isLoading: profilesLoading } =
     useProfilesQuery();
 
-  const superNakamaProfile = findSuperNakamaProfile(profiles);
+  const superAirinProfile = findSuperAirinProfile(profiles);
 
   const automations = useMemo(() => {
     const all = automationsData?.automations ?? EMPTY_AUTOMATIONS;
 
-    return profileId && profileId === superNakamaProfile?.id
+    return profileId && profileId === superAirinProfile?.id
       ? all
       : all.filter((automation) => automation.profileId === profileId);
-  }, [automationsData?.automations, profileId, superNakamaProfile?.id]);
+  }, [automationsData?.automations, profileId, superAirinProfile?.id]);
 
   const [searchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -360,13 +360,13 @@ export function useAutomationsPage() {
       return;
     }
 
-    if (!superNakamaProfile) {
-      setError("No super nakama profile exists in this organization.");
+    if (!superAirinProfile) {
+      setError("No super airin profile exists in this organization.");
 
       return;
     }
 
-    navigateToNewChat(superNakamaProfile.id, {
+    navigateToNewChat(superAirinProfile.id, {
       draft,
       intent: "automation",
       send: options?.send,

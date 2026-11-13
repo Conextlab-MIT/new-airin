@@ -1,4 +1,4 @@
-import type { ProviderModelOption } from "@nakama/core/contract";
+import type { ProviderModelOption } from "@airin/core/contract";
 import type { ModelListRow } from "@/components/ModelListEditor";
 import { normalizeModelListRows } from "@/components/model-list-editor.shared";
 import {

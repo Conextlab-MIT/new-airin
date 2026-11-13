@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import {
   type ReactNode,
   useCallback,
@@ -18,10 +18,10 @@ import {
 
 const DEFAULT_PANEL_WIDTH = 448;
 
-const PANEL_WIDTH_KEY = "nakama:attachment-panel-width";
+const PANEL_WIDTH_KEY = "airin:attachment-panel-width";
 
 /** One entry per chat, newest last, so the list cannot grow without end. */
-const CHAT_PANELS_KEY = "nakama:chat-panels";
+const CHAT_PANELS_KEY = "airin:chat-panels";
 
 const MAX_REMEMBERED_CHATS = 50;
 

@@ -1,7 +1,7 @@
-import type { ProfileSummary } from "@nakama/core";
-import { type AgentGroup, groupRoster } from "@nakama/core/agent-groups";
-import type { ImageAttachment } from "@nakama/core/contract";
-import { MAX_IMAGE_BYTES, parseDataUrl } from "@nakama/core/message-content";
+import type { ProfileSummary } from "@airin/core";
+import { type AgentGroup, groupRoster } from "@airin/core/agent-groups";
+import type { ImageAttachment } from "@airin/core/contract";
+import { MAX_IMAGE_BYTES, parseDataUrl } from "@airin/core/message-content";
 import {
   Button,
   Dialog,
@@ -11,8 +11,8 @@ import {
   DialogTitle,
   Input,
   Textarea,
-} from "@nakama/ui";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui";
+import { cn } from "@airin/ui/utils";
 import { Camera01Icon, Cancel01Icon } from "hugeicons-react";
 import { useRef, useState } from "react";
 import { ProfileAvatar } from "@/components/ProfileAvatar";

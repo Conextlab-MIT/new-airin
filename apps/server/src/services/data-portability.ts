@@ -35,6 +35,8 @@ import { type Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { crc32 } from "node:zlib";
 import {
+  AIRIN_API_VERSION,
+  AirinApiError,
   assertConfigPathSegment,
   type DataExportManifest,
   type DataExportSkippedItem,
@@ -46,17 +48,15 @@ import {
   getUserConfigDir,
   listArtifacts,
   loadConfig,
-  NAKAMA_API_VERSION,
-  NakamaApiError,
   pathExists,
   type RestoreDataImportResponse,
   readAttachmentBytes,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   createSqliteDatabase,
   type DatabaseAdapter,
   resolveDatabasePath,
-} from "@nakama/db";
+} from "@airin/db";
 import { Zip, ZipDeflate, ZipPassThrough, zipSync } from "fflate";
 import * as yauzl from "yauzl";
 import { decodeSecretsKey, ManagedSecrets } from "./managed-secrets";
@@ -72,17 +72,17 @@ import {
   isEncryptedBackup,
 } from "./scheduled-backup";
 
-export const NAKAMA_EXPORT_MANIFEST = "nakama-export.json";
+export const AIRIN_EXPORT_MANIFEST = "airin-export.json";
 
-export const NAKAMA_EXPORT_FORMAT_VERSION = 1;
+export const AIRIN_EXPORT_FORMAT_VERSION = 1;
 
-export const NAKAMA_USER_EXPORT_MANIFEST = "nakama-user-export.json";
+export const AIRIN_USER_EXPORT_MANIFEST = "airin-user-export.json";
 
-export const NAKAMA_USER_EXPORT_FORMAT_VERSION = 1;
+export const AIRIN_USER_EXPORT_FORMAT_VERSION = 1;
 
-export const NAKAMA_ORG_EXPORT_MANIFEST = "nakama-org-export.json";
+export const AIRIN_ORG_EXPORT_MANIFEST = "airin-org-export.json";
 
-export const NAKAMA_ORG_EXPORT_FORMAT_VERSION = 1;
+export const AIRIN_ORG_EXPORT_FORMAT_VERSION = 1;
 
 // Setup import is unauthenticated until the first admin exists, so an archive
 // has to be capped on the way in rather than once it is already in memory.
@@ -146,18 +146,18 @@ function envLimit(name: string, fallback: number, ceiling: number): number {
 export function getDataImportLimits(): ImportLimits {
   return {
     archiveBytes: envLimit(
-      "NAKAMA_DATA_IMPORT_MAX_ARCHIVE_BYTES",
+      "AIRIN_DATA_IMPORT_MAX_ARCHIVE_BYTES",
       DATA_IMPORT_LIMITS.archiveBytes,
       MAX_DATA_IMPORT_ARCHIVE_BYTES
     ),
     entries: MAX_IMPORT_ENTRIES,
     entryBytes: envLimit(
-      "NAKAMA_DATA_IMPORT_MAX_ENTRY_BYTES",
+      "AIRIN_DATA_IMPORT_MAX_ENTRY_BYTES",
       DATA_IMPORT_LIMITS.entryBytes,
       MAX_DATA_IMPORT_ENTRY_BYTES
     ),
     uncompressedBytes: envLimit(
-      "NAKAMA_DATA_IMPORT_MAX_UNCOMPRESSED_BYTES",
+      "AIRIN_DATA_IMPORT_MAX_UNCOMPRESSED_BYTES",
       DATA_IMPORT_LIMITS.uncompressedBytes,
       MAX_DATA_IMPORT_UNCOMPRESSED_BYTES
     ),
@@ -213,7 +213,7 @@ export interface RestoreDataImportOptions {
   /** Defaults to `PM2_HOME` in the desktop app. A live pm2 home that is a top-level entry stays in place. */
   pm2Home?: string | null;
   rootDir?: string;
-  /** Defaults to `NAKAMA_SERVER_LOG` in the desktop app, its log for this process. */
+  /** Defaults to `AIRIN_SERVER_LOG` in the desktop app, its log for this process. */
   serverLog?: string | null;
 }
 
@@ -222,15 +222,15 @@ interface InventoryItem {
   relativePath: string;
 }
 
-const RESTORE_PREFIX = ".nakama-restore-";
+const RESTORE_PREFIX = ".airin-restore-";
 
-const BACKUP_PREFIX = ".nakama-backup-";
+const BACKUP_PREFIX = ".airin-backup-";
 
-const EXPORT_PREFIX = ".nakama-export-";
+const EXPORT_PREFIX = ".airin-export-";
 
-const UPLOAD_PREFIX = ".nakama-upload-";
+const UPLOAD_PREFIX = ".airin-upload-";
 
-const PLUGIN_SNAPSHOT_PREFIX = ".nakama-plugin-snapshot-";
+const PLUGIN_SNAPSHOT_PREFIX = ".airin-plugin-snapshot-";
 
 const DELETED_DURING_EXPORT = "Deleted while the export ran.";
 
@@ -246,11 +246,11 @@ const ORG_PLUGIN_SQLITE = /^orgs\/[^/]+\/plugins\/[^/]+\/db\/[^/]+\.sqlite$/;
  * An archive from one layout must land where the restoring install reads it.
  */
 const MAIN_DATABASE_LAYOUTS: readonly string[] = [
-  "data/sqlite/nakama.sqlite",
-  "sqlite/nakama.sqlite",
+  "data/sqlite/airin.sqlite",
+  "sqlite/airin.sqlite",
 ];
 
-function resolveNakamaRootDir(rootDir?: string): string {
+function resolveAirinRootDir(rootDir?: string): string {
   const raw = rootDir ?? getUserConfigDir();
 
   if (!isAbsolute(raw)) {
@@ -276,7 +276,7 @@ export async function retireAppUserData(
   rootDir: string,
   databasePath: string | null
 ): Promise<void> {
-  const root = await realpath(resolveNakamaRootDir(rootDir));
+  const root = await realpath(resolveAirinRootDir(rootDir));
   const retired = join(root, "retired-app-users");
 
   const sessions: Array<{ id: string; org_id: string; profile_id: string }> =
@@ -463,10 +463,10 @@ export async function retireAppUserData(
   }
 }
 
-export async function createNakamaDataExportFile(
+export async function createAirinDataExportFile(
   options: CreateDataExportOptions = {}
 ): Promise<CreateDataExportFileResult> {
-  const rootDir = resolveNakamaRootDir(options.rootDir);
+  const rootDir = resolveAirinRootDir(options.rootDir);
   const createdAt = (options.now ?? new Date()).toISOString();
   const limits = options.limits ?? getDataImportLimits();
 
@@ -504,7 +504,7 @@ export async function createNakamaDataExportFile(
             ) {
               outsideDatabases.push({
                 path: databasePath,
-                reason: "Database path is outside the Nakama root.",
+                reason: "Database path is outside the Airin root.",
               });
             } else if (await pathExists(databasePath)) {
               const target = join(snapshotParent, relativeDatabasePath);
@@ -543,7 +543,7 @@ export async function createNakamaDataExportFile(
 
           return {
             cleanup,
-            filename: `nakama-export-${createdAt.replace(/[:.]/g, "-")}.zip`,
+            filename: `airin-export-${createdAt.replace(/[:.]/g, "-")}.zip`,
             manifest,
             path: archivePath,
           };
@@ -556,7 +556,7 @@ export async function createNakamaDataExportFile(
     );
   } catch (error) {
     if (error instanceof PluginExportBarrierError) {
-      throw new NakamaApiError(error.message, 503);
+      throw new AirinApiError(error.message, 503);
     }
 
     throw error;
@@ -565,12 +565,12 @@ export async function createNakamaDataExportFile(
 
 /**
  * In-memory form, for tests and small callers. Routes and scheduled backups
- * must use `createNakamaDataExportFile` so a large install never sits in RAM.
+ * must use `createAirinDataExportFile` so a large install never sits in RAM.
  */
-export async function createNakamaDataExport(
+export async function createAirinDataExport(
   options: CreateDataExportOptions = {}
 ): Promise<CreateDataExportResult> {
-  const file = await createNakamaDataExportFile(options);
+  const file = await createAirinDataExportFile(options);
 
   try {
     return {
@@ -627,7 +627,7 @@ async function writeExportArchive(options: {
     archiveBytes += chunk.byteLength;
 
     if (archiveBytes > options.limits.archiveBytes) {
-      zipError = new NakamaApiError(
+      zipError = new AirinApiError(
         `Cannot export a restorable backup: ZIP exceeds the ${megabytes(options.limits.archiveBytes)} import limit. Use a filesystem or volume backup instead.`,
         413
       );
@@ -647,7 +647,7 @@ async function writeExportArchive(options: {
     entryCount += 1;
 
     if (entryCount > options.limits.entries) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Cannot export a restorable backup: Archive exceeds the ${options.limits.entries} entry limit. Use a filesystem or volume backup instead.`,
         413
       );
@@ -684,7 +684,7 @@ async function writeExportArchive(options: {
     compress: boolean
   ): Promise<void> => {
     if (data.byteLength > options.limits.entryBytes) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Cannot export a restorable backup: Archive entry ${name} exceeds the ${megabytes(options.limits.entryBytes)} limit. Use a filesystem or volume backup instead.`,
         413
       );
@@ -694,7 +694,7 @@ async function writeExportArchive(options: {
       uncompressedTotal + data.byteLength >
       options.limits.uncompressedBytes
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Cannot export a restorable backup: Archive exceeds the ${megabytes(options.limits.uncompressedBytes)} uncompressed limit. Use a filesystem or volume backup instead.`,
         413
       );
@@ -750,7 +750,7 @@ async function writeExportArchive(options: {
             fileBytes += chunk.byteLength;
 
             if (fileBytes > options.limits.entryBytes) {
-              throw new NakamaApiError(
+              throw new AirinApiError(
                 `Cannot export a restorable backup: Archive entry ${name} exceeds the ${megabytes(options.limits.entryBytes)} limit. Use a filesystem or volume backup instead.`,
                 413
               );
@@ -760,7 +760,7 @@ async function writeExportArchive(options: {
               uncompressedTotal + fileBytes >
               options.limits.uncompressedBytes
             ) {
-              throw new NakamaApiError(
+              throw new AirinApiError(
                 `Cannot export a restorable backup: Archive exceeds the ${megabytes(options.limits.uncompressedBytes)} uncompressed limit. Use a filesystem or volume backup instead.`,
                 413
               );
@@ -807,7 +807,7 @@ async function writeExportArchive(options: {
         if (
           /(?:^|\n)\s*(?:api_key|password)\s*=/m.test(data.toString("utf8"))
         ) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Legacy plaintext secrets must migrate before export.",
             409
           );
@@ -845,19 +845,19 @@ async function writeExportArchive(options: {
     const topLevelPaths = [...topLevelPathSet].sort();
 
     const manifest: DataExportManifest = {
-      apiVersion: NAKAMA_API_VERSION,
+      apiVersion: AIRIN_API_VERSION,
       createdAt: options.createdAt,
       fileCount: writtenPaths.length,
-      kind: "nakama-export",
+      kind: "airin-export",
       skipped: options.skipped,
-      sourceRootName: basename(options.rootDir) || ".nakama",
+      sourceRootName: basename(options.rootDir) || ".airin",
       topLevelPaths,
       totalBytes: uncompressedTotal,
-      version: NAKAMA_EXPORT_FORMAT_VERSION,
+      version: AIRIN_EXPORT_FORMAT_VERSION,
     };
 
     await addBufferEntry(
-      NAKAMA_EXPORT_MANIFEST,
+      AIRIN_EXPORT_MANIFEST,
       Buffer.from(JSON.stringify(manifest, null, 2), "utf8"),
       true
     );
@@ -887,7 +887,7 @@ function isCompressibleFile(name: string): boolean {
   return COMPRESSIBLE_FILE.test(name);
 }
 
-export async function createNakamaUserDataExport(
+export async function createAirinUserDataExport(
   databaseAdapter: DatabaseAdapter,
   userId: string,
   options: { now?: Date } = {}
@@ -895,7 +895,7 @@ export async function createNakamaUserDataExport(
   const user = await databaseAdapter.getUserById(userId);
 
   if (!user) {
-    throw new NakamaApiError("Not found", 404);
+    throw new AirinApiError("Not found", 404);
   }
 
   const memberships = [];
@@ -974,12 +974,12 @@ export async function createNakamaUserDataExport(
   }
 
   const createdAt = (options.now ?? new Date()).toISOString();
-  entries[NAKAMA_USER_EXPORT_MANIFEST] = Buffer.from(
+  entries[AIRIN_USER_EXPORT_MANIFEST] = Buffer.from(
     JSON.stringify(
       {
-        apiVersion: NAKAMA_API_VERSION,
+        apiVersion: AIRIN_API_VERSION,
         createdAt,
-        kind: "nakama-user-export",
+        kind: "airin-user-export",
         memberships,
         sessions,
         user: {
@@ -992,7 +992,7 @@ export async function createNakamaUserDataExport(
           phone: user.phone ?? null,
           updatedAt: user.updatedAt,
         },
-        version: NAKAMA_USER_EXPORT_FORMAT_VERSION,
+        version: AIRIN_USER_EXPORT_FORMAT_VERSION,
       },
       null,
       2
@@ -1002,11 +1002,11 @@ export async function createNakamaUserDataExport(
 
   return {
     data: Buffer.from(zipSync(entries)),
-    filename: `nakama-user-export-${createdAt.replace(/[:.]/g, "-")}.zip`,
+    filename: `airin-user-export-${createdAt.replace(/[:.]/g, "-")}.zip`,
   };
 }
 
-export async function createNakamaOrgDataExport(
+export async function createAirinOrgDataExport(
   databaseAdapter: DatabaseAdapter,
   orgId: string,
   options: { now?: Date } = {}
@@ -1014,7 +1014,7 @@ export async function createNakamaOrgDataExport(
   const organization = await databaseAdapter.getOrganizationById(orgId);
 
   if (!organization) {
-    throw new NakamaApiError("Not found", 404);
+    throw new AirinApiError("Not found", 404);
   }
 
   const entries: Record<string, Uint8Array> = {};
@@ -1201,18 +1201,18 @@ export async function createNakamaOrgDataExport(
   }
 
   const createdAt = (options.now ?? new Date()).toISOString();
-  entries[NAKAMA_ORG_EXPORT_MANIFEST] = Buffer.from(
+  entries[AIRIN_ORG_EXPORT_MANIFEST] = Buffer.from(
     JSON.stringify(
       {
-        apiVersion: NAKAMA_API_VERSION,
+        apiVersion: AIRIN_API_VERSION,
         automations,
         createdAt,
-        kind: "nakama-org-export",
+        kind: "airin-org-export",
         members,
         organization,
         profiles,
         sessions,
-        version: NAKAMA_ORG_EXPORT_FORMAT_VERSION,
+        version: AIRIN_ORG_EXPORT_FORMAT_VERSION,
         workflows,
       },
       null,
@@ -1223,7 +1223,7 @@ export async function createNakamaOrgDataExport(
 
   return {
     data: Buffer.from(zipSync(entries)),
-    filename: `nakama-org-export-${organization.slug}-${createdAt.replace(/[:.]/g, "-")}.zip`,
+    filename: `airin-org-export-${organization.slug}-${createdAt.replace(/[:.]/g, "-")}.zip`,
   };
 }
 
@@ -1316,14 +1316,14 @@ async function validateArchiveEntries(
 
       // biome-ignore lint/suspicious/noBitwiseOperators: S_IFMT and S_IFLNK are bit masks.
       if ((mode & 0o17_0000) === 0o12_0000) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           `Archive entry is a symlink: ${entry.fileName}`,
           400
         );
       }
 
       if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           `Archive entry uses an unsupported compression method: ${entry.fileName}`,
           400
         );
@@ -1335,7 +1335,7 @@ async function validateArchiveEntries(
           : entry.fileName.toLowerCase();
 
       if (names.has(key)) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           `Archive has duplicate entry: ${entry.fileName}`,
           400
         );
@@ -1343,7 +1343,7 @@ async function validateArchiveEntries(
 
       names.add(key);
 
-      if (entry.fileName === NAKAMA_EXPORT_MANIFEST) {
+      if (entry.fileName === AIRIN_EXPORT_MANIFEST) {
         void readZipEntryBuffer(zipfile, entry, MAX_MANIFEST_BYTES)
           .then((data) => {
             manifest = parseManifestBuffer(data);
@@ -1378,7 +1378,7 @@ async function validateArchiveEntries(
   await done.promise;
 
   if (!manifest) {
-    throw new NakamaApiError("Archive is missing Nakama export manifest.", 400);
+    throw new AirinApiError("Archive is missing Airin export manifest.", 400);
   }
 
   return {
@@ -1389,11 +1389,11 @@ async function validateArchiveEntries(
   };
 }
 
-export async function previewNakamaDataImportFile(
+export async function previewAirinDataImportFile(
   archivePath: string,
   options: PreviewDataImportOptions = {}
 ): Promise<DataImportPreviewResponse> {
-  const rootDir = resolveNakamaRootDir(options.rootDir);
+  const rootDir = resolveAirinRootDir(options.rootDir);
   const limits = options.limits ?? getDataImportLimits();
   const validation = await validateArchiveFile(archivePath, limits);
 
@@ -1406,14 +1406,14 @@ export async function previewNakamaDataImportFile(
   };
 }
 
-export async function previewNakamaDataImport(
+export async function previewAirinDataImport(
   archive: Buffer | Uint8Array | ArrayBuffer,
   options: PreviewDataImportOptions = {}
 ): Promise<DataImportPreviewResponse> {
   const temp = await writeTempImportArchive(toBuffer(archive));
 
   try {
-    return await previewNakamaDataImportFile(temp.path, options);
+    return await previewAirinDataImportFile(temp.path, options);
   } finally {
     await temp.cleanup();
   }
@@ -1429,13 +1429,13 @@ export function decodeArchiveRequestData(
   // Checked before the trim, so an oversized payload is rejected without
   // being copied and then decoded.
   if (data.length > MAX_IMPORT_ARCHIVE_BASE64_CHARS) {
-    throw new NakamaApiError(tooLargeMessage, 413);
+    throw new AirinApiError(tooLargeMessage, 413);
   }
 
   const trimmed = data.trim();
 
   if (!trimmed) {
-    throw new NakamaApiError("Import archive data is required.", 400);
+    throw new AirinApiError("Import archive data is required.", 400);
   }
 
   return decryptArchiveIfNeeded(Buffer.from(trimmed, "base64"));
@@ -1450,11 +1450,11 @@ function decryptArchiveIfNeeded(archive: Buffer): Buffer {
   try {
     return decryptBackup(
       archive,
-      decodeSecretsKey(process.env.NAKAMA_SECRETS_KEY ?? "")
+      decodeSecretsKey(process.env.AIRIN_SECRETS_KEY ?? "")
     );
   } catch {
-    throw new NakamaApiError(
-      "Cannot decrypt this backup with NAKAMA_SECRETS_KEY.",
+    throw new AirinApiError(
+      "Cannot decrypt this backup with AIRIN_SECRETS_KEY.",
       400
     );
   }
@@ -1466,11 +1466,11 @@ export function decodeArchiveRequestBytes(
   tooLargeMessage = ARCHIVE_TOO_LARGE
 ): Buffer {
   if (archive.length > MAX_IMPORT_ARCHIVE_BYTES) {
-    throw new NakamaApiError(tooLargeMessage, 413);
+    throw new AirinApiError(tooLargeMessage, 413);
   }
 
   if (archive.length === 0) {
-    throw new NakamaApiError("Import archive data is required.", 400);
+    throw new AirinApiError("Import archive data is required.", 400);
   }
 
   return decryptArchiveIfNeeded(archive);
@@ -1491,7 +1491,7 @@ export async function spoolImportArchive(
     tooLargeMessage?: string;
   }
 ): Promise<{ cleanup: () => Promise<void>; path: string }> {
-  const rootDir = resolveNakamaRootDir(options.rootDir);
+  const rootDir = resolveAirinRootDir(options.rootDir);
   await mkdir(rootDir, { mode: 0o700, recursive: true });
   const dir = await mkdtemp(join(rootDir, UPLOAD_PREFIX));
   const path = join(dir, "archive.zip");
@@ -1505,7 +1505,7 @@ export async function spoolImportArchive(
           bytes += chunk.byteLength;
 
           if (bytes > options.limits.archiveBytes) {
-            throw new NakamaApiError(
+            throw new AirinApiError(
               options.tooLargeMessage ??
                 `Import archive must be at most ${megabytes(options.limits.archiveBytes)}.`,
               413
@@ -1548,7 +1548,7 @@ export async function spoolImportArchive(
 export async function cleanupDataPortabilityTempDirs(
   rootDir?: string
 ): Promise<void> {
-  const root = resolveNakamaRootDir(rootDir);
+  const root = resolveAirinRootDir(rootDir);
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
 
   const prefixes = [
@@ -1592,12 +1592,12 @@ export async function openImportArchive(
     await decryptBackupFile(
       archivePath,
       path,
-      decodeSecretsKey(process.env.NAKAMA_SECRETS_KEY ?? "")
+      decodeSecretsKey(process.env.AIRIN_SECRETS_KEY ?? "")
     );
   } catch {
     await rm(dir, { force: true, recursive: true });
-    throw new NakamaApiError(
-      "Cannot decrypt this backup with NAKAMA_SECRETS_KEY.",
+    throw new AirinApiError(
+      "Cannot decrypt this backup with AIRIN_SECRETS_KEY.",
       400
     );
   }
@@ -1620,7 +1620,7 @@ export async function openImportArchive(
 export async function writeTempImportArchive(
   data: Buffer
 ): Promise<{ cleanup: () => Promise<void>; path: string }> {
-  const dir = await mkdtemp(join(tmpdir(), "nakama-import-"));
+  const dir = await mkdtemp(join(tmpdir(), "airin-import-"));
   const path = join(dir, "archive.zip");
   await writeFile(path, data, { mode: 0o600 });
 
@@ -1639,28 +1639,28 @@ export async function writeTempImportArchive(
   };
 }
 
-export async function restoreNakamaDataImport(
+export async function restoreAirinDataImport(
   archive: Buffer | Uint8Array | ArrayBuffer,
   options: RestoreDataImportOptions
 ): Promise<RestoreDataImportResponse> {
   const temp = await writeTempImportArchive(toBuffer(archive));
 
   try {
-    return await restoreNakamaDataImportFile(temp.path, options);
+    return await restoreAirinDataImportFile(temp.path, options);
   } finally {
     await temp.cleanup();
   }
 }
 
-export async function restoreNakamaDataImportFile(
+export async function restoreAirinDataImportFile(
   archivePath: string,
   options: RestoreDataImportOptions
 ): Promise<RestoreDataImportResponse> {
   if (!options.confirm) {
-    throw new NakamaApiError("Restore confirmation is required.", 400);
+    throw new AirinApiError("Restore confirmation is required.", 400);
   }
 
-  const rootDir = resolveNakamaRootDir(options.rootDir);
+  const rootDir = resolveAirinRootDir(options.rootDir);
   const limits = options.limits ?? getDataImportLimits();
   const validation = await validateArchiveFile(archivePath, limits);
   const zipfile = await openZipFile(archivePath);
@@ -1673,7 +1673,7 @@ export async function restoreNakamaDataImportFile(
   // Live runtime state, not user data: replacing the pm2 home orphans the
   // daemon, and replacing the log loses this session's diagnostics. Only the
   // desktop app keeps these in its data root.
-  const desktop = process.env.NAKAMA_DESKTOP === "1";
+  const desktop = process.env.AIRIN_DESKTOP === "1";
   const keptEntries = new Set<string>();
 
   for (const live of [
@@ -1681,7 +1681,7 @@ export async function restoreNakamaDataImportFile(
       ? process.env.PM2_HOME
       : options.pm2Home,
     options.serverLog === undefined && desktop
-      ? process.env.NAKAMA_SERVER_LOG
+      ? process.env.AIRIN_SERVER_LOG
       : options.serverLog,
   ]) {
     const inside = pathInsideRoot(rootDir, live);
@@ -1693,7 +1693,7 @@ export async function restoreNakamaDataImportFile(
     }
   }
 
-  // Stage and back up inside rootDir so Docker volume mounts (e.g. /nakama/data)
+  // Stage and back up inside rootDir so Docker volume mounts (e.g. /airin/data)
   // are never renamed — rename(2) on a mount point returns EBUSY.
   await mkdir(rootDir, { mode: 0o700, recursive: true });
   const stagingParent = await mkdtemp(join(rootDir, RESTORE_PREFIX));
@@ -1725,8 +1725,8 @@ export async function restoreNakamaDataImportFile(
     const stagedDatabases = new Set([
       stagedDatabasePath,
       ...MAIN_DATABASE_LAYOUTS.map((layout) => join(stagedRoot, layout)),
-      join(stagedRoot, "nakama.db"),
-      join(stagedRoot, "nakama.sqlite"),
+      join(stagedRoot, "airin.db"),
+      join(stagedRoot, "airin.sqlite"),
     ]);
 
     await retireAppUserData(stagedRoot, null);
@@ -1769,7 +1769,7 @@ export async function restoreNakamaDataImportFile(
 
     if (secretDatabasePath || hasLegacySecrets) {
       const stagedDatabase = await createSqliteDatabase(
-        `file:${secretDatabasePath ?? join(stagedRoot, "sqlite", "nakama.sqlite")}`
+        `file:${secretDatabasePath ?? join(stagedRoot, "sqlite", "airin.sqlite")}`
       );
 
       const secrets = new ManagedSecrets(stagedDatabase.adapter);
@@ -1780,11 +1780,11 @@ export async function restoreNakamaDataImportFile(
         try {
           await secrets.checkIntegrity();
         } catch (error) {
-          // formatServerError only logs non-NakamaApiError causes; log here so
+          // formatServerError only logs non-AirinApiError causes; log here so
           // the underlying failure stays diagnosable.
           console.error("Restored secrets integrity check failed:", error);
-          throw new NakamaApiError(
-            "Saved secrets in this backup cannot be decrypted with this install's NAKAMA_SECRETS_KEY. Re-enter provider keys after restore, or remove saved secrets from the backup.",
+          throw new AirinApiError(
+            "Saved secrets in this backup cannot be decrypted with this install's AIRIN_SECRETS_KEY. Re-enter provider keys after restore, or remove saved secrets from the backup.",
             400
           );
         }
@@ -2120,7 +2120,7 @@ async function extractArchiveEntries(
         return;
       }
 
-      if (entry.fileName === NAKAMA_EXPORT_MANIFEST) {
+      if (entry.fileName === AIRIN_EXPORT_MANIFEST) {
         zipfile.readEntry();
 
         return;
@@ -2158,7 +2158,7 @@ async function extractZipEntry(
 
       if (bytes > entry.uncompressedSize) {
         callback(
-          new NakamaApiError(
+          new AirinApiError(
             `Archive entry ${entry.fileName} has the wrong size.`,
             400
           )
@@ -2180,7 +2180,7 @@ async function extractZipEntry(
   );
 
   if (bytes !== entry.uncompressedSize) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Archive entry ${entry.fileName} has the wrong size.`,
       400
     );
@@ -2188,7 +2188,7 @@ async function extractZipEntry(
 
   // biome-ignore lint/suspicious/noBitwiseOperators: CRC-32 is an unsigned 32-bit value.
   if (crc >>> 0 !== entry.crc32 >>> 0) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Archive entry ${entry.fileName} failed its checksum.`,
       400
     );
@@ -2210,9 +2210,9 @@ function openZipFile(path: string): Promise<yauzl.ZipFile> {
     (error, zipfile) => {
       if (error) {
         result.reject(
-          error instanceof NakamaApiError
+          error instanceof AirinApiError
             ? error
-            : new NakamaApiError("Invalid ZIP archive.", 400)
+            : new AirinApiError("Invalid ZIP archive.", 400)
         );
 
         return;
@@ -2257,7 +2257,7 @@ async function readZipEntryBuffer(
     size += chunk.length;
 
     if (size > maxBytes) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Archive entry ${entry.fileName} is too large.`,
         400
       );
@@ -2275,20 +2275,20 @@ function parseManifestBuffer(data: Buffer): DataExportManifest {
   try {
     manifest = parseDataExportManifest(JSON.parse(data.toString("utf8")));
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       throw error;
     }
 
-    throw new NakamaApiError("Nakama export manifest is not valid JSON.", 400);
+    throw new AirinApiError("Airin export manifest is not valid JSON.", 400);
   }
 
-  if (manifest.kind !== "nakama-export") {
-    throw new NakamaApiError("Archive is not a Nakama export.", 400);
+  if (manifest.kind !== "airin-export") {
+    throw new AirinApiError("Archive is not an Airin export.", 400);
   }
 
-  if (manifest.version !== NAKAMA_EXPORT_FORMAT_VERSION) {
-    throw new NakamaApiError(
-      `Unsupported Nakama export version: ${manifest.version}`,
+  if (manifest.version !== AIRIN_EXPORT_FORMAT_VERSION) {
+    throw new AirinApiError(
+      `Unsupported Airin export version: ${manifest.version}`,
       400
     );
   }
@@ -2306,10 +2306,7 @@ function resolveRestoredTarget(rootDir: string, name: string): string {
     isAbsolute(relativeTarget) ||
     relativeTarget === ""
   ) {
-    throw new NakamaApiError(
-      `Archive entry escapes restore root: ${name}`,
-      400
-    );
+    throw new AirinApiError(`Archive entry escapes restore root: ${name}`, 400);
   }
 
   return target;
@@ -2323,21 +2320,21 @@ function validateArchiveEntryLimits(
   limits: ImportLimits
 ): void {
   if (entryCount > limits.entries) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Archive exceeds the ${limits.entries} entry limit.`,
       400
     );
   }
 
   if (size > limits.entryBytes) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Archive entry ${name} exceeds the ${megabytes(limits.entryBytes)} limit.`,
       400
     );
   }
 
   if (uncompressedTotal > limits.uncompressedBytes) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Archive exceeds the ${megabytes(limits.uncompressedBytes)} uncompressed limit.`,
       400
     );
@@ -2346,22 +2343,22 @@ function validateArchiveEntryLimits(
 
 function validateArchivePath(path: string): void {
   if (!path || path.includes("\0")) {
-    throw new NakamaApiError("Archive entry path is empty or invalid.", 400);
+    throw new AirinApiError("Archive entry path is empty or invalid.", 400);
   }
 
   if (path !== toZipPath(path)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Archive entry must use POSIX separators: ${path}`,
       400
     );
   }
 
   if (isAbsolute(path) || /^[a-zA-Z]:/.test(path)) {
-    throw new NakamaApiError(`Archive entry must be relative: ${path}`, 400);
+    throw new AirinApiError(`Archive entry must be relative: ${path}`, 400);
   }
 
   if (process.platform === "win32" && path.includes(":")) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Archive entry cannot name an NTFS alternate data stream: ${path}`,
       400
     );
@@ -2374,10 +2371,7 @@ function validateArchivePath(path: string): void {
     normalized.startsWith("../") ||
     normalized.includes("/../")
   ) {
-    throw new NakamaApiError(
-      `Archive entry escapes restore root: ${path}`,
-      400
-    );
+    throw new AirinApiError(`Archive entry escapes restore root: ${path}`, 400);
   }
 
   const first = normalized.split("/")[0] ?? "";
@@ -2388,7 +2382,7 @@ function validateArchivePath(path: string): void {
     first.startsWith(EXPORT_PREFIX) ||
     first.startsWith(UPLOAD_PREFIX)
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Archive entry uses a reserved restore path: ${path}`,
       400
     );
@@ -2411,7 +2405,7 @@ function skipRelativePathReason(
   const first = parts[0] ?? "";
 
   if (
-    first === NAKAMA_EXPORT_MANIFEST ||
+    first === AIRIN_EXPORT_MANIFEST ||
     (parts[0] === "orgs" && parts[2] === "meet" && parts[3] === "audio") ||
     first.startsWith(RESTORE_PREFIX) ||
     first.startsWith(BACKUP_PREFIX) ||
@@ -2526,8 +2520,8 @@ async function finalizeRestoredPlugins(
 
   const candidates = [
     databasePath ? resolve(databasePath) : "",
-    join(rootDir, "data/sqlite/nakama.sqlite"),
-    join(rootDir, "nakama.db"),
+    join(rootDir, "data/sqlite/airin.sqlite"),
+    join(rootDir, "airin.db"),
   ].filter(Boolean);
 
   const seen = new Set<string>();
@@ -2582,10 +2576,7 @@ async function disableRestoredOrgPlugins(databasePath: string): Promise<void> {
 
 function parseDataExportManifest<T>(input: T): DataExportManifest {
   if (!(input instanceof Object)) {
-    throw new NakamaApiError(
-      "Nakama export manifest has an invalid shape.",
-      400
-    );
+    throw new AirinApiError("Airin export manifest has an invalid shape.", 400);
   }
 
   const record = new Map(Object.entries(input));
@@ -2600,9 +2591,9 @@ function parseDataExportManifest<T>(input: T): DataExportManifest {
 
   if (
     !(
-      record.get("kind") === "nakama-export" &&
+      record.get("kind") === "airin-export" &&
       isNumber(version) &&
-      (apiVersion === undefined || apiVersion === NAKAMA_API_VERSION) &&
+      (apiVersion === undefined || apiVersion === AIRIN_API_VERSION) &&
       (createdAt === undefined || isString(createdAt)) &&
       (fileCount === undefined || isNumber(fileCount)) &&
       (skipped === undefined ||
@@ -2612,17 +2603,14 @@ function parseDataExportManifest<T>(input: T): DataExportManifest {
       (totalBytes === undefined || isNumber(totalBytes))
     )
   ) {
-    throw new NakamaApiError(
-      "Nakama export manifest has an invalid shape.",
-      400
-    );
+    throw new AirinApiError("Airin export manifest has an invalid shape.", 400);
   }
 
   return {
-    apiVersion: NAKAMA_API_VERSION,
+    apiVersion: AIRIN_API_VERSION,
     createdAt: isString(createdAt) ? createdAt : "",
     fileCount: isNumber(fileCount) ? fileCount : 0,
-    kind: "nakama-export",
+    kind: "airin-export",
     skipped: Array.isArray(skipped) ? skipped : [],
     sourceRootName: isString(sourceRootName) ? sourceRootName : "",
     topLevelPaths: isStringArray(topLevelPaths) ? topLevelPaths : [],
@@ -2672,7 +2660,7 @@ function isPermissionError<T>(error: T): boolean {
  */
 function rethrowIfUnreadable<T>(relativePath: string, error: T): void {
   if (isPermissionError(error)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Cannot export a restorable backup: the server cannot read ${relativePath || "the data folder"}. Fix its owner or permissions, close the program that uses it, or remove it, then try again.`,
       409
     );

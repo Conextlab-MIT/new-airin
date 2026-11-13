@@ -6,11 +6,11 @@
  * into a normal chat turn for web/cli sessions.
  */
 
-import type { MessageContentPart } from "@nakama/core";
+import type { MessageContentPart } from "@airin/core";
 import {
   messageContentHasDocuments,
   messageContentHasImages,
-} from "@nakama/core";
+} from "@airin/core";
 
 const DEFAULT_LEARN_SOURCE =
   "the workflow we just went through in this conversation — review the steps taken and distill them into a reusable skill";
@@ -22,7 +22,7 @@ const LEARN_NEED_SOURCE_PROMPT = [
   "Do not call skill_manage yet.",
 ].join(" ");
 
-const AUTHORING_STANDARDS = `Follow Nakama skill-authoring standards exactly:
+const AUTHORING_STANDARDS = `Follow Airin skill-authoring standards exactly:
 
 Frontmatter (existing parser only — do not invent Hermes-only fields like version, author, platforms, or metadata.hermes):
 - name: lowercase kebab-case
@@ -38,7 +38,7 @@ Body section order (omit empty sections):
 
 Target ~100 lines for a simple skill, ~200 for a complex one. Put large reference material in references/ (via skill_manage write_file) or the profile knowledge base — not in SKILL.md.
 
-Nakama-tool framing (name builtins / assigned tools in backticks; do not invent commands):
+Airin-tool framing (name builtins / assigned tools in backticks; do not invent commands):
 - Prefer \`search_files\` / \`ripgrep\` over grep/rg
 - Prefer \`read_file\` over cat/head/tail
 - Prefer \`web_fetch\` over curl for page text

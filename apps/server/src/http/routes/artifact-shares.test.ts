@@ -1,13 +1,10 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import * as core from "@nakama/core";
-import { getProfileArtifactsDir } from "@nakama/core";
-import { MAX_HTML_ARTIFACT_BYTES } from "@nakama/core/artifact-mime";
-import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+import * as core from "@airin/core";
+import { getProfileArtifactsDir } from "@airin/core";
+import { MAX_HTML_ARTIFACT_BYTES } from "@airin/core/artifact-mime";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { setupTestConfigDir, withTestEnv } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -18,7 +15,7 @@ import {
   type TestBrowserSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-artifact-shares-test-");
+setupTestConfigDir("airin-artifact-shares-test-");
 
 function createApp(databaseAdapter = createInMemoryDatabaseAdapter()) {
   return createMinimalHonoApp({
@@ -77,7 +74,7 @@ async function seedProfileArtifact(params: {
 
   if (params.meta !== undefined) {
     await writeFile(
-      join(artifactsDir, `${params.filename}.nakama-meta.json`),
+      join(artifactsDir, `${params.filename}.airin-meta.json`),
       params.meta
     );
   }
@@ -456,7 +453,7 @@ describe("artifact share routes", () => {
     const publishResponse = await app.fetch(
       publishArtifactShareRequest({
         body: {
-          clientOrigin: "https://nakama.example.com/",
+          clientOrigin: "https://airin.example.com/",
           path: "note.md",
         },
         host: "127.0.0.1",
@@ -476,7 +473,7 @@ describe("artifact share routes", () => {
 
   test("publish prefers configured web public URL over loopback request URL", async () => {
     await withTestEnv(
-      { NAKAMA_WEB_PUBLIC_URL: "https://deployed.example.com/" },
+      { AIRIN_WEB_PUBLIC_URL: "https://deployed.example.com/" },
       async () => {
         const { app, databaseAdapter } = createApp();
         const session = await setupFreshInstallSession(app, databaseAdapter);

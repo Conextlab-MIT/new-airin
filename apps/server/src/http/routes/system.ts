@@ -1,18 +1,18 @@
 import { createHash } from "node:crypto";
-import { createRoute, z } from "@hono/zod-openapi";
 import {
-  getNakamaVersion,
+  AIRIN_API_VERSION,
+  AirinApiError,
+  getAirinVersion,
   isComposioConfiguredAsync,
-  NAKAMA_API_VERSION,
-  NakamaApiError,
-} from "@nakama/core";
-import { BUILTIN_TOOL_IDS } from "@nakama/core/tools/protected";
+} from "@airin/core";
+import { BUILTIN_TOOL_IDS } from "@airin/core/tools/protected";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   getWebPublicUrlSettings,
   persistWebPublicUrl,
 } from "../../services/composio-callback-url";
 import {
-  checkNakamaVersion,
+  checkAirinVersion,
   isOnboardingEnabled,
   isUpdateCheckEnabled,
   readUpgradeState,
@@ -44,7 +44,7 @@ const DOCS_HTML = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Nakama API</title>
+    <title>Airin API</title>
   </head>
   <body>
     <div id="app"></div>
@@ -84,12 +84,12 @@ export const ARTIFACT_FRAME_CSP = [
 const ARTIFACT_FRAME_HTML = `<!doctype html>
 <script>
   addEventListener("message", (event) => {
-    if (event.source !== parent || typeof event.data?.nakamaArtifactHtml !== "string") return;
+    if (event.source !== parent || typeof event.data?.airinArtifactHtml !== "string") return;
     document.open();
-    document.write(event.data.nakamaArtifactHtml);
+    document.write(event.data.airinArtifactHtml);
     document.close();
   });
-  parent.postMessage("nakama-artifact-frame-ready", "*");
+  parent.postMessage("airin-artifact-frame-ready", "*");
 </script>
 `;
 
@@ -118,12 +118,12 @@ export function registerSystemRoutes(
       ok: z.literal(true),
       onboardingEnabled: z.boolean().openapi({
         description:
-          "Whether NAKAMA_ENABLE_ONBOARDING is on. The web app then asks a new user for a goal.",
+          "Whether AIRIN_ENABLE_ONBOARDING is on. The web app then asks a new user for a goal.",
       }),
       providerConfigured: z.boolean(),
       updateCheckEnabled: z.boolean().openapi({
         description:
-          "False when NAKAMA_DISABLE_UPDATE_CHECK is set. The web app then hides the release check.",
+          "False when AIRIN_DISABLE_UPDATE_CHECK is set. The web app then hides the release check.",
       }),
       userConfigured: z.boolean(),
       version: z.string(),
@@ -219,7 +219,7 @@ export function registerSystemRoutes(
 
   const versionRoute = createRoute({
     method: "get",
-    operationId: "getNakamaVersion",
+    operationId: "getAirinVersion",
     path: "/v1/system/version",
     responses: {
       200: {
@@ -232,7 +232,7 @@ export function registerSystemRoutes(
                 releaseUrl: z.string(),
                 updateAvailable: z.boolean(),
               })
-              .openapi("NakamaVersionResponse"),
+              .openapi("AirinVersionResponse"),
           },
         },
         description: "Running version and the newest GitHub release",
@@ -243,14 +243,14 @@ export function registerSystemRoutes(
       },
       404: {
         content: { "application/json": { schema: errorSchema } },
-        description: "NAKAMA_DISABLE_UPDATE_CHECK is set",
+        description: "AIRIN_DISABLE_UPDATE_CHECK is set",
       },
       502: {
         content: { "application/json": { schema: errorSchema } },
         description: "Latest version unreachable",
       },
     },
-    summary: "Check for a newer Nakama release",
+    summary: "Check for a newer Airin release",
     tags: ["Health"],
   });
 
@@ -267,11 +267,11 @@ export function registerSystemRoutes(
         })
         .nullable(),
     })
-    .openapi("NakamaUpgradeResponse");
+    .openapi("AirinUpgradeResponse");
 
   const upgradeStateRoute = createRoute({
     method: "get",
-    operationId: "getNakamaUpgrade",
+    operationId: "getAirinUpgrade",
     path: "/v1/system/upgrade",
     responses: {
       200: {
@@ -289,7 +289,7 @@ export function registerSystemRoutes(
 
   const startUpgradeRoute = createRoute({
     method: "post",
-    operationId: "startNakamaUpgrade",
+    operationId: "startAirinUpgrade",
     path: "/v1/system/upgrade",
     request: {
       body: {
@@ -300,7 +300,7 @@ export function registerSystemRoutes(
                 rollback: z.boolean().optional(),
                 version: z.string(),
               })
-              .openapi("StartNakamaUpgradeRequest"),
+              .openapi("StartAirinUpgradeRequest"),
           },
         },
         required: true,
@@ -386,7 +386,7 @@ export function registerSystemRoutes(
 
     return c.json(
       {
-        apiVersion: NAKAMA_API_VERSION,
+        apiVersion: AIRIN_API_VERSION,
         builtinTools: BUILTIN_TOOL_NAMES,
         composioAvailable: false,
         composioConfigured,
@@ -395,7 +395,7 @@ export function registerSystemRoutes(
         providerConfigured: agent.providerConfigured,
         updateCheckEnabled: isUpdateCheckEnabled(),
         userConfigured: humanUserCount > 0,
-        version: getNakamaVersion(),
+        version: getAirinVersion(),
       },
       200
     );
@@ -433,16 +433,16 @@ export function registerSystemRoutes(
     requirePlatformAdminFromContext(c);
 
     if (!isUpdateCheckEnabled()) {
-      throw new NakamaApiError("Update check is disabled.", 404);
+      throw new AirinApiError("Update check is disabled.", 404);
     }
 
-    return c.json(await checkNakamaVersion(getNakamaVersion()), 200);
+    return c.json(await checkAirinVersion(getAirinVersion()), 200);
   });
 
   app.openapi(upgradeStateRoute, async (c) => {
     requirePlatformAdminFromContext(c);
 
-    return c.json(await readUpgradeState(getNakamaVersion()), 200);
+    return c.json(await readUpgradeState(getAirinVersion()), 200);
   });
 
   app.openAPIRegistry.registerPath(startUpgradeRoute);
@@ -463,7 +463,7 @@ export function registerSystemRoutes(
     return c.json(
       await requestUpgrade(
         body.version,
-        getNakamaVersion(),
+        getAirinVersion(),
         body.rollback ? "rollback" : "upgrade"
       ),
       202

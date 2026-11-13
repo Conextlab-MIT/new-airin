@@ -1,4 +1,4 @@
-import type { UpdateTelegramSettingsRequest } from "@nakama/core/contract";
+import type { UpdateTelegramSettingsRequest } from "@airin/core/contract";
 import { useEffect, useRef, useState } from "react";
 import { SETTINGS_CARD_LOADING_SKELETON } from "@/components/integration-settings.shared";
 import { TelegramAllowedUsers } from "@/components/TelegramAllowedUsers";

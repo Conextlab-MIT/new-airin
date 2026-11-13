@@ -215,7 +215,7 @@ export async function loadEmailConfig(): Promise<EmailConfigFile | null> {
         ...parsedConfig,
         password:
           (await resolveManagedSecret("global", "email", [
-            "NAKAMA_EMAIL_PASSWORD",
+            "AIRIN_EMAIL_PASSWORD",
           ])) ?? "",
       }
     : null;

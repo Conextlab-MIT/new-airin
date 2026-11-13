@@ -1,8 +1,8 @@
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import type { ImageAttachment, SendMessageInput } from "@nakama/core";
-import { getUserConfigDir, MAX_IMAGE_BYTES } from "@nakama/core";
+import type { ImageAttachment, SendMessageInput } from "@airin/core";
+import { getUserConfigDir, MAX_IMAGE_BYTES } from "@airin/core";
 
 const IMAGE_PATH_PATTERN = /^@(\S+)(?:\s+([\s\S]*))?$/;
 
@@ -16,8 +16,8 @@ const EXTENSION_MEDIA_TYPES = {
 
 /**
  * Resolve `@path` image reads to an allowlisted absolute path.
- * Allowed roots: process.cwd() and the Nakama config dir (`~/.nakama` or
- * `NAKAMA_CONFIG_DIR`). Blocks clipboard-stuffed absolute paths like
+ * Allowed roots: process.cwd() and the Airin config dir (`~/.airin` or
+ * `AIRIN_CONFIG_DIR`). Blocks clipboard-stuffed absolute paths like
  * `/etc/passwd` (#545).
  */
 export function resolveAllowedImagePath(filePath: string): string {
@@ -39,7 +39,7 @@ export function resolveAllowedImagePath(filePath: string): string {
 
   if (!isWithinRoots(realPath, allowedRoots)) {
     throw new Error(
-      `Image path is outside allowed directories (cwd or Nakama config dir): ${filePath}`
+      `Image path is outside allowed directories (cwd or Airin config dir): ${filePath}`
     );
   }
 

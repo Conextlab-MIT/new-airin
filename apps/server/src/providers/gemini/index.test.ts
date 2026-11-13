@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type { ProviderJsonRecord, ProviderJsonValue } from "../shared";
 import { asTestFetch } from "../test-helpers";
 import { createGeminiProvider } from "./index";
@@ -491,7 +491,7 @@ describe("Gemini HTTP failures", () => {
         (caught: Error) => caught
       );
 
-      expect(error).toBeInstanceOf(NakamaApiError);
+      expect(error).toBeInstanceOf(AirinApiError);
       expect(error).toMatchObject({ status: 502 });
       expect(error.message).toContain("(503)");
     });
@@ -511,7 +511,7 @@ describe("Gemini HTTP failures", () => {
         (caught: Error) => caught
       );
 
-      expect(error).toBeInstanceOf(NakamaApiError);
+      expect(error).toBeInstanceOf(AirinApiError);
       expect(error).toMatchObject({ status: 400 });
     });
 

@@ -1,7 +1,7 @@
 /**
- * Stdio MCP server that an ACP agent starts for Nakama's tools. ACP agents must
+ * Stdio MCP server that an ACP agent starts for Airin's tools. ACP agents must
  * accept stdio MCP servers, so this relays each JSON-RPC line from the agent to
- * Nakama's HTTP endpoint and writes the reply back on stdout.
+ * Airin's HTTP endpoint and writes the reply back on stdout.
  *
  * It runs as `node -e` or `bun -e` with the source below, so no file has to be
  * shipped next to the server. The endpoint URL (which holds the chat's secret
@@ -9,7 +9,7 @@
  */
 export const ACP_MCP_BRIDGE_SOURCE = `
 const { createInterface } = require("node:readline");
-const url = process.env.NAKAMA_ACP_MCP_URL;
+const url = process.env.AIRIN_ACP_MCP_URL;
 
 createInterface({ input: process.stdin }).on("line", async (line) => {
   if (!line.trim()) return;
@@ -32,7 +32,7 @@ createInterface({ input: process.stdin }).on("line", async (line) => {
 
     // A non-JSON-RPC body is dropped by the agent's MCP client, which then
     // waits out its connect timeout and reports that instead of the cause.
-    if (!response.ok) return fail("Nakama MCP endpoint answered " + response.status + ": " + text);
+    if (!response.ok) return fail("Airin MCP endpoint answered " + response.status + ": " + text);
     if (text) process.stdout.write(text + "\\n");
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));

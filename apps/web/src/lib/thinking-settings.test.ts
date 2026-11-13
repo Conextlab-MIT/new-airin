@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ProviderModelOption } from "@nakama/core/contract";
+import type { ProviderModelOption } from "@airin/core/contract";
 import { thinkingEffortOptionsFor } from "./thinking-settings";
 
 const values = (model?: Pick<ProviderModelOption, "id" | "provider">) =>

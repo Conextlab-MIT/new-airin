@@ -29,7 +29,7 @@ describe("group-message helpers", () => {
         me,
         mentionedJids: ["628100000000@s.whatsapp.net"],
         quotedParticipant: null,
-        text: "@Nakama hello",
+        text: "@Airin hello",
       }).shouldHandle
     ).toBe(true);
 
@@ -110,7 +110,7 @@ describe("group-message helpers", () => {
   });
 
   test("stripWhatsAppBotMention removes @mention tokens", () => {
-    expect(stripWhatsAppBotMention("hi @Nakama there")).toBe("hi there");
-    expect(stripWhatsAppBotMention("@Nakama")).toBe("");
+    expect(stripWhatsAppBotMention("hi @Airin there")).toBe("hi there");
+    expect(stripWhatsAppBotMention("@Airin")).toBe("");
   });
 });

@@ -1,10 +1,10 @@
-import type { StoredAutomation } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { ConfirmDialog } from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { cn } from "@nakama/ui/utils";
+import type { StoredAutomation } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { cn } from "@airin/ui/utils";
 import {
   Copy01Icon,
   PencilEdit02Icon,

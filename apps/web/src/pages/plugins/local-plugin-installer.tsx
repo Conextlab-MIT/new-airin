@@ -1,25 +1,25 @@
 import type {
   LocalPluginPreviewResponse,
   PluginPackageRequest,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/select";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown01Icon, ArrowRight01Icon } from "hugeicons-react";
 import { useRef, useState } from "react";
@@ -56,7 +56,7 @@ export function PluginPackageForm({
           aria-label="npm package name"
           disabled={busy}
           onChange={(event) => setPackageName(event.target.value)}
-          placeholder="@team/nakama-notes"
+          placeholder="@team/airin-notes"
           required
           value={packageName}
         />

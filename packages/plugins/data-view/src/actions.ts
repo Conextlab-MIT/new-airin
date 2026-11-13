@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
-import type { PluginExecutionContext } from "@nakama/core";
+import type { PluginExecutionContext } from "@airin/core";
 
 export type JsonValue =
   | boolean

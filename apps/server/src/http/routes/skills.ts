@@ -1,13 +1,13 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   type ListSkillsResponse,
   type ListSkillVersionsResponse,
-  NakamaApiError,
   type ProfileResponse,
   type PublishedSkillResponse,
   type SkillResponse,
   type SyncSkillsResponse,
-} from "@nakama/core";
+} from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { ServerOptions } from "../context";
 import {
   profileResponseFor,
@@ -97,7 +97,7 @@ export function registerSkillRoutes(
       const orgId = decodeURIComponent(c.req.param("orgId"));
 
       if (auth.activeOrgId !== orgId) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       const organization =
@@ -108,7 +108,7 @@ export function registerSkillRoutes(
         auth.orgRole !== "admin" &&
         !auth.isPlatformAdmin
       ) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       return json<PublishedSkillResponse>(
@@ -186,7 +186,7 @@ export function registerSkillRoutes(
         const orgId = decodeURIComponent(c.req.param("orgId"));
 
         if (auth.activeOrgId !== orgId) {
-          throw new NakamaApiError("Not found", 404);
+          throw new AirinApiError("Not found", 404);
         }
 
         const organization =
@@ -197,7 +197,7 @@ export function registerSkillRoutes(
           auth.orgRole !== "admin" &&
           !auth.isPlatformAdmin
         ) {
-          throw new NakamaApiError("Not found", 404);
+          throw new AirinApiError("Not found", 404);
         }
 
         const publicationId = decodeURIComponent(c.req.param("publicationId"));
@@ -630,7 +630,7 @@ export function registerSkillRoutes(
     const existing = await agent.getSkill(skillId);
 
     if (existing.skill.pluginId) {
-      throw new NakamaApiError("Plugin-owned skills cannot be edited.", 409);
+      throw new AirinApiError("Plugin-owned skills cannot be edited.", 409);
     }
 
     const body = await readJson(c.req.raw, patchSkillSchema);
@@ -650,7 +650,7 @@ export function registerSkillRoutes(
     const existing = await agent.getSkill(skillId);
 
     if (existing.skill.pluginId) {
-      throw new NakamaApiError("Plugin-owned skills cannot be deleted.", 409);
+      throw new AirinApiError("Plugin-owned skills cannot be deleted.", 409);
     }
 
     await agent.deleteSkill(skillId);

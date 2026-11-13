@@ -4,16 +4,16 @@ import type {
   StreamChatHandlers,
   ThinkingEffort,
   ToolCall,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   MODEL_CONNECTION_CLOSED_MESSAGE,
-  NakamaApiError,
   ProviderStreamInterruptedError,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   clampThinkingEffort,
   isThinkingEffort,
-} from "@nakama/core/thinking-effort";
+} from "@airin/core/thinking-effort";
 import { z } from "zod";
 
 export type ProviderJsonValue =
@@ -503,8 +503,8 @@ export function formatHttpErrorBody(
 }
 
 /** A provider answered but the answer is unusable. The user sees the message. */
-export function buildProviderResponseError(message: string): NakamaApiError {
-  return new NakamaApiError(message, 502);
+export function buildProviderResponseError(message: string): AirinApiError {
+  return new AirinApiError(message, 502);
 }
 
 // Account refusals that some providers send without a 401/402/403: OpenAI
@@ -515,7 +515,7 @@ const LOW_CREDIT_MESSAGE = /credit balance is too low/i;
 
 /**
  * A rejected API key or an exhausted credit balance is the caller's account to
- * fix, not a Nakama bug: 400 so the global error handler's `status >= 500`
+ * fix, not an Airin bug: 400 so the global error handler's `status >= 500`
  * check never reports it and the chat loop does not retry it. Anything else
  * from the provider (rate limits, 5xx, timeouts) stays worth seeing.
  */
@@ -523,7 +523,7 @@ export function buildProviderHttpError(
   label: string,
   status: number,
   body: string
-): NakamaApiError {
+): AirinApiError {
   const parsed = parseJsonRecord(body);
   // Raw bodies nest the error under `error`; OpenAI SDK errors arrive flat.
   const error = { ...parsed, ...readRecord(parsed.error) };
@@ -538,7 +538,7 @@ export function buildProviderHttpError(
 
   const clientStatus = accountRefused ? 400 : 502;
 
-  return new NakamaApiError(
+  return new AirinApiError(
     formatHttpErrorBody(label, status, body),
     clientStatus
   );

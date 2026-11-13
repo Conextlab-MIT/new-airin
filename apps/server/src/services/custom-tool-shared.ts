@@ -6,18 +6,18 @@ import type {
   ToolContext,
   ToolDefinition,
   ToolSetupPlan,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   decryptCredential,
   encryptCredential,
   getCustomToolsDir,
   getUserConfigPath,
-  NakamaApiError,
   parseIniWithSections,
   permissiveObjectSchema,
   writeParsedConfigIni,
-} from "@nakama/core";
-import type { DatabaseAdapter, StoredToolRecord } from "@nakama/db";
+} from "@airin/core";
+import type { DatabaseAdapter, StoredToolRecord } from "@airin/db";
 import { z } from "zod";
 import {
   REMOTE_BACKEND_HOST_CODE_REFUSAL,
@@ -205,7 +205,7 @@ function validateApiKey(value: string | undefined): string {
     value.length > 8192 ||
     /[\r\n\0]/.test(value)
   ) {
-    throw new NakamaApiError("Enter a valid API key.", 400);
+    throw new AirinApiError("Enter a valid API key.", 400);
   }
 
   return value.trim();
@@ -232,7 +232,7 @@ export function saveToolApiKey(
 /**
  * Names a tool may declare in handlerConfig.env. Names that change how the
  * interpreter starts (PATH, NODE_OPTIONS, PYTHONPATH, LD_PRELOAD, ...) or
- * that Nakama itself sets are refused, so a saved value cannot load code.
+ * that Airin itself sets are refused, so a saved value cannot load code.
  */
 const TOOL_ENV_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 
@@ -240,7 +240,7 @@ const BLOCKED_TOOL_ENV_PREFIXES = [
   "BUN_",
   "DYLD_",
   "LD_",
-  "NAKAMA_",
+  "AIRIN_",
   "NODE_",
   "NPM_",
   "PYTHON",
@@ -277,14 +277,14 @@ export function parseToolEnvDeclarations(
   try {
     entries = z.array(JsonValueSchema).parse(value);
   } catch {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "handlerConfig.env must be a list of up to 20 variables.",
       400
     );
   }
 
   if (entries.length > 20) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "handlerConfig.env must be a list of up to 20 variables.",
       400
     );
@@ -306,8 +306,8 @@ export function parseToolEnvDeclarations(
       BLOCKED_TOOL_ENV_PREFIXES.some((prefix) => name.startsWith(prefix)) ||
       seen.has(name)
     ) {
-      throw new NakamaApiError(
-        `handlerConfig.env name "${name}" is not allowed. Use unique UPPER_SNAKE_CASE names that are not system or NAKAMA_ variables.`,
+      throw new AirinApiError(
+        `handlerConfig.env name "${name}" is not allowed. Use unique UPPER_SNAKE_CASE names that are not system or AIRIN_ variables.`,
         400
       );
     }
@@ -342,11 +342,11 @@ export function saveToolEnv(
 
   for (const [name, value] of Object.entries(values)) {
     if (!names.has(name)) {
-      throw new NakamaApiError(`${name} is not a variable of this tool.`, 400);
+      throw new AirinApiError(`${name} is not a variable of this tool.`, 400);
     }
 
     if (!value.trim() || value.length > 8192 || /[\r\n\0]/.test(value)) {
-      throw new NakamaApiError(`Enter a valid value for ${name}.`, 400);
+      throw new AirinApiError(`Enter a valid value for ${name}.`, 400);
     }
 
     updates[name] = value.trim();
@@ -385,7 +385,7 @@ export async function loadToolSetup(
     ?.plan;
 
   if (!value) {
-    throw new NakamaApiError("Tool setup not found.", 404);
+    throw new AirinApiError("Tool setup not found.", 404);
   }
 
   const plan = ToolSetupPlanSchema.parse(JSON.parse(value));
@@ -413,13 +413,13 @@ export function rejectToolSetup(
     const value = parsed.sections[section]?.plan;
 
     if (!value) {
-      throw new NakamaApiError("Tool setup not found.", 404);
+      throw new AirinApiError("Tool setup not found.", 404);
     }
 
     const plan = ToolSetupPlanSchema.parse(JSON.parse(value));
 
     if (plan.status === "ready") {
-      throw new NakamaApiError("Tool setup is complete.", 409);
+      throw new AirinApiError("Tool setup is complete.", 409);
     }
 
     await requireToolSecrets().delete(orgId, `tool:${setupId}`);
@@ -466,7 +466,7 @@ export function approveToolSetup(
     const value = parsed.sections[section]?.plan;
 
     if (!value) {
-      throw new NakamaApiError("Tool setup not found.", 404);
+      throw new AirinApiError("Tool setup not found.", 404);
     }
 
     const plan = ToolSetupPlanSchema.parse(JSON.parse(value));
@@ -477,7 +477,7 @@ export function approveToolSetup(
         plan: JSON.stringify({ ...plan, status: "rejected" }),
       };
       await writeParsedConfigIni(parsed.global, parsed.sections);
-      throw new NakamaApiError("Tool setup expired.", 410);
+      throw new AirinApiError("Tool setup expired.", 410);
     }
 
     if (plan.status !== "pending") {
@@ -525,7 +525,7 @@ export function completeToolSetup(
       !current ||
       ToolSetupPlanSchema.parse(JSON.parse(current)).status !== "approved"
     ) {
-      throw new NakamaApiError("Tool setup is not approved.", 409);
+      throw new AirinApiError("Tool setup is not approved.", 409);
     }
 
     if (plan.requiresApiKey) {
@@ -561,7 +561,7 @@ export function completeToolSetup(
 
 /**
  * Purge every org-scoped tool API key and setup plan. The config file is
- * rewritten in place and Nakama keeps no history of it, so a purge leaves no
+ * rewritten in place and Airin keeps no history of it, so a purge leaves no
  * shadow copy holding the secret; pre-deletion operator backups remain under
  * the operator's own retention policy.
  */
@@ -734,7 +734,7 @@ export async function loadCustomSubprocessTool(options: {
       }
 
       if (apiKey) {
-        env.NAKAMA_TOOL_API_KEY = apiKey;
+        env.AIRIN_TOOL_API_KEY = apiKey;
       }
 
       // Keep accidental secret echoes and subprocess errors out of chat and

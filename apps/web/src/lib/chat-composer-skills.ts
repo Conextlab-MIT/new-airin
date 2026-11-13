@@ -1,5 +1,5 @@
+import type { SkillSummary } from "@airin/core/contract";
 import uFuzzy from "@leeoniya/ufuzzy";
-import type { SkillSummary } from "@nakama/core/contract";
 
 const commandSearch = new uFuzzy({
   compare: () => 0,

@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { asTestFetch, withTempHome } from "@nakama/core/channel-test-helpers";
+import { asTestFetch, withTempHome } from "@airin/core/channel-test-helpers";
 import {
   getTeamsConfigDir,
   loadTeamsConfigFile,
   regenerateTeamsHandshake,
   saveTeamsConfig,
-} from "@nakama/core/teams-config";
+} from "@airin/core/teams-config";
 import {
   ALLOWED,
   activity,
@@ -48,7 +48,7 @@ describe("teams chat handler", () => {
   }
 
   test("a code in a personal chat links the sender and only the later message starts a turn", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, code, replies, turns, createdSessions } =
         await pairingHarness(homeDir);
 
@@ -83,7 +83,7 @@ describe("teams chat handler", () => {
     { channelId: "webchat" },
   ]) {
     test(`a code cannot pair an activity with ${JSON.stringify(patch)}`, async () => {
-      await withTempHome("nakama-teams-handler-", async (homeDir) => {
+      await withTempHome("airin-teams-handler-", async (homeDir) => {
         const { handle, code, turns, createdSessions } =
           await pairingHarness(homeDir);
 
@@ -118,7 +118,7 @@ describe("teams chat handler", () => {
     ],
   ] as const) {
     test(`${name} posted in a channel is spent and reaches no agent`, async () => {
-      await withTempHome("nakama-teams-handler-", async (homeDir) => {
+      await withTempHome("airin-teams-handler-", async (homeDir) => {
         const { handle, code, replies, turns } = await pairingHarness(
           homeDir,
           allowed
@@ -144,7 +144,7 @@ describe("teams chat handler", () => {
   }
 
   test("a code spent before the lock is not made live again", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { code } = await pairingHarness(homeDir);
       const stale = await loadTeamsConfigFile(OWNER);
 
@@ -169,7 +169,7 @@ describe("teams chat handler", () => {
   });
 
   test("a code that cannot be spent still reaches no agent", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, code, replies, turns } = await pairingHarness(
         homeDir,
         ALLOWED
@@ -192,7 +192,7 @@ describe("teams chat handler", () => {
   }, 15_000);
 
   test("an authorized sender's code-shaped message reaches the agent", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir);
       const guid = "55555555-5555-4555-8555-555555555555";
       await handle(activity({ text: "A".repeat(32) }));
@@ -203,7 +203,7 @@ describe("teams chat handler", () => {
   });
 
   test("wrong and consumed codes never start a turn or link a second sender", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, code, turns } = await pairingHarness(homeDir);
       await handle(
         activity({
@@ -221,7 +221,7 @@ describe("teams chat handler", () => {
   });
 
   test("duplicate delivery consumes a code and replies once", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, code, replies, turns } = await pairingHarness(homeDir);
       const message = activity({ text: code });
       await Promise.all([handle(message), handle(message)]);
@@ -234,22 +234,22 @@ describe("teams chat handler", () => {
   });
 
   test("an allowed user in a personal chat gets the agent's reply", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, replies, turns } = createHarness(homeDir);
 
-      await handle(activity({ text: "what is nakama" }));
+      await handle(activity({ text: "what is airin" }));
 
       expect(turns).toEqual([
-        { message: "what is nakama", sessionId: "session_1" },
+        { message: "what is airin", sessionId: "session_1" },
       ]);
       expect(replies).toEqual([
-        { conversationId: "conv_1", text: "echo: what is nakama" },
+        { conversationId: "conv_1", text: "echo: what is airin" },
       ]);
     });
   });
 
   test("each personal chat keeps its own session", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { createdSessions, handle, turns } = createHarness(homeDir);
 
       await handle(activity({ conversationId: "conv_a" }));
@@ -278,7 +278,7 @@ describe("teams chat handler", () => {
     ["another Bot Framework channel", { channelId: "webchat" }],
   ] as const) {
     test(`${name} never reaches the agent`, async () => {
-      await withTempHome("nakama-teams-handler-", async (homeDir) => {
+      await withTempHome("airin-teams-handler-", async (homeDir) => {
         const { handle, replies, turns } = createHarness(homeDir);
 
         await handle(activity(patch));
@@ -290,7 +290,7 @@ describe("teams chat handler", () => {
   }
 
   test("no configuration means no agent call", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, turns } = createHarness(homeDir, { config: null });
 
       await handle(activity());
@@ -300,7 +300,7 @@ describe("teams chat handler", () => {
   });
 
   test("access removed during a turn stops the next message", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       let allowed = true;
 
       const { handle, turns } = createHarness(homeDir, {
@@ -324,7 +324,7 @@ describe("teams chat handler", () => {
   // The second turn passes the first check, then waits for the lock. Access is
   // removed while it waits, so only the re-read inside the lock can stop it.
   test("access removed while a turn is queued stops it at the lock", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       let configReads = 0;
       let releaseFirst = () => {};
 
@@ -359,7 +359,7 @@ describe("teams chat handler", () => {
   });
 
   test("a turn turned away at the lock leaves nothing for !stop", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       let configReads = 0;
 
       const { handle, replies, turns } = createHarness(homeDir, {
@@ -382,7 +382,7 @@ describe("teams chat handler", () => {
   });
 
   test("the same activity delivered twice runs one turn", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, turns } = createHarness(homeDir);
       const duplicate = activity({ text: "only once" });
 
@@ -393,7 +393,7 @@ describe("teams chat handler", () => {
   });
 
   test("the same id in two chats, or no id at all, is not a duplicate", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, turns } = createHarness(homeDir);
 
       await handle(activity({ conversationId: "conv_a", id: "act_same" }));
@@ -406,7 +406,7 @@ describe("teams chat handler", () => {
   });
 
   test("tenant and user ids match regardless of letter case", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       // Ids with letters, so changing their case changes them.
       const tenantId = "aaaabbbb-cccc-4ddd-8eee-ffff00001111";
       const senderId = "bbbbcccc-dddd-4eee-8fff-aaaa00002222";
@@ -427,7 +427,7 @@ describe("teams chat handler", () => {
   });
 
   test("a failed turn tells the user instead of going silent", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const { handle, replies } = createHarness(homeDir, {
         onSend: async () => {
           throw new Error("No model provider is configured.");
@@ -443,7 +443,7 @@ describe("teams chat handler", () => {
   });
 
   test("a long reply arrives as several messages Teams accepts", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const reply = Array.from(
         { length: 4000 },
         (_, index) => `word${index}`
@@ -464,7 +464,7 @@ describe("teams chat handler", () => {
   });
 
   test("a saved session is reused after a restart", async () => {
-    await withTempHome("nakama-teams-handler-", async (homeDir) => {
+    await withTempHome("airin-teams-handler-", async (homeDir) => {
       const first = createHarness(homeDir);
 
       await first.handle(activity({ conversationId: "conv_restart" }));

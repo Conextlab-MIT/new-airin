@@ -1,13 +1,13 @@
-import { NakamaApiError } from "@nakama/core/api-error";
-import { Button } from "@nakama/ui/button";
+import { AirinApiError } from "@airin/core/api-error";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 import { useState } from "react";
 import { UserContextForm } from "@/components/UserContextForm";
 import { useAuth } from "@/context/use-auth";
@@ -22,8 +22,8 @@ import {
 import { formatError } from "@/lib/client";
 
 function formatUserContextError(error: Error): string {
-  if (error instanceof NakamaApiError && error.status === 404) {
-    return "This feature needs a newer Nakama server. Restart the server and try again.";
+  if (error instanceof AirinApiError && error.status === 404) {
+    return "This feature needs a newer Airin server. Restart the server and try again.";
   }
 
   return formatError(error);

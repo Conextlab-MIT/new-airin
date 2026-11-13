@@ -3,10 +3,10 @@
 ## Reporting a vulnerability
 
 Report it privately through GitHub: open the
-[Security tab](https://github.com/ahmadrosid/nakama/security) and click
+[Security tab](https://github.com/ahmadrosid/airin/security) and click
 **Report a vulnerability**. Only the maintainers see the report.
 
-You can also email [security@withnakama.com](mailto:security@withnakama.com).
+You can also email [security@withairin.com](mailto:security@withairin.com).
 
 Please do not open a public issue, pull request or discussion for a
 vulnerability before it is fixed. Everything posted in this repository is
@@ -33,6 +33,6 @@ so the fix for an issue is to upgrade. Older versions are not patched.
 
 ## Scope
 
-What Nakama does and does not try to protect, and the risks it accepts, are
+What Airin does and does not try to protect, and the risks it accepts, are
 written down in [THREAT_MODEL.md](./THREAT_MODEL.md). A report that shows one
 of those boundaries does not hold is in scope.

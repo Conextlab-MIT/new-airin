@@ -1,6 +1,6 @@
-# Nakama Architecture
+# Airin Architecture
 
-Nakama is an agent platform for teams. The platform does not replace the team. One shared server runtime serves thin clients.
+Airin is an agent platform for teams. The platform does not replace the team. One shared server runtime serves thin clients.
 
 The org is the isolation boundary. Profiles, sessions, tools, MCP, skills, automations, attachments, and usage are org-scoped unless they are platform-level.
 
@@ -15,7 +15,7 @@ The words session, chat, turn, branch, child chat, and cognito chat have one mea
 flowchart TB
   clients["Clients: apps/web, apps/cli, apps/desktop"]
   channels["Channel workers: telegram, whatsapp, discord, slack, teams"]
-  client["@nakama/client (HTTP + SSE)"]
+  client["@airin/client (HTTP + SSE)"]
 
   subgraph server ["apps/server"]
     http["Hono app: rate limit, auth, org, routes"]
@@ -23,9 +23,9 @@ flowchart TB
     workers["WorkerManagerService (PM2)"]
   end
 
-  runtime["@nakama/agent, tools, providers, MCP, plugins"]
+  runtime["@airin/agent, tools, providers, MCP, plugins"]
   automation["automation worker + plugin workers"]
-  state["State: SQLite, ~/.nakama soul + org MEMORY.md, config.ini, files"]
+  state["State: SQLite, ~/.airin soul + org MEMORY.md, config.ini, files"]
 
   clients --> client
   channels --> client
@@ -44,7 +44,7 @@ Apps can import from `packages/*`. Packages must not import from `apps/*`.
 ## Repo map
 
 ```text
-nakama/
+airin/
 ├── apps/
 │   ├── server/                 # HTTP API, auth, org, agent runtime
 │   ├── web/                    # Dashboard
@@ -101,11 +101,11 @@ Org roles are `admin` and `member`. A platform admin uses `/v1/platform/*`. File
 
 `AgentService` in [`agent-service.ts`](./apps/server/src/services/agent-service.ts) assembles the agent runtime.
 
-The service loads the profile, the soul, the provider, and the model. The service attaches builtin tools, custom JS tools, custom Python tools, MCP tools, and enabled plugin tools. The service attaches Composio tools and org-memory tools when they apply. Super Nakama gets extra tools when the profile permits them. Discord sessions get Discord artifact tools.
+The service loads the profile, the soul, the provider, and the model. The service attaches builtin tools, custom JS tools, custom Python tools, MCP tools, and enabled plugin tools. The service attaches Composio tools and org-memory tools when they apply. Airin gets extra tools when the profile permits them. Discord sessions get Discord artifact tools.
 
 The kind of turn decides the platform tools on top of the profile's own: automation, todo, questionnaire, `sub_agent`, `skill_manage`, and org-memory proposals. It also decides the prompt lines added after the profile's prompt. The kinds are `chat`, `branch`, `cognito`, `child`, `sub_agent`, `group_member`, `automation`, `plugin_workflow`, `plugin_summarize`, and `acp_draft`. For example, a child chat, a sub-agent run, and a group member turn get no todo, questionnaire, automation, or `sub_agent` tools. A cognito chat gets no org-memory proposals and no `skill_manage`. The table is [`turn-kinds.ts`](./apps/server/src/services/turn-kinds.ts).
 
-Prompt layers, in order: soul content, skills catalog, org memory from `~/.nakama/orgs/{orgId}/MEMORY.md` (every org role), chat structure and tool instructions, then per-turn context (todos, matched skills, Composio connections). A knowledge-base catalog can also attach to the system prompt. Files and functions: [`packages/core/AGENTS.md`](./packages/core/AGENTS.md#system-prompt).
+Prompt layers, in order: soul content, skills catalog, org memory from `~/.airin/orgs/{orgId}/MEMORY.md` (every org role), chat structure and tool instructions, then per-turn context (todos, matched skills, Composio connections). A knowledge-base catalog can also attach to the system prompt. Files and functions: [`packages/core/AGENTS.md`](./packages/core/AGENTS.md#system-prompt).
 
 ## Sessions
 
@@ -132,7 +132,7 @@ Turns outside a session (automations, plugin summaries, in-memory sub-agents, gr
 
 ## Tools and MCP
 
-Builtin definitions live in `packages/core/src/tools/` and server runtime tools in `apps/server/src/tools/`. Custom JS, custom Python, MCP, Composio and plugin tools each have a loader or bridge in `apps/server/src/services/`. Tool definitions are shared; `profile_tools` controls which custom tools a profile can use. Super Nakama can get extra runtime tools when the profile permits them. Loaders and workspace paths: [`packages/core/AGENTS.md`](./packages/core/AGENTS.md#tool-execution--workspace).
+Builtin definitions live in `packages/core/src/tools/` and server runtime tools in `apps/server/src/tools/`. Custom JS, custom Python, MCP, Composio and plugin tools each have a loader or bridge in `apps/server/src/services/`. Tool definitions are shared; `profile_tools` controls which custom tools a profile can use. Airin can get extra runtime tools when the profile permits them. Loaders and workspace paths: [`packages/core/AGENTS.md`](./packages/core/AGENTS.md#tool-execution--workspace).
 
 ## Workers and automations
 
@@ -156,7 +156,7 @@ Attachments have SQLite records and files on disk. The server adds them to provi
 
 `sessions.app_user_id` marks retired sessions from the removed external-app integration. Normal reads and writes exclude them. Their files stay under `retired-app-users/`, in full operator backups only.
 
-Org memory is also on disk at `~/.nakama/orgs/{orgId}/MEMORY.md`.
+Org memory is also on disk at `~/.airin/orgs/{orgId}/MEMORY.md`.
 
 ## Invariants
 

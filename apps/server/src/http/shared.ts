@@ -1,22 +1,22 @@
-import type { OrgRole } from "@nakama/core";
+import type { OrgRole } from "@airin/core";
 import {
   AGENT_CHANNELS,
   type AgentChannel,
+  AirinApiError,
   type ApiErrorResponse,
   HOST_BOUND_BROWSER_SESSION_COOKIE_NAMES,
   LOCAL_CLIENT_EMAIL,
-  NakamaApiError,
   PLAIN_BROWSER_SESSION_COOKIE_NAMES,
   browserSessionCookieNames as resolveBrowserSessionCookieNames,
   type StreamEvent,
   verifyLocalAuthToken,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   DatabaseAdapter,
   StoredBrowserSessionRecord,
   StoredUserRecord,
-} from "@nakama/db";
-import { ensureLocalClientAccess } from "@nakama/db";
+} from "@airin/db";
+import { ensureLocalClientAccess } from "@airin/db";
 import type { Context } from "hono";
 import type { ZodType } from "zod";
 import type { AuthService } from "../services/auth-service";
@@ -145,7 +145,7 @@ export function getRequestAuth(c: Context<AppEnv>): RequestAuthContext {
   const auth = c.get("auth");
 
   if (!auth) {
-    throw new NakamaApiError("Authentication required", 401);
+    throw new AirinApiError("Authentication required", 401);
   }
 
   return auth;
@@ -334,11 +334,11 @@ export function assertBrowserCsrf(
   const csrfHeader = request.headers.get(CSRF_HEADER_NAME);
 
   if (!(csrfToken && csrfHeader) || csrfToken !== csrfHeader.trim()) {
-    throw new NakamaApiError("CSRF validation failed.", 403);
+    throw new AirinApiError("CSRF validation failed.", 403);
   }
 
   if (auth.session?.csrfTokenHash !== authService.hashToken(csrfToken)) {
-    throw new NakamaApiError("CSRF validation failed.", 403);
+    throw new AirinApiError("CSRF validation failed.", 403);
   }
 }
 
@@ -494,7 +494,7 @@ export function clearBrowserSessionCookies(headers: Headers): void {
  */
 export function assertJsonRequest(request: Request): void {
   if (readMediaType(request) !== "application/json") {
-    throw new NakamaApiError("Content-Type must be application/json.", 415);
+    throw new AirinApiError("Content-Type must be application/json.", 415);
   }
 }
 
@@ -521,7 +521,7 @@ export function readUntilClientGone<T>(
 ): Promise<T> {
   const gone = new Promise<never>((_resolve, reject) => {
     const rejectGone = () => {
-      reject(new NakamaApiError("The client closed the request.", 400));
+      reject(new AirinApiError("The client closed the request.", 400));
     };
 
     if (request.signal.aborted) {
@@ -541,7 +541,7 @@ async function readJsonBodyWithLimit<T>(
   const contentLength = Number(request.headers.get("content-length") ?? "");
 
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    throw new NakamaApiError("Request body is too large.", 413);
+    throw new AirinApiError("Request body is too large.", 413);
   }
 
   if (!request.body) {
@@ -564,7 +564,7 @@ async function readJsonBodyWithLimit<T>(
 
       if (bytes > maxBytes) {
         await reader.cancel().catch(() => undefined);
-        throw new NakamaApiError("Request body is too large.", 413);
+        throw new AirinApiError("Request body is too large.", 413);
       }
 
       chunks.push(value);
@@ -601,13 +601,13 @@ export async function readJson<T>(
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      throw new NakamaApiError("Invalid request body.", 400);
+      throw new AirinApiError("Invalid request body.", 400);
     }
 
     return parsed.data;
   } catch (err) {
     if (err instanceof SyntaxError) {
-      throw new NakamaApiError("Invalid JSON in request body.", 400);
+      throw new AirinApiError("Invalid JSON in request body.", 400);
     }
 
     throw err;
@@ -628,7 +628,7 @@ export function parseOptionalQueryEnum<const T extends string>(
     return parsed;
   }
 
-  throw new NakamaApiError("Invalid query parameter.", 400);
+  throw new AirinApiError("Invalid query parameter.", 400);
 }
 
 export async function readOptionalJson<T>(
@@ -652,13 +652,13 @@ export async function readOptionalJson<T>(
     const parsed = schema.safeParse(value);
 
     if (!parsed.success) {
-      throw new NakamaApiError("Invalid request body.", 400);
+      throw new AirinApiError("Invalid request body.", 400);
     }
 
     return parsed.data;
   } catch (err) {
     if (err instanceof SyntaxError) {
-      throw new NakamaApiError("Invalid JSON in request body.", 400);
+      throw new AirinApiError("Invalid JSON in request body.", 400);
     }
 
     throw err;
@@ -699,7 +699,7 @@ export function oauthResultPage(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${Bun.escapeHTML(title)} - Nakama</title>
+  <title>${Bun.escapeHTML(title)} - Airin</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1.25rem; line-height: 1.5; color: #111; }
     h1 { font-size: 1.35rem; margin-bottom: 0.5rem; }
@@ -731,7 +731,7 @@ export function parseChannel(value: string | undefined): AgentChannel {
     return channel;
   }
 
-  throw new NakamaApiError(`Invalid channel. Expected ${CHANNEL_LIST}.`, 400);
+  throw new AirinApiError(`Invalid channel. Expected ${CHANNEL_LIST}.`, 400);
 }
 
 const SSE_HEADERS = {

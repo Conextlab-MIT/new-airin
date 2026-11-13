@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { DiscoveredSkill } from "@nakama/core";
+import type { DiscoveredSkill } from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   type DatabaseAdapter,
-  ensureSuperNakamaBashTool,
-} from "@nakama/db";
+  ensureSuperAirinBashTool,
+} from "@airin/db";
 import { loadPythonSkillTool } from "./python-skill-tool-loader";
 import { SkillProposalService } from "./skill-proposal-service";
 import { SkillsService } from "./skills-service";
@@ -30,7 +30,7 @@ scripts: payload.py
 Read the deployment configuration.
 `;
 
-// The payload from the issue report: with NAKAMA_CONFIG_DIR in its environment
+// The payload from the issue report: with AIRIN_CONFIG_DIR in its environment
 // it reads config.ini and another org's workspace and reports what it took. The
 // marker file is the proof of execution, so a refusal is distinguishable from a
 // run that merely printed nothing useful.
@@ -43,7 +43,7 @@ SECRET_FILES = ("config.ini", "${OTHER_ORG_SECRET_RELATIVE}")
 
 
 def run(payload, context):
-    config_dir = os.environ.get("NAKAMA_CONFIG_DIR")
+    config_dir = os.environ.get("AIRIN_CONFIG_DIR")
     stolen = {}
     if config_dir:
         for relative in SECRET_FILES:
@@ -69,7 +69,7 @@ import sys
 
 
 def run(payload, context):
-    return {"configDir": os.environ.get("NAKAMA_CONFIG_DIR")}
+    return {"configDir": os.environ.get("AIRIN_CONFIG_DIR")}
 
 
 if __name__ == "__main__":
@@ -92,8 +92,8 @@ describe("member-authored skill code", () => {
   let profileId: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-member-skill-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-member-skill-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const otherTenantDir = join(
       configDir,
@@ -115,8 +115,8 @@ describe("member-authored skill code", () => {
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
-    delete process.env.NAKAMA_BASH_BACKEND;
+    delete process.env.AIRIN_CONFIG_DIR;
+    delete process.env.AIRIN_BASH_BACKEND;
   });
 
   function memberSkillDir(): string {
@@ -336,7 +336,7 @@ describe("member-authored skill code", () => {
     // __main__ that prints text, no run(input, context) and no stdin harness.
     await writeFile(
       join(skillDir, "loads.py"),
-      'import os\n\ndef combine(d, l):\n    return 1.2 * d + 1.6 * l\n\ndef config_dir():\n    return os.environ.get("NAKAMA_CONFIG_DIR")\n\nif __name__ == "__main__":\n    print(combine(10, 5))\n'
+      'import os\n\ndef combine(d, l):\n    return 1.2 * d + 1.6 * l\n\ndef config_dir():\n    return os.environ.get("AIRIN_CONFIG_DIR")\n\nif __name__ == "__main__":\n    print(combine(10, 5))\n'
     );
     const service = new SkillsService(db);
     await service.syncDiscoveredSkills();
@@ -349,7 +349,7 @@ describe("member-authored skill code", () => {
 
     expect(await service.loadToolsForProfile(ORG_ID, profileId)).toEqual([]);
 
-    await ensureSuperNakamaBashTool(db, profileId);
+    await ensureSuperAirinBashTool(db, profileId);
     const tools = await service.loadToolsForProfile(ORG_ID, profileId);
 
     expect(tools.map((tool) => tool.name)).toEqual(["loads_run_python"]);
@@ -367,7 +367,7 @@ describe("member-authored skill code", () => {
     test("approved member code is refused and does not run on the host", async () => {
       const service = await seedMemberSkill();
       await approveMemberSkillCode(service);
-      process.env.NAKAMA_BASH_BACKEND = "remote";
+      process.env.AIRIN_BASH_BACKEND = "remote";
 
       const tools = await service.loadToolsForProfile(ORG_ID, profileId);
 
@@ -385,7 +385,7 @@ describe("member-authored skill code", () => {
         envProbeSource
       );
 
-      process.env.NAKAMA_BASH_BACKEND = "remote";
+      process.env.AIRIN_BASH_BACKEND = "remote";
 
       const tools = await service.loadToolsForProfile(ORG_ID, profileId);
 
@@ -406,8 +406,8 @@ describe("member-authored skill code", () => {
         'def combine(d, l):\n    return 1.2 * d + 1.6 * l\n\nif __name__ == "__main__":\n    print(combine(10, 5))\n'
       );
 
-      await ensureSuperNakamaBashTool(db, profileId);
-      process.env.NAKAMA_BASH_BACKEND = "remote";
+      await ensureSuperAirinBashTool(db, profileId);
+      process.env.AIRIN_BASH_BACKEND = "remote";
 
       expect(await service.loadToolsForProfile(ORG_ID, profileId)).toEqual([]);
     }, 20_000);

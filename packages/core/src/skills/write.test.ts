@@ -35,16 +35,16 @@ describe("createSkillFile", () => {
   let configDir: string;
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (configDir) {
       await rm(configDir, { force: true, recursive: true });
     }
   });
 
-  test("writes a profile skill to ~/.nakama/orgs/{orgId}/profiles/{id}/skills/", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-write-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+  test("writes a profile skill to ~/.airin/orgs/{orgId}/profiles/{id}/skills/", async () => {
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-write-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const directory = await createSkillFile({
       body: "Call the weather tool with a city name.",
@@ -73,8 +73,8 @@ describe("createSkillFile", () => {
   });
 
   test("deleteSkillDirectory removes a managed profile skill directory", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-write-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-write-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const directory = await createSkillFile({
       description: "Capture notes for the user.",
@@ -105,7 +105,7 @@ describe("writeRawProfileSkillMarkdown", () => {
   let configDir: string;
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (configDir) {
       await rm(configDir, { force: true, recursive: true });
@@ -113,8 +113,8 @@ describe("writeRawProfileSkillMarkdown", () => {
   });
 
   test("writes raw SKILL.md preserving include-body-on-match", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-raw-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-raw-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const content = `---
 name: research-paper
@@ -140,8 +140,8 @@ include-body-on-match: true
   });
 
   test("adopts existing valid skill directory when allowExisting", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-adopt-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-adopt-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const directory = join(
       configDir,
@@ -186,8 +186,8 @@ Old body.
   });
 
   test("refuses bundled skill names", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-bundled-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-bundled-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     await expect(
       writeRawProfileSkillMarkdown({
@@ -205,8 +205,8 @@ Nope.
   });
 
   test("refuses existing skill without allowExisting", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-exists-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-exists-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const content = `---
 name: dup
@@ -236,7 +236,7 @@ describe("patchSkillFile", () => {
   let configDir: string;
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (configDir) {
       await rm(configDir, { force: true, recursive: true });
@@ -244,8 +244,8 @@ describe("patchSkillFile", () => {
   });
 
   test("applies unique old_string replacement and re-validates", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-patch-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-patch-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     await writeRawProfileSkillMarkdown({
       content: `---
@@ -275,8 +275,8 @@ Use staging first.
   });
 
   test("errors when old_string is missing or duplicated", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-patch-err-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-patch-err-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     await writeRawProfileSkillMarkdown({
       content: `---
@@ -313,8 +313,8 @@ step
   });
 
   test("writes new_string literally, including $ patterns", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-patch-dollar-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-patch-dollar-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     await writeRawProfileSkillMarkdown({
       content: `---
@@ -341,8 +341,8 @@ Print the pid.
   });
 
   test("refuses patch on bundled skill name", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-patch-bundled-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-patch-bundled-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     await expect(
       patchSkillFile({
@@ -360,7 +360,7 @@ describe("resolveProfileSkillDirectory", () => {
   let configDir: string;
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (configDir) {
       await rm(configDir, { force: true, recursive: true });
@@ -368,8 +368,8 @@ describe("resolveProfileSkillDirectory", () => {
   });
 
   test("resolves under profile skills dir and rejects escape names", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-resolve-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-resolve-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     await mkdir(
       join(configDir, "orgs", ORG_ID, "profiles", PROFILE_ID, "skills"),
       {
@@ -395,8 +395,8 @@ describe("resolveProfileSkillDirectory", () => {
   });
 
   test("refuses symlink escape outside the profile skills dir", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-symlink-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-symlink-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const skillsRoot = join(
       configDir,
@@ -435,8 +435,8 @@ describe("resolveProfileSkillDirectory", () => {
   test.skipIf(process.platform !== "win32")(
     "counts a differently cased path as inside the profile skills dir on Windows",
     async () => {
-      configDir = await mkdtemp(join(tmpdir(), "nakama-skill-case-"));
-      process.env.NAKAMA_CONFIG_DIR = configDir;
+      configDir = await mkdtemp(join(tmpdir(), "airin-skill-case-"));
+      process.env.AIRIN_CONFIG_DIR = configDir;
 
       const profileDir = join(
         configDir,
@@ -475,7 +475,7 @@ describe("profile skill supporting files", () => {
   let configDir: string;
 
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (configDir) {
       await rm(configDir, { force: true, recursive: true });
@@ -483,8 +483,8 @@ describe("profile skill supporting files", () => {
   });
 
   test("writes nested supporting files and refuses SKILL.md / path escape", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-support-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-support-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     await writeRawProfileSkillMarkdown({
       content: `---
@@ -554,8 +554,8 @@ Use staging first.
   test.skipIf(process.platform !== "win32")(
     "refuses NTFS alternate data stream names on Windows",
     async () => {
-      configDir = await mkdtemp(join(tmpdir(), "nakama-skill-ads-"));
-      process.env.NAKAMA_CONFIG_DIR = configDir;
+      configDir = await mkdtemp(join(tmpdir(), "airin-skill-ads-"));
+      process.env.AIRIN_CONFIG_DIR = configDir;
 
       await writeRawProfileSkillMarkdown({
         content: `---

@@ -3,7 +3,7 @@ import {
   type ChatMessage,
   getUserMessageText,
   type ProviderClient,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 
 const TURN_SNIPPET_MAX = 4000;

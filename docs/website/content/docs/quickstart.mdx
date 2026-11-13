@@ -1,6 +1,6 @@
 ---
 title: "Quickstart"
-description: "Try the live demo, or run Nakama with managed hosting, Docker, or Bun and send your first chat message."
+description: "Try the live demo, or run Airin with managed hosting, Docker, or Bun and send your first chat message."
 ---
 
 ## Before you start
@@ -13,16 +13,16 @@ Install [Bun](https://bun.sh) only if you run from source. Managed hosting and D
 
 ### Option 1: Try the demo
 
-Explore a live instance without installing anything. Open [https://demo.getnakama.cloud](https://demo.getnakama.cloud) and sign in with:
+Explore a live instance without installing anything. Open [https://demo.getairin.cloud](https://demo.getairin.cloud) and sign in with:
 
-- Username: `demo@getnakama.cloud`
+- Username: `demo@getairin.cloud`
 - Password: `demo1234`
 
 The demo is shared and reset periodically — use it to click around the dashboard, not for real data or API keys.
 
 ### Option 2: Managed hosting
 
-If you do not want to run your own server, use [Nakama Cloud](https://getnakama.cloud/). Sign up, create an instance, and open your dedicated URL (for example `acme.getnakama.cloud`).
+If you do not want to run your own server, use [Airin Cloud](https://getairin.cloud/). Sign up, create an instance, and open your dedicated URL (for example `acme.getairin.cloud`).
 
 Complete the setup wizard in the browser and you are live. Skip to [First-time setup](/first-time-setup).
 
@@ -31,10 +31,10 @@ Complete the setup wizard in the browser and you are live. Skip to [First-time s
 To try it on your own machine:
 
 ```bash
-docker pull ghcr.io/ahmadrosid/nakama:latest
+docker pull ghcr.io/ahmadrosid/airin:latest
 umask 077
-printf 'NAKAMA_SECRETS_KEY=%s\n' "$(openssl rand -base64 32)" > nakama-secrets.env
-docker run -d -p 4310:4310 -v nakama-data:/nakama/data --env-file nakama-secrets.env --name nakama ghcr.io/ahmadrosid/nakama:latest
+printf 'AIRIN_SECRETS_KEY=%s\n' "$(openssl rand -base64 32)" > airin-secrets.env
+docker run -d -p 4310:4310 -v airin-data:/airin/data --env-file airin-secrets.env --name airin ghcr.io/ahmadrosid/airin:latest
 ```
 
 Open `http://localhost:4310`. On a server, use Compose instead: it pins the version, keeps a daily backup, and can upgrade from Settings. See [Docker](/docker#on-a-server).
@@ -44,8 +44,8 @@ Open `http://localhost:4310`. On a server, use Compose instead: it pins the vers
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/ahmadrosid/nakama.git
-cd nakama
+git clone https://github.com/ahmadrosid/airin.git
+cd airin
 bun install
 bun run dev:web
 ```
@@ -62,7 +62,7 @@ If you only want the API server:
 bun run dev:server
 ```
 
-On first run, the browser setup wizard guides you through creating an admin account and organization, then configuring a model provider. Local settings are saved in `~/.nakama/config.ini`.
+On first run, the browser setup wizard guides you through creating an admin account and organization, then configuring a model provider. Local settings are saved in `~/.airin/config.ini`.
 
 ## Install with an AI agent
 
@@ -71,15 +71,15 @@ If you use a coding agent such as Claude Code, Codex, Cursor, or OpenCode, paste
 ### Docker on your machine
 
 ```text
-Install Nakama on this machine with Docker.
+Install Airin on this machine with Docker.
 
-Follow "Option 3: Docker" in https://ahmadrosid.github.io/nakama/quickstart.md and run only the commands written there.
+Follow "Option 3: Docker" in https://ahmadrosid.github.io/airin/quickstart.md and run only the commands written there.
 
 1. First check that `docker` and `openssl` are installed and that the Docker daemon is running. If one is missing, stop and tell me what to install. Do not install it yourself.
-2. If a container named `nakama` already exists or port 4310 is in use, stop and ask me.
-3. `nakama-secrets.env` holds NAKAMA_SECRETS_KEY. Run the documented `umask 077` and `printf` lines in one shell command, so the file is created readable only by me. Never print, cat, or echo it. Check it with `wc -c nakama-secrets.env` only. Tell me its full path and to back it up, because secrets saved in Settings cannot be read without it.
+2. If a container named `airin` already exists or port 4310 is in use, stop and ask me.
+3. `airin-secrets.env` holds AIRIN_SECRETS_KEY. Run the documented `umask 077` and `printf` lines in one shell command, so the file is created readable only by me. Never print, cat, or echo it. Check it with `wc -c airin-secrets.env` only. Tell me its full path and to back it up, because secrets saved in Settings cannot be read without it.
 4. Wait until `curl -fsS http://localhost:4310/health` succeeds.
-5. Tell me to open http://localhost:4310 and finish the setup wizard (https://ahmadrosid.github.io/nakama/first-time-setup). Do not fill in the wizard for me.
+5. Tell me to open http://localhost:4310 and finish the setup wizard (https://ahmadrosid.github.io/airin/first-time-setup). Do not fill in the wizard for me.
 ```
 
 ### Docker Compose on a server
@@ -87,35 +87,35 @@ Follow "Option 3: Docker" in https://ahmadrosid.github.io/nakama/quickstart.md a
 Run your agent on the server itself, for example in an SSH session.
 
 ```text
-Install Nakama on this server with Docker Compose.
+Install Airin on this server with Docker Compose.
 
-Follow "On a server" in https://ahmadrosid.github.io/nakama/docker.md and run only the commands written there.
+Follow "On a server" in https://ahmadrosid.github.io/airin/docker.md and run only the commands written there.
 
 1. First check that `docker`, `docker compose`, `curl`, and `openssl` are available and that the Docker daemon is running. If one is missing, stop and tell me what to install. Do not install it yourself.
-2. Work in a new directory named `nakama`. If it already holds `docker-compose.yaml`, `.env`, or `nakama-secrets.env`, stop and ask me.
-3. Set NAKAMA_VERSION to the latest release from https://github.com/ahmadrosid/nakama/releases/latest, without the leading "v".
-4. `nakama-secrets.env` holds NAKAMA_SECRETS_KEY. Run the documented `umask 077` and `printf` lines in one shell command, so the file is created readable only by me. Never print, cat, or echo it. Check it with `wc -c nakama-secrets.env` only. Tell me its full path and to back it up somewhere other than this server, because secrets saved in Settings cannot be read without it.
+2. Work in a new directory named `airin`. If it already holds `docker-compose.yaml`, `.env`, or `airin-secrets.env`, stop and ask me.
+3. Set AIRIN_VERSION to the latest release from https://github.com/ahmadrosid/airin/releases/latest, without the leading "v".
+4. `airin-secrets.env` holds AIRIN_SECRETS_KEY. Run the documented `umask 077` and `printf` lines in one shell command, so the file is created readable only by me. Never print, cat, or echo it. Check it with `wc -c airin-secrets.env` only. Tell me its full path and to back it up somewhere other than this server, because secrets saved in Settings cannot be read without it.
 5. Wait until `curl -fsS http://localhost:4310/health` succeeds.
-6. Warn me that Compose publishes port 4310 on every interface, and that Docker's published ports are not blocked by ufw. Whoever finishes the setup wizard first becomes the admin. Tell me to finish it right away through an SSH tunnel (`ssh -L 4310:localhost:4310 <this server>`, then http://localhost:4310 on my machine), using the setup wizard guide (https://ahmadrosid.github.io/nakama/first-time-setup), then follow https://ahmadrosid.github.io/nakama/deployment-hardening before sharing the server.
+6. Warn me that Compose publishes port 4310 on every interface, and that Docker's published ports are not blocked by ufw. Whoever finishes the setup wizard first becomes the admin. Tell me to finish it right away through an SSH tunnel (`ssh -L 4310:localhost:4310 <this server>`, then http://localhost:4310 on my machine), using the setup wizard guide (https://ahmadrosid.github.io/airin/first-time-setup), then follow https://ahmadrosid.github.io/airin/deployment-hardening before sharing the server.
 ```
 
 ### From source with Bun
 
 ```text
-Install Nakama from source on this machine with Bun.
+Install Airin from source on this machine with Bun.
 
-Follow "Option 4: Local development" in https://ahmadrosid.github.io/nakama/quickstart.md and run only the commands written there.
+Follow "Option 4: Local development" in https://ahmadrosid.github.io/airin/quickstart.md and run only the commands written there.
 
 1. First check that `git` and `bun` are installed. If one is missing, stop and tell me to install Bun from https://bun.sh. Do not install it yourself.
-2. If a `nakama` directory already exists here, or ports 3003 or 4310 are in use, stop and ask me.
-3. Do not create NAKAMA_SECRETS_KEY. A source checkout creates its own in ~/.config/nakama/dev-secrets.env on first start. Never print that file. Tell me to keep it, because secrets saved in Settings cannot be read without it.
+2. If a `airin` directory already exists here, or ports 3003 or 4310 are in use, stop and ask me.
+3. Do not create AIRIN_SECRETS_KEY. A source checkout creates its own in ~/.config/airin/dev-secrets.env on first start. Never print that file. Tell me to keep it, because secrets saved in Settings cannot be read without it.
 4. Start `bun run dev:web` in the background and wait until `curl -fsS http://127.0.0.1:4310/health` succeeds.
-5. Tell me to open http://localhost:3003 and finish the setup wizard (https://ahmadrosid.github.io/nakama/first-time-setup). Do not fill in the wizard for me.
+5. Tell me to open http://localhost:3003 and finish the setup wizard (https://ahmadrosid.github.io/airin/first-time-setup). Do not fill in the wizard for me.
 ```
 
 ## First-time setup
 
-After Nakama is running:
+After Airin is running:
 
 1. Open the dashboard
 2. Create the first admin account and first organization
@@ -138,11 +138,11 @@ Use the web dashboard, [CLI](/cli), Telegram, WhatsApp, or Discord:
 
 ### Understand the mental model
 
-Most of Nakama fits four ideas: organization, profile, tool access, and channel. See [Overview](/overview).
+Most of Airin fits four ideas: organization, profile, tool access, and channel. See [Overview](/overview).
 
 ## Next steps
 
-- [Overview](/overview) — what Nakama is and how to think about it
+- [Overview](/overview) — what Airin is and how to think about it
 - [Providers](/providers) — LLM API keys and model setup
 - [Profiles](/profiles) — how to define each bot
 - [Multi-tenancy](/multi-tenancy) — orgs, members, and roles

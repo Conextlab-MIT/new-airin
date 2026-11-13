@@ -1,10 +1,11 @@
+import type { AgentCharacterId } from "@airin/core/agent-marketplace";
 import type {
   AcpAgentPresetSummary,
   ImageAttachment,
   ToolSummary,
-} from "@nakama/core/contract";
-import { parseDataUrl } from "@nakama/core/message-content";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { parseDataUrl } from "@airin/core/message-content";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,14 +13,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 import {
   type ChangeEvent,
   type FormEvent,
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import {
   BUILT_IN_AGENT,
@@ -28,10 +30,11 @@ import {
 import {
   useAssignToolMutation,
   useCreateProfileMutation,
-  useCreateProfileWithSuperNakamaMutation,
+  useCreateProfileWithSuperAirinMutation,
   useUpdateProfileMutation,
   useUploadProfileAvatarMutation,
 } from "@/hooks/use-resource-mutations";
+import { characterIdToFile } from "@/lib/agent-character-avatar";
 import { formatError } from "@/lib/client";
 import { readFileAsDataUrl } from "../lib/read-file-as-data-url";
 
@@ -43,7 +46,7 @@ function fileToImageAttachment(file: File): Promise<ImageAttachment | null> {
 
 interface ProfileCreateDialogProps {
   agentPresets: AcpAgentPresetSummary[];
-  onAskSuperNakama?: () => void;
+  onAskSuperAirin?: () => void;
   onCreated: (profileId: string) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -151,14 +154,14 @@ export function ProfileCreateDialog({
   tools,
   onCreated,
   onOpenChange,
-  onAskSuperNakama,
+  onAskSuperAirin,
 }: ProfileCreateDialogProps) {
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       {open ? (
         <ProfileCreateDialogContent
           agentPresets={agentPresets}
-          onAskSuperNakama={onAskSuperNakama}
+          onAskSuperAirin={onAskSuperAirin}
           onCreated={onCreated}
           onOpenChange={onOpenChange}
           tools={tools}
@@ -173,20 +176,21 @@ function ProfileCreateDialogContent({
   tools,
   onCreated,
   onOpenChange,
-  onAskSuperNakama,
+  onAskSuperAirin,
 }: {
   agentPresets: AcpAgentPresetSummary[];
   tools: ToolSummary[];
   onCreated: (profileId: string) => void;
   onOpenChange: (open: boolean) => void;
-  onAskSuperNakama?: () => void;
+  onAskSuperAirin?: () => void;
 }) {
   const createMutation = useCreateProfileMutation();
-  const superNakamaCreateMutation = useCreateProfileWithSuperNakamaMutation();
+  const superAirinCreateMutation = useCreateProfileWithSuperAirinMutation();
   const uploadAvatarMutation = useUploadProfileAvatarMutation();
   const assignToolMutation = useAssignToolMutation();
   const updateProfileMutation = useUpdateProfileMutation();
   const createAvatarInputRef = useRef<HTMLInputElement>(null);
+  const [characterId, setCharacterId] = useState<AgentCharacterId | null>(null);
 
   const [form, dispatch] = useReducer(
     profileCreateFormReducer,
@@ -198,7 +202,7 @@ function ProfileCreateDialogContent({
 
   const busy =
     createMutation.isPending ||
-    superNakamaCreateMutation.isPending ||
+    superAirinCreateMutation.isPending ||
     uploadAvatarMutation.isPending ||
     assignToolMutation.isPending ||
     updateProfileMutation.isPending;
@@ -225,6 +229,7 @@ function ProfileCreateDialogContent({
       return;
     }
 
+    setCharacterId(null);
     dispatch({ type: "patch", values: { submitError: null } });
     dispatch({
       preview: null,
@@ -237,6 +242,26 @@ function ProfileCreateDialogContent({
       revokePrevious: false,
       type: "set-avatar-preview",
     });
+  }
+
+  async function handleCharacterSelect(nextId: AgentCharacterId) {
+    dispatch({ type: "patch", values: { submitError: null } });
+
+    try {
+      const file = await characterIdToFile(nextId);
+      setCharacterId(nextId);
+      avatarFileRef.current = file;
+      dispatch({
+        preview: URL.createObjectURL(file),
+        revokePrevious: true,
+        type: "set-avatar-preview",
+      });
+    } catch (failure) {
+      dispatch({
+        type: "patch",
+        values: { submitError: formatError(failure) },
+      });
+    }
   }
 
   function handleToolToggle(toolId: string, checked: boolean) {
@@ -266,7 +291,7 @@ function ProfileCreateDialogContent({
 
       const response =
         prompt && !profileIdTrimmed
-          ? await superNakamaCreateMutation.mutateAsync({
+          ? await superAirinCreateMutation.mutateAsync({
               name: form.name.trim() || undefined,
               prompt,
             })
@@ -332,7 +357,7 @@ function ProfileCreateDialogContent({
           <DialogTitle className="text-xl">
             What do you need help with?
           </DialogTitle>
-          {onAskSuperNakama ? (
+          {onAskSuperAirin ? (
             <DialogDescription>
               Or{" "}
               <button
@@ -340,11 +365,11 @@ function ProfileCreateDialogContent({
                 disabled={busy}
                 onClick={() => {
                   onOpenChange(false);
-                  onAskSuperNakama();
+                  onAskSuperAirin();
                 }}
                 type="button"
               >
-                ask Super Nakama
+                ask Airin
               </button>{" "}
               to draft from chat.
             </DialogDescription>
@@ -357,12 +382,17 @@ function ProfileCreateDialogContent({
           avatarInputRef={createAvatarInputRef}
           avatarPreview={form.avatarPreview}
           busy={busy}
+          characterId={characterId}
           name={form.name}
           onAgentChange={(agentId) => {
             dispatch({ type: "patch", values: { agentId, submitError: null } });
           }}
           onAvatarSelected={handleAvatarSelected}
+          onCharacterSelect={(nextId) => {
+            void handleCharacterSelect(nextId);
+          }}
           onClearAvatar={() => {
+            setCharacterId(null);
             dispatch({ type: "patch", values: { submitError: null } });
             dispatch({
               preview: null,

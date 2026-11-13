@@ -1,5 +1,5 @@
-import type { SessionSummary } from "@nakama/core/contract";
-import { cn } from "@nakama/ui/utils";
+import type { SessionSummary } from "@airin/core/contract";
+import { cn } from "@airin/ui/utils";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   RecentChatRow,

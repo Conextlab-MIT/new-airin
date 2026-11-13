@@ -57,7 +57,7 @@ export default async function Page(props: PageProps) {
         <div className="flex items-center gap-2 border-b pt-2 pb-6">
           <MarkdownCopyButton markdownUrl={markdownUrl} />
           <ViewOptionsPopover
-            githubUrl={`https://github.com/ahmadrosid/nakama/blob/main/docs/website/content/docs/${page.path}`}
+            githubUrl={`https://github.com/ahmadrosid/airin/blob/main/docs/website/content/docs/${page.path}`}
             markdownUrl={markdownUrl}
           />
         </div>

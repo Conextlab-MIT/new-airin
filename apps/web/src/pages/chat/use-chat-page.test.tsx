@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
-import { NakamaClient } from "@nakama/client";
-import type { AgentChannel, ChatMessage } from "@nakama/core/contract";
+import { AirinClient } from "@airin/client";
+import type { AgentChannel, ChatMessage } from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -409,7 +409,7 @@ function createRetrySessions() {
   const automationBodies: Array<{ channel: AgentChannel; prompt: string }> = [];
   const spies: ReturnType<typeof spyOn>[] = [];
 
-  const transport = new NakamaClient({
+  const transport = new AirinClient({
     baseUrl: "http://retry.test",
     fetch: async (url, options) => {
       if (String(url) !== "http://retry.test/v1/automations/draft") {
@@ -676,7 +676,7 @@ test.each(staleRetryCases)(
 // in this browser, so loading the chat has to read it back.
 test("a failed turn stored for a CLI chat is shown when the chat loads", async () => {
   window.localStorage.setItem(
-    "nakama:failed-chat-turn:source",
+    "airin:failed-chat-turn:source",
     JSON.stringify({ error: "provider down", text: "third prompt" })
   );
 
@@ -1147,7 +1147,7 @@ test("waits for the active org profile query before selecting a profile", async 
   const previousStorage = globalThis.localStorage;
 
   const stored = new Map<string, string>([
-    ["nakama:active-chat-profile", "org-a-profile"],
+    ["airin:active-chat-profile", "org-a-profile"],
   ]);
 
   Object.defineProperty(globalThis, "localStorage", {
@@ -1255,8 +1255,8 @@ test("waits for the active org profile query before selecting a profile", async 
     });
 
     expect(getProfile.mock.calls[0]?.[0]).toBe("default");
-    expect(stored.get("nakama:active-chat-profile:org-b")).toBe("default");
-    expect(stored.get("nakama:active-chat-profile")).toBeUndefined();
+    expect(stored.get("airin:active-chat-profile:org-b")).toBe("default");
+    expect(stored.get("airin:active-chat-profile")).toBeUndefined();
 
     await act(async () => {
       await page.sendMessage("hello");

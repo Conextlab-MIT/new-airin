@@ -8,7 +8,7 @@ import {
 afterEach(closePluginPackageRegistry);
 
 test("closing the plugin registry isolates cassette replay and allows registry reuse", async () => {
-  const source = pluginPackage({ "nakama.plugin.json": '{"version":"1.0.0"}' });
+  const source = pluginPackage({ "airin.plugin.json": '{"version":"1.0.0"}' });
   const registryUrl = `https://registry.npmjs.org/${source.packageName}`;
   expect((await (await fetch(registryUrl)).json()).name).toBe(
     source.packageName
@@ -35,7 +35,7 @@ test("closing the plugin registry isolates cassette replay and allows registry r
     { mode: "replay", url }
   );
 
-  pluginPackage({ "nakama.plugin.json": '{"version":"1.0.0"}' });
+  pluginPackage({ "airin.plugin.json": '{"version":"1.0.0"}' });
   const metadata = await (await fetch(registryUrl)).json();
   expect(metadata.name).toBe(source.packageName);
   const archive = await fetch(metadata.versions["1.0.0"].dist.tarball);

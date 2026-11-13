@@ -4,11 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 source "$(dirname "$0")/capture-common.sh"
 SCREENSHOT_DIR="$(cd "$(dirname "$0")/.." && pwd)/public/screenshots"
-TEMP_CONFIG="/tmp/nakama-docs-acp-agents-screenshots-$$"
-COOKIE_JAR="/tmp/nakama-docs-acp-agents-cookies-$$.txt"
+TEMP_CONFIG="/tmp/airin-docs-acp-agents-screenshots-$$"
+COOKIE_JAR="/tmp/airin-docs-acp-agents-cookies-$$.txt"
 PORT=4319
 BASE_URL="http://127.0.0.1:${PORT}"
-SESSION=nakama-docs-acp-agents-screenshots
+SESSION=airin-docs-acp-agents-screenshots
 SERVER_PID=""
 VIEWPORT_WIDTH=1280
 VIEWPORT_HEIGHT=800
@@ -32,14 +32,14 @@ trap cleanup EXIT
 mkdir -p "$SCREENSHOT_DIR" "$TEMP_CONFIG"
 ensure_current_web_build "$ROOT"
 
-NAKAMA_CONFIG_DIR="$TEMP_CONFIG" NAKAMA_PORT="$PORT" \
-  bun run "$ROOT/apps/server/src/index.ts" > /tmp/nakama-docs-acp-agents-server.log 2>&1 &
+AIRIN_CONFIG_DIR="$TEMP_CONFIG" AIRIN_PORT="$PORT" \
+  bun run "$ROOT/apps/server/src/index.ts" > /tmp/airin-docs-acp-agents-server.log 2>&1 &
 SERVER_PID=$!
 
 deadline=$(( $(date +%s) + 90 ))
 until curl -sf "${BASE_URL}/health" >/dev/null 2>&1; do
   if [[ "$(date +%s)" -gt "$deadline" ]]; then
-    tail -20 /tmp/nakama-docs-acp-agents-server.log
+    tail -20 /tmp/airin-docs-acp-agents-server.log
     exit 1
   fi
   sleep 0.25
@@ -54,8 +54,8 @@ SETUP_BODY=$(curl -sf -c "$COOKIE_JAR" -X POST "${BASE_URL}/v1/auth/setup" \
   }")
 ORG_ID=$(printf '%s' "$SETUP_BODY" | bun -e 'const j=JSON.parse(await Bun.stdin.text()); process.stdout.write(j.activeOrgId);')
 
-CSRF_VAL=$(awk '$6=="nakama_csrf"{print $7}' "$COOKIE_JAR")
-SESSION_VAL=$(awk '$6=="nakama_session"{print $7}' "$COOKIE_JAR")
+CSRF_VAL=$(awk '$6=="airin_csrf"{print $7}' "$COOKIE_JAR")
+SESSION_VAL=$(awk '$6=="airin_session"{print $7}' "$COOKIE_JAR")
 
 # Without a provider the SetupGuard redirects every page to the setup wizard.
 # The key is a placeholder and is never used.
@@ -65,9 +65,9 @@ curl -sf -b "$COOKIE_JAR" -X POST "${BASE_URL}/v1/providers" \
   -d '{"type":"openai","apiKey":"sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","model":"gpt-4o-mini"}' >/dev/null
 
 $AB --session "$SESSION" close 2>/dev/null || true
-$AB --session "$SESSION" cookies set nakama_session "$SESSION_VAL" \
+$AB --session "$SESSION" cookies set airin_session "$SESSION_VAL" \
   --url "${BASE_URL}/" --httpOnly --sameSite Lax
-$AB --session "$SESSION" cookies set nakama_csrf "$CSRF_VAL" \
+$AB --session "$SESSION" cookies set airin_csrf "$CSRF_VAL" \
   --url "${BASE_URL}/" --sameSite Lax
 $AB --session "$SESSION" set viewport "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT"
 

@@ -48,7 +48,7 @@ test("HTML artifact reads enforce actual bytes despite a misleading sidecar", as
   );
   await writeArtifact("page.html", `${content}x`);
   await writeArtifact(
-    "page.html.nakama-meta.json",
+    "page.html.airin-meta.json",
     JSON.stringify({
       mimeType: "text/plain",
       savedAt: new Date().toISOString(),
@@ -64,7 +64,7 @@ test("HTML artifact reads enforce actual bytes despite a misleading sidecar", as
   ).rejects.toMatchObject({ status: 413 });
   await writeArtifact("page.bin", `${content}x`);
   await writeArtifact(
-    "page.bin.nakama-meta.json",
+    "page.bin.airin-meta.json",
     JSON.stringify({
       mimeType: "text/html",
       savedAt: new Date().toISOString(),
@@ -79,7 +79,7 @@ test("HTML artifact reads enforce actual bytes despite a misleading sidecar", as
 test("workspace rename preserves files, folder contents and sidecars, and rolls back failed reference updates", async () => {
   await writeArtifact("notes/report.md", "report");
   await writeArtifact(
-    "notes/report.md.nakama-meta.json",
+    "notes/report.md.airin-meta.json",
     JSON.stringify({
       mimeType: "text/markdown",
       savedAt: "2026-09-20T00:00:00.000Z",
@@ -200,7 +200,7 @@ test("workspace rename rejects invalid names, managed paths, symlinks and collis
     "data/knowledge-base/index.json",
     "data/memory-archive",
     "data/memory-archive/2026-09.md",
-    "artifacts/report.md.nakama-meta.json",
+    "artifacts/report.md.airin-meta.json",
   ]) {
     await expect(rename(filename, "changed")).rejects.toMatchObject({
       status: 400,
@@ -373,17 +373,17 @@ test("reads the shared profile folder", async () => {
 });
 
 beforeEach(async () => {
-  previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-  configDir = await mkdtemp(path.join(tmpdir(), "nakama-artifacts-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+  configDir = await mkdtemp(path.join(tmpdir(), "airin-artifacts-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
   await mkdir(getProfileArtifactsDir(ORG_ID, PROFILE_ID), { recursive: true });
 });
 
 afterEach(async () => {
   if (previousConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+    process.env.AIRIN_CONFIG_DIR = previousConfigDir;
   }
 
   await rm(configDir, { force: true, recursive: true });
@@ -428,7 +428,7 @@ test("serves a markdown artifact without a sidecar as text/markdown", async () =
 test("prefers the sidecar mime type when present", async () => {
   await writeArtifact("page.html", "<p>hi</p>");
   await writeArtifact(
-    "page.html.nakama-meta.json",
+    "page.html.airin-meta.json",
     JSON.stringify({
       mimeType: "text/html",
       savedAt: "2026-01-01T00:00:00.000Z",
@@ -606,7 +606,7 @@ test("paginates artifacts with limit and offset", async () => {
 test("saves an edit and refreshes the sidecar size and timestamp", async () => {
   await writeArtifact("script.md", "# Draft\n");
   await writeArtifact(
-    "script.md.nakama-meta.json",
+    "script.md.airin-meta.json",
     JSON.stringify({
       mimeType: "text/markdown",
       savedAt: "2020-01-01T00:00:00.000Z",
@@ -879,7 +879,7 @@ test("list_artifacts projects relative keys, and pages results", async () => {
 test("list_artifacts rejects an artifacts-root symlink and skips symlink entries", async () => {
   const root = getProfileSoulDir(ORG_ID, PROFILE_ID);
   await writeArtifact("real.csv", "real");
-  const external = await mkdtemp(path.join(tmpdir(), "nakama-list-external-"));
+  const external = await mkdtemp(path.join(tmpdir(), "airin-list-external-"));
 
   try {
     await writeFile(path.join(external, "private.csv"), "secret");

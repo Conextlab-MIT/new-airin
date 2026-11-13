@@ -7,7 +7,7 @@ import { guardFilePath, PathGuardError } from "./paths";
 
 describe("guardFilePath", () => {
   test("HTML aliases cannot bypass the limit through a different extension", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "nakama-html-alias-"));
+    const root = await mkdtemp(path.join(tmpdir(), "airin-html-alias-"));
 
     try {
       const options = { cwd: root, maxFileBytes: MAX_HTML_ARTIFACT_BYTES * 2 };
@@ -27,7 +27,7 @@ describe("guardFilePath", () => {
   });
 
   test("allows a new directory beneath a symlinked parent without allowing siblings", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "nakama-new-tools-"));
+    const root = await mkdtemp(path.join(tmpdir(), "airin-new-tools-"));
 
     try {
       const data = path.join(root, "data");
@@ -50,7 +50,7 @@ describe("guardFilePath", () => {
   });
 
   test("checks the real cwd and preserves valid directory aliases", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "nakama-cwd-"));
+    const root = await mkdtemp(path.join(tmpdir(), "airin-cwd-"));
 
     try {
       const workspace = path.join(root, "workspace");
@@ -120,7 +120,7 @@ describe("guardFilePath", () => {
   });
 
   test("resolves relative paths under an explicit workspace", async () => {
-    const workspaceRoot = await mkdtemp(path.join(tmpdir(), "nakama-guard-"));
+    const workspaceRoot = await mkdtemp(path.join(tmpdir(), "airin-guard-"));
     const realWorkspace = await realpath(workspaceRoot);
 
     const guarded = await guardFilePath("SOUL.md", null, undefined, {
@@ -133,7 +133,7 @@ describe("guardFilePath", () => {
   test.skipIf(process.platform !== "win32")(
     "refuses NTFS alternate data stream names on Windows",
     async () => {
-      const workspace = await mkdtemp(path.join(tmpdir(), "nakama-guard-ads-"));
+      const workspace = await mkdtemp(path.join(tmpdir(), "airin-guard-ads-"));
 
       try {
         for (const attempt of [
@@ -168,7 +168,7 @@ describe("guardFilePath", () => {
     "keeps ':' as an ordinary file name character on POSIX",
     async () => {
       const workspace = await mkdtemp(
-        path.join(tmpdir(), "nakama-guard-colon-")
+        path.join(tmpdir(), "airin-guard-colon-")
       );
 
       try {

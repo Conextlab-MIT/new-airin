@@ -6,7 +6,7 @@ import {
   rehydrateMessagesForProvider,
   replaceImagePartsWithDescriptions,
   resolveMessagesForNonVisionProvider,
-} from "@nakama/core";
+} from "@airin/core";
 import { createAgentChatSession } from "./index";
 
 const tinyPngBase64 =

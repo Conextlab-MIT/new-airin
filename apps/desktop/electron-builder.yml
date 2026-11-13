@@ -1,5 +1,5 @@
-appId: com.nakama.desktop
-productName: Nakama
+appId: com.airin.desktop
+productName: Airin
 asar: true
 npmRebuild: false
 directories:
@@ -10,7 +10,7 @@ files:
   - package.json
 publish:
   provider: generic
-  url: https://github.com/ahmadrosid/nakama/releases/download/desktop-updates
+  url: https://github.com/ahmadrosid/airin/releases/download/desktop-updates
 extraResources:
   - from: dist/runtime
     to: runtime
@@ -41,7 +41,7 @@ win:
     - target: nsis
       arch: [x64]
 nsis:
-  artifactName: Nakama-${version}-${arch}-Setup.exe
+  artifactName: Airin-${version}-${arch}-Setup.exe
   oneClick: true
   perMachine: false
   deleteAppDataOnUninstall: false

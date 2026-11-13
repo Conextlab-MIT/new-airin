@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setToolSecrets } from "./custom-tool-shared";
 import {
   makeCustomToolRecord,
@@ -12,9 +12,9 @@ import {
 import { ManagedSecrets } from "./managed-secrets";
 import { loadPythonTool, resolvePythonBin } from "./python-tool-loader";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
-const originalPythonBin = process.env.NAKAMA_PYTHON_BIN;
+const originalPythonBin = process.env.AIRIN_PYTHON_BIN;
 
 const setupToolsDir = setupCustomToolsDir;
 
@@ -37,14 +37,14 @@ const makeRecord = (overrides = {}) =>
 describe("resolvePythonBin", () => {
   afterEach(() => {
     if (originalPythonBin === undefined) {
-      delete process.env.NAKAMA_PYTHON_BIN;
+      delete process.env.AIRIN_PYTHON_BIN;
     } else {
-      process.env.NAKAMA_PYTHON_BIN = originalPythonBin;
+      process.env.AIRIN_PYTHON_BIN = originalPythonBin;
     }
   });
 
   test.skipIf(process.platform === "win32")("defaults to python3", () => {
-    delete process.env.NAKAMA_PYTHON_BIN;
+    delete process.env.AIRIN_PYTHON_BIN;
     expect(resolvePythonBin()).toBe("python3");
   });
 
@@ -103,9 +103,9 @@ describe.skipIf(process.platform !== "win32")(
       process.env.ProgramFiles = originalProgramFiles;
 
       if (originalPythonBin === undefined) {
-        delete process.env.NAKAMA_PYTHON_BIN;
+        delete process.env.AIRIN_PYTHON_BIN;
       } else {
-        process.env.NAKAMA_PYTHON_BIN = originalPythonBin;
+        process.env.AIRIN_PYTHON_BIN = originalPythonBin;
       }
 
       if (tempDir) {
@@ -118,7 +118,7 @@ describe.skipIf(process.platform !== "win32")(
     // resolver expands before comparing.
     async function useFakeInstallRoots(): Promise<void> {
       tempDir = realpathSync.native(
-        await mkdtemp(path.join(os.tmpdir(), "nakama-python-bin-"))
+        await mkdtemp(path.join(os.tmpdir(), "airin-python-bin-"))
       );
       process.env.LOCALAPPDATA = path.join(tempDir, "Local");
       process.env.ProgramFiles = path.join(tempDir, "Program Files");
@@ -133,7 +133,7 @@ describe.skipIf(process.platform !== "win32")(
     }
 
     test("defaults to python, because python3 is the Store stub", () => {
-      delete process.env.NAKAMA_PYTHON_BIN;
+      delete process.env.AIRIN_PYTHON_BIN;
       expect(resolvePythonBin()).toBe("python");
     });
 
@@ -201,15 +201,15 @@ describe("python tool loader", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (originalPythonBin === undefined) {
-      delete process.env.NAKAMA_PYTHON_BIN;
+      delete process.env.AIRIN_PYTHON_BIN;
     } else {
-      process.env.NAKAMA_PYTHON_BIN = originalPythonBin;
+      process.env.AIRIN_PYTHON_BIN = originalPythonBin;
     }
 
     if (configDir) {
@@ -227,7 +227,7 @@ describe("python tool loader", () => {
       `import json, os, sys
 
 def run(input, context):
-    return {"echoed": input.get("message"), "root": os.environ.get("NAKAMA_WORKSPACE_ROOT", "")}
+    return {"echoed": input.get("message"), "root": os.environ.get("AIRIN_WORKSPACE_ROOT", "")}
 
 if __name__ == "__main__":
     payload = json.loads(sys.stdin.read() or "{}")
@@ -245,16 +245,16 @@ if __name__ == "__main__":
     // SAFETY: The test fixture matches the contract used by this test.
     const result = (await tool!.run(
       { message: "hello" },
-      { orgId: "org_a", workspaceRoot: "/tmp/nakama-ws" }
+      { orgId: "org_a", workspaceRoot: "/tmp/airin-ws" }
     )) as { echoed: string; root: string };
 
     expect(result.echoed).toBe("hello");
     // The loader must forward context.workspaceRoot to the child process as
-    // NAKAMA_WORKSPACE_ROOT.
-    expect(result.root).toBe("/tmp/nakama-ws");
+    // AIRIN_WORKSPACE_ROOT.
+    expect(result.root).toBe("/tmp/airin-ws");
   });
 
-  test("rejects a disallowed NAKAMA_PYTHON_BIN before spawn", async () => {
+  test("rejects a disallowed AIRIN_PYTHON_BIN before spawn", async () => {
     const { configDir: dir, toolsDir } = await setupToolsDir();
     configDir = dir;
 
@@ -269,7 +269,7 @@ if __name__ == "__main__":
       "utf8"
     );
 
-    process.env.NAKAMA_PYTHON_BIN = "/tmp/not-an-allowlisted-python";
+    process.env.AIRIN_PYTHON_BIN = "/tmp/not-an-allowlisted-python";
     const tool = await loadPythonTool(makeRecord());
     await expect(tool!.run({}, { orgId: "org_a" })).rejects.toThrow(
       /allowlist/i
@@ -476,7 +476,7 @@ if __name__ == "__main__":
       `import json, os, sys
 
 def run(input, context):
-    return {"secret": os.environ.get("NAKAMA_TEST_CANARY_SECRET")}
+    return {"secret": os.environ.get("AIRIN_TEST_CANARY_SECRET")}
 
 if __name__ == "__main__":
     payload = json.loads(sys.stdin.read() or "{}")
@@ -492,7 +492,7 @@ if __name__ == "__main__":
       })
     );
 
-    process.env.NAKAMA_TEST_CANARY_SECRET = "canary-not-a-real-secret";
+    process.env.AIRIN_TEST_CANARY_SECRET = "canary-not-a-real-secret";
 
     try {
       // SAFETY: The test fixture matches the contract used by this test.
@@ -502,7 +502,7 @@ if __name__ == "__main__":
 
       expect(result.secret).toBeNull();
     } finally {
-      delete process.env.NAKAMA_TEST_CANARY_SECRET;
+      delete process.env.AIRIN_TEST_CANARY_SECRET;
     }
   });
 
@@ -542,14 +542,14 @@ if __name__ == "__main__":
       })
     );
 
-    process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS = "200";
+    process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS = "200";
 
     try {
       await expect(tool!.run({}, { orgId: "org_a" })).rejects.toThrow(
         /timed out/i
       );
     } finally {
-      delete process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS;
+      delete process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS;
     }
   });
 });
@@ -559,9 +559,9 @@ describe("tool resolver", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (configDir) {
@@ -614,9 +614,9 @@ describe("agent-service playground dispatch", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (configDir) {
@@ -645,7 +645,7 @@ if __name__ == "__main__":
       "utf8"
     );
 
-    const { createInMemoryDatabaseAdapter } = await import("@nakama/db");
+    const { createInMemoryDatabaseAdapter } = await import("@airin/db");
     const databaseAdapter = createInMemoryDatabaseAdapter();
     const now = new Date().toISOString();
 

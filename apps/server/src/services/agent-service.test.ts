@@ -4,8 +4,8 @@ import {
   type GenerateChatInput,
   type ProviderClient,
   type ToolCall,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 import { createDefaultProfile } from "./agent-service-test-fixtures";
@@ -16,14 +16,14 @@ import { SkillsService } from "./skills-service";
 const TEST_ORG_ID = "org_test";
 
 describe("AgentService MCP discovery", () => {
-  setupTestConfigDir("nakama-mcp-discovery-");
-  const previous = process.env.NAKAMA_MCP_TOOL_DISCOVERY;
+  setupTestConfigDir("airin-mcp-discovery-");
+  const previous = process.env.AIRIN_MCP_TOOL_DISCOVERY;
 
   afterEach(() => {
     if (previous === undefined) {
-      delete process.env.NAKAMA_MCP_TOOL_DISCOVERY;
+      delete process.env.AIRIN_MCP_TOOL_DISCOVERY;
     } else {
-      process.env.NAKAMA_MCP_TOOL_DISCOVERY = previous;
+      process.env.AIRIN_MCP_TOOL_DISCOVERY = previous;
     }
   });
 
@@ -40,9 +40,9 @@ describe("AgentService MCP discovery", () => {
       "search_revoked",
     ]) {
       if (mode === "eager") {
-        delete process.env.NAKAMA_MCP_TOOL_DISCOVERY;
+        delete process.env.AIRIN_MCP_TOOL_DISCOVERY;
       } else {
-        process.env.NAKAMA_MCP_TOOL_DISCOVERY = "1";
+        process.env.AIRIN_MCP_TOOL_DISCOVERY = "1";
       }
 
       const db = createInMemoryDatabaseAdapter();
@@ -218,7 +218,7 @@ describe("AgentService MCP discovery", () => {
 });
 
 describe("AgentService /skill requests", () => {
-  setupTestConfigDir("nakama-explicit-skill-");
+  setupTestConfigDir("airin-explicit-skill-");
 
   async function systemPromptFor(
     message: string,
@@ -320,9 +320,9 @@ describe("AgentService /skill requests", () => {
 });
 
 describe("AgentService documents from earlier turns", () => {
-  setupTestConfigDir("nakama-document-history-");
+  setupTestConfigDir("airin-document-history-");
 
-  const pdf = Buffer.from("%PDF-1.4\n% nakama-2386 report\n%%EOF\n").toString(
+  const pdf = Buffer.from("%PDF-1.4\n% airin-2386 report\n%%EOF\n").toString(
     "base64"
   );
 

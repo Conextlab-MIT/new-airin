@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaClient } from "./index";
+import { AirinClient } from "./index";
 import { isActiveTurnConflict, retryWhileTurnIsStopping } from "./stream";
 
 const conflict = new Error(
@@ -103,7 +103,7 @@ test("sendStream retries a 409 from a turn that is still stopping", async () => 
   // POST can land on a turn that is already dying.
   let attempts = 0;
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "http://localhost:4310",
     fetch: (_input, _init) => {
       attempts += 1;
@@ -137,7 +137,7 @@ test("sendStream retries a 409 from a turn that is still stopping", async () => 
 test("sendStream surfaces a 409 that never clears", async () => {
   let attempts = 0;
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "http://localhost:4310",
     fetch: () => {
       attempts += 1;

@@ -1,5 +1,5 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import type {
   MeetAction,
   MeetActionInput,
@@ -7,7 +7,7 @@ import type {
   MeetExtensionKey,
   Meeting,
   MeetOverview,
-} from "@nakama/core/google-meet";
+} from "@airin/core/google-meet";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -507,7 +507,7 @@ test("a failed approval keeps the card and shows an error", async () => {
     handlers: {
       "approve-extension": () =>
         Promise.reject(
-          new NakamaApiError("This code is wrong or has expired", 400)
+          new AirinApiError("This code is wrong or has expired", 400)
         ),
     },
     path: "/google-meet?pair=K7Q4M2",
@@ -635,7 +635,7 @@ test("a v0.2 extension action gets the update error and runs nothing", async () 
             action: "start-capture",
             id: "request",
             input: { url: "https://meet.google.com/abc-defg-hij" },
-            type: "NAKAMA_MEET_ACTION",
+            type: "AIRIN_MEET_ACTION",
           },
           ...init,
         })
@@ -653,9 +653,9 @@ test("a v0.2 extension action gets the update error and runs nothing", async () 
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply).toHaveBeenCalledWith(
       {
-        error: "Update the Nakama Meet extension to v0.3.",
+        error: "Update the Airin Meet extension to v0.3.",
         id: "request",
-        type: "NAKAMA_MEET_RESULT",
+        type: "AIRIN_MEET_RESULT",
       },
       window.location.origin
     );

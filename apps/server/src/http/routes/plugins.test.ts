@@ -1,17 +1,14 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { ListOrgPluginsResponse, OrgRole } from "@nakama/core";
+import type { ListOrgPluginsResponse, OrgRole } from "@airin/core";
 import {
   getProfileSoulDir,
   getUserConfigDir,
   PLUGIN_MANIFEST_API_VERSION,
   readApiErrorMessage,
-} from "@nakama/core";
-import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
 import type { AuthService } from "../../services/auth-service";
 import { PluginService } from "../../services/plugin-service";
 import { setupTestConfigDir } from "../../test-config-dir";
@@ -31,7 +28,7 @@ import {
 
 afterEach(closePluginPackageRegistry);
 
-setupTestConfigDir("nakama-plugins-http-");
+setupTestConfigDir("airin-plugins-http-");
 
 const PASSWORD = "password123";
 
@@ -67,11 +64,11 @@ function pluginBundle(
       },
     ],
     apiVersion: PLUGIN_MANIFEST_API_VERSION,
-    author: "Nakama",
+    author: "Airin",
     description: "Notes",
     id: "notes",
     license: "MIT",
-    minNakamaVersion: "0.1.0",
+    minAirinVersion: "0.1.0",
     name: "Notes",
     skills: [],
     ui: {
@@ -87,7 +84,7 @@ function pluginBundle(
     "actions/wipe.js": Buffer.from(echoJs),
     "private.js": Buffer.from(echoJs),
     "migrations/001.sql": Buffer.from("SELECT 1;"),
-    "nakama.plugin.json": Buffer.from(JSON.stringify(manifest)),
+    "airin.plugin.json": Buffer.from(JSON.stringify(manifest)),
     "secret.txt": Buffer.from("backend-secret"),
     "ui/assets/app.js": Buffer.from("export {}"),
     "ui/index.js": Buffer.from(
@@ -231,12 +228,12 @@ describe("plugin HTTP API", () => {
       JSON.stringify({ name: "@test/local-notes", version: "1.0.0" })
     );
     await writeFile(
-      resolve(directory, "nakama.plugin.json"),
+      resolve(directory, "airin.plugin.json"),
       JSON.stringify({
         id: "local-notes",
         version: "1.0.0",
         apiVersion: 1,
-        minNakamaVersion: "0.1.0",
+        minAirinVersion: "0.1.0",
         name: "Local notes",
         description: "Local",
         author: "Test",
@@ -928,8 +925,8 @@ describe("plugin HTTP API", () => {
     const added = await pluginService.getOrgPluginDetail(admin.orgId!, "notes");
     await pluginService.enableOrgPlugin(admin.orgId!, "notes", added!.revision);
 
-    const previousTimeout = process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS;
-    process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS = "1000";
+    const previousTimeout = process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS;
+    process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS = "1000";
 
     try {
       const timedOut = await jsonRequest(
@@ -954,9 +951,9 @@ describe("plugin HTTP API", () => {
       expect(hostHeldUp.status).toBe(500);
     } finally {
       if (previousTimeout === undefined) {
-        delete process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS;
+        delete process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS;
       } else {
-        process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS = previousTimeout;
+        process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS = previousTimeout;
       }
     }
   }, 30_000);
@@ -1150,14 +1147,14 @@ describe("plugin HTTP API", () => {
       app,
       platform,
       pluginBundle("1.1.0", {
-        "nakama.plugin.json": JSON.stringify({
+        "airin.plugin.json": JSON.stringify({
           actions: [],
           apiVersion: PLUGIN_MANIFEST_API_VERSION,
-          author: "Nakama",
+          author: "Airin",
           description: "Notes",
           id: "notes",
           license: "MIT",
-          minNakamaVersion: "0.1.0",
+          minAirinVersion: "0.1.0",
           name: "Notes",
           skills: [],
           version: "1.1.0",

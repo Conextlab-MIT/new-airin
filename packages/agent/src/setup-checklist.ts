@@ -5,8 +5,8 @@ import type {
   SetupChecklistItem,
   SetupChecklistResponse,
   SkillSummary,
-} from "@nakama/core";
-import { parseUserContext } from "@nakama/core/user-context";
+} from "@airin/core";
+import { parseUserContext } from "@airin/core/user-context";
 import { z } from "zod";
 
 /** A checklist is a short list; more than this is a setup chore, not a start. */
@@ -172,7 +172,7 @@ export function parseSetupChecklistReply(
 }
 
 /**
- * Turn what the user told Nakama into a short setup checklist. Never throws:
+ * Turn what the user told Airin into a short setup checklist. Never throws:
  * no provider, an empty USER.md or a bad reply all give an empty list.
  */
 export async function buildSetupChecklist(

@@ -12,9 +12,9 @@ import type {
   RegressionCaseSourceType,
   RegressionCaseVerdict,
   ThinkingEffort,
-} from "@nakama/core";
+} from "@airin/core";
 
-export type { OrgRole } from "@nakama/core";
+export type { OrgRole } from "@airin/core";
 
 export type ChannelType = "telegram" | "whatsapp";
 
@@ -295,7 +295,7 @@ export interface StoredWorkspaceSettingsRecord {
   automationWorkerPollIntervalMs: number;
   codingAgentHarnesses: StoredCodingAgentHarnessRecord[];
   /**
-   * When true (default), coding CLIs get Nakama provider credentials at spawn.
+   * When true (default), coding CLIs get Airin provider credentials at spawn.
    * When false, harness-native vendor login on the host is used instead.
    */
   codingAgentProviderPassthrough: boolean;
@@ -675,7 +675,7 @@ export type OrgMemoryProposalStatus = "pending" | "approved" | "rejected";
 
 export type ProfileChangeSource =
   | "dashboard"
-  | "super_nakama"
+  | "super_airin"
   | "skill_manage"
   | "pack_import";
 

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { OrgRole } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { OrgRole } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { loginUserSession, seedOrgAdmin } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-channel-legacy-claim-test-");
+setupTestConfigDir("airin-channel-legacy-claim-test-");
 
 const ORG_ID = "org_channel_legacy";
 

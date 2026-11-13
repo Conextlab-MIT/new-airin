@@ -10,7 +10,7 @@ import {
   writeParsedConfigIni,
 } from "./user-config";
 
-export const LOCAL_CLIENT_EMAIL = "local-client@nakama.internal";
+export const LOCAL_CLIENT_EMAIL = "local-client@airin.internal";
 
 export const LOCAL_CLIENT_USER_ID = "user_local_client";
 
@@ -21,7 +21,7 @@ const LOCAL_AUTH_TOKEN_FILENAME = "local-auth-token";
 export class LocalAuthTokenManagedExternallyError extends Error {
   constructor() {
     super(
-      "Local auth token is managed by NAKAMA_LOCAL_AUTH_TOKEN and cannot be rotated on disk."
+      "Local auth token is managed by AIRIN_LOCAL_AUTH_TOKEN and cannot be rotated on disk."
     );
     this.name = "LocalAuthTokenManagedExternallyError";
   }
@@ -74,7 +74,7 @@ function compareTokenHash(token: string, expectedHashHex: string): boolean {
 }
 
 export async function resolveLocalAuthToken(): Promise<string> {
-  const envToken = process.env.NAKAMA_LOCAL_AUTH_TOKEN?.trim();
+  const envToken = process.env.AIRIN_LOCAL_AUTH_TOKEN?.trim();
 
   if (envToken) {
     return envToken;
@@ -114,7 +114,7 @@ export async function loadLocalAuthToken(
 }
 
 export async function rotateLocalAuthToken(): Promise<string> {
-  if (process.env.NAKAMA_LOCAL_AUTH_TOKEN?.trim()) {
+  if (process.env.AIRIN_LOCAL_AUTH_TOKEN?.trim()) {
     throw new LocalAuthTokenManagedExternallyError();
   }
 
@@ -133,7 +133,7 @@ export async function verifyLocalAuthToken(
     return null;
   }
 
-  const envToken = process.env.NAKAMA_LOCAL_AUTH_TOKEN?.trim();
+  const envToken = process.env.AIRIN_LOCAL_AUTH_TOKEN?.trim();
 
   if (envToken) {
     return compareTokenHash(token, hashLocalAuthToken(envToken))

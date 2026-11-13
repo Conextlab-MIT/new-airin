@@ -1,25 +1,25 @@
-import { resolveCloudflareAccountInput } from "@nakama/core/cloudflare-provider-config";
-import type { CreateProviderResponse } from "@nakama/core/contract";
-import { defaultDiscoveryBaseUrl } from "@nakama/core/discovery-providers";
-import { ollamaRequiresApiKey } from "@nakama/core/ollama-provider-config";
-import { Button } from "@nakama/ui/button";
-import { DialogFooter } from "@nakama/ui/dialog";
-import { FormField } from "@nakama/ui/form-field";
-import { Input } from "@nakama/ui/input";
+import { resolveCloudflareAccountInput } from "@airin/core/cloudflare-provider-config";
+import type { CreateProviderResponse } from "@airin/core/contract";
+import { defaultDiscoveryBaseUrl } from "@airin/core/discovery-providers";
+import { ollamaRequiresApiKey } from "@airin/core/ollama-provider-config";
+import { Button } from "@airin/ui/button";
+import { DialogFooter } from "@airin/ui/dialog";
+import { FormField } from "@airin/ui/form-field";
+import { Input } from "@airin/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
+} from "@airin/ui/input-group";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/select";
+import { Spinner } from "@airin/ui/spinner";
 import { ViewIcon, ViewOffIcon } from "hugeicons-react";
 import { type ReactNode, useState } from "react";
 import { CatalogProviderModelFields } from "@/components/CatalogProviderModelFields";

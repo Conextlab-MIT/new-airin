@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { Cancel01Icon } from "hugeicons-react";
 import { wordCountFromPastedFilename } from "@/lib/pasted-text";
 

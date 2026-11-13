@@ -1,6 +1,6 @@
-import type { OrgPluginDetail } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Checkbox } from "@nakama/ui/checkbox";
+import type { OrgPluginDetail } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Checkbox } from "@airin/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -8,9 +8,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
 import { Search01Icon } from "hugeicons-react";
 import { type Dispatch, type SetStateAction, useState } from "react";
 import { ProfileAvatar } from "@/components/ProfileAvatar";

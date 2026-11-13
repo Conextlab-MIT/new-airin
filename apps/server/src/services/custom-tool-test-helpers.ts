@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { StoredToolRecord } from "@nakama/db";
+import type { StoredToolRecord } from "@airin/db";
 
 const CUSTOM_TOOL_TEST_ORG = "org_a";
 
@@ -9,8 +9,8 @@ export async function setupCustomToolsDir(): Promise<{
   configDir: string;
   toolsDir: string;
 }> {
-  const configDir = await mkdtemp(path.join(os.tmpdir(), "nakama-config-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(path.join(os.tmpdir(), "airin-config-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
   const toolsDir = path.join(configDir, "orgs", CUSTOM_TOOL_TEST_ORG, "tools");
   await mkdir(toolsDir, { recursive: true });
 

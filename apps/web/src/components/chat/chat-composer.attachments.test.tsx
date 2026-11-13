@@ -105,15 +105,15 @@ test("clicking 'Add files or photos' opens the picker accepting both images and 
   const clickSpy = spyOn(fileInput, "click");
 
   const trigger = container.querySelector<HTMLElement>(
-    'button[aria-label="Add attachment"]'
+    'button[aria-label="Add"]'
   );
 
   await act(async () => trigger?.click());
   await waitFor(() =>
-    Boolean(findByText('[role="menuitem"]', "Add files or photos"))
+    Boolean(findByText('[role="menuitem"]', "Files and photos"))
   );
   await act(async () =>
-    findByText('[role="menuitem"]', "Add files or photos")?.click()
+    findByText('[role="menuitem"]', "Files and photos")?.click()
   );
 
   expect(fileInput.accept).toBe(ALL_ATTACHMENT_ACCEPT);

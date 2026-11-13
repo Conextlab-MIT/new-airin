@@ -189,7 +189,7 @@ export interface GroupRoster<P extends RosterProfile = ProfileSummary> {
 
 /**
  * The roster from the group and the profiles the user may chat with. Super
- * Nakama never joins a group. A member that lost access has no handle here,
+ * Airin never joins a group. A member that lost access has no handle here,
  * so a mention of it wakes nobody.
  */
 export function groupRoster<P extends RosterProfile>(

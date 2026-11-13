@@ -1,23 +1,23 @@
-import { NakamaApiError, type ProfileResponse } from "@nakama/core";
+import { AirinApiError, type ProfileResponse } from "@airin/core";
 import type { Context } from "hono";
 import { getRequestAuth, type RequestAuthContext } from "./shared";
 import type { AppEnv } from "./types";
 
 export function requireOrgAdmin(auth: RequestAuthContext): void {
   if (auth.orgRole !== "admin") {
-    throw new NakamaApiError("Forbidden", 403);
+    throw new AirinApiError("Forbidden", 403);
   }
 }
 
 export function requireOrgMember(auth: RequestAuthContext): void {
   if (auth.orgRole !== "admin" && auth.orgRole !== "member") {
-    throw new NakamaApiError("Forbidden", 403);
+    throw new AirinApiError("Forbidden", 403);
   }
 }
 
 export function requirePlatformAdmin(auth: RequestAuthContext): void {
   if (!auth.isPlatformAdmin) {
-    throw new NakamaApiError("Forbidden", 403);
+    throw new AirinApiError("Forbidden", 403);
   }
 }
 
@@ -36,7 +36,7 @@ export function isOrgAdminOrPlatformAdmin(auth: RequestAuthContext): boolean {
 
 function requireOrgAdminOrPlatformAdmin(auth: RequestAuthContext): void {
   if (!isOrgAdminOrPlatformAdmin(auth)) {
-    throw new NakamaApiError("Forbidden", 403);
+    throw new AirinApiError("Forbidden", 403);
   }
 }
 
@@ -121,7 +121,7 @@ export async function requireProfileManageFromContext(
   );
 
   if (!found || found.isSuper || found.ownerUserId !== auth.user.id) {
-    throw new NakamaApiError("Forbidden", 403);
+    throw new AirinApiError("Forbidden", 403);
   }
 
   return auth;
@@ -151,7 +151,7 @@ export async function artifactCreatorScopeFromContext(
   );
 
   if (!found) {
-    throw new NakamaApiError("Forbidden", 403);
+    throw new AirinApiError("Forbidden", 403);
   }
 
   return !found.isSuper && found.ownerUserId === auth.user.id
@@ -172,7 +172,7 @@ export function requireActiveOrgIdFromContext(c: Context<AppEnv>): string {
   const orgId = getRequestAuth(c).activeOrgId?.trim();
 
   if (!orgId) {
-    throw new NakamaApiError("Organization context required", 400);
+    throw new AirinApiError("Organization context required", 400);
   }
 
   return orgId;

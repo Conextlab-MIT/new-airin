@@ -1,6 +1,6 @@
-import { NakamaApiError } from "@nakama/core/api-error";
-import type { OrgPluginDetail } from "@nakama/core/contract";
-import * as ui from "@nakama/ui";
+import { AirinApiError } from "@airin/core/api-error";
+import type { OrgPluginDetail } from "@airin/core/contract";
+import * as ui from "@airin/ui";
 import * as React from "react";
 
 export interface PluginToolProps {
@@ -153,7 +153,7 @@ export async function activatePlugin(
             return result;
           } catch (error) {
             const busy =
-              error instanceof NakamaApiError &&
+              error instanceof AirinApiError &&
               error.status === 429 &&
               error.message === "busy";
 

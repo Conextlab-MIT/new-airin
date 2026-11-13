@@ -5,8 +5,8 @@ import {
   getProfileSoulDir,
   type ToolDefinition,
   writeRuntimeServerUrl,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import * as acpMcpTools from "../providers/acp/acp-mcp-tools";
 import {
   acpMcpRequestSchema,
@@ -77,7 +77,7 @@ function listToolsFor(sessionKey: string) {
 }
 
 describe("ACP profile in an automation run", () => {
-  setupTestConfigDir("nakama-acp-automation-");
+  setupTestConfigDir("airin-acp-automation-");
 
   // An endpoint with no tools registered answered "Unknown ACP session", and
   // the agent's MCP client waited on that until its 30 second connect timeout.
@@ -117,7 +117,7 @@ describe("ACP profile in an automation run", () => {
     );
 
     // read_file stays hidden: the agent reads files itself. Its own web tools
-    // are refused by the permission handler, so Nakama's must stay listed.
+    // are refused by the permission handler, so Airin's must stay listed.
     expect(output).toBe("mcp tools: plugin_x__status,web_search,web_fetch");
 
     const afterRun = await handleAcpMcpRequest(tokens[0] ?? "", {

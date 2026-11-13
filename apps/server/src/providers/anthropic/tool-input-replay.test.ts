@@ -17,7 +17,7 @@ const TOOL_USE = [
 const PAUSE_TURN = [
   START,
   'event: content_block_start\r\ndata:{"type":"content_block_start","index":0,"content_block":{"type":"server_tool_use","id":"srvtoolu_01","name":"web_search","input":{}}}\r\n\r\n',
-  'event: content_block_delta\r\ndata:{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"query\\":\\"nakama\\"}"}}\r\n\r\n',
+  'event: content_block_delta\r\ndata:{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"query\\":\\"airin\\"}"}}\r\n\r\n',
   'event: content_block_stop\r\ndata:{"type":"content_block_stop","index":0}\r\n\r\n',
   'event: message_delta\r\ndata:{"type":"message_delta","delta":{"stop_reason":"pause_turn"},"usage":{"output_tokens":5}}\r\n\r\n',
 ];
@@ -118,7 +118,7 @@ describe("Anthropic tool input replay", () => {
 
       const serverTool = {
         id: "srv-1",
-        input: { query: "nakama" },
+        input: { query: "airin" },
         name: "web_search",
         type: "server_tool_use",
       };
@@ -137,7 +137,7 @@ describe("Anthropic tool input replay", () => {
         apiKey: "test-key",
         fetch: asTestFetch(
           async (_input: RequestInfo | URL, init?: RequestInit) => {
-            expect(String(init?.body)).not.toContain("_nakamaPrefixHash");
+            expect(String(init?.body)).not.toContain("_airinPrefixHash");
             bodies.push(JSON.parse(String(init?.body)));
             const blocks = responses[bodies.length - 1] ?? [];
             const stopReason = bodies.length < 3 ? "pause_turn" : "end_turn";
@@ -247,7 +247,7 @@ describe("Anthropic tool input replay", () => {
       (block) => block.type === "server_tool_use"
     );
 
-    expect(serverToolUse?.input).toEqual({ query: "nakama" });
+    expect(serverToolUse?.input).toEqual({ query: "airin" });
     expect(bodies[1]).toMatchObject({
       thinking: { type: "between_tools" },
     });

@@ -1,7 +1,7 @@
-import { Button } from "@nakama/ui/button";
-import { FormField } from "@nakama/ui/form-field";
-import { Input } from "@nakama/ui/input";
-import { Switch } from "@nakama/ui/switch";
+import { Button } from "@airin/ui/button";
+import { FormField } from "@airin/ui/form-field";
+import { Input } from "@airin/ui/input";
+import { Switch } from "@airin/ui/switch";
 import { ViewIcon, ViewOffIcon } from "hugeicons-react";
 
 export function EmailSettingsFormFields({

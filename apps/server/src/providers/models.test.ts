@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { isDiscoveryModelProvider } from "@nakama/core";
-import { USER_PROVIDER_NAMES } from "@nakama/core/provider-resolution";
+import { isDiscoveryModelProvider } from "@airin/core";
+import { USER_PROVIDER_NAMES } from "@airin/core/provider-resolution";
 import {
   AVAILABLE_MODELS,
   getDefaultModel,

@@ -1,8 +1,8 @@
-import type { OrgMemberSummary, OrgRole } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { Input } from "@nakama/ui/input";
-import { toast } from "@nakama/ui/toast";
+import type { OrgMemberSummary, OrgRole } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { Input } from "@airin/ui/input";
+import { toast } from "@airin/ui/toast";
 import { Cancel01Icon } from "hugeicons-react";
 import { useReducer, useState } from "react";
 import {

@@ -1,19 +1,19 @@
 import { randomBytes } from "node:crypto";
 import type * as acp from "@agentclientprotocol/sdk";
-import { executeToolCall } from "@nakama/agent";
+import { executeToolCall } from "@airin/agent";
 import {
   type JsonSchema,
   readRuntimeServerUrl,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
-import { DEFAULT_SERVER_PORT } from "@nakama/core/runtime";
+} from "@airin/core";
+import { DEFAULT_SERVER_PORT } from "@airin/core/runtime";
 import { z } from "zod";
 import { readRecord } from "../shared";
 import { ACP_MCP_BRIDGE_SOURCE } from "./acp-mcp-bridge";
 
 /**
- * Nakama tools reach an ACP agent over MCP. The agent starts a small stdio
+ * Airin tools reach an ACP agent over MCP. The agent starts a small stdio
  * bridge (acp-mcp-bridge.ts), and the bridge posts each JSON-RPC message to
  * POST /v1/acp-mcp/:token. The token is a secret that identifies one chat, so
  * the route can only run that chat's tools.
@@ -43,7 +43,7 @@ function tokenFor(sessionKey: string): string {
   return token;
 }
 
-const NAKAMA_MCP_SERVER = "nakama";
+const AIRIN_MCP_SERVER = "airin";
 
 /** The MCP server entry a new ACP session is created with. */
 export function acpMcpServerFor(sessionKey: string): acp.McpServer {
@@ -55,25 +55,25 @@ export function acpMcpServerFor(sessionKey: string): acp.McpServer {
     command: process.execPath,
     env: [
       {
-        name: "NAKAMA_ACP_MCP_URL",
+        name: "AIRIN_ACP_MCP_URL",
         value: `${baseUrl}/v1/acp-mcp/${tokenFor(sessionKey)}`,
       },
     ],
-    name: NAKAMA_MCP_SERVER,
+    name: AIRIN_MCP_SERVER,
   };
 }
 
 // Claude names the tool in the permission request's `_meta`, for example
-// `mcp__nakama__search_files`.
+// `mcp__airin__search_files`.
 const claudePermissionSchema = z.object({
   _meta: z.object({ claudeCode: z.object({ toolName: z.string() }) }),
 });
 
 /**
- * True when the agent asks to run one of this chat's Nakama tools over MCP.
+ * True when the agent asks to run one of this chat's Airin tools over MCP.
  * Only those are approved; every other permission request is denied.
  */
-export function isNakamaToolPermission(
+export function isAirinToolPermission(
   sessionKey: string,
   toolCall: acp.ToolCallUpdate
 ): boolean {
@@ -88,13 +88,13 @@ export function isNakamaToolPermission(
   const requested = parsed.data._meta.claudeCode.toolName;
 
   return access.tools.some(
-    (tool) => requested === `mcp__${NAKAMA_MCP_SERVER}__${tool.name}`
+    (tool) => requested === `mcp__${AIRIN_MCP_SERVER}__${tool.name}`
   );
 }
 
 // The ACP agent brings its own file, shell and search tools. Web tools stay:
 // the permission handler in acp-provider.ts refuses the agent's own WebFetch
-// and WebSearch, so Nakama's are the only web access the agent has.
+// and WebSearch, so Airin's are the only web access the agent has.
 const ACP_NATIVE_TOOL_NAMES = new Set([
   "bash",
   "delete_file",
@@ -210,7 +210,7 @@ export async function handleAcpMcpRequest(
         body: rpcResult(request.id, {
           capabilities: { tools: {} },
           protocolVersion: MCP_PROTOCOL_VERSION,
-          serverInfo: { name: "nakama", version: "1.0.0" },
+          serverInfo: { name: "airin", version: "1.0.0" },
         }),
         kind: "reply",
       };

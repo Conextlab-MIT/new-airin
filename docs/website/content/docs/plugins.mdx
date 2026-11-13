@@ -5,7 +5,7 @@ description: "Install approved plugin packages and use their pages, skills, and 
 
 ## Why plugins exist
 
-Skills and custom tools cover one piece of a feature. A plugin ships the whole feature: a dashboard page, agent tools, and the data they share — without changing Nakama itself.
+Skills and custom tools cover one piece of a feature. A plugin ships the whole feature: a dashboard page, agent tools, and the data they share — without changing Airin itself.
 
 ## What you get
 
@@ -29,9 +29,9 @@ A plugin goes through three gates before your team uses it. Each gate has an own
 
 When someone uses the plugin, the page and the chat both run the same plugin actions:
 
-![A member on the plugin page, or a profile in chat, starts a plugin action. Nakama checks the organization, role, and assignment, then runs the action on the server. The action uses its organization data and can use the profile's assigned tools.](/diagrams/plugin-runtime.svg)
+![A member on the plugin page, or a profile in chat, starts a plugin action. Airin checks the organization, role, and assignment, then runs the action on the server. The action uses its organization data and can use the profile's assigned tools.](/diagrams/plugin-runtime.svg)
 
-- Nakama checks the organization, the user's role, the profile assignment, and that the plugin is on before each action runs.
+- Airin checks the organization, the user's role, the profile assignment, and that the plugin is on before each action runs.
 - An action can use only its own organization's data.
 - An action can call other tools only through a profile, and only tools assigned to that profile.
 - In chat, a profile first searches for plugin tools by name. This keeps the start of each chat small when a profile has many plugin tools.
@@ -50,7 +50,7 @@ When someone uses the plugin, the page and the chat both run the same plugin act
 
 ## Create a plugin with an agent
 
-Ask Super Nakama to create a plugin when your team needs a custom page or agent
+Ask Airin to create a plugin when your team needs a custom page or agent
 tool. Any other agent can do the same once an admin assigns it the
 `create-plugin` skill (see [Skills](/skills)), so the agent already doing the
 work can change the plugin it needs. An agent without the skill cannot submit a
@@ -105,16 +105,16 @@ and Bun on the server to build; it reports missing prerequisites.
 
 ## Supermemory
 
-Use Supermemory for the agent memory, shared organization memory, and knowledge base you already use in Nakama. Your existing memory tools, approval flow, and knowledge uploads stay in place.
+Use Supermemory for the agent memory, shared organization memory, and knowledge base you already use in Airin. Your existing memory tools, approval flow, and knowledge uploads stay in place.
 
 1. An org admin opens **Settings → Agent tools → Plugins → Official plugins → Supermemory → Install**.
-2. Enable the plugin. Nakama automatically uses your default OpenAI provider, or the first saved OpenAI provider if your default uses another service. If you use a separately managed server, open **Supermemory → Settings**, save its URL and API token, and use **Check saved connection**.
+2. Enable the plugin. Airin automatically uses your default OpenAI provider, or the first saved OpenAI provider if your default uses another service. If you use a separately managed server, open **Supermemory → Settings**, save its URL and API token, and use **Check saved connection**.
 3. Keep using your agent's memory and knowledge base. Existing content moves to Supermemory when it is next read or searched; new knowledge uploads also sync automatically. Shared organization facts still require the usual approval before they are saved.
 4. Ask your agent to search its knowledge base using everyday language. Explicit regular-expression searches still use the local extracted text.
 
 The managed worker automatically reuses a saved OpenAI provider’s API key, URL, and default model for extraction, with local embeddings. Add an OpenAI provider in **Settings → Agent tools → AI Providers** if none is available. ChatGPT subscription connections are not supported by this worker. Restart Supermemory in **Settings → Workspace → Workers** after adding or changing your OpenAI provider. A changed provider configuration reindexes existing content on its next access, including failed documents. Verification makes a small API request; extraction and search also require the configured provider.
 
-Nakama keeps local copies for recovery. Disabling the plugin returns your existing tools to those copies. Before the managed worker first becomes ready, memory stays local. After migration starts, an unavailable backend reports an error; restart the worker or disable the plugin to continue locally. Search can ask you to retry while new content is indexing.
+Airin keeps local copies for recovery. Disabling the plugin returns your existing tools to those copies. Before the managed worker first becomes ready, memory stays local. After migration starts, an unavailable backend reports an error; restart the worker or disable the plugin to continue locally. Search can ask you to retry while new content is indexing.
 
 The plugin's separate **Memory** and **Knowledge** collections remain available for previously saved items and explicit plugin actions. They are separate from the built-in memory and knowledge base. Installing the plugin does not automatically capture every conversation.
 
@@ -122,9 +122,9 @@ Documents show their processing state. Use **Check status** for an unresolved sa
 
 Knowledge documents are sent as complete extracted text. Supermemory chooses their search chunks and uses its SuperRAG mode, which skips personal-memory extraction. PDF text extraction stays local; this setup does not require a separate Gemini account. Existing documents are reindexed on their next access after upgrading.
 
-For built-in memory, replaced or removed versions stop appearing in search immediately. If Supermemory is still processing them, Nakama retries remote cleanup on later memory operations.
+For built-in memory, replaced or removed versions stop appearing in search immediately. If Supermemory is still processing them, Airin retries remote cleanup on later memory operations.
 
-Use a dedicated Supermemory server per organization. Once content has been saved, the plugin keeps that server address fixed; an admin can still rotate its token. Disabling or uninstalling retains the external data. Back up the Supermemory server separately: Nakama's backup contains the connection and tracking records, not the external dataset. Restore into the same organization to retain access; moving records to a different organization requires fresh ingestion.
+Use a dedicated Supermemory server per organization. Once content has been saved, the plugin keeps that server address fixed; an admin can still rotate its token. Disabling or uninstalling retains the external data. Back up the Supermemory server separately: Airin's backup contains the connection and tracking records, not the external dataset. Restore into the same organization to retain access; moving records to a different organization requires fresh ingestion.
 
 ## Who can do what
 

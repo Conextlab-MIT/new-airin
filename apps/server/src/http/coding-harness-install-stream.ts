@@ -1,4 +1,4 @@
-import { type AgentBrowserInstallEvent, formatServerError } from "@nakama/core";
+import { type AgentBrowserInstallEvent, formatServerError } from "@airin/core";
 
 const INSTALL_STREAM_TIMEOUT_MS = 120_000;
 

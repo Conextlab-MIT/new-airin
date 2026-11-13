@@ -3,16 +3,16 @@ import type {
   ListProvidersResponse,
   ModelsResponse,
   OrgRole,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   loadWhatsAppConfigFile,
   syncWhatsAppOwnerPairing,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 import {
   getWhatsAppWorkerStatus,
   writeWhatsAppQrCode,
-} from "@nakama/core/whatsapp-worker";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core/whatsapp-worker";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import type { ServerOptions } from "../context";
@@ -23,7 +23,7 @@ import {
   seedOrgAdmin,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-settings-rbac-test-");
+setupTestConfigDir("airin-settings-rbac-test-");
 
 type SystemStatusStub = Pick<ServerOptions["systemStatus"], "getStatus">;
 
@@ -320,10 +320,10 @@ function createApp(systemStatus?: SystemStatusStub) {
       deleteProvider: record("deleteProvider"),
       discoverModels: record("discoverModels"),
       getProfile: async (_orgId: string, profileId: string) => ({
-        profile: { id: "default", isSuper: profileId === "super_nakama" },
+        profile: { id: "default", isSuper: profileId === "super_airin" },
       }),
       getProfileAccess: async (_orgId: string, profileId: string) => ({
-        isSuper: profileId === "super_nakama",
+        isSuper: profileId === "super_airin",
         ownerUserId: null,
       }),
       getModels: async () => ({
@@ -370,6 +370,7 @@ function createApp(systemStatus?: SystemStatusStub) {
       setTelegramSettings: record("setTelegramSettings"),
       setThinkingSettings: record("setThinkingSettings"),
       setTranscriptionSettings: record("setTranscriptionSettings"),
+      setUserLanguage: record("setUserLanguage"),
       setUserTimezone: record("setUserTimezone"),
       setVisionSettings: record("setVisionSettings"),
       setWebSearchSettings: record("setWebSearchSettings"),
@@ -483,13 +484,13 @@ describe("install-wide settings writes require a platform admin", () => {
   });
 
   for (const channel of ["telegram", "discord", "whatsapp"]) {
-    test(`an admin cannot connect ${channel} to Super Nakama`, async () => {
+    test(`an admin cannot connect ${channel} to Airin`, async () => {
       const { app, calls, session } = await login("admin", true);
 
       const response = await callRoute(app, session, {
         body: { botToken: "token" },
         method: "PUT",
-        path: `/v1/settings/${channel}?profileId=super_nakama`,
+        path: `/v1/settings/${channel}?profileId=super_airin`,
       });
 
       expect(response.status).toBe(400);
@@ -891,7 +892,7 @@ describe("profile detail and history reads follow the chat list visibility", () 
     expect(await unknown.json()).toEqual(await hidden.json());
   });
 
-  test("a member cannot read Super Nakama's detail", async () => {
+  test("a member cannot read Airin's detail", async () => {
     const { app, member } = await seedProfilesFixture();
 
     const response = await callRoute(app, member, {

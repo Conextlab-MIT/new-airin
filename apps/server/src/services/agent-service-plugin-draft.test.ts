@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { ensureBundledSkillFiles } from "@nakama/core";
+import { ensureBundledSkillFiles } from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   type StoredProfileRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 import { createDefaultProfile } from "./agent-service-test-fixtures";
@@ -19,7 +19,7 @@ interface ProfileToolResolver {
 }
 
 describe("submit_plugin_draft on an ordinary agent", () => {
-  setupTestConfigDir("nakama-plugin-draft-");
+  setupTestConfigDir("airin-plugin-draft-");
 
   test("arrives with create-plugin and brings no other Super tool", async () => {
     const db = createInMemoryDatabaseAdapter();

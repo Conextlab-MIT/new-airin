@@ -6,9 +6,9 @@ import type {
   ToolContext,
   ToolDefinition,
   ToolSourceResponse,
-} from "@nakama/core";
-import { reportError } from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { reportError } from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import { z } from "zod";
 import {
   type CustomToolRecord,

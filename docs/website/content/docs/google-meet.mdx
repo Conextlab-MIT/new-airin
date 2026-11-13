@@ -1,13 +1,13 @@
 ---
 title: "Google Meet"
-description: "Capture Google Meet audio in Chrome and read the live transcript in Nakama."
+description: "Capture Google Meet audio in Chrome and read the live transcript in Airin."
 ---
 
-Nakama can listen to a Google Meet call through Chrome and turn the conversation into text you and your agent can use.
+Airin can listen to a Google Meet call through Chrome and turn the conversation into text you and your agent can use.
 
 ## Why use Google Meet capture
 
-The Chrome extension picks up sound from the Meet tab and your microphone on your computer. Nakama sends that sound to OpenAI, which turns it into text and saves it with the meeting.
+The Chrome extension picks up sound from the Meet tab and your microphone on your computer. Airin sends that sound to OpenAI, which turns it into text and saves it with the meeting.
 
 There is no bot participant joining the call.
 
@@ -15,7 +15,7 @@ There is no bot participant joining the call.
 
 - An organization admin who can configure Google Meet
 - An OpenAI provider in **AI Providers**. Google Meet uses its key to turn speech into text.
-- Google Chrome with the Nakama extension installed
+- Google Chrome with the Airin extension installed
 - A Google Meet call that you are allowed to record and transcribe
 
 Always tell participants before transcription starts. Follow your organization's recording and privacy rules.
@@ -24,7 +24,7 @@ Always tell participants before transcription starts. Follow your organization's
 
 ### 1. Open Google Meet
 
-Open **Settings → Workspace → Google Meet**. It is included in Nakama. An organization admin can enable or disable it in **Google Meet → Settings**.
+Open **Settings → Workspace → Google Meet**. It is included in Airin. An organization admin can enable or disable it in **Google Meet → Settings**.
 
 ### 2. Add an OpenAI provider
 
@@ -41,25 +41,25 @@ Download the extension from the **Google Meet** page and unzip it. This is a one
 
 Keep the extension enabled while you use Google Meet.
 
-### 4. Connect the extension to Nakama
+### 4. Connect the extension to Airin
 
 You do this once per browser.
 
-1. Click the Nakama icon in the Chrome toolbar. The extension opens in the side panel.
-2. Enter your Nakama address, for example `https://nakama.example.com`, and choose **Connect**. Allow access to that address when Chrome asks.
-3. Nakama opens in a new tab and shows a code. Check that it matches the code in the side panel, then choose **Approve**.
+1. Click the Airin icon in the Chrome toolbar. The extension opens in the side panel.
+2. Enter your Airin address, for example `https://airin.example.com`, and choose **Connect**. Allow access to that address when Chrome asks.
+3. Airin opens in a new tab and shows a code. Check that it matches the code in the side panel, then choose **Approve**.
 
-The side panel then shows **Connected**. Your browser appears under **Connected browsers** on the **Google Meet** page, where you can remove it. **Disconnect** in the side panel also removes it from Nakama. A connection lasts 90 days and renews each time you use it.
+The side panel then shows **Connected**. Your browser appears under **Connected browsers** on the **Google Meet** page, where you can remove it. **Disconnect** in the side panel also removes it from Airin. A connection lasts 90 days and renews each time you use it.
 
 ## Start a transcription
 
 1. Join your Google Meet call in Chrome.
-2. On the Meet tab, click the Nakama icon in the Chrome toolbar. Chrome lets the extension record a tab only after this click on that tab.
+2. On the Meet tab, click the Airin icon in the Chrome toolbar. Chrome lets the extension record a tab only after this click on that tab.
 3. Choose **Start transcription** in the side panel.
 
-You do not need to keep Nakama open. The side panel shows a timer and the live transcript.
+You do not need to keep Airin open. The side panel shows a timer and the live transcript.
 
-The meeting moves through **Waiting**, **Transcribing**, and **Finished**. Open the meeting in Nakama to see new text while the call is running.
+The meeting moves through **Waiting**, **Transcribing**, and **Finished**. Open the meeting in Airin to see new text while the call is running.
 
 ## Read the transcript with your agent
 
@@ -82,29 +82,29 @@ You can also upload a Markdown transcript (up to 1 MiB) or audio file (up to 7 M
 
 ## Import a recorded meeting
 
-If a Meet call was recorded, open **Google Meet** and choose **Import recording**. The first time, the dialog lists **Gmail** and **Google Drive**. Choose **Connect** next to each one and sign in with Google. Nakama turns on the integration for your organization and brings you back to Google Meet. Recording import needs Composio: if it is not set up, ask your platform admin. It also needs an OpenAI provider in **AI Providers**.
+If a Meet call was recorded, open **Google Meet** and choose **Import recording**. The first time, the dialog lists **Gmail** and **Google Drive**. Choose **Connect** next to each one and sign in with Google. Airin turns on the integration for your organization and brings you back to Google Meet. Recording import needs Composio: if it is not set up, ask your platform admin. It also needs an OpenAI provider in **AI Providers**.
 
-Select the video from your Meet recording email and choose **Import**. Keep the page open while Nakama downloads the video and sends its audio to OpenAI Whisper. The finished transcript appears in meeting history.
+Select the video from your Meet recording email and choose **Import**. Keep the page open while Airin downloads the video and sends its audio to OpenAI Whisper. The finished transcript appears in meeting history.
 
 The recording must be no larger than 1 GiB or two hours. If an import fails, choose it again. Imported transcripts do not identify speakers.
 
 ## Stop and save
 
-Choose **Stop** in Nakama or **Stop transcription** in the side panel. Nakama finishes the current transcript and keeps the saved meeting available under **Saved transcripts**.
+Choose **Stop** in Airin or **Stop transcription** in the side panel. Airin finishes the current transcript and keeps the saved meeting available under **Saved transcripts**.
 
-If Chrome closes or the connection breaks, Nakama keeps the text collected so far and marks the meeting as incomplete. It does not silently reconnect to the call.
+If Chrome closes or the connection breaks, Airin keeps the text collected so far and marks the meeting as incomplete. It does not silently reconnect to the call.
 
-## Nakama behind a reverse proxy
+## Airin behind a reverse proxy
 
-The extension sends audio to the same address you connected it to. If Nakama runs behind a reverse proxy, the proxy must forward WebSocket upgrade requests for `/v1/meet/capture`. Use `https://` for any address outside your own computer.
+The extension sends audio to the same address you connected it to. If Airin runs behind a reverse proxy, the proxy must forward WebSocket upgrade requests for `/v1/meet/capture`. Use `https://` for any address outside your own computer.
 
 ## Troubleshooting
 
 ### The capture does not start
 
-- Click the Nakama icon in the toolbar on the Meet tab, then choose **Start transcription** again.
+- Click the Airin icon in the toolbar on the Meet tab, then choose **Start transcription** again.
 - Make sure the extension is enabled.
-- If the side panel shows **Not connected**, connect it again. Nakama disconnects a browser when you remove it, change your password, or leave the organization.
+- If the side panel shows **Not connected**, connect it again. Airin disconnects a browser when you remove it, change your password, or leave the organization.
 
 ### The meeting is ready but no transcript appears
 
@@ -113,6 +113,6 @@ The extension sends audio to the same address you connected it to. If Nakama run
 - Confirm that Chrome allowed microphone access.
 - Confirm that participants are speaking in the Meet tab being captured.
 
-### The extension cannot reach Nakama
+### The extension cannot reach Airin
 
 Check the address in the side panel settings. For a remote server, ask your administrator to check the secure connection, the firewall, and WebSocket forwarding for `/v1/meet/capture`.

@@ -1,5 +1,5 @@
-import type { OrgRole } from "@nakama/core";
-import { ORG_ROLES } from "@nakama/db";
+import type { OrgRole } from "@airin/core";
+import { ORG_ROLES } from "@airin/db";
 import type { MiddlewareHandler } from "hono";
 import type { ServerOptions } from "./context";
 import { isPublicRouteRequest } from "./public-routes";

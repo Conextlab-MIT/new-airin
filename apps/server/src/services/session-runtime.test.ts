@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { createAgentChatSession } from "@nakama/agent";
-import type { ProviderClient } from "@nakama/core";
-import type { StoredSessionRecord } from "@nakama/db";
+import { createAgentChatSession } from "@airin/agent";
+import type { ProviderClient } from "@airin/core";
+import type { StoredSessionRecord } from "@airin/db";
 import {
   type ChatBuildContext,
   SessionRuntime,

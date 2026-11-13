@@ -7,14 +7,14 @@ import {
   createInMemoryDatabaseAdapter,
   createSqliteDatabase,
   seedDatabase,
-} from "@nakama/db";
+} from "@airin/db";
 import { AuthService } from "../services/auth-service";
 import { OrgService } from "../services/org-service";
 import { setupTestConfigDir } from "../test-config-dir";
 import { createHonoApp } from "./app";
 import { setupFreshInstallSession } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-http-app-test-");
+setupTestConfigDir("airin-http-app-test-");
 
 function createServerOptions() {
   const databaseAdapter = createInMemoryDatabaseAdapter();
@@ -337,7 +337,7 @@ describe("createHonoApp", () => {
   });
   test("a formerly valid stored backend key is rejected while its owner can still sign in", async () => {
     const root = await mkdtemp(join(tmpdir(), "retired-key-auth-"));
-    const filename = join(root, "nakama.sqlite");
+    const filename = join(root, "airin.sqlite");
     const database = await createSqliteDatabase(`file:${filename}`);
 
     const options = {
@@ -480,7 +480,7 @@ describe("createHonoApp", () => {
               {
                 headers: {
                   Authorization: `Bearer ${token}`,
-                  "X-Nakama-App-User-Id": "alice",
+                  "X-Airin-App-User-Id": "alice",
                 },
               }
             )
@@ -539,7 +539,7 @@ describe("createHonoApp", () => {
         (
           await app.fetch(
             new Request(`http://localhost${path}`, {
-              headers: session.headers({ "X-Nakama-App-User-Id": "" }),
+              headers: session.headers({ "X-Airin-App-User-Id": "" }),
             })
           )
         ).status

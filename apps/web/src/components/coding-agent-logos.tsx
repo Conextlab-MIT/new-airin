@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import type { ReactNode } from "react";
 
 function LogoFrame({

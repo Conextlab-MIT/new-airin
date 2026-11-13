@@ -21,7 +21,7 @@ import type {
   ProviderInstance,
   WorkerLogsResponse,
   WorkerProcessInfo,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   getUserConfigDir,
   isSecretEnvKey,
@@ -31,7 +31,7 @@ import {
   readWorkerDesiredState,
   resolvePluginReleaseEntry,
   setWorkerDesiredRunning,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   assertChannelPath,
   type ChannelConfigScope,
@@ -44,16 +44,16 @@ import {
   listChannelOwners,
   moveBotTokenToSecrets,
   removeChannelConnection,
-} from "@nakama/core/channel-config-shared";
-import { resolveDiscordApplicationId } from "@nakama/core/discord-config";
-import { parseIni, readTextOrNull, writeTextFile } from "@nakama/core/fs";
-import { listWhatsAppConfigOrgIds } from "@nakama/core/whatsapp-config";
+} from "@airin/core/channel-config-shared";
+import { resolveDiscordApplicationId } from "@airin/core/discord-config";
+import { parseIni, readTextOrNull, writeTextFile } from "@airin/core/fs";
+import { listWhatsAppConfigOrgIds } from "@airin/core/whatsapp-config";
 import {
   readWhatsAppHostChannels,
   writeWhatsAppHostChannels,
-} from "@nakama/core/whatsapp-worker";
-import { createWorkerHeartbeatStore } from "@nakama/core/worker-heartbeat";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core/whatsapp-worker";
+import { createWorkerHeartbeatStore } from "@airin/core/worker-heartbeat";
+import type { DatabaseAdapter } from "@airin/db";
 
 const WORKER_SCRIPTS = new Map(
   Object.entries({
@@ -123,7 +123,7 @@ interface Pm2SchemaRule {
 const WORKER_ENV_VERSION = "3";
 
 function hasCurrentWorkerEnv(process: Pm2ProcessDescription | undefined) {
-  return process?.pm2_env?.NAKAMA_WORKER_ENV === WORKER_ENV_VERSION;
+  return process?.pm2_env?.AIRIN_WORKER_ENV === WORKER_ENV_VERSION;
 }
 
 /** True for a key that PM2 reads as a process option or writes as state. */
@@ -188,7 +188,7 @@ function pm2StartOptions(
     env: {
       ...inherited,
       ...env,
-      NAKAMA_WORKER_ENV: WORKER_ENV_VERSION,
+      AIRIN_WORKER_ENV: WORKER_ENV_VERSION,
       PWD: cwd,
     },
     filter_env: Object.keys(process.env),
@@ -212,13 +212,13 @@ export interface PluginWorkerRegistration {
 }
 
 type WorkerProcessEnv = {
-  NAKAMA_CHANNEL_ORG_ID?: string;
-  NAKAMA_CHANNEL_PROFILE_ID?: string;
-  NAKAMA_CONFIG_DIR?: string;
-  NAKAMA_SERVER_URL?: string;
-  NAKAMA_WHATSAPP_CONTEXT_TOKEN?: string;
-  NAKAMA_WHATSAPP_HOST?: string;
-  NAKAMA_WHATSAPP_ORG_ID?: string;
+  AIRIN_CHANNEL_ORG_ID?: string;
+  AIRIN_CHANNEL_PROFILE_ID?: string;
+  AIRIN_CONFIG_DIR?: string;
+  AIRIN_SERVER_URL?: string;
+  AIRIN_WHATSAPP_CONTEXT_TOKEN?: string;
+  AIRIN_WHATSAPP_HOST?: string;
+  AIRIN_WHATSAPP_ORG_ID?: string;
   NODE_ENV: string;
 };
 
@@ -809,7 +809,7 @@ export class WorkerManagerService {
 
         if (
           process?.pm2_env?.status !== "online" ||
-          process.pm2_env.NAKAMA_PLUGIN_VERSION !== registration.version ||
+          process.pm2_env.AIRIN_PLUGIN_VERSION !== registration.version ||
           !hasCurrentWorkerEnv(process)
         ) {
           await this.startWorker(name);
@@ -850,7 +850,7 @@ export class WorkerManagerService {
       for (const process of processes) {
         if (
           process.name?.startsWith("plugin-") &&
-          process.pm2_env?.NAKAMA_PLUGIN_WORKER_ROOT === configDir &&
+          process.pm2_env?.AIRIN_PLUGIN_WORKER_ROOT === configDir &&
           !this.pluginWorkers.has(process.name)
         ) {
           await this.deletePluginProcess(pm2, process.name);
@@ -970,12 +970,12 @@ export class WorkerManagerService {
 
       const env = {
         ...this.workerProcessEnv(),
-        NAKAMA_ORG_ID: worker.registration.orgId,
-        NAKAMA_PLUGIN_DATA_DIR: worker.registration.dataDir,
-        NAKAMA_PLUGIN_ID: worker.registration.pluginId,
-        NAKAMA_PLUGIN_VERSION: worker.registration.version,
-        NAKAMA_PLUGIN_WORKER_ROOT: worker.registration.configDir ?? "",
-        NAKAMA_WORKER_DATA_DIR: worker.directory,
+        AIRIN_ORG_ID: worker.registration.orgId,
+        AIRIN_PLUGIN_DATA_DIR: worker.registration.dataDir,
+        AIRIN_PLUGIN_ID: worker.registration.pluginId,
+        AIRIN_PLUGIN_VERSION: worker.registration.version,
+        AIRIN_PLUGIN_WORKER_ROOT: worker.registration.configDir ?? "",
+        AIRIN_WORKER_DATA_DIR: worker.directory,
       };
 
       if (
@@ -1016,7 +1016,7 @@ export class WorkerManagerService {
             min_uptime: 10_000,
             name,
             output: join(worker.directory, "stdout.log"),
-            script: process.env.NAKAMA_BUN_BIN ?? "bun",
+            script: process.env.AIRIN_BUN_BIN ?? "bun",
             ...pm2StartOptions(env, worker.registration.dataDir),
           },
           (error) => cb(error)
@@ -1139,13 +1139,13 @@ export class WorkerManagerService {
       const env = this.workerProcessEnv();
 
       if (isChannelOwner(scope)) {
-        env.NAKAMA_CHANNEL_ORG_ID = scope.orgId;
-        env.NAKAMA_CHANNEL_PROFILE_ID = scope.profileId;
+        env.AIRIN_CHANNEL_ORG_ID = scope.orgId;
+        env.AIRIN_CHANNEL_PROFILE_ID = scope.profileId;
       }
 
       if (whatsappContextToken) {
-        env.NAKAMA_WHATSAPP_CONTEXT_TOKEN = whatsappContextToken;
-        env.NAKAMA_WHATSAPP_ORG_ID = isChannelOwner(scope)
+        env.AIRIN_WHATSAPP_CONTEXT_TOKEN = whatsappContextToken;
+        env.AIRIN_WHATSAPP_ORG_ID = isChannelOwner(scope)
           ? scope.orgId
           : (scope ?? "");
       }
@@ -1185,10 +1185,10 @@ export class WorkerManagerService {
 
     await this.deletePluginProcess(pm2, WHATSAPP_HOST_PROCESS);
     const env = this.workerProcessEnv();
-    env.NAKAMA_WHATSAPP_HOST = "1";
+    env.AIRIN_WHATSAPP_HOST = "1";
 
     if (whatsappContextToken) {
-      env.NAKAMA_WHATSAPP_CONTEXT_TOKEN = whatsappContextToken;
+      env.AIRIN_WHATSAPP_CONTEXT_TOKEN = whatsappContextToken;
     }
 
     await promisifyPm2<void>((cb) =>
@@ -1727,16 +1727,16 @@ export class WorkerManagerService {
     };
 
     const serverUrl =
-      process.env.NAKAMA_SERVER_URL?.trim() || readRuntimeServerUrl() || "";
+      process.env.AIRIN_SERVER_URL?.trim() || readRuntimeServerUrl() || "";
 
     if (serverUrl) {
-      env.NAKAMA_SERVER_URL = serverUrl;
+      env.AIRIN_SERVER_URL = serverUrl;
     }
 
-    const configDir = process.env.NAKAMA_CONFIG_DIR?.trim();
+    const configDir = process.env.AIRIN_CONFIG_DIR?.trim();
 
     if (configDir) {
-      env.NAKAMA_CONFIG_DIR = configDir;
+      env.AIRIN_CONFIG_DIR = configDir;
     }
 
     return env;
@@ -1766,9 +1766,9 @@ interface Pm2ProcessDescription {
     pm_uptime?: number;
     pm_out_log_path?: string;
     pm_err_log_path?: string;
-    NAKAMA_PLUGIN_VERSION?: string;
-    NAKAMA_PLUGIN_WORKER_ROOT?: string;
-    NAKAMA_WORKER_ENV?: string;
+    AIRIN_PLUGIN_VERSION?: string;
+    AIRIN_PLUGIN_WORKER_ROOT?: string;
+    AIRIN_WORKER_ENV?: string;
   };
 }
 

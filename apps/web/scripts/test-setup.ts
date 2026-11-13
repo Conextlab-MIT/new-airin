@@ -14,6 +14,7 @@ const globals = {
   HTMLElement: dom.HTMLElement,
   IS_REACT_ACT_ENVIRONMENT: true,
   KeyboardEvent: dom.KeyboardEvent,
+  localStorage: dom.localStorage,
   MouseEvent: dom.MouseEvent,
   MutationObserver: dom.MutationObserver,
   Node: dom.Node,

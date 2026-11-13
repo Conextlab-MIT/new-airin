@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { MoveProfileRequest } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { MoveProfileRequest } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { ProfileService } from "../../services/profile-service";
 import { setupTestConfigDir } from "../../test-config-dir";
@@ -10,7 +10,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-profiles-clone-routes-");
+setupTestConfigDir("airin-profiles-clone-routes-");
 
 const BASE = "http://localhost:4310";
 

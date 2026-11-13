@@ -12,15 +12,15 @@ import {
   readEnvValue,
   readXaiOAuthFromInstance,
   type UserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   ChatgptOAuthCredentials,
   XaiOAuthCredentials,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   defaultDiscoveryBaseUrl,
   NETRA_AGENT_MODEL_ID,
-} from "@nakama/core/discovery-providers";
+} from "@airin/core/discovery-providers";
 import { resolveDefaultModelForInstance } from "../services/provider-instance-helpers";
 import { createAnthropicProvider } from "./anthropic";
 import { CEREBRAS_CHAT_BASE_URL } from "./cerebras";

@@ -1,9 +1,9 @@
-import { DOCX_MEDIA_TYPE } from "@nakama/core/artifact-mime";
-import type { DocumentAttachment } from "@nakama/core/contract";
+import { DOCX_MEDIA_TYPE } from "@airin/core/artifact-mime";
+import type { DocumentAttachment } from "@airin/core/contract";
 import {
   normalizeDocumentMediaType,
   parseDocumentDataUrl,
-} from "@nakama/core/message-content";
+} from "@airin/core/message-content";
 
 import { readFileAsDataUrl } from "./read-file-as-data-url";
 

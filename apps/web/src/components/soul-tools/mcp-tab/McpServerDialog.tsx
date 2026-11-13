@@ -3,8 +3,8 @@ import type {
   McpRegistryServer,
   McpServerResponse,
   McpServerSummary,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,10 +12,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { toast } from "@nakama/ui/toast";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { toast } from "@airin/ui/toast";
+import { cn } from "@airin/ui/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ComponentProps, useState } from "react";
 import {

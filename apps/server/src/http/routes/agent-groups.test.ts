@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { AgentGroupInput } from "@nakama/core/agent-groups";
-import type { DocumentAttachment } from "@nakama/core/contract";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { AgentGroupInput } from "@airin/core/agent-groups";
+import type { DocumentAttachment } from "@airin/core/contract";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { closeAgentGroupDatabases } from "../../services/agent-group-store";
 import { AgentService } from "../../services/agent-service";
-import { SuperNakamaSessionState } from "../../services/super-nakama-session-state";
+import { SuperAirinSessionState } from "../../services/super-airin-session-state";
 import { setupTestConfigDir } from "../../test-config-dir";
-import { createSuperNakamaTools } from "../../tools/super-nakama-tools";
+import { createSuperAirinTools } from "../../tools/super-airin-tools";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { loginUserSession, seedOrgAdmin } from "../test-session-helpers";
 
 // Before the config dir cleanup, which Windows refuses while a file is open.
 afterEach(closeAgentGroupDatabases);
 
-setupTestConfigDir("nakama-agent-group-routes-");
+setupTestConfigDir("airin-agent-group-routes-");
 
 const BASE = "http://localhost:4310";
 
@@ -227,10 +227,10 @@ describe("agent group routes", () => {
 
     let created = 0;
 
-    const tool = createSuperNakamaTools(
+    const tool = createSuperAirinTools(
       // SAFETY: create_group never touches the profile service.
       {} as never,
-      new SuperNakamaSessionState(),
+      new SuperAirinSessionState(),
       undefined,
       undefined,
       {

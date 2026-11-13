@@ -1,5 +1,5 @@
+import { type ImageAttachment, validateImageAttachments } from "@airin/core";
 import { Key, matchesKey } from "@earendil-works/pi-tui";
-import { type ImageAttachment, validateImageAttachments } from "@nakama/core";
 import { pastedImagePath, readClipboardImage } from "./clipboard-image";
 import type { PromptSuggestion } from "./commands";
 import type { PromptLineResult } from "./prompt";

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ProviderInstance, UserConfig } from "@nakama/core";
-import type { MeetImportProgress } from "@nakama/core/google-meet";
+import type { ProviderInstance, UserConfig } from "@airin/core";
+import type { MeetImportProgress } from "@airin/core/google-meet";
 import { z } from "zod";
 import type { ComposioService } from "../composio-service";
 import { importMeetRecording } from "../meet-recording-import";

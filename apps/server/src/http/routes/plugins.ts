@@ -1,17 +1,17 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   type InstallPluginPackageResponse,
   type InvokePluginActionResponse,
   type ListOrgPluginsResponse,
   type ListPluginReleasesResponse,
   type ListPluginUpdatesResponse,
-  NakamaApiError,
   type OrgPluginDetail,
   type PluginContributionChangePreview,
   type PluginExecutionActor,
   type PluginPackagePreviewResponse,
   type PluginUsageResponse,
-} from "@nakama/core";
+} from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
   PluginHostError,
@@ -464,7 +464,7 @@ export function registerPluginRoutes(
     );
 
     if (!parsed.success) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Package name and exact version are required.",
         400
       );
@@ -558,7 +558,7 @@ export function registerPluginRoutes(
     );
 
     if (!parsed.success) {
-      throw new NakamaApiError("Preview approval is required.", 400);
+      throw new AirinApiError("Preview approval is required.", 400);
     }
 
     try {
@@ -646,7 +646,7 @@ export function registerPluginRoutes(
     );
 
     if (!detail) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     return json<OrgPluginDetail>(detail);
@@ -723,7 +723,7 @@ export function registerPluginRoutes(
     const targetVersion = c.req.query("targetVersion")?.trim();
 
     if (!targetVersion) {
-      throw new NakamaApiError("targetVersion is required", 400);
+      throw new AirinApiError("targetVersion is required", 400);
     }
 
     try {
@@ -799,7 +799,7 @@ export function registerPluginRoutes(
       body.orgId !== orgId ||
       body.pluginId !== pluginId
     ) {
-      throw new NakamaApiError("Confirmation does not match", 400);
+      throw new AirinApiError("Confirmation does not match", 400);
     }
 
     try {
@@ -859,7 +859,7 @@ async function servePluginUi(
   const pathOrgId = decodeURIComponent(c.req.param("orgId"));
 
   if (pathOrgId !== orgId) {
-    throw new NakamaApiError("Organization context conflict", 400);
+    throw new AirinApiError("Organization context conflict", 400);
   }
 
   const plugins = requirePluginService(options);
@@ -868,7 +868,7 @@ async function servePluginUi(
   const asset = await plugins.resolveEnabledUiAsset(orgId, pluginId, assetPath);
 
   if (!asset) {
-    throw new NakamaApiError("Not found", 404);
+    throw new AirinApiError("Not found", 404);
   }
 
   if (assetPath === "" && !c.req.path.endsWith("/")) {
@@ -886,7 +886,7 @@ async function servePluginUi(
 
 function requirePluginService(options: ServerOptions): PluginService {
   if (!options.pluginService) {
-    throw new NakamaApiError("Plugin service not configured", 500);
+    throw new AirinApiError("Plugin service not configured", 500);
   }
 
   return options.pluginService;
@@ -898,7 +898,7 @@ function pluginActor(
   const role = auth.orgRole;
 
   if (role !== "admin" && role !== "member") {
-    throw new NakamaApiError("Forbidden", 403);
+    throw new AirinApiError("Forbidden", 403);
   }
 
   return { id: auth.user.id, role };
@@ -964,7 +964,7 @@ const PLUGIN_ERROR_STATUS = new Map(
 
 function throwPluginHttpError<T>(error: T): never {
   if (error instanceof PluginHostError) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       error.code === "action_failed" ? error.message : error.code,
       PLUGIN_ERROR_STATUS.get(error.code) ?? 409
     );

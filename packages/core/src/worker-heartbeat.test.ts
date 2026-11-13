@@ -10,7 +10,7 @@ import {
 
 describe("worker-heartbeat store", () => {
   test("only one worker acquires a connection and release permits a replacement", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-worker-lock-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-worker-lock-"));
     const first = createWorkerHeartbeatStore({ getDir: () => dir });
     const second = createWorkerHeartbeatStore({ getDir: () => dir });
 
@@ -31,7 +31,7 @@ describe("worker-heartbeat store", () => {
     }
   });
   test("a reused pid in an old heartbeat does not count as a running worker", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-worker-reused-pid-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-worker-reused-pid-"));
     const previous = createWorkerHeartbeatStore({ getDir: () => dir });
     const checker = createWorkerHeartbeatStore({ getDir: () => dir });
 
@@ -78,7 +78,7 @@ describe("worker-heartbeat store", () => {
   });
 
   test("write/read/clear round-trip", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "nakama-worker-heartbeat-"));
+    const dir = await mkdtemp(join(tmpdir(), "airin-worker-heartbeat-"));
     const store = createWorkerHeartbeatStore({ getDir: () => dir });
 
     try {
@@ -100,7 +100,7 @@ describe("worker-heartbeat store", () => {
 });
 
 test("a killed worker releases its operating-system connection lock", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "nakama-worker-crash-"));
+  const dir = await mkdtemp(join(tmpdir(), "airin-worker-crash-"));
 
   const modulePath = fileURLToPath(
     new URL("./worker-heartbeat.ts", import.meta.url)

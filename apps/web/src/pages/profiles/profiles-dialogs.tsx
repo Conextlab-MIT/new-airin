@@ -1,5 +1,5 @@
-import { BASH_TOOL_ID } from "@nakama/core/tools/protected";
-import { Button } from "@nakama/ui/button";
+import { BASH_TOOL_ID } from "@airin/core/tools/protected";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -7,8 +7,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
 import { ProfileCreateDialog } from "@/components/ProfileCreateDialog";
 import { ProfileImportDialog } from "@/components/profiles/ProfileImportDialog";
 import { SkillCreateDialog } from "@/components/SkillCreateDialog";
@@ -16,7 +16,7 @@ import { AddSkillDialog } from "@/components/SkillInstallDialog";
 import { McpServerDialog } from "@/components/soul-tools/mcp-tab/McpServerDialog";
 import { useAuth } from "@/context/use-auth";
 import { useAppNavigation } from "@/hooks/use-app-navigation";
-import { resolveSuperNakamaChatProfileId } from "@/lib/profiles";
+import { resolveSuperAirinChatProfileId } from "@/lib/profiles";
 import type { ProfilesPageState } from "@/pages/profiles/use-profiles-page";
 
 function cloneProfileDescription(name?: string): string {
@@ -324,17 +324,17 @@ export function ProfilesDialogs(state: ProfilesPageState) {
   } = state;
 
   const { navigateToNewChat } = useAppNavigation();
-  const superNakamaProfileId = resolveSuperNakamaChatProfileId(profiles);
+  const superAirinProfileId = resolveSuperAirinChatProfileId(profiles);
 
-  const onAskSuperNakama = superNakamaProfileId
-    ? () => navigateToNewChat(superNakamaProfileId)
+  const onAskSuperAirin = superAirinProfileId
+    ? () => navigateToNewChat(superAirinProfileId)
     : undefined;
 
   return (
     <>
       <ProfileCreateDialog
         agentPresets={acpAgentPresets}
-        onAskSuperNakama={onAskSuperNakama}
+        onAskSuperAirin={onAskSuperAirin}
         onCreated={(profileId) => setSelectedId(profileId)}
         onOpenChange={handleCreateOpenChange}
         open={createOpen}

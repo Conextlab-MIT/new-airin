@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import {
+  AirinApiError,
   appendOrgMemoryHistory,
   applyApprovedOrgMemoryBullet,
   composeOrgMemorySummary,
@@ -13,7 +14,6 @@ import {
   type ListOrgMemoryHistoryResponse,
   listOrgMemoryHistory,
   listOrgMemoryHistoryWithCap,
-  NakamaApiError,
   normalizeOrgMemoryBullet,
   normalizeOrgMemoryDedupKey,
   ORG_MEMORY_PREAMBLE,
@@ -22,16 +22,16 @@ import {
   parseOrgMemoryContent,
   rebuildOrgMemoryContent,
   toHtmlCommentText,
-} from "@nakama/core";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
+} from "@airin/core";
+import { createChatLock } from "@airin/core/channel-chat-lock";
 import {
   pathExists,
   readDirectoryEntries,
   readText,
   readTextIfExists,
   writeTextFile,
-} from "@nakama/core/fs";
-import type { DatabaseAdapter, StoredOrgMemoryProposal } from "@nakama/db";
+} from "@airin/core/fs";
+import type { DatabaseAdapter, StoredOrgMemoryProposal } from "@airin/db";
 import { MemoryBackendService } from "./memory-backend-service";
 
 const SUMMARY_BYTE_CAP = 2048;
@@ -138,7 +138,7 @@ function assertNoOrgMemoryInjection(raw: string, normalized: string): void {
   ];
 
   if (injection.length > 0) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Memory bullet rejected. ${injection.join(" ")}`,
       400
     );
@@ -202,7 +202,7 @@ export class OrgMemoryService {
     const trimmed = content.trim();
 
     if (Buffer.byteLength(trimmed, "utf8") > SUMMARY_BYTE_CAP * 4) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Org memory content exceeds the size limit.",
         400
       );
@@ -240,7 +240,7 @@ export class OrgMemoryService {
     );
 
     if (!record) {
-      throw new NakamaApiError("Org memory history revision not found.", 404);
+      throw new AirinApiError("Org memory history revision not found.", 404);
     }
 
     const { content, ...change } = record;
@@ -262,7 +262,7 @@ export class OrgMemoryService {
     );
 
     if (!record) {
-      throw new NakamaApiError("Org memory history revision not found.", 404);
+      throw new AirinApiError("Org memory history revision not found.", 404);
     }
 
     await this.locked(orgId, async () => {
@@ -299,10 +299,7 @@ export class OrgMemoryService {
       }
     }
 
-    throw new NakamaApiError(
-      "No previous org memory revision to restore.",
-      404
-    );
+    throw new AirinApiError("No previous org memory revision to restore.", 404);
   }
 
   /**
@@ -421,7 +418,7 @@ export class OrgMemoryService {
       );
 
       if (index === -1) {
-        throw new NakamaApiError("Pinned fact not found.", 404);
+        throw new AirinApiError("Pinned fact not found.", 404);
       }
 
       parsed.pinned.splice(index, 1);
@@ -456,7 +453,7 @@ export class OrgMemoryService {
     );
 
     if (targets.size === 0) {
-      throw new NakamaApiError("No memory entries provided.", 400);
+      throw new AirinApiError("No memory entries provided.", 400);
     }
 
     return this.locked(orgId, async () => {
@@ -481,14 +478,14 @@ export class OrgMemoryService {
       }
 
       if (unmatched.length > 0) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           `Memory entries not found: ${unmatched.join(", ")}`,
           404
         );
       }
 
       if (archived.length === 0) {
-        throw new NakamaApiError("No matching memory entries found.", 404);
+        throw new AirinApiError("No matching memory entries found.", 404);
       }
 
       const archivedAt = options.archivedAt ?? new Date();
@@ -570,7 +567,7 @@ export class OrgMemoryService {
     );
 
     if (!proposal) {
-      throw new NakamaApiError("Org memory proposal not found.", 404);
+      throw new AirinApiError("Org memory proposal not found.", 404);
     }
 
     return proposal;
@@ -666,10 +663,7 @@ export class OrgMemoryService {
       }
 
       if (proposal.status !== "pending") {
-        throw new NakamaApiError(
-          "Only pending proposals can be approved.",
-          400
-        );
+        throw new AirinApiError("Only pending proposals can be approved.", 400);
       }
 
       // A proposal created before propose_org_memory started rejecting these can
@@ -727,7 +721,7 @@ export class OrgMemoryService {
     }
 
     if (proposal.status !== "pending") {
-      throw new NakamaApiError("Only pending proposals can be rejected.", 400);
+      throw new AirinApiError("Only pending proposals can be rejected.", 400);
     }
 
     const reviewedAt = new Date().toISOString();
@@ -855,7 +849,7 @@ export class OrgMemoryService {
     const text = normalizeOrgMemoryBullet(bullet);
 
     if (text.length === 0) {
-      throw new NakamaApiError("Memory bullet must not be empty.", 400);
+      throw new AirinApiError("Memory bullet must not be empty.", 400);
     }
 
     return text;
@@ -865,7 +859,7 @@ export class OrgMemoryService {
     const text = this.normalizeBullet(bullet);
 
     if (text.length > MAX_PROPOSAL_BULLET_LENGTH) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Memory bullet exceeds the ${MAX_PROPOSAL_BULLET_LENGTH} character limit.`,
         400
       );
@@ -889,7 +883,7 @@ export class OrgMemoryService {
 
   private requireDatabase(): DatabaseAdapter {
     if (!this.database) {
-      throw new NakamaApiError("Org memory proposals are not configured.", 500);
+      throw new AirinApiError("Org memory proposals are not configured.", 500);
     }
 
     return this.database;
@@ -899,7 +893,7 @@ export class OrgMemoryService {
     const org = await this.requireDatabase().getOrganizationById(orgId);
 
     if (!org || org.archivedAt) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
   }
 

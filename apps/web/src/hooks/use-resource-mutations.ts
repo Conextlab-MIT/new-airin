@@ -1,7 +1,7 @@
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import type {
   CreateProfileRequest,
-  CreateProfileWithSuperNakamaRequest,
+  CreateProfileWithSuperAirinRequest,
   DocumentAttachment,
   ImageAttachment,
   KnowledgeBaseDuplicateAction,
@@ -13,7 +13,7 @@ import type {
   UpdateSessionRequest,
   UserContextStatusResponse,
   WorkspaceEntry,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -27,6 +27,7 @@ import { useRunningTurnsStore } from "@/context/running-turns-store";
 import { useAuth } from "@/context/use-auth";
 import { HISTORY_SESSION_CHANNELS } from "@/lib/chat-history";
 import { client } from "@/lib/client";
+import { needsMfaEnrollment } from "@/lib/mfa";
 import { invalidateQueries } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { sessionListPollInterval, withFirstPage } from "@/lib/session-list";
@@ -41,7 +42,7 @@ async function fetchUserContext(
   try {
     return await client.getUserContext({ includeContent });
   } catch (error) {
-    if (error instanceof NakamaApiError && error.status === 404) {
+    if (error instanceof AirinApiError && error.status === 404) {
       return EMPTY_USER_CONTEXT;
     }
 
@@ -83,12 +84,12 @@ export function useCreateProfileMutation() {
   });
 }
 
-export function useCreateProfileWithSuperNakamaMutation() {
+export function useCreateProfileWithSuperAirinMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: CreateProfileWithSuperNakamaRequest) =>
-      client.createProfileWithSuperNakama(input),
+    mutationFn: (input: CreateProfileWithSuperAirinRequest) =>
+      client.createProfileWithSuperAirin(input),
     onSuccess: (data) =>
       invalidateQueries(
         queryClient,
@@ -900,7 +901,7 @@ export function useRevokeArtifactShareMutation() {
         return await client.revokeProfileArtifactShare(profileId, shareId);
       } catch (error) {
         // Another tab may have revoked this link; still clear stale share state.
-        if (error instanceof NakamaApiError && error.status === 404) {
+        if (error instanceof AirinApiError && error.status === 404) {
           return { id: shareId, revoked: false };
         }
 
@@ -986,8 +987,10 @@ export function useWriteSoulFileMutation() {
 export function useUserContextQuery(
   options: { includeContent?: boolean; orgId?: string | null } = {}
 ) {
+  const { user } = useAuth();
+
   return useQuery({
-    enabled: options.orgId !== null,
+    enabled: options.orgId !== null && !needsMfaEnrollment(user),
     queryFn: () => fetchUserContext(options.includeContent),
     queryKey: [
       ...queryKeys.userContext,

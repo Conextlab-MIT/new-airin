@@ -1,8 +1,8 @@
 import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { normalizeBaseUrl, type ProviderName } from "@nakama/core";
-import type { StoredCodingAgentHarnessKind } from "@nakama/db";
+import { normalizeBaseUrl, type ProviderName } from "@airin/core";
+import type { StoredCodingAgentHarnessKind } from "@airin/db";
 import type { CodingAgentProviderRouting } from "./coding-agent-provider-routing";
 import { formatModelForHarness } from "./coding-agent-spawn-env";
 
@@ -66,17 +66,17 @@ export async function writeCodexConfigToml(
   const baseUrl = routing.baseUrl ?? "";
 
   const contents = [
-    'model_provider = "nakama"',
+    'model_provider = "airin"',
     "",
-    "[model_providers.nakama]",
-    'name = "Nakama"',
+    "[model_providers.airin]",
+    'name = "Airin"',
     `base_url = ${toTomlString(baseUrl)}`,
     `wire_api = "responses"`,
     "",
-    'env_key = "NAKAMA_HARNESS_API_KEY"',
+    'env_key = "AIRIN_HARNESS_API_KEY"',
     "",
-    "[profiles.nakama]",
-    'model_provider = "nakama"',
+    "[profiles.airin]",
+    'model_provider = "airin"',
     `model = ${toTomlString(model)}`,
     "",
   ].join("\n");
@@ -110,7 +110,7 @@ export async function writeOpenCodeConfig(
       [providerKey]: {
         models: model ? { [model]: { name: model } } : undefined,
         options: {
-          apiKey: "{env:NAKAMA_HARNESS_API_KEY}",
+          apiKey: "{env:AIRIN_HARNESS_API_KEY}",
           baseURL: routing.baseUrl,
         },
       },
@@ -138,11 +138,11 @@ function resolveOpenCodeProviderKey(providerType: ProviderName): string {
     return "opencode-go";
   }
 
-  return "nakama";
+  return "airin";
 }
 
 /**
- * Maps a Nakama provider type to the pi CLI built-in provider ID.
+ * Maps an Airin provider type to the pi CLI built-in provider ID.
  * pi has named providers (e.g. "openai", "anthropic", "openrouter") with
  * hardcoded base URLs. We override their baseUrl + apiKey via models.json.
  */
@@ -175,14 +175,14 @@ function resolvePiProviderId(providerType: ProviderName): string {
     return "opencode";
   }
 
-  return "nakama";
+  return "airin";
 }
 
 /**
  * Default base URLs for built-in pi providers.
  * When the configured base URL matches the default, we can safely override
  * the built-in provider (which keeps the correct API type).
- * When it doesn't match (proxy/gateway), we create a custom "nakama" provider
+ * When it doesn't match (proxy/gateway), we create a custom "airin" provider
  * with the OpenAI Chat Completions API, which is universally supported.
  */
 const PI_DEFAULT_BASE_URLS: Partial<Record<ProviderName, string>> = {
@@ -212,14 +212,14 @@ function isDefaultBaseUrl(
 }
 
 /**
- * Writes a models.json that routes pi requests through the Nakama-configured
+ * Writes a models.json that routes pi requests through the Airin-configured
  * provider.
  *
  * Strategy:
  * - If the base URL matches the built-in provider's default (e.g. real
  *   api.anthropic.com), override the built-in provider's baseUrl + apiKey.
  *   This keeps the provider's native API type (anthropic-messages, etc).
- * - If the base URL is custom (proxy/gateway), create a standalone "nakama"
+ * - If the base URL is custom (proxy/gateway), create a standalone "airin"
  *   provider with the OpenAI Chat Completions API ("openai-completions"),
  *   which is the most universally supported format across proxies/gateways.
  *   Using the built-in "anthropic" or "openai" provider with a custom base URL
@@ -242,11 +242,11 @@ export async function writePiModelsJson(
     // openai-responses, openai-completions, etc).
     const providerId = resolvePiProviderId(providerType);
     providers[providerId] = {
-      apiKey: "NAKAMA_HARNESS_API_KEY",
+      apiKey: "AIRIN_HARNESS_API_KEY",
       baseUrl,
     };
   } else {
-    // Custom base URL (proxy/gateway): create a standalone "nakama" provider
+    // Custom base URL (proxy/gateway): create a standalone "airin" provider
     // with the OpenAI Chat Completions API, which is universally supported.
     const model = formatModelForHarness(
       "pi",
@@ -254,9 +254,9 @@ export async function writePiModelsJson(
       routing.model ?? "gpt-4o"
     );
 
-    providers["nakama"] = {
+    providers["airin"] = {
       api: "openai-completions",
-      apiKey: "NAKAMA_HARNESS_API_KEY",
+      apiKey: "AIRIN_HARNESS_API_KEY",
       baseUrl,
       models: [
         {
@@ -268,7 +268,7 @@ export async function writePiModelsJson(
           reasoning: false,
         },
       ],
-      name: "Nakama",
+      name: "Airin",
     };
   }
 

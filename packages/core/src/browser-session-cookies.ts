@@ -6,7 +6,7 @@
  * those cookies when they are Secure, Path=/ and carry no Domain attribute, so
  * they stay bound to the exact host: a sibling host under the same parent
  * domain can neither set nor overwrite them, which is what made an unprefixed
- * `nakama_session` a session-fixation vector (#1345).
+ * `airin_session` a session-fixation vector (#1345).
  *
  * Plain HTTP keeps the unprefixed pair because browsers discard Secure cookies
  * on http:// origins. Both server and client derive the pair from the scheme of
@@ -18,14 +18,14 @@ export interface BrowserSessionCookieNames {
 }
 
 export const PLAIN_BROWSER_SESSION_COOKIE_NAMES: BrowserSessionCookieNames = {
-  csrf: "nakama_csrf",
-  session: "nakama_session",
+  csrf: "airin_csrf",
+  session: "airin_session",
 };
 
 export const HOST_BOUND_BROWSER_SESSION_COOKIE_NAMES: BrowserSessionCookieNames =
   {
-    csrf: "__Host-nakama_csrf",
-    session: "__Host-nakama_session",
+    csrf: "__Host-airin_csrf",
+    session: "__Host-airin_session",
   };
 
 export function browserSessionCookieNames(

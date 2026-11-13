@@ -25,7 +25,7 @@ export function useAppNavigation() {
       options?: { draft?: string; intent?: "automation"; send?: boolean }
     ) {
       const draft = options?.draft?.trim();
-      const url = new URL(buildNewChatPath(profileId), "http://nakama.local");
+      const url = new URL(buildNewChatPath(profileId), "http://airin.local");
 
       if (options?.intent) {
         url.searchParams.set("intent", options.intent);

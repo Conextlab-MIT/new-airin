@@ -1,5 +1,5 @@
-import { Button } from "@nakama/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
+import { Button } from "@airin/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
 import { Add01Icon } from "hugeicons-react";
 
 export function ProfileAdminPlusButton({

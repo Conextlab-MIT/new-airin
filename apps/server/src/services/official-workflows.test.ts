@@ -6,8 +6,8 @@ import {
   getPluginReleaseDir,
   type StoredWorkflow,
   type WorkflowRunRecord,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { z } from "zod";
 import { PluginService } from "./plugin-service";
 
@@ -276,7 +276,7 @@ test("official workflow install imports once, executes through IPC, isolates org
   expect(await invoke("list_workflows")).toEqual(savedWorkflows);
 }, 20_000);
 
-test("host capabilities enforce profile tenancy, Super Nakama access, and tool assignment", async () => {
+test("host capabilities enforce profile tenancy, Airin access, and tool assignment", async () => {
   const { createPluginAgentHost } = await import("./plugin-agent-host");
   const db = createInMemoryDatabaseAdapter();
   const now = new Date().toISOString();

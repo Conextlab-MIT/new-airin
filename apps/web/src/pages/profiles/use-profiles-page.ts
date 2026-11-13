@@ -4,9 +4,9 @@ import type {
   ImageAttachment,
   InstallSkillRequest,
   ProfileDetail,
-} from "@nakama/core/contract";
-import { parseDataUrl } from "@nakama/core/message-content";
-import { BASH_TOOL_ID } from "@nakama/core/tools/protected";
+} from "@airin/core/contract";
+import { parseDataUrl } from "@airin/core/message-content";
+import { BASH_TOOL_ID } from "@airin/core/tools/protected";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useActiveChatProfile } from "@/context/use-active-chat-profile";

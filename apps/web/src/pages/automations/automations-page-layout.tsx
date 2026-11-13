@@ -1,12 +1,12 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/select";
+import { cn } from "@airin/ui/utils";
 import { Message01Icon } from "hugeicons-react";
 import { AutomationDetailPanel } from "@/pages/automations/automation-detail-panel";
 import {

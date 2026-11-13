@@ -20,14 +20,14 @@ function parseJsonObject(text: string): JsonObject {
 
 describe("createTelegramOutboundAdapter", () => {
   let tempHome = "";
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
   let homedirSpy: ReturnType<typeof spyOn<typeof os, "homedir">> | null = null;
 
   afterEach(async () => {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     homedirSpy?.mockRestore();
@@ -40,9 +40,9 @@ describe("createTelegramOutboundAdapter", () => {
   });
 
   async function useTempHome(run: () => Promise<void>): Promise<void> {
-    tempHome = await mkdtemp(path.join(os.tmpdir(), "nakama-tg-outbound-"));
+    tempHome = await mkdtemp(path.join(os.tmpdir(), "airin-tg-outbound-"));
     homedirSpy = spyOn(os, "homedir").mockReturnValue(tempHome);
-    process.env.NAKAMA_CONFIG_DIR = path.join(tempHome, ".nakama");
+    process.env.AIRIN_CONFIG_DIR = path.join(tempHome, ".airin");
     await saveTelegramConfig(owner, { botToken: "1234567890:TEST" });
     await run();
   }

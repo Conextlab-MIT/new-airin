@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import {
   getChannelConfigDir,
   migrateChannelBotTokens,
@@ -65,9 +65,9 @@ afterEach(() => {
   readBotTokensFromServer(null);
 });
 
-describe("bot tokens with NAKAMA_SECRETS_KEY", () => {
+describe("bot tokens with AIRIN_SECRETS_KEY", () => {
   test("a saved token goes to managed secrets once, not config.ini", async () => {
-    await withTempHomedir("nakama-bot-token-save-", async () => {
+    await withTempHomedir("airin-bot-token-save-", async () => {
       const { saves, store } = useSecretStore();
 
       await saveTelegramConfig(owner, { botToken: "111:AAA" });
@@ -98,7 +98,7 @@ describe("bot tokens with NAKAMA_SECRETS_KEY", () => {
   });
 
   test("a worker pairing a user does not write the token back", async () => {
-    await withTempHomedir("nakama-bot-token-pair-", async () => {
+    await withTempHomedir("airin-bot-token-pair-", async () => {
       const { store } = useSecretStore();
       const saved = await saveTelegramConfig(owner, { botToken: "111:AAA" });
 
@@ -123,7 +123,7 @@ describe("bot tokens with NAKAMA_SECRETS_KEY", () => {
   });
 
   test("start-up moves a plaintext token out and skips a bad entry", async () => {
-    await withTempHomedir("nakama-bot-token-migrate-", async () => {
+    await withTempHomedir("airin-bot-token-migrate-", async () => {
       await saveTelegramConfig(owner, {
         allowedUserIds: "7",
         botToken: "111:AAA",
@@ -158,7 +158,7 @@ describe("bot tokens with NAKAMA_SECRETS_KEY", () => {
   });
 
   test("disconnecting deletes the stored token", async () => {
-    await withTempHomedir("nakama-bot-token-remove-", async () => {
+    await withTempHomedir("airin-bot-token-remove-", async () => {
       const { store } = useSecretStore();
       await saveTelegramConfig(owner, { botToken: "111:AAA" });
 
@@ -169,7 +169,7 @@ describe("bot tokens with NAKAMA_SECRETS_KEY", () => {
   });
 
   test("without a key the token stays in config.ini as before", async () => {
-    await withTempHomedir("nakama-bot-token-plain-", async () => {
+    await withTempHomedir("airin-bot-token-plain-", async () => {
       await saveTelegramConfig(owner, { botToken: "111:AAA" });
       await migrateChannelBotTokens();
 
@@ -198,7 +198,7 @@ describe("readBotTokensFromServer", () => {
   }
 
   test("waits out a starting or busy server, then reads once", async () => {
-    await withTempHomedir("nakama-bot-token-retry-", async () => {
+    await withTempHomedir("airin-bot-token-retry-", async () => {
       await saveTelegramConfig(owner, { botToken: "111:AAA" });
       const waits: number[] = [];
       let calls = 0;
@@ -211,7 +211,7 @@ describe("readBotTokensFromServer", () => {
         }
 
         if (calls === 2) {
-          throw new NakamaApiError("Too many requests", 429);
+          throw new AirinApiError("Too many requests", 429);
         }
 
         return "111:AAA";
@@ -225,10 +225,10 @@ describe("readBotTokensFromServer", () => {
   });
 
   test("stops at an error that will not heal", async () => {
-    await withTempHomedir("nakama-bot-token-refused-", async () => {
+    await withTempHomedir("airin-bot-token-refused-", async () => {
       await saveTelegramConfig(owner, { botToken: "111:AAA" });
       const waits: number[] = [];
-      const refusal = new NakamaApiError("Decrypt failed", 500);
+      const refusal = new AirinApiError("Decrypt failed", 500);
 
       await expect(
         loadWith(async () => {
@@ -240,7 +240,7 @@ describe("readBotTokensFromServer", () => {
   });
 
   test("gives up after about a minute", async () => {
-    await withTempHomedir("nakama-bot-token-timeout-", async () => {
+    await withTempHomedir("airin-bot-token-timeout-", async () => {
       await saveTelegramConfig(owner, { botToken: "111:AAA" });
       const waits: number[] = [];
 

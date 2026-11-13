@@ -6,10 +6,10 @@ import {
   clearAutomationWorkerHeartbeat,
   type WorkerProcessInfo,
   writeAutomationWorkerHeartbeat,
-} from "@nakama/core";
-import { saveWhatsAppConfig } from "@nakama/core/whatsapp-config";
-import { createWhatsAppWorkerHeartbeat } from "@nakama/core/whatsapp-worker";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { saveWhatsAppConfig } from "@airin/core/whatsapp-config";
+import { createWhatsAppWorkerHeartbeat } from "@airin/core/whatsapp-worker";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "./agent-service";
 import { LlmUsageTracker } from "./llm-usage-tracker";
 import { SystemStatusService } from "./system-status-service";
@@ -24,13 +24,13 @@ afterEach(async () => {
     configDir = null;
   }
 
-  delete process.env.NAKAMA_CONFIG_DIR;
+  delete process.env.AIRIN_CONFIG_DIR;
   delete process.env.COMPOSIO_API_KEY;
 });
 
 async function withConfigDir(): Promise<void> {
-  configDir = await mkdtemp(join(tmpdir(), "nakama-system-status-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  configDir = await mkdtemp(join(tmpdir(), "airin-system-status-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
 }
 
 function createService(

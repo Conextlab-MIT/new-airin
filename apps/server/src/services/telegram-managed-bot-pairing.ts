@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   TelegramPairingStartResponse,
   TelegramPairingStatusResponse,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 
 const PAIRING_TTL_MS = 10 * 60 * 1000;
@@ -66,13 +66,13 @@ export class TelegramManagedBotPairingService {
 
   constructor(
     private readonly managerToken = process.env
-      .NAKAMA_TELEGRAM_MANAGER_BOT_TOKEN,
+      .AIRIN_TELEGRAM_MANAGER_BOT_TOKEN,
     private readonly request: (
       input: RequestInfo | URL,
       init?: RequestInit
     ) => Promise<Response> = fetch,
-    private readonly cloudUrl = process.env.NAKAMA_TELEGRAM_MANAGER_URL ??
-      "https://getnakama.cloud"
+    private readonly cloudUrl = process.env.AIRIN_TELEGRAM_MANAGER_URL ??
+      "https://getairin.cloud"
   ) {
     this.pollTimer.unref?.();
   }
@@ -117,9 +117,9 @@ export class TelegramManagedBotPairingService {
     }
 
     const id = randomUUID();
-    const suggestedUsername = `nakama_${id.replaceAll("-", "").slice(0, 16)}_bot`;
+    const suggestedUsername = `airin_${id.replaceAll("-", "").slice(0, 16)}_bot`;
     const expiresAt = new Date(Date.now() + PAIRING_TTL_MS).toISOString();
-    const deepLink = `https://t.me/newbot/${manager.username}/${suggestedUsername}?name=Nakama`;
+    const deepLink = `https://t.me/newbot/${manager.username}/${suggestedUsername}?name=Airin`;
     this.pairings.set(id, {
       expiresAt,
       id,
@@ -404,7 +404,7 @@ export class TelegramManagedBotPairingService {
   ): Promise<T> {
     if (!this.managerToken) {
       throw new Error(
-        "Telegram manager bot is not configured, please include NAKAMA_TELEGRAM_MANAGER_BOT_TOKEN in environment variable."
+        "Telegram manager bot is not configured, please include AIRIN_TELEGRAM_MANAGER_BOT_TOKEN in environment variable."
       );
     }
 

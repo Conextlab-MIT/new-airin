@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
 import { GridViewIcon, ListViewIcon, Refresh01Icon } from "hugeicons-react";
 import type { ReactNode } from "react";
 import type { FilesViewMode } from "@/lib/files-page.shared";

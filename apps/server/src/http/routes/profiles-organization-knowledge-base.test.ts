@@ -9,9 +9,9 @@ import {
   getKnowledgeBaseStoredDocumentPath,
   getOrgKnowledgeBaseDir,
   getProfileSoulDir,
-} from "@nakama/core";
-import { runKnowledgeBaseSearch } from "@nakama/core/tools/knowledge-base-search";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { runKnowledgeBaseSearch } from "@airin/core/tools/knowledge-base-search";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { zipSync } from "fflate";
 import { AgentService } from "../../services/agent-service";
 import { MemoryBackendService } from "../../services/memory-backend-service";
@@ -25,7 +25,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-org-knowledge-base-routes-");
+setupTestConfigDir("airin-org-knowledge-base-routes-");
 
 const BASE = "http://localhost:4310";
 

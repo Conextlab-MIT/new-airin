@@ -8,9 +8,9 @@ You are preparing a coding agent run for Cursor Agent CLI (`agent`), orchestrate
 
 ## Prerequisites
 
-- Cursor Agent CLI must already be installed and authenticated **on the Nakama server host**.
+- Cursor Agent CLI must already be installed and authenticated **on the Airin server host**.
 - Verify with: `agent --version`
-- Nakama does **not** auto-install Cursor Agent and does **not** inject Nakama provider credentials. Host Cursor auth is required.
+- Airin does **not** auto-install Cursor Agent and does **not** inject Airin provider credentials. Host Cursor auth is required.
 - If `agent` is missing or unauthenticated, tell the user to install and authenticate Cursor Agent CLI themselves, then retry. Do not run `npm install -g` for this backend.
 
 ## Repo setup (do this before coding)
@@ -26,7 +26,7 @@ Do not invent a repo URL. Do not run coding work against an empty workspace when
 
 ## Command (required shape)
 
-Set bash **`cwd`** to the repo directory. Keep argv0 as **`agent`** — never `cd … && agent` (with `codingAgent: true`, Nakama requires the harness binary first).
+Set bash **`cwd`** to the repo directory. Keep argv0 as **`agent`** — never `cd … && agent` (with `codingAgent: true`, Airin requires the harness binary first).
 
 ```bash
 agent -p 'Implement the requested change and summarize what you verified' --output-format text --yolo
@@ -41,7 +41,7 @@ bash args:
 Flags:
 
 - `-p` / `--print` — non-interactive one-shot
-- `--output-format text` — short final answer for Nakama (preferred). `stream-json` also works: Nakama summarizes the NDJSON into assistant/tools/result and saves the full log under `artifacts/coding-agent-runs/`.
+- `--output-format text` — short final answer for Airin (preferred). `stream-json` also works: Airin summarizes the NDJSON into assistant/tools/result and saves the full log under `artifacts/coding-agent-runs/`.
 - `--yolo` — required for unattended background dispatch
 
 ## Commits and pull requests

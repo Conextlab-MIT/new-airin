@@ -2,12 +2,12 @@ import type {
   InstallSkillRequest,
   SkillSummary,
   SkillsMarketplaceSkill,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   BUNDLED_SKILL_NAMES,
   RUNTIME_ONLY_BUNDLED_SKILL_NAMES,
-} from "@nakama/core/skills/bundled-names";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/skills/bundled-names";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -15,9 +15,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
 import { useQuery } from "@tanstack/react-query";
 import { Delete02Icon } from "hugeicons-react";
 import { type ChangeEvent, type SubmitEvent, useEffect, useState } from "react";

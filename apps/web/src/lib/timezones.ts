@@ -1,7 +1,7 @@
 import type {
   ListTimezonesResponse,
   TimezoneCatalogEntry,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
 export function getBrowserTimezone(): string {
   try {

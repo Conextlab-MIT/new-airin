@@ -1,11 +1,11 @@
 ---
 title: "WhatsApp"
-description: "Set up Nakama on WhatsApp with device linking, commands, and troubleshooting."
+description: "Set up Airin on WhatsApp with device linking, commands, and troubleshooting."
 ---
 
-Use WhatsApp when you want the same Nakama agent available from your phone in a direct chat or group.
+Use WhatsApp when you want the same Airin agent available from your phone in a direct chat or group.
 
-The WhatsApp bridge talks to the same Nakama server as the web app and CLI. It is a chat channel, not a separate agent system.
+The WhatsApp bridge talks to the same Airin server as the web app and CLI. It is a chat channel, not a separate agent system.
 
 Each profile can connect its own WhatsApp account. Starting, stopping, or reconnecting one profile's worker does not interrupt another. The account can belong to only one profile across the installation.
 
@@ -14,7 +14,7 @@ Each profile can connect its own WhatsApp account. Starting, stopping, or reconn
 WhatsApp works well for:
 
 - quick questions while away from your desk
-- using one Nakama profile from phone and web
+- using one Airin profile from phone and web
 - simple direct-chat workflows for one linked number
 - lightweight status checks and short back-and-forth conversations
 
@@ -22,7 +22,7 @@ WhatsApp works well for:
 
 With WhatsApp enabled, users can:
 
-- chat with a Nakama profile in a private WhatsApp chat or a group
+- chat with an Airin profile in a private WhatsApp chat or a group
 - keep chats attached to the organization that owns the connected number
 - start a new conversation or clear history
 - stop an in-progress reply
@@ -48,7 +48,7 @@ chat before asking to resend it.
 
 ## Reply formatting
 
-Profiles can still write normal Markdown-style replies, but Nakama simplifies them for WhatsApp.
+Profiles can still write normal Markdown-style replies, but Airin simplifies them for WhatsApp.
 
 In practice:
 
@@ -61,7 +61,7 @@ This keeps replies readable in WhatsApp without depending on web-style Markdown 
 
 ## Setup
 
-### 1. Enable WhatsApp in Nakama
+### 1. Enable WhatsApp in Airin
 
 1. Sign in as an organization admin or platform admin
 2. Select the organization, then open **Agent → your agent → Channels → WhatsApp**
@@ -76,7 +76,7 @@ Use the bridge's **Start** control in **Agent → your agent → Channels → Wh
 
 ### 3. Link your WhatsApp account
 
-Nakama supports two ways to link:
+Airin supports two ways to link:
 
 #### Option A: pairing code
 
@@ -94,20 +94,20 @@ Nakama supports two ways to link:
 4. Go to **Settings → Linked Devices**
 5. Tap **Link a Device** and scan the QR code
 
-After linking succeeds, Nakama shows the linked account and the bridge can receive messages. The connected owner is automatically paired with that WhatsApp account, so the owner can use the private chat without copying a pairing code. Additional users can still pair in a private chat or be added to **Allowed numbers**.
+After linking succeeds, Airin shows the linked account and the bridge can receive messages. The connected owner is automatically paired with that WhatsApp account, so the owner can use the private chat without copying a pairing code. Additional users can still pair in a private chat or be added to **Allowed numbers**.
 
 ## Chat behavior
 
 WhatsApp works in **private chats** and **groups**.
 
 - direct chats send every message to the agent
-- group chats reply to a mention of the linked number, a reply to a Nakama message, or a `/command`. Turn off **Only reply when mentioned in groups** in **Agents → your agent → Connections → WhatsApp** to answer without a tag
+- group chats reply to a mention of the linked number, a reply to an Airin message, or a `/command`. Turn off **Only reply when mentioned in groups** in **Agents → your agent → Connections → WhatsApp** to answer without a tag
 - group members who are not paired or in **Allowed numbers** get no answer unless **Reply to unpaired group members** is on. Connections that already had the mention switch off keep answering everyone until you turn it off
-- each private chat and each group keeps its own Nakama session
+- each private chat and each group keeps its own Airin session
 - an organization-owned number stays in its owning organization; `/org` cannot switch it to another organization
 - pairing still happens in a private chat first
 - extra numbers in **Agent → your agent → Channels → WhatsApp → Allowed numbers** can also talk to the agent
-- reply to another group message while mentioning Nakama includes that quoted text in the agent turn
+- reply to another group message while mentioning Airin includes that quoted text in the agent turn
 
 Turning off **Only reply when mentioned in groups** makes every message an eligible trigger. Use **Reply to unpaired group members** to allow senders who are not paired or listed under **Allowed numbers**.
 
@@ -130,11 +130,11 @@ Useful WhatsApp commands:
 
 ## Saved artifacts and share links
 
-When your profile saves a file for you with the `save_artifact` tool, Nakama posts a **Publish-style share link** after the reply in WhatsApp.
+When your profile saves a file for you with the `save_artifact` tool, Airin posts a **Publish-style share link** after the reply in WhatsApp.
 
-Opening that link does not require a Nakama login. Anyone who can read the WhatsApp message can open the file until the share is revoked from the dashboard.
+Opening that link does not require an Airin login. Anyone who can read the WhatsApp message can open the file until the share is revoked from the dashboard.
 
-To receive the file itself in WhatsApp, ask in plain language — for example, "send the file" or "attach it" — or type `/attach`. Nakama sends a native WhatsApp document when the file is within the attach size limit. If the file is too large, use the share link instead.
+To receive the file itself in WhatsApp, ask in plain language — for example, "send the file" or "attach it" — or type `/attach`. Airin sends a native WhatsApp document when the file is within the attach size limit. If the file is too large, use the share link instead.
 
 In a WhatsApp **group**, both the share link and a requested document go to the whole group (same visibility as the bot's other replies).
 
@@ -146,7 +146,7 @@ Only successful artifact saves produce share links or attachments.
 
 Check:
 
-1. the Nakama server is running
+1. the Airin server is running
 2. the WhatsApp bridge is running in the selected agent's **Agent → your agent → Channels → WhatsApp** settings
 3. the WhatsApp account is linked
 4. the linked number shown in **Agent → your agent → Channels → WhatsApp** is the one you are messaging from
@@ -171,15 +171,15 @@ If QR linking does not finish:
 
 ### The bot does not reply in a group
 
-By default, Nakama only answers in a group when someone:
+By default, Airin only answers in a group when someone:
 
 1. mentions the linked WhatsApp number
-2. replies to a Nakama message
+2. replies to an Airin message
 3. sends a `/command`
 
 Turn off **Only reply when mentioned in groups** in **Agents → your agent → Connections → WhatsApp** to answer every group message without tagging the bot.
 
-The sender must be the linked WhatsApp number, or a number listed under **Agents → your agent → Connections → WhatsApp → Allowed numbers**, unless **Reply to unpaired group members** is on. Add country code, like `+62812…`. Reply to another person's message while mentioning Nakama if the agent should see that text.
+The sender must be the linked WhatsApp number, or a number listed under **Agents → your agent → Connections → WhatsApp → Allowed numbers**, unless **Reply to unpaired group members** is on. Add country code, like `+62812…`. Reply to another person's message while mentioning Airin if the agent should see that text.
 
 ### Check connection ownership
 
@@ -187,19 +187,19 @@ Open **Agent → your agent → Channels → WhatsApp** for the selected agent. 
 
 ## Existing installations
 
-Nakama preserves a linked account when its existing settings identify one owner. An ambiguous connection is different: it stays stopped until it is claimed for an agent through the API (`POST /v1/settings/channel-legacy/claim`). The dashboard has no claim control. Installation-wide connections require a platform admin. Stop manually launched workers before claiming them.
+Airin preserves a linked account when its existing settings identify one owner. An ambiguous connection is different: it stays stopped until it is claimed for an agent through the API (`POST /v1/settings/channel-legacy/claim`). The dashboard has no claim control. Installation-wide connections require a platform admin. Stop manually launched workers before claiming them.
 
 ## Running the worker directly
 
 A direct local run needs the organization and profile that own the connection:
 
 ```bash
-NAKAMA_CHANNEL_ORG_ID="org_your_org" \
-NAKAMA_CHANNEL_PROFILE_ID="your-profile" \
+AIRIN_CHANNEL_ORG_ID="org_your_org" \
+AIRIN_CHANNEL_PROFILE_ID="your-profile" \
 bun run dev:whatsapp
 ```
 
-Save the connection in the same Nakama config directory first. Set `NAKAMA_SERVER_URL` and `NAKAMA_CONFIG_DIR` if you use a separate server or config root.
+Save the connection in the same Airin config directory first. Set `AIRIN_SERVER_URL` and `AIRIN_CONFIG_DIR` if you use a separate server or config root.
 
 ## Next steps
 

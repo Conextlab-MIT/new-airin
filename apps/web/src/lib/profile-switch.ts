@@ -1,5 +1,6 @@
 import {
   buildChatBasePath,
+  buildNewChatPath,
   isChatSessionPath,
   isProfilesPath,
 } from "@/lib/chat-history";
@@ -24,11 +25,13 @@ export function resolveProfileSwitch(input: {
   const { activeProfileId, pathname, profileId, search } = input;
   const onProfilesPage = isProfilesPath(pathname, PAGE_PATHS.profiles);
 
-  // Draft /chat included: ChatPage enters a new draft for the live id itself.
+  // Files / Automations swap the agent in place. Draft /chat and session
+  // routes remount via ?new=1 so the previous chat does not stay on screen.
   const swapsInPlace =
-    pathname === PAGE_PATHS.files ||
-    pathname === PAGE_PATHS.automations ||
-    pathname === buildChatBasePath();
+    pathname === PAGE_PATHS.files || pathname === PAGE_PATHS.automations;
+
+  const onChat =
+    pathname === buildChatBasePath() || isChatSessionPath(pathname);
 
   // On Profiles the URL names the open agent. It can be one the rail does not
   // list (a blocked deep link), and picking any listed agent leaves it.
@@ -40,7 +43,7 @@ export function resolveProfileSwitch(input: {
   // agent, so picking it opens its chat instead of doing nothing.
   if (
     profileId === openProfileId &&
-    (onProfilesPage || swapsInPlace || isChatSessionPath(pathname))
+    (onProfilesPage || swapsInPlace || onChat)
   ) {
     return { kind: "stay" };
   }
@@ -64,9 +67,10 @@ export function resolveProfileSwitch(input: {
     return { kind: "select" };
   }
 
+  // Carry the agent in ?new=1 so ChatPage clears the previous transcript.
   return {
     kind: "navigate",
-    replace: isChatSessionPath(pathname),
-    to: buildChatBasePath(),
+    replace: onChat,
+    to: buildNewChatPath(profileId),
   };
 }

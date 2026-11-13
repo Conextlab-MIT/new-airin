@@ -256,7 +256,7 @@ describe("findRejectedConnectedAccountIds", () => {
   const refusal = {
     code: 4306,
     message:
-      'Could not find connected account(s) ca_old, ca__dash-1 belonging to user "nakama:user:user_admin".',
+      'Could not find connected account(s) ca_old, ca__dash-1 belonging to user "airin:user:user_admin".',
     slug: "ToolRouterV2_InvalidConnectedAccountIds",
     status: 400,
   };

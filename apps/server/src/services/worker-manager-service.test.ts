@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readWorkerDesiredState, setWorkerDesiredRunning } from "@nakama/core";
-import { getChannelConfigDir } from "@nakama/core/channel-config-shared";
-import { saveWhatsAppConfig } from "@nakama/core/whatsapp-config";
+import { readWorkerDesiredState, setWorkerDesiredRunning } from "@airin/core";
+import { getChannelConfigDir } from "@airin/core/channel-config-shared";
+import { saveWhatsAppConfig } from "@airin/core/whatsapp-config";
 import { WorkerManagerService } from "./worker-manager-service";
 
 interface Pm2Common {
@@ -52,8 +52,8 @@ const projectRoot = "/tmp/test-project";
 let configDir: string | null = null;
 
 beforeEach(async () => {
-  configDir = await mkdtemp(join(tmpdir(), "nakama-worker-manager-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  configDir = await mkdtemp(join(tmpdir(), "airin-worker-manager-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
 });
 
 afterEach(async () => {
@@ -62,7 +62,7 @@ afterEach(async () => {
     configDir = null;
   }
 
-  delete process.env.NAKAMA_CONFIG_DIR;
+  delete process.env.AIRIN_CONFIG_DIR;
 });
 
 describe("WorkerManagerService", () => {
@@ -104,7 +104,7 @@ describe("WorkerManagerService", () => {
     // SAFETY: The test fixture matches the contract used by this test.
     const starts = (pm2.start as ReturnType<typeof mock>).mock.calls;
     expect(starts).toHaveLength(1);
-    expect(starts[0][0].env.NAKAMA_CHANNEL_PROFILE_ID).toBe(owner.profileId);
+    expect(starts[0][0].env.AIRIN_CHANNEL_PROFILE_ID).toBe(owner.profileId);
   });
 
   describe("startWorker", () => {
@@ -116,8 +116,8 @@ describe("WorkerManagerService", () => {
       // SAFETY: The test fixture matches the contract used by this test.
       const calls = (pm2.start as ReturnType<typeof mock>).mock.calls;
       expect(calls[0][0].name).not.toBe(calls[1][0].name);
-      expect(calls[0][0].env.NAKAMA_WHATSAPP_ORG_ID).toBe("org_a");
-      expect(calls[1][0].env.NAKAMA_WHATSAPP_ORG_ID).toBe("org_b");
+      expect(calls[0][0].env.AIRIN_WHATSAPP_ORG_ID).toBe("org_a");
+      expect(calls[1][0].env.AIRIN_WHATSAPP_ORG_ID).toBe("org_b");
       // SAFETY: The test fixture matches the contract used by this test.
       (pm2.list as ReturnType<typeof mock>).mockImplementation((cb) =>
         cb(null, [
@@ -182,9 +182,9 @@ describe("WorkerManagerService", () => {
 
     test("keeps secrets out of the worker environment", async () => {
       const secrets = [
-        "NAKAMA_SECRETS_KEY",
-        "NAKAMA_SECRETS_KEY_NEXT",
-        "NAKAMA_EMAIL_PASSWORD",
+        "AIRIN_SECRETS_KEY",
+        "AIRIN_SECRETS_KEY_NEXT",
+        "AIRIN_EMAIL_PASSWORD",
         "OPENAI_API_KEY",
       ];
 
@@ -192,7 +192,7 @@ describe("WorkerManagerService", () => {
         process.env[key] = "server-only-secret";
       }
 
-      process.env.NAKAMA_WORKER_TEST_PLAIN = "kept";
+      process.env.AIRIN_WORKER_TEST_PLAIN = "kept";
 
       try {
         const mockPm2 = createMockPm2();
@@ -207,10 +207,10 @@ describe("WorkerManagerService", () => {
         const app = prepareAppConf({ cwd: projectRoot }, { ...opts });
 
         expect(secrets.filter((key) => key in app.env)).toEqual([]);
-        expect(app.env.NAKAMA_WORKER_TEST_PLAIN).toBe("kept");
-        expect(app.env.NAKAMA_CONFIG_DIR).toBe(configDir ?? undefined);
+        expect(app.env.AIRIN_WORKER_TEST_PLAIN).toBe("kept");
+        expect(app.env.AIRIN_CONFIG_DIR).toBe(configDir ?? undefined);
       } finally {
-        for (const key of [...secrets, "NAKAMA_WORKER_TEST_PLAIN"]) {
+        for (const key of [...secrets, "AIRIN_WORKER_TEST_PLAIN"]) {
           delete process.env[key];
         }
       }
@@ -221,14 +221,14 @@ describe("WorkerManagerService", () => {
         _km_monitored: "true",
         args: "run start",
         cron_restart: "0 4 * * *",
-        cwd: "/srv/nakama",
+        cwd: "/srv/airin",
         exec_mode: "fork_mode",
         kill_timeout: "3000",
         km_link: "false",
         max_restarts: "10",
-        name: "nakama",
+        name: "airin",
         namespace: "default",
-        pm_cwd: "/srv/nakama",
+        pm_cwd: "/srv/airin",
         pm_exec_path: "/usr/local/bin/bun",
         pm_id: "17",
         status: "online",
@@ -236,7 +236,7 @@ describe("WorkerManagerService", () => {
         updateEnv: "true",
       };
 
-      const operatorEnv = { app_env: "prod", db_name: "nakama" };
+      const operatorEnv = { app_env: "prod", db_name: "airin" };
 
       const previous = new Map(
         [...Object.keys(pm2Keys), ...Object.keys(operatorEnv), "PWD"].map(
@@ -265,7 +265,7 @@ describe("WorkerManagerService", () => {
         expect(Object.keys(pm2Keys).filter((key) => key in underPm2)).toEqual(
           []
         );
-        expect(underPm2.db_name).toBe("nakama");
+        expect(underPm2.db_name).toBe("airin");
         expect(underPm2.app_env).toBe("prod");
         expect(underPm2.PWD).toBe(projectRoot);
 
@@ -275,7 +275,7 @@ describe("WorkerManagerService", () => {
         const local = await startedEnv();
 
         expect(Object.keys(pm2Keys).filter((key) => key in local)).toEqual([]);
-        expect(local.db_name).toBe("nakama");
+        expect(local.db_name).toBe("airin");
         expect(local.PWD).toBe(projectRoot);
       } finally {
         for (const [key, value] of previous) {
@@ -302,7 +302,7 @@ describe("WorkerManagerService", () => {
 
     test("starts worker from dist when dist build exists", async () => {
       const tmpProjectRoot = await mkdtemp(
-        join(tmpdir(), "nakama-worker-dist-")
+        join(tmpdir(), "airin-worker-dist-")
       );
 
       const distFilePath = join(

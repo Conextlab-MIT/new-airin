@@ -29,7 +29,7 @@ export function formatAutomationDeliveryMessage(options: {
   body: string;
 }): AutomationDeliveryMessage {
   const label = options.status === "failed" ? "failed" : "completed";
-  const subject = `[Nakama] ${options.automationName} — ${label}`;
+  const subject = `[Airin] ${options.automationName} — ${label}`;
 
   const text = [
     subject,

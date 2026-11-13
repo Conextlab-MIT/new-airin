@@ -1,10 +1,10 @@
 import {
   assertHtmlArtifactSize,
   MAX_HTML_ARTIFACT_BYTES,
-} from "@nakama/core/artifact-mime";
+} from "@airin/core/artifact-mime";
 
 const HIDDEN_SCROLLBAR_STYLE =
-  "<style data-nakama-html-preview>html,body{scrollbar-width:none;-ms-overflow-style:none}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}</style>";
+  "<style data-airin-html-preview>html,body{scrollbar-width:none;-ms-overflow-style:none}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}</style>";
 
 /** Scripts run inside the iframe, but without same-origin access to the host app. */
 export const ARTIFACT_HTML_IFRAME_SANDBOX = "allow-scripts";
@@ -12,9 +12,9 @@ export const ARTIFACT_HTML_IFRAME_SANDBOX = "allow-scripts";
 /** Served by the API with its own CSP; see `ARTIFACT_FRAME_HTML` on the server. */
 export const ARTIFACT_FRAME_URL = "/artifact-frame";
 
-export const ARTIFACT_FRAME_READY = "nakama-artifact-frame-ready";
+export const ARTIFACT_FRAME_READY = "airin-artifact-frame-ready";
 
-const ARTIFACT_PRINT_DONE = "nakama-artifact-print-done";
+const ARTIFACT_PRINT_DONE = "airin-artifact-print-done";
 
 /** Runs inside the frame: wait for fonts, open the print dialog, then report back. */
 const PRINT_SCRIPT = `<script>(() => {
@@ -50,7 +50,7 @@ export function printArtifactHtml(html: string): void {
     if (event.data === ARTIFACT_FRAME_READY) {
       frame.contentWindow?.postMessage(
         {
-          nakamaArtifactHtml: `${htmlForArtifactPreview(html)}${PRINT_SCRIPT}`,
+          airinArtifactHtml: `${htmlForArtifactPreview(html)}${PRINT_SCRIPT}`,
         },
         "*"
       );

@@ -1,5 +1,5 @@
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@/context/use-auth";
 import {

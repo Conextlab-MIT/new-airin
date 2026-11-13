@@ -1,4 +1,4 @@
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import {
   formatTranscript,
   type MeetActionInput,
@@ -9,7 +9,7 @@ import {
   type MeetSessionAction,
   type MeetOverview as Overview,
   type TranscriptSegment,
-} from "@nakama/core/google-meet";
+} from "@airin/core/google-meet";
 import {
   Button,
   Card,
@@ -22,8 +22,8 @@ import {
   DialogTitle,
   Input,
   Switch,
-} from "@nakama/ui";
-import { buttonVariants } from "@nakama/ui/button-variants";
+} from "@airin/ui";
+import { buttonVariants } from "@airin/ui/button-variants";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircleIcon,
@@ -1012,7 +1012,7 @@ function RecordingPicker({ close, call }: { close(): void; call: MeetCall }) {
       const { redirectUrl } =
         await client.connectMeetRecordingSource(toolkitSlug);
 
-      if (!isAllowedComposioRedirectUrl(redirectUrl)) {
+      if (!(redirectUrl && isAllowedComposioRedirectUrl(redirectUrl))) {
         throw new Error("Blocked an unexpected Composio redirect URL.");
       }
 
@@ -1473,7 +1473,7 @@ function LiveCaptureSetup({ liveReady }: { liveReady: boolean }) {
         <strong>Record live calls</strong>
         <span>
           {liveReady
-            ? "Install the Chrome extension, open its side panel and connect this Nakama address."
+            ? "Install the Chrome extension, open its side panel and connect this Airin address."
             : "Live calls need an OpenAI key."}
         </span>
       </div>
@@ -1532,7 +1532,7 @@ function ExtensionApproval({
     } catch (reason) {
       // A 400 is a wrong, used or expired code. Never show raw server text.
       setError(
-        reason instanceof NakamaApiError && reason.status === 400
+        reason instanceof AirinApiError && reason.status === 400
           ? "This code is wrong, used or expired. Get a new code from the extension."
           : "Could not connect this browser. Try again."
       );
@@ -1795,7 +1795,7 @@ function MeetPage({ call, signal }: { call: MeetCall; signal: AbortSignal }) {
         event.origin !== window.location.origin ||
         !(data instanceof Object) ||
         !("type" in data) ||
-        data.type !== "NAKAMA_MEET_ACTION" ||
+        data.type !== "AIRIN_MEET_ACTION" ||
         !("id" in data)
       ) {
         return;
@@ -1803,9 +1803,9 @@ function MeetPage({ call, signal }: { call: MeetCall; signal: AbortSignal }) {
 
       window.postMessage(
         {
-          error: "Update the Nakama Meet extension to v0.3.",
+          error: "Update the Airin Meet extension to v0.3.",
           id: String(data.id),
-          type: "NAKAMA_MEET_RESULT",
+          type: "AIRIN_MEET_RESULT",
         },
         window.location.origin
       );

@@ -10,7 +10,7 @@ import {
   seedOrgAdmin,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-audit-log-test-");
+setupTestConfigDir("airin-audit-log-test-");
 
 describe("audit event coverage", () => {
   test("classifies security routes", () => {

@@ -1,18 +1,18 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { createAgentChatSession } from "@nakama/agent";
+import { createAgentChatSession } from "@airin/agent";
 import {
   type ChatMessage,
   getUserConfigDir,
   type ProviderClient,
   saveAttachmentBytes,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   createSqliteDatabase,
   type DatabaseAdapter,
-} from "@nakama/db";
+} from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 import {
@@ -124,7 +124,7 @@ async function openDatabaseWithProfiles(
 }
 
 describe("session persistence", () => {
-  setupTestConfigDir("nakama-history-archive-");
+  setupTestConfigDir("airin-history-archive-");
 
   test("branch archives survive source purge and are removed on clear", async () => {
     const db = createInMemoryDatabaseAdapter();

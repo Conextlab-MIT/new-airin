@@ -7,7 +7,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { NakamaApiError } from "../api-error";
+import { AirinApiError } from "../api-error";
 import { pathExists } from "../fs";
 import {
   comparablePath,
@@ -152,7 +152,7 @@ export function isPathWithinProfileSkillsDir(
 
 /**
  * Owning org of a skill directory, read back from its path
- * (`~/.nakama/orgs/{orgId}/profiles/{profileId}/skills/{name}`). Global skills
+ * (`~/.airin/orgs/{orgId}/profiles/{profileId}/skills/{name}`). Global skills
  * live outside `orgs/` and belong to no org, so they return null.
  */
 export function orgIdFromSkillSourcePath(sourcePath: string): string | null {
@@ -470,7 +470,7 @@ export async function prepareSkillPatch(options: {
   skillFilePath: string;
 }> {
   if (!options.oldString) {
-    throw new NakamaApiError("old_string is required for patch.", 400);
+    throw new AirinApiError("old_string is required for patch.", 400);
   }
 
   const directory = resolveProfileSkillDirectory(
@@ -484,18 +484,18 @@ export async function prepareSkillPatch(options: {
   const skillFilePath = path.join(directory, SKILL_FILE_NAME);
 
   if (!(await pathExists(skillFilePath))) {
-    throw new NakamaApiError(`Skill "${options.name}" not found.`, 404);
+    throw new AirinApiError(`Skill "${options.name}" not found.`, 404);
   }
 
   const existing = await readFile(skillFilePath, "utf8");
   const parts = existing.split(options.oldString);
 
   if (parts.length === 1) {
-    throw new NakamaApiError("old_string not found in SKILL.md.", 409);
+    throw new AirinApiError("old_string not found in SKILL.md.", 409);
   }
 
   if (parts.length > 2) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "old_string matched multiple times in SKILL.md; make the match unique.",
       409
     );
@@ -508,14 +508,14 @@ export async function prepareSkillPatch(options: {
   try {
     parsed = parseSkillMarkdown(next, skillFilePath);
   } catch (error) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       error instanceof Error ? error.message : String(error),
       400
     );
   }
 
   if (parsed.frontmatter.name !== options.name.trim().toLowerCase()) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "patch cannot rename a skill via frontmatter; create a new skill instead.",
       400
     );

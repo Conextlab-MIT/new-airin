@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { JsonSchema, ToolContext, ToolDefinition } from "@nakama/core";
+import type { JsonSchema, ToolContext, ToolDefinition } from "@airin/core";
 import { ACP_MCP_BRIDGE_SOURCE } from "./acp-mcp-bridge";
 import {
   acpMcpRequestSchema,
@@ -202,7 +202,7 @@ describe("ACP MCP tools", () => {
     endpoint.host = `127.0.0.1:${server.port}`;
 
     const bridge = Bun.spawn([process.execPath, "-e", ACP_MCP_BRIDGE_SOURCE], {
-      env: { ...process.env, NAKAMA_ACP_MCP_URL: endpoint.toString() },
+      env: { ...process.env, AIRIN_ACP_MCP_URL: endpoint.toString() },
       stdin: "pipe",
       stdout: "pipe",
     });
@@ -242,7 +242,7 @@ describe("ACP MCP tools", () => {
     const bridge = Bun.spawn([process.execPath, "-e", ACP_MCP_BRIDGE_SOURCE], {
       env: {
         ...process.env,
-        NAKAMA_ACP_MCP_URL: `http://127.0.0.1:${server.port}/v1/acp-mcp/x`,
+        AIRIN_ACP_MCP_URL: `http://127.0.0.1:${server.port}/v1/acp-mcp/x`,
       },
       stdin: "pipe",
       stdout: "pipe",

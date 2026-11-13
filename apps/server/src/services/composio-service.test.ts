@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AuthService } from "./auth-service";
 import type { ComposioApiClient } from "./composio-api-client";
 import { ComposioService, isSameSiteReturnPath } from "./composio-service";
@@ -29,7 +29,7 @@ function createMockClient(): Pick<
       _allowedTools,
       connectedAccounts = {}
     ) {
-      expect(userId).toBe("nakama:user:user_admin");
+      expect(userId).toBe("airin:user:user_admin");
       expect(connectedAccounts).toEqual({});
 
       return {
@@ -103,7 +103,7 @@ async function seedOrgWithAdmin(
   });
   await db.createUser({
     createdAt: now,
-    email: "local-client@nakama.internal",
+    email: "local-client@airin.internal",
     id: LOCAL_CLIENT_USER_ID,
     passwordHash: "hash",
     updatedAt: now,
@@ -123,10 +123,10 @@ async function seedOrgWithAdmin(
 }
 
 async function createConfiguredService() {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-composio-service-"));
-  const previous = process.env.NAKAMA_CONFIG_DIR;
+  const configDir = await mkdtemp(join(tmpdir(), "airin-composio-service-"));
+  const previous = process.env.AIRIN_CONFIG_DIR;
   const previousKey = process.env.COMPOSIO_API_KEY;
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  process.env.AIRIN_CONFIG_DIR = configDir;
   process.env.COMPOSIO_API_KEY = TEST_API_KEY;
 
   const db = createInMemoryDatabaseAdapter();
@@ -137,9 +137,9 @@ async function createConfiguredService() {
     db,
     restore() {
       if (previous === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previous;
+        process.env.AIRIN_CONFIG_DIR = previous;
       }
 
       if (previousKey === undefined) {
@@ -185,7 +185,7 @@ describe("ComposioService", () => {
       injectMockComposioClient(service, {
         ...createMockClient(),
         async executeTool(slug, userId, accountId) {
-          expect(userId).toBe("nakama:user:user_admin");
+          expect(userId).toBe("airin:user:user_admin");
           calls.push(`${slug}:${accountId}`);
 
           if (slug === "GMAIL_FETCH_EMAILS") {
@@ -388,7 +388,7 @@ describe("ComposioService", () => {
       expect(sessionCalls).toEqual(
         [ORG_ID, "team_a", "team_b"].map((orgId) => ({
           accounts: { gmail: `account_${orgId}` },
-          userId: `nakama:user:${USER_ID}`,
+          userId: `airin:user:${USER_ID}`,
         }))
       );
 
@@ -481,7 +481,7 @@ describe("ComposioService", () => {
           if (stale.length > 0) {
             const details = {
               code: 4306,
-              message: `Could not find connected account(s) ${stale.join(", ")} belonging to user "nakama:user:${USER_ID}".`,
+              message: `Could not find connected account(s) ${stale.join(", ")} belonging to user "airin:user:${USER_ID}".`,
               slug: "ToolRouterV2_InvalidConnectedAccountIds",
             };
 
@@ -831,7 +831,7 @@ describe("ComposioService", () => {
         isDefault: false,
         isSuper: true,
         model: null,
-        name: "Super Nakama",
+        name: "Airin",
         orgId: ORG_ID,
         systemPrompt: "",
         updatedAt: new Date().toISOString(),
@@ -844,7 +844,7 @@ describe("ComposioService", () => {
       const assigned = await db.listProfileComposioToolkits("profile_default");
       expect(assigned.map((entry) => entry.toolkitId)).toEqual([toolkit.id]);
 
-      // Super Nakama and channel-facing profiles stay an explicit choice.
+      // Airin and channel-facing profiles stay an explicit choice.
       expect(await db.listProfileComposioToolkits("profile_super")).toEqual([]);
     } finally {
       restore();
@@ -948,6 +948,48 @@ describe("ComposioService", () => {
     }
   });
 
+  test("connectToolkit marks no-auth toolkits connected and syncs tools", async () => {
+    const { service, restore } = await createConfiguredService();
+
+    injectMockComposioClient(service, {
+      async linkToolkitAccount() {
+        throw new Error(
+          '400 {"error":{"message":"Cannot create an auth config for toolkit \\"hackernews\\" because it does not require authentication.","code":303,"slug":"Auth_Config_NoAuthApp","status":400}}'
+        );
+      },
+      async listSessionTools() {
+        return [
+          {
+            description: "Get top stories",
+            inputSchema: { properties: {}, type: "object" },
+            name: "Get Top Stories",
+            slug: "HACKERNEWS_GET_TOP_STORIES",
+          },
+        ];
+      },
+    });
+
+    try {
+      await service.enableToolkit(ORG_ID, { toolkitSlug: "hackernews" });
+
+      const response = await service.connectToolkit(
+        ORG_ID,
+        USER_ID,
+        "hackernews",
+        "http://localhost:4310"
+      );
+
+      expect(response).toEqual({ connected: true, redirectUrl: null });
+      const listed = await service.listToolkits(ORG_ID, USER_ID);
+      expect(listed.userConnections[0]?.status).toBe("connected");
+      expect(listed.orgToolkits[0]?.cachedTools?.[0]?.slug).toBe(
+        "HACKERNEWS_GET_TOP_STORIES"
+      );
+    } finally {
+      restore();
+    }
+  });
+
   test("Meet connect enables the toolkit and OAuth returns to Google Meet", async () => {
     const { db, service, restore } = await createConfiguredService();
     let callbackUrl = "";
@@ -1008,9 +1050,9 @@ describe("ComposioService", () => {
   });
 
   test("Meet recordings report when Composio is not configured", async () => {
-    const previous = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
-      join(tmpdir(), "nakama-composio-unset-")
+    const previous = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = await mkdtemp(
+      join(tmpdir(), "airin-composio-unset-")
     );
 
     try {
@@ -1027,9 +1069,9 @@ describe("ComposioService", () => {
       });
     } finally {
       if (previous === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previous;
+        process.env.AIRIN_CONFIG_DIR = previous;
       }
     }
   });

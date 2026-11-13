@@ -1,4 +1,4 @@
-const STORAGE_PREFIX = "nakama:artifact-share:";
+const STORAGE_PREFIX = "airin:artifact-share:";
 
 export function artifactShareStorageKey(
   userId: string,

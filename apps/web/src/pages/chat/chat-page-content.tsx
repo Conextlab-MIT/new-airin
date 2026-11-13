@@ -1,119 +1,52 @@
-import {
-  formatAgentQuestionnaireAnswersMessage,
-  hasActiveAgentQuestionnaire,
-} from "@nakama/core/agent-questionnaire";
+import { hasActiveAgentQuestionnaire } from "@airin/core/agent-questionnaire";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
+import { Settings01Icon } from "hugeicons-react";
 import {
   lazy,
   type ReactNode,
   Suspense,
-  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { PromptInputProvider } from "@/components/ai-elements/prompt-input";
-import { ArtifactStreamingPanelBridge } from "@/components/chat/artifact-streaming-panel-bridge";
-import { BrowserLiveViewPanelBridge } from "@/components/chat/browser-live-view-panel-bridge";
 import { ChatCognitoControl } from "@/components/chat/chat-cognito-control";
 import { ChatComposer } from "@/components/chat/chat-composer";
-import {
-  ChatMessageList,
-  type SaveCaseReply,
-} from "@/components/chat/chat-message-list";
-import type { AgentActivity } from "@/components/moodstone";
-import { SaveRegressionCaseDialog } from "@/components/regression-cases";
-import { UserContextEditorDialog } from "@/components/UserContextCard";
+import { OwnerAgentSettingsDialog } from "@/components/OwnerAgentSettingsDialog";
 import { ChatAttachmentPanelProvider } from "@/context/chat-attachment-panel-context";
-import { useAuth } from "@/context/use-auth";
+import { useUiMode } from "@/context/use-ui-mode";
 import { useChatUsageVisible } from "@/hooks/use-chat-usage-visible";
 import { usePostTurnSkillReviewOverlay } from "@/hooks/use-post-turn-skill-review-overlay";
-import {
-  type ChatListItem,
-  formatSessionChannelLabel,
-} from "@/lib/chat-history";
+import { formatSessionChannelLabel } from "@/lib/chat-history";
 import { sumChatUsage } from "@/lib/chat-usage";
 import { extractModelId } from "@/lib/models";
-import { canAccessIntegrationsPage } from "@/lib/navigation";
 import {
-  ChatGoalPrompt,
-  ChatSetupChecklist,
-  ChatSetupFinding,
-  ChatSetupPill,
-} from "@/pages/chat/chat-onboarding";
-import {
-  deriveAgentActivity,
+  emptyStateControlClass,
   shouldShowCognitoControl,
 } from "@/pages/chat/chat-page.shared";
 import {
-  ChatPageColumn,
-  ChatSessionBar,
-  ChatWelcome,
-} from "@/pages/chat/chat-page-layout";
-import {
-  ChatStatusArtifactOpener,
-  ChatStatusButton,
-  ChatStatusProvider,
-} from "@/pages/chat/chat-status-panel";
-import {
-  type Onboarding,
-  useOnboarding,
-} from "@/pages/chat/use-chat-onboarding";
+  ChatConversation,
+  EmptyChatBody,
+  NewChatTopBar,
+} from "@/pages/chat/chat-page-conversation";
+import { ChatPageColumn, ChatWelcome } from "@/pages/chat/chat-page-layout";
+import { ChatStatusButton } from "@/pages/chat/chat-status-panel";
+import { useOnboarding } from "@/pages/chat/use-chat-onboarding";
 import type { ChatPageState } from "@/pages/chat/use-chat-page";
 
 const ProviderSetupForm = lazy(async () => ({
   default: (await import("@/components/ProviderSetupForm")).ProviderSetupForm,
 }));
 
-/** Long enough to see the celebration, short enough not to look stuck. */
-const DONE_ACTIVITY_MS = 2400;
-
-function useAgentActivity(
-  busy: boolean,
-  messages: ChatListItem[],
-  lastSuccessfulTurnAt: number | null,
-  sessionId: string
-): AgentActivity {
-  const [celebrating, setCelebrating] = useState(false);
-  const seen = useRef({ sessionId, turnAt: lastSuccessfulTurnAt });
-
-  useEffect(() => {
-    // The timestamp survives a session change: opening another chat must not
-    // replay the flash of the one that just finished.
-    if (seen.current.sessionId !== sessionId) {
-      seen.current = { sessionId, turnAt: lastSuccessfulTurnAt };
-      setCelebrating(false);
-
-      return;
-    }
-
-    if (
-      lastSuccessfulTurnAt === null ||
-      seen.current.turnAt === lastSuccessfulTurnAt
-    ) {
-      return;
-    }
-
-    seen.current.turnAt = lastSuccessfulTurnAt;
-    setCelebrating(true);
-    const timer = setTimeout(() => setCelebrating(false), DONE_ACTIVITY_MS);
-
-    return () => clearTimeout(timer);
-  }, [lastSuccessfulTurnAt, sessionId]);
-
-  return useMemo(
-    () => deriveAgentActivity(busy, messages, celebrating),
-    [busy, messages, celebrating]
-  );
-}
-
+// oxlint-disable-next-line react-doctor/no-high-complexity-react-function -- Owner/Advanced empty vs active chat composition stays in one entry.
 export function ChatPageContent({
   below,
   cognitoLocked = false,
@@ -207,7 +140,7 @@ export function ChatPageContent({
       </div>
     ) : null;
 
-  const { visible: showUsage } = useChatUsageVisible();
+  const { visible: chatUsageSetting } = useChatUsageVisible();
   const sessionUsage = useMemo(() => sumChatUsage(messages), [messages]);
 
   const { banner: skillReviewBanner } = usePostTurnSkillReviewOverlay({
@@ -219,6 +152,24 @@ export function ChatPageContent({
   });
 
   const modelPickerTriggerRef = useRef<HTMLButtonElement>(null);
+  const { uiMode } = useUiMode();
+  const ownerMode = uiMode === "owner";
+  const showUsage = !ownerMode && chatUsageSetting;
+  const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
+
+  const ownerAgentSettingsButton =
+    ownerMode && activeProfile && !isEmptyState ? (
+      <Button
+        aria-label="Agent settings"
+        className="text-muted-foreground"
+        onClick={() => setAgentSettingsOpen(true)}
+        size="icon-sm"
+        type="button"
+        variant="ghost"
+      >
+        <Settings01Icon aria-hidden className="size-4" />
+      </Button>
+    ) : null;
 
   const readOnlyBanner = readOnlySession ? (
     <p className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-muted-foreground text-sm">
@@ -227,45 +178,64 @@ export function ChatPageContent({
     </p>
   ) : null;
 
-  const composer = (
+  const composerClassName =
+    isEmptyState && !error
+      ? "z-10 py-0 [&>p:first-child]:min-h-0"
+      : "z-10 py-0";
+
+  const composerShared = {
+    busy,
+    canStop,
+    chatStatus,
+    className: composerClassName,
+    disabled: composerDisabled,
+    draftStorageKey: composerDraftKey,
+    error,
+    onEditQueuedMessage: editQueuedMessage,
+    onRemoveQueuedMessage: removeQueuedMessage,
+    onSendQueuedMessageNow: sendQueuedMessageNow,
+    onStop: stopStreaming,
+    onSubmit: (text: string, files: Parameters<typeof sendMessage>[1]) => {
+      void sendMessage(text, files);
+    },
+    placeholder: isEmptyState
+      ? ownerMode
+        ? `Message ${activeProfile?.name ?? "agent"}`
+        : composerEntry.placeholder
+      : undefined,
+    promptHistoryRef,
+    queuedMessages,
+    todos: hasActiveAgentQuestionnaire(agentQuestionnaire) ? [] : agentTodos,
+  } as const;
+
+  const composer = ownerMode ? (
     <>
       {readOnlyBanner}
       <ChatComposer
+        {...composerShared}
+        profileId={profileId}
+        variant="minimal"
+      />
+    </>
+  ) : (
+    <>
+      {readOnlyBanner}
+      <ChatComposer
+        {...composerShared}
         availableSkills={availableSkills}
-        busy={busy}
-        canStop={canStop}
-        chatStatus={chatStatus}
-        className={
-          isEmptyState && !error
-            ? "z-10 py-0 [&>p:first-child]:min-h-0"
-            : "z-10 py-0"
-        }
         contextUsage={contextUsage}
         currentModelSelection={currentModelSelection}
-        disabled={composerDisabled}
-        draftStorageKey={composerDraftKey}
-        error={error}
         headerNotice={skillReviewBanner}
         modelPickerTriggerRef={modelPickerTriggerRef}
         onBtw={onBtw}
         onConnectProvider={() => setProviderDialogOpen(true)}
-        onEditQueuedMessage={editQueuedMessage}
         onModelChange={handleModelChange}
-        onRemoveQueuedMessage={removeQueuedMessage}
-        onSendQueuedMessageNow={sendQueuedMessageNow}
-        onStop={stopStreaming}
-        onSubmit={(text, files) => {
-          void sendMessage(text, files);
-        }}
         onThinkingEffortChange={handleThinkingEffortChange}
-        placeholder={isEmptyState ? composerEntry.placeholder : undefined}
         primarySupportsVision={activeModelSupportsVision}
         profileId={profileId}
         profileModelId={extractModelId(currentModelSelection)}
-        promptHistoryRef={promptHistoryRef}
         providerConfigured={health?.providerConfigured}
         providerModelGroups={providerModelGroups}
-        queuedMessages={queuedMessages}
         renderModelLabel={renderModelLabel}
         sessionUsage={sessionUsage}
         showOfflineHint={showOfflineHint}
@@ -274,9 +244,6 @@ export function ChatPageContent({
         thinkingEffortDisabled={thinkingEffortDisabled}
         thinkingEffortOptions={thinkingEffortOptions}
         thinkingEffortVisible={thinkingEffortVisible}
-        todos={
-          hasActiveAgentQuestionnaire(agentQuestionnaire) ? [] : agentTodos
-        }
       />
     </>
   );
@@ -284,14 +251,27 @@ export function ChatPageContent({
   const content = isEmptyState ? (
     <ChatAttachmentPanelProvider below={below} key={session?.id ?? "new"}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {cognitoSurface ? null : <NewChatTopBar toggle={cognitoToggle} />}
-        <ChatPageColumn centered cognito={cognitoSurface}>
-          {cognitoControl(emptyStateControlClass(cognitoSurface))}
+        {cognitoSurface ? null : (
+          <NewChatTopBar
+            actions={ownerAgentSettingsButton}
+            toggle={cognitoToggle}
+          />
+        )}
+        <ChatPageColumn
+          centered
+          cognito={cognitoSurface}
+          wallpaper={ownerMode && !cognitoSurface}
+        >
+          {cognitoControl(
+            emptyStateControlClass(cognitoSurface),
+            ownerMode ? ownerAgentSettingsButton : undefined
+          )}
           <div className="mx-auto mb-12 flex w-full max-w-3xl flex-col gap-1">
             <EmptyChatBody onboarding={onboarding}>
               <ChatWelcome
                 cognito={cognito}
                 onProfileSwitch={handleProfileSwitch}
+                ownerMode={ownerMode}
                 profile={activeProfile}
                 profileId={profileId}
                 profileSwitchDisabled={busy}
@@ -307,11 +287,19 @@ export function ChatPageContent({
     <ChatConversation
       below={below}
       // The session bar is hidden on phones, so the status button sits here.
-      cognitoControl={cognitoControl("sm:hidden", <ChatStatusButton />)}
+      cognitoControl={cognitoControl(
+        "sm:hidden",
+        <>
+          {ownerAgentSettingsButton}
+          <ChatStatusButton />
+        </>
+      )}
       cognitoSurface={cognitoSurface}
       cognitoToggle={cognitoToggle}
       composer={composer}
       onSwitchModel={() => modelPickerTriggerRef.current?.click()}
+      ownerAgentSettingsButton={ownerAgentSettingsButton}
+      ownerMode={ownerMode}
       showSessionBar={!cognitoLocked}
       showUsage={showUsage}
       state={state}
@@ -324,6 +312,13 @@ export function ChatPageContent({
       key={`${composerDraftKey}:${composerEntry.revision}`}
     >
       {content}
+      {activeProfile ? (
+        <OwnerAgentSettingsDialog
+          onOpenChange={setAgentSettingsOpen}
+          open={agentSettingsOpen}
+          profile={activeProfile}
+        />
+      ) : null}
       <Dialog onOpenChange={setProviderDialogOpen} open={providerDialogOpen}>
         <DialogContent className="w-[min(96vw,56rem)] grid-cols-1 sm:max-w-4xl">
           <DialogHeader>
@@ -339,310 +334,5 @@ export function ChatPageContent({
         </DialogContent>
       </Dialog>
     </PromptInputProvider>
-  );
-}
-
-/** Swaps the welcome and composer for the onboarding step that is active. */
-function EmptyChatBody({
-  children,
-  onboarding,
-}: {
-  children: ReactNode;
-  onboarding: Onboarding;
-}) {
-  const dialog = (
-    <UserContextEditorDialog
-      onOpenChange={onboarding.setAboutYouOpen}
-      onSaved={onboarding.markAboutYouSaved}
-      open={onboarding.aboutYouOpen}
-    />
-  );
-
-  switch (onboarding.view) {
-    case "goal":
-      return (
-        <ChatGoalPrompt
-          error={onboarding.goalError}
-          onSave={onboarding.saveGoal}
-          onSkip={onboarding.skipGoal}
-          saving={onboarding.savingGoal}
-        />
-      );
-    case "finding":
-      return <ChatSetupFinding goal={onboarding.goal} />;
-    case "checklist":
-      return (
-        <>
-          <ChatSetupChecklist
-            busyKey={onboarding.busyKey}
-            error={onboarding.actionError}
-            goal={onboarding.goal}
-            onAction={onboarding.runAction}
-            onFinish={onboarding.finish}
-            onSkipRest={onboarding.skipRest}
-            rows={onboarding.rows}
-          />
-          {dialog}
-        </>
-      );
-    default:
-      return (
-        <>
-          {onboarding.pill ? (
-            <ChatSetupPill
-              done={onboarding.pill.done}
-              onOpen={onboarding.openChecklist}
-              total={onboarding.pill.total}
-            />
-          ) : null}
-          {children}
-        </>
-      );
-  }
-}
-
-function ChatConversation({
-  below,
-  cognitoControl,
-  cognitoSurface,
-  cognitoToggle,
-  composer,
-  onSwitchModel,
-  showSessionBar,
-  showUsage,
-  state,
-}: {
-  below?: ReactNode;
-  cognitoControl: ReactNode;
-  cognitoSurface: boolean;
-  cognitoToggle: ReactNode;
-  composer: ReactNode;
-  onSwitchModel: () => void;
-  showSessionBar: boolean;
-  showUsage: boolean;
-  state: ChatPageState;
-}) {
-  const {
-    activeProfile,
-    agentQuestionnaire,
-    branchingMessageId,
-    busy,
-    cognito,
-    contextUsage,
-    currentModelSelection,
-    handleBranchMessage,
-    handleEditMessage,
-    handleTryAgainMessage,
-    lastSuccessfulTurnAt,
-    messages,
-    profileId,
-    queuedMessages,
-    readOnlySession,
-    renderModelLabel,
-    sendMessage,
-    session,
-    sessionChannel,
-    showThinking,
-    turnStartedAt,
-  } = state;
-
-  const agentActivity = useAgentActivity(
-    busy,
-    messages,
-    lastSuccessfulTurnAt,
-    session?.id ?? "new"
-  );
-
-  const { caseTarget, openCase, setCaseDraft } = useChatCaseDraft(
-    session?.id,
-    profileId,
-    cognito
-  );
-
-  // Cognito chats are not kept, so neither is their open panel.
-  const rememberId = session && !cognito ? session.id : undefined;
-  const modelLabel = renderModelLabel(currentModelSelection);
-
-  const statusData = useMemo(
-    () => ({
-      busy,
-      channel: sessionChannel,
-      contextUsage,
-      messages,
-      modelLabel,
-      profile: activeProfile,
-      profileId,
-    }),
-    [
-      activeProfile,
-      busy,
-      contextUsage,
-      messages,
-      modelLabel,
-      profileId,
-      sessionChannel,
-    ]
-  );
-
-  return (
-    <ChatStatusProvider data={statusData} key={session?.id ?? "new"}>
-      <ChatAttachmentPanelProvider
-        below={below}
-        key={session?.id ?? "new"}
-        rememberId={rememberId}
-      >
-        <ArtifactStreamingPanelBridge
-          messages={messages}
-          profileId={profileId}
-        />
-        <ChatStatusArtifactOpener />
-        <BrowserLiveViewPanelBridge
-          messages={messages}
-          sessionId={session?.id}
-        />
-        <ChatPageColumn cognito={cognitoSurface}>
-          {cognitoControl}
-          {session && showSessionBar ? (
-            <ChatSessionBar
-              actions={
-                <>
-                  {cognitoToggle}
-                  <ChatStatusButton />
-                </>
-              }
-              activity={agentActivity}
-              cognito={cognito}
-              profile={activeProfile}
-              profileId={profileId}
-              sessionId={session.id}
-            />
-          ) : null}
-          <div className="mx-auto flex min-h-0 w-full flex-1 flex-col">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <ChatMessageList
-                actionsDisabled={busy || readOnlySession}
-                branchingMessageId={branchingMessageId}
-                contentClassName="mx-auto w-full max-w-3xl px-4"
-                messages={messages}
-                modelLabel={
-                  currentModelSelection
-                    ? renderModelLabel(currentModelSelection)
-                    : null
-                }
-                onBranchMessage={(message) => void handleBranchMessage(message)}
-                onContinueToolSetup={async (setupId) => {
-                  await sendMessage(
-                    `Build the approved tool setup ${setupId}. Use this setupId with create_tool to connect the saved credentials and selected agent.`,
-                    []
-                  );
-                }}
-                onEditMessage={(message, text) =>
-                  void handleEditMessage(message, text)
-                }
-                onRetryMessage={(message) =>
-                  void handleTryAgainMessage(message)
-                }
-                onSaveAsCase={
-                  caseTarget
-                    ? (reply) =>
-                        setCaseDraft({
-                          ...reply,
-                          sessionId: caseTarget.sessionId,
-                        })
-                    : undefined
-                }
-                onSubmitQuestionnaire={(answers) => {
-                  void sendMessage(
-                    formatAgentQuestionnaireAnswersMessage(answers),
-                    [],
-                    { questionnaireAnswers: answers }
-                  );
-                }}
-                onSwitchModel={onSwitchModel}
-                profileId={profileId}
-                questionnaire={
-                  !busy && queuedMessages.length === 0
-                    ? agentQuestionnaire
-                    : null
-                }
-                sessionId={session?.id}
-                showThinking={showThinking}
-                showUsage={showUsage}
-                streamActive={busy}
-                turnStartedAt={turnStartedAt}
-                workStreamActive={turnStartedAt !== null}
-              />
-            </div>
-
-            <div className="sticky bottom-0 z-10 mt-auto w-full shrink-0 bg-background/95 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:pt-4 sm:pb-4">
-              <div className="mx-auto w-full max-w-3xl">{composer}</div>
-            </div>
-          </div>
-          {caseTarget && openCase ? (
-            <SaveRegressionCaseDialog
-              expectedResult={openCase.expectedResult}
-              onOpenChange={(open) => {
-                if (!open) {
-                  setCaseDraft(null);
-                }
-              }}
-              open
-              profileId={caseTarget.profileId}
-              source={{
-                messageIndex: openCase.messageIndex,
-                sourceId: caseTarget.sessionId,
-                sourceType: "session",
-              }}
-            />
-          ) : null}
-        </ChatPageColumn>
-      </ChatAttachmentPanelProvider>
-    </ChatStatusProvider>
-  );
-}
-
-/** The reply a member is saving as a test case, and where it saves. */
-function useChatCaseDraft(
-  sessionId: string | undefined,
-  profileId: ChatPageState["profileId"],
-  cognito: boolean
-) {
-  const { activeOrg } = useAuth();
-
-  // Tied to the chat it came from: the page does not remount between chats.
-  const [caseDraft, setCaseDraft] = useState<
-    (SaveCaseReply & { sessionId: string }) | null
-  >(null);
-
-  // Cognito chats are never stored, so there is no run to save.
-  const caseTarget =
-    canAccessIntegrationsPage(activeOrg?.role) &&
-    sessionId &&
-    profileId &&
-    !cognito
-      ? { profileId, sessionId }
-      : null;
-
-  const openCase =
-    caseDraft && caseDraft.sessionId === caseTarget?.sessionId
-      ? caseDraft
-      : null;
-
-  return { caseTarget, openCase, setCaseDraft };
-}
-
-/** Off the cognito surface, the desktop top bar holds the toggle. */
-function emptyStateControlClass(cognitoSurface: boolean) {
-  return cognitoSurface ? undefined : "sm:hidden";
-}
-
-function NewChatTopBar({ toggle }: { toggle: ReactNode }) {
-  return (
-    <div className="flex h-12 shrink-0 items-center border-border border-b bg-background px-4 max-sm:hidden">
-      <h1 className="truncate px-2 font-semibold text-[15px] tracking-tight">
-        New chat
-      </h1>
-      {toggle ? <div className="ml-auto">{toggle}</div> : null}
-    </div>
   );
 }

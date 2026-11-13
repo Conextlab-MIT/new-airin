@@ -1,5 +1,5 @@
+import { AirinApiError } from "@airin/core";
 import { z } from "@hono/zod-openapi";
-import { NakamaApiError } from "@nakama/core";
 import {
   listCodingHarnessLoginCommands,
   loadCodingAgentWorkspaceSettings,
@@ -45,7 +45,7 @@ export function registerCodingHarnessSettingsRoutes(
     );
 
     if (body.providerPassthroughEnabled === undefined) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "providerPassthroughEnabled must be a boolean.",
         400
       );

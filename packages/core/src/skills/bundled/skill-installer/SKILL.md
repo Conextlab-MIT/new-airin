@@ -5,7 +5,7 @@ description: Find, list, and install reusable skills from GitHub or skills linke
 
 # Skill Installer
 
-Install skills for the current Nakama profile using `skill_manage`. Do not install into Codex directories or run an external installer with bash.
+Install skills for the current Airin profile using `skill_manage`. Do not install into Codex directories or run an external installer with bash.
 
 ## Find a skill
 

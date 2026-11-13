@@ -1,5 +1,5 @@
 {
-  "name": "@nakama/db",
+  "name": "@airin/db",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,6 +10,6 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@nakama/core": "workspace:*"
+    "@airin/core": "workspace:*"
   }
 }

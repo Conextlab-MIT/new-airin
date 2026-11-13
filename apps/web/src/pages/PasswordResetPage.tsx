@@ -1,5 +1,5 @@
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTheme } from "@/context/use-theme";
@@ -68,7 +68,7 @@ export function PasswordResetPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center text-center">
           <img
-            alt="Nakama"
+            alt="Airin"
             className="mb-4 size-14 rounded-xl"
             src={markLogoSrc(resolvedTheme)}
           />

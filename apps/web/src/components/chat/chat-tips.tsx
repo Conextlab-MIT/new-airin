@@ -1,10 +1,10 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { AlertCircleIcon, BulbIcon } from "hugeicons-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 const TIPS = [
-  "Use the Super Nakama profile to create your own agents and tools.",
+  "Use the Airin profile to create your own agents and tools.",
   "Type / to use a skill — a quick shortcut for common tasks.",
   "Switch profiles from the composer to give the agent a different personality and tools.",
 ];

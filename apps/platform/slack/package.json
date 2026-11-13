@@ -1,5 +1,5 @@
 {
-  "name": "@nakama/slack",
+  "name": "@airin/slack",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@nakama/client": "workspace:*",
-    "@nakama/core": "workspace:*"
+    "@airin/client": "workspace:*",
+    "@airin/core": "workspace:*"
   }
 }

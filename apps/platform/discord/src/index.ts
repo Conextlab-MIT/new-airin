@@ -1,25 +1,25 @@
 import { join } from "node:path";
-import { NakamaClient } from "@nakama/client";
+import { AirinClient } from "@airin/client";
 import {
   installErrorHandlers,
   installErrorTrackingSink,
   log,
-} from "@nakama/core";
-import { hasActiveStreams } from "@nakama/core/channel-active-stream";
+} from "@airin/core";
+import { hasActiveStreams } from "@airin/core/channel-active-stream";
 import {
   channelOwnerFromEnv,
   readBotTokensFromServer,
-} from "@nakama/core/channel-config-shared";
-import { ChannelOrgStore } from "@nakama/core/channel-org";
-import { ChannelSessionStore } from "@nakama/core/channel-session-store";
-import { getDiscordConfigDir } from "@nakama/core/discord-config";
-import { createDiscordWorkerHeartbeat } from "@nakama/core/discord-worker";
+} from "@airin/core/channel-config-shared";
+import { ChannelOrgStore } from "@airin/core/channel-org";
+import { ChannelSessionStore } from "@airin/core/channel-session-store";
+import { getDiscordConfigDir } from "@airin/core/discord-config";
+import { createDiscordWorkerHeartbeat } from "@airin/core/discord-worker";
 import {
   ensureServerRunning,
   stopSpawnedServer,
-} from "@nakama/core/ensure-server";
-import { loadLocalAuthToken } from "@nakama/core/local-auth";
-import { resolveWebPublicUrl } from "@nakama/core/runtime";
+} from "@airin/core/ensure-server";
+import { loadLocalAuthToken } from "@airin/core/local-auth";
+import { resolveWebPublicUrl } from "@airin/core/runtime";
 import { DiscordAuthStore } from "./auth-store";
 import { createBot } from "./bot";
 import { loadConfig } from "./config";
@@ -58,7 +58,7 @@ registerCleanupHandlers(async () => {
 
   if (hasActiveStreams()) {
     console.warn(
-      "Leaving the spawned Nakama server running so in-flight agent turns can finish; the next worker start will reuse it."
+      "Leaving the spawned Airin server running so in-flight agent turns can finish; the next worker start will reuse it."
     );
   } else {
     stopSpawnedServer(spawnedChild);
@@ -67,10 +67,10 @@ registerCleanupHandlers(async () => {
 
 try {
   const authToken =
-    (await loadLocalAuthToken("discord@nakama.internal")) ?? undefined;
+    (await loadLocalAuthToken("discord@airin.internal")) ?? undefined;
 
   // The token is encrypted on disk; the server reads it for us.
-  const tokenClient = new NakamaClient({ authToken });
+  const tokenClient = new AirinClient({ authToken });
   readBotTokensFromServer((secret) =>
     tokenClient.getChannelBotToken(secret.scope, secret.name)
   );
@@ -84,7 +84,7 @@ try {
 
   spawnedChild = child;
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken,
     baseUrl: serverUrl,
     clientOrigin: resolveWebPublicUrl(),
@@ -104,7 +104,7 @@ try {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(
-      `Nakama API authentication failed: ${message}\n` +
+      `Airin API authentication failed: ${message}\n` +
         "Restart the server so it can provision the local client user:\n" +
         "  bun run dev:server"
     );

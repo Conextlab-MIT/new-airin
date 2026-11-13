@@ -1,7 +1,7 @@
 import type {
   DiscordWorkerStatus,
   SystemStatusResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/use-auth";
 import { useChannelProfileId } from "@/hooks/use-app-queries";

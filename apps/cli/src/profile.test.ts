@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { NakamaClient } from "@nakama/client";
-import type { ProfileSummary } from "@nakama/core";
+import type { AirinClient } from "@airin/client";
+import type { ProfileSummary } from "@airin/core";
 import { loadSavedCliProfileId, saveCliProfileId } from "./cli-config";
 import { resolveProfileInput, resolveStartupProfile } from "./profile";
 
@@ -24,26 +24,26 @@ function profile(
 }
 
 const sampleProfiles = [
-  profile({ id: "super_nakama", isSuper: true, name: "Super Nakama" }),
+  profile({ id: "super_airin", isSuper: true, name: "Airin" }),
   profile({ id: "profile_default", isDefault: true, name: "Default Bot" }),
   profile({ id: "profile_custom", name: "Research Bot" }),
 ];
 
-test("startup defaults to Super Nakama and respects saved and explicit choices", async () => {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-cli-profile-"));
-  const previous = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+test("startup defaults to Airin and respects saved and explicit choices", async () => {
+  const configDir = await mkdtemp(join(tmpdir(), "airin-cli-profile-"));
+  const previous = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = configDir;
 
   // SAFETY: resolveStartupProfile only reads listProfiles from this fixture.
   const client = {
     listProfiles: async () => ({ profiles: sampleProfiles }),
-  } as NakamaClient;
+  } as AirinClient;
 
   try {
     expect((await resolveStartupProfile(client, {})).profileId).toBe(
-      "super_nakama"
+      "super_airin"
     );
-    expect(await loadSavedCliProfileId()).toBe("super_nakama");
+    expect(await loadSavedCliProfileId()).toBe("super_airin");
     await saveCliProfileId("profile_custom");
     expect((await resolveStartupProfile(client, {})).profileId).toBe(
       "profile_custom"
@@ -54,13 +54,13 @@ test("startup defaults to Super Nakama and respects saved and explicit choices",
     ).toBe("profile_default");
     await saveCliProfileId("deleted_profile");
     expect((await resolveStartupProfile(client, {})).profileId).toBe(
-      "super_nakama"
+      "super_airin"
     );
   } finally {
     if (previous === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous;
+      process.env.AIRIN_CONFIG_DIR = previous;
     }
 
     await rm(configDir, { force: true, recursive: true });
@@ -76,8 +76,8 @@ describe("resolveProfileInput", () => {
     expect(resolveProfileInput(sampleProfiles, "profile_custom")?.name).toBe(
       "Research Bot"
     );
-    expect(resolveProfileInput(sampleProfiles, "Super Nakama")?.id).toBe(
-      "super_nakama"
+    expect(resolveProfileInput(sampleProfiles, "Airin")?.id).toBe(
+      "super_airin"
     );
     expect(resolveProfileInput(sampleProfiles, "1")?.id).toBe(
       "profile_default"

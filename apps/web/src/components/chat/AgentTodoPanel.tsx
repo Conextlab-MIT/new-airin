@@ -1,8 +1,8 @@
-import { hasActiveAgentTodos } from "@nakama/core/agent-todo";
-import type { AgentTodo } from "@nakama/core/contract";
-import { Matrix } from "@nakama/ui/matrix";
-import { type Frame, snake3x2 } from "@nakama/ui/matrix-frames";
-import { cn } from "@nakama/ui/utils";
+import { hasActiveAgentTodos } from "@airin/core/agent-todo";
+import type { AgentTodo } from "@airin/core/contract";
+import { Matrix } from "@airin/ui/matrix";
+import { type Frame, snake3x2 } from "@airin/ui/matrix-frames";
+import { cn } from "@airin/ui/utils";
 import { ArrowDown01Icon, ListViewIcon } from "hugeicons-react";
 import { useState } from "react";
 import {

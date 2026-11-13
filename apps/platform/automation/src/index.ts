@@ -1,14 +1,14 @@
-import { NakamaClient } from "@nakama/client";
-import { log } from "@nakama/core";
+import { AirinClient } from "@airin/client";
+import { log } from "@airin/core";
 import {
   clearAutomationWorkerHeartbeat,
   writeAutomationWorkerHeartbeat,
-} from "@nakama/core/automation-worker";
+} from "@airin/core/automation-worker";
 import {
   ensureServerRunning,
   stopSpawnedServer,
-} from "@nakama/core/ensure-server";
-import { loadLocalAuthToken } from "@nakama/core/local-auth";
+} from "@airin/core/ensure-server";
+import { loadLocalAuthToken } from "@airin/core/local-auth";
 import { AutomationWorkerScheduler } from "./scheduler";
 
 const AUTOMATION_POLL_INTERVAL_MS = 5 * 60 * 1000;
@@ -21,10 +21,10 @@ interface AutomationWorkerConfig {
 function loadConfig(): AutomationWorkerConfig {
   return {
     heartbeatIntervalMs: Number.parseInt(
-      process.env.NAKAMA_AUTOMATION_HEARTBEAT_INTERVAL_MS ?? "15000",
+      process.env.AIRIN_AUTOMATION_HEARTBEAT_INTERVAL_MS ?? "15000",
       10
     ),
-    serverUrl: process.env.NAKAMA_SERVER_URL?.trim() || "http://127.0.0.1:4310",
+    serverUrl: process.env.AIRIN_SERVER_URL?.trim() || "http://127.0.0.1:4310",
   };
 }
 
@@ -50,7 +50,7 @@ try {
   const { serverUrl, spawnedChild: child } = await ensureServerRunning();
   spawnedChild = child;
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     authToken: await loadLocalAuthToken(),
     baseUrl: serverUrl,
   });

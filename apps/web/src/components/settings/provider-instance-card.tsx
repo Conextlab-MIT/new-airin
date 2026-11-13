@@ -2,9 +2,9 @@ import type {
   ProviderInstanceSummary,
   ProviderModelOption,
   UpdateProviderRequest,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { TableCell, TableRow } from "@nakama/ui/table";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { TableCell, TableRow } from "@airin/ui/table";
 import { useQuery } from "@tanstack/react-query";
 import {
   Delete02Icon,

@@ -2,11 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ChatMessage, ProviderClient, UserConfig } from "@nakama/core";
-import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+import type { ChatMessage, ProviderClient, UserConfig } from "@airin/core";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
 import {
   evaluatePostTurnReviewTurnEligibility,
   SkillPostTurnReviewService,
@@ -324,9 +321,9 @@ describe("SkillPostTurnReviewService", () => {
   });
 
   test("review prompt carries the SKILL.md of skills the session loaded", async () => {
-    const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-post-turn-review-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-post-turn-review-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       const db = createInMemoryDatabaseAdapter();
@@ -449,9 +446,9 @@ describe("SkillPostTurnReviewService", () => {
       expect(prompt).not.toContain("release-notes-body-marker");
     } finally {
       if (originalConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+        process.env.AIRIN_CONFIG_DIR = originalConfigDir;
       }
 
       await rm(configDir, { force: true, recursive: true });

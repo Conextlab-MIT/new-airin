@@ -1,20 +1,20 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { DocumentAttachment, OrgRole, ProfileSummary } from "@nakama/core";
+import type { DocumentAttachment, OrgRole, ProfileSummary } from "@airin/core";
 import {
+  AirinApiError,
   findDocumentTextParser,
   getProfileSoulDir,
-  NakamaApiError,
   resolveDocumentPartForProvider,
   SOUL_FILES,
   SOUL_TEMPLATE,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   AgentGroup,
   AgentGroupMemoryChange,
   AgentGroupMessage,
   GroupRoster,
-} from "@nakama/core/agent-groups";
+} from "@airin/core/agent-groups";
 import {
   MAX_DOCUMENT_BYTES,
   MAX_IMAGE_BYTES,
@@ -22,7 +22,7 @@ import {
   normalizeDocumentMediaType,
   validateDocumentAttachments,
   validateImageAttachments,
-} from "@nakama/core/message-content";
+} from "@airin/core/message-content";
 import { failSubAgentResult } from "../tools/sub-agent-shared";
 import {
   appendAgentGroupMessage,
@@ -365,7 +365,7 @@ async function readGroupZip(
   const files = readZipUpload(data, MAX_DOCUMENT_BYTES);
 
   if (files.length === 0) {
-    throw new NakamaApiError("ZIP file has no files.", 400);
+    throw new AirinApiError("ZIP file has no files.", 400);
   }
 
   // Names as a case-insensitive disk (macOS, Windows) sees them, so no file
@@ -374,7 +374,7 @@ async function readGroupZip(
   const names = new Set(keys);
 
   if (names.size < keys.length) {
-    throw new NakamaApiError("ZIP file contains duplicate paths.", 400);
+    throw new AirinApiError("ZIP file contains duplicate paths.", 400);
   }
 
   const tooLong = files.some(
@@ -395,7 +395,7 @@ async function readGroupZip(
   );
 
   if (tooLong || clashes) {
-    throw new NakamaApiError("ZIP file contains an invalid path.", 400);
+    throw new AirinApiError("ZIP file contains an invalid path.", 400);
   }
 
   let text = files.map(([name]) => `- ${name}`).join("\n");

@@ -5,18 +5,18 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 source "$(dirname "$0")/capture-common.sh"
-MAIN_ROOT="${NAKAMA_MAIN_ROOT:-/tmp/nakama-main-pr-shots}"
+MAIN_ROOT="${AIRIN_MAIN_ROOT:-/tmp/airin-main-pr-shots}"
 SCREENSHOT_DIR="$ROOT/.github/pr-image"
-TEMP_AFTER="/tmp/nakama-pr-auto-profile-after-$$"
-TEMP_BEFORE="/tmp/nakama-pr-auto-profile-before-$$"
-COOKIE_AFTER="/tmp/nakama-pr-auto-profile-after-$$.txt"
-COOKIE_BEFORE="/tmp/nakama-pr-auto-profile-before-$$.txt"
+TEMP_AFTER="/tmp/airin-pr-auto-profile-after-$$"
+TEMP_BEFORE="/tmp/airin-pr-auto-profile-before-$$"
+COOKIE_AFTER="/tmp/airin-pr-auto-profile-after-$$.txt"
+COOKIE_BEFORE="/tmp/airin-pr-auto-profile-before-$$.txt"
 PORT_AFTER=4321
 PORT_BEFORE=4322
 WEB_AFTER=3021
 WEB_BEFORE=3022
-SESSION_AFTER=nakama-pr-auto-profile-after
-SESSION_BEFORE=nakama-pr-auto-profile-before
+SESSION_AFTER=airin-pr-auto-profile-after
+SESSION_BEFORE=airin-pr-auto-profile-before
 VIEWPORT_WIDTH=1280
 VIEWPORT_HEIGHT=900
 
@@ -80,7 +80,7 @@ start_seeded_stack() {
   local prefix="$8" # AFTER | BEFORE
 
   mkdir -p "$temp"
-  NAKAMA_CONFIG_DIR="$temp" NAKAMA_PORT="$port" \
+  AIRIN_CONFIG_DIR="$temp" AIRIN_PORT="$port" \
     bun run "$root/apps/server/src/index.ts" >"$server_log" 2>&1 &
   if [[ "$prefix" == "AFTER" ]]; then
     AFTER_SERVER_PID=$!
@@ -100,8 +100,8 @@ start_seeded_stack() {
     }" >/dev/null
 
   local csrf session_val org profile_id
-  csrf=$(awk '$6=="nakama_csrf"{print $7}' "$cookie")
-  session_val=$(awk '$6=="nakama_session"{print $7}' "$cookie")
+  csrf=$(awk '$6=="airin_csrf"{print $7}' "$cookie")
+  session_val=$(awk '$6=="airin_session"{print $7}' "$cookie")
   org=$(curl -sf -b "$cookie" "${api}/v1/auth/me" | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).activeOrgId)')
 
   curl -sf -b "$cookie" -X POST "${api}/v1/providers" \
@@ -134,7 +134,7 @@ start_seeded_stack() {
 
   (
     cd "$root/apps/web"
-    NAKAMA_SERVER_URL="$api" bun x vite --host 127.0.0.1 --port "$web_port" --strictPort \
+    AIRIN_SERVER_URL="$api" bun x vite --host 127.0.0.1 --port "$web_port" --strictPort \
       >"$web_log" 2>&1
   ) &
   if [[ "$prefix" == "AFTER" ]]; then
@@ -164,9 +164,9 @@ capture_edit_dialog() {
 
   $AB --session "$session" close --all 2>/dev/null || true
 
-  $AB --session "$session" cookies set nakama_session "$session_val" \
+  $AB --session "$session" cookies set airin_session "$session_val" \
     --url "${web_base}/" --httpOnly --sameSite Lax
-  $AB --session "$session" cookies set nakama_csrf "$csrf" \
+  $AB --session "$session" cookies set airin_csrf "$csrf" \
     --url "${web_base}/" --sameSite Lax
   $AB --session "$session" open "${web_base}/automations"
   $AB --session "$session" wait 3000
@@ -243,8 +243,8 @@ BEFORE_SESSION=""
 # One stack at a time — dual vite/API on the same host confused auth/cookies.
 echo "Capturing AFTER (feature)…"
 start_seeded_stack "$ROOT" "$PORT_AFTER" "$WEB_AFTER" "$TEMP_AFTER" "$COOKIE_AFTER" \
-  /tmp/nakama-pr-auto-profile-after-server.log \
-  /tmp/nakama-pr-auto-profile-after-web.log \
+  /tmp/airin-pr-auto-profile-after-server.log \
+  /tmp/airin-pr-auto-profile-after-web.log \
   AFTER
 capture_edit_dialog "$SESSION_AFTER" "http://127.0.0.1:${WEB_AFTER}" \
   "$SCREENSHOT_DIR/automation-profile-select-after.png" "after" \
@@ -253,8 +253,8 @@ stop_prefix AFTER
 
 echo "Capturing BEFORE (main)…"
 start_seeded_stack "$MAIN_ROOT" "$PORT_BEFORE" "$WEB_BEFORE" "$TEMP_BEFORE" "$COOKIE_BEFORE" \
-  /tmp/nakama-pr-auto-profile-before-server.log \
-  /tmp/nakama-pr-auto-profile-before-web.log \
+  /tmp/airin-pr-auto-profile-before-server.log \
+  /tmp/airin-pr-auto-profile-before-web.log \
   BEFORE
 capture_edit_dialog "$SESSION_BEFORE" "http://127.0.0.1:${WEB_BEFORE}" \
   "$SCREENSHOT_DIR/automation-profile-select-before.png" "before" \

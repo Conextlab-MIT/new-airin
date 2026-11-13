@@ -4,8 +4,8 @@ import type {
   ProviderInstanceSummary,
   ProviderModelOption,
   UpdateProviderRequest,
-} from "@nakama/core/contract";
-import { DISCOVERY_MODEL_PROVIDERS } from "@nakama/core/discovery-providers";
+} from "@airin/core/contract";
+import { DISCOVERY_MODEL_PROVIDERS } from "@airin/core/discovery-providers";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";

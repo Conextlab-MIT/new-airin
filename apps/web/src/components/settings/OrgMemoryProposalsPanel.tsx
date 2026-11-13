@@ -2,19 +2,19 @@ import type {
   OrgMemberSummary,
   OrgMemoryProposal,
   ProfileSummary,
-} from "@nakama/core/contract";
-import { detectOrgMemoryInjectionWarnings } from "@nakama/core/soul/org-memory";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { detectOrgMemoryInjectionWarnings } from "@airin/core/soul/org-memory";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { toast } from "@airin/ui/toast";
 import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import { useProfilesQuery } from "@/hooks/use-app-queries";

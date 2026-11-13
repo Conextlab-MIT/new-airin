@@ -43,7 +43,7 @@ tmp-repro-setup-auth.mjs
 .vscode/
 # jscpd duplication report
 .jscpd-report/
-nakama-secrets.env
+airin-secrets.env
 .idea
 ecosystem.config.js
 ecosystem.config.cjs

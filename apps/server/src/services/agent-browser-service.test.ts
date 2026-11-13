@@ -3,8 +3,8 @@ import { existsSync } from "node:fs";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { REDACTED_SECRET_VALUE } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { REDACTED_SECRET_VALUE } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { createHonoApp } from "../http/app";
 import { setupFreshInstallSession } from "../http/test-session-helpers";
 import { asTestFetch } from "../providers/test-helpers";
@@ -32,22 +32,22 @@ const testPosix = test.skipIf(process.platform === "win32");
 
 describe("agent-browser service", () => {
   const originalPath = process.env.PATH ?? "";
-  const originalDisableFixPath = process.env.NAKAMA_DISABLE_FIX_PATH;
+  const originalDisableFixPath = process.env.AIRIN_DISABLE_FIX_PATH;
   let tempBinDir = "";
 
   beforeEach(async () => {
-    tempBinDir = await mkdtemp(join(tmpdir(), "nakama-agent-browser-bin-"));
+    tempBinDir = await mkdtemp(join(tmpdir(), "airin-agent-browser-bin-"));
     process.env.PATH = tempBinDir;
-    process.env.NAKAMA_DISABLE_FIX_PATH = "1";
+    process.env.AIRIN_DISABLE_FIX_PATH = "1";
   });
 
   afterEach(async () => {
     process.env.PATH = originalPath;
 
     if (originalDisableFixPath === undefined) {
-      delete process.env.NAKAMA_DISABLE_FIX_PATH;
+      delete process.env.AIRIN_DISABLE_FIX_PATH;
     } else {
-      process.env.NAKAMA_DISABLE_FIX_PATH = originalDisableFixPath;
+      process.env.AIRIN_DISABLE_FIX_PATH = originalDisableFixPath;
     }
 
     if (tempBinDir) {
@@ -145,32 +145,32 @@ describe("agent-browser service", () => {
 
 describe("agent-browser settings routes", () => {
   const originalPath = process.env.PATH ?? "";
-  const originalDisableFixPath = process.env.NAKAMA_DISABLE_FIX_PATH;
+  const originalDisableFixPath = process.env.AIRIN_DISABLE_FIX_PATH;
   let tempBinDir = "";
   let configDir = "";
 
   beforeEach(async () => {
     tempBinDir = await mkdtemp(
-      join(tmpdir(), "nakama-agent-browser-route-bin-")
+      join(tmpdir(), "airin-agent-browser-route-bin-")
     );
     configDir = await mkdtemp(
-      join(tmpdir(), "nakama-agent-browser-route-config-")
+      join(tmpdir(), "airin-agent-browser-route-config-")
     );
     process.env.PATH = tempBinDir;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-    process.env.NAKAMA_DISABLE_FIX_PATH = "1";
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    process.env.AIRIN_DISABLE_FIX_PATH = "1";
   });
 
   afterEach(async () => {
     process.env.PATH = originalPath;
 
     if (originalDisableFixPath === undefined) {
-      delete process.env.NAKAMA_DISABLE_FIX_PATH;
+      delete process.env.AIRIN_DISABLE_FIX_PATH;
     } else {
-      process.env.NAKAMA_DISABLE_FIX_PATH = originalDisableFixPath;
+      process.env.AIRIN_DISABLE_FIX_PATH = originalDisableFixPath;
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
 
     if (tempBinDir) {
       await rm(tempBinDir, { force: true, recursive: true });
@@ -408,8 +408,8 @@ setInterval(() => {}, 1000);
 
 describe("Kernel browser runtime", () => {
   const originalFetch = globalThis.fetch;
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
-  const kernelEnvKeys = ["NAKAMA_BROWSER_PROVIDER", "KERNEL_API_KEY"] as const;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
+  const kernelEnvKeys = ["AIRIN_BROWSER_PROVIDER", "KERNEL_API_KEY"] as const;
 
   const originalKernelEnv = Object.fromEntries(
     kernelEnvKeys.map((key) => [key, process.env[key]])
@@ -428,8 +428,8 @@ describe("Kernel browser runtime", () => {
   };
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-kernel-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-kernel-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     for (const key of kernelEnvKeys) {
       delete process.env[key];
@@ -489,16 +489,16 @@ describe("Kernel browser runtime", () => {
     }
 
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     await rm(configDir, { force: true, recursive: true });
   });
 
   test("uses the Kernel key from the host env", async () => {
-    process.env.NAKAMA_BROWSER_PROVIDER = "kernel";
+    process.env.AIRIN_BROWSER_PROVIDER = "kernel";
     process.env.KERNEL_API_KEY = "env-key";
 
     expect((await getAgentBrowserStatus()).provider).toBe("kernel");
@@ -580,7 +580,7 @@ describe("Kernel browser runtime", () => {
     await ensureKernelBrowser("kernel-key", "org-a", "user-1");
 
     expect((await getUserBrowser("org-a", "user-1")).liveViewUrl).toBe(
-      "https://live.onkernel.com/nakama-org-a-user-user-1"
+      "https://live.onkernel.com/airin-org-a-user-user-1"
     );
     expect((await getUserBrowser("org-b", "user-1")).liveViewUrl).toBeNull();
   });

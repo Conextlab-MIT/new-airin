@@ -1,4 +1,4 @@
-import { buttonVariants } from "@nakama/ui/button-variants";
+import { buttonVariants } from "@airin/ui/button-variants";
 import {
   Dialog,
   DialogContent,
@@ -6,9 +6,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 
 /**
  * The link is a plain anchor the operator clicks: a window.open fired after the
@@ -37,8 +37,8 @@ export function McpServerAuthorizeDialog({
           <DialogTitle>Sign in to {serverName}</DialogTitle>
           <DialogDescription>
             {new URL(authorizationUrl).host} handles the sign-in. Approve
-            Nakama's access there and this server connects on its own. Nothing
-            is stored until you approve.
+            Airin's access there and this server connects on its own. Nothing is
+            stored until you approve.
           </DialogDescription>
         </DialogHeader>
 

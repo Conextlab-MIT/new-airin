@@ -1,5 +1,5 @@
-import type { ToolSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ToolSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -7,14 +7,14 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@nakama/ui/command";
+} from "@airin/ui/command";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import { Add01Icon } from "hugeicons-react";
 import { useState } from "react";
 import { groupAssignableTools, isPluginOwned } from "@/hooks/use-plugins";

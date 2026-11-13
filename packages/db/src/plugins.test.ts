@@ -1,6 +1,6 @@
 import { Database, type SQLQueryBindings } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import type { PluginManifest } from "@nakama/core";
+import type { PluginManifest } from "@airin/core";
 import { createInMemoryDatabaseAdapter } from "./index";
 import { migrateDatabase } from "./migrate";
 import type { StoredSkillRecord, StoredToolRecord } from "./types";
@@ -90,11 +90,11 @@ function notesManifest(version = "1.0.0"): PluginManifest {
       },
     ],
     apiVersion: 1,
-    author: "Nakama",
+    author: "Airin",
     description: "Notes",
     id: "notes",
     license: "MIT",
-    minNakamaVersion: "0.1.0",
+    minAirinVersion: "0.1.0",
     name: "Notes",
     skills: [{ directory: "skills/notes", key: "notes" }],
     version,

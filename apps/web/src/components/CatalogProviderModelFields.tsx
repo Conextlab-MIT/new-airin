@@ -1,7 +1,7 @@
-import type { ProviderModelOption } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { FormField } from "@nakama/ui/form-field";
-import { Spinner } from "@nakama/ui/spinner";
+import type { ProviderModelOption } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { FormField } from "@airin/ui/form-field";
+import { Spinner } from "@airin/ui/spinner";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import type { CatalogShortlistProvider } from "@/components/catalog-provider-model-fields.shared";

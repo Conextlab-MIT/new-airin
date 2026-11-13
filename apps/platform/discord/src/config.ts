@@ -1,8 +1,8 @@
 import {
   type ChannelOwner,
   channelOwnerFromEnv,
-} from "@nakama/core/channel-config-shared";
-import { loadDiscordConfigFile } from "@nakama/core/discord-config";
+} from "@airin/core/channel-config-shared";
+import { loadDiscordConfigFile } from "@airin/core/discord-config";
 
 export interface DiscordBridgeConfig {
   botToken: string;

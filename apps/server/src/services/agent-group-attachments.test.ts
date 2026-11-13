@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { getGroupSharedDir } from "@nakama/core";
+import { getGroupSharedDir } from "@airin/core";
 import { strToU8, type Zippable, zipSync } from "fflate";
 import { setupTestConfigDir } from "../test-config-dir";
 import { closeAgentGroupDatabases } from "./agent-group-store";
@@ -21,7 +21,7 @@ const uploadsOf = (groupId: string) =>
 // Before the config dir cleanup, which Windows refuses while a file is open.
 afterEach(closeAgentGroupDatabases);
 
-setupTestConfigDir("nakama-agent-group-attachments-");
+setupTestConfigDir("airin-agent-group-attachments-");
 
 describe("group attachments", () => {
   test("an attached document reaches the agent, and the client sees only its name", async () => {

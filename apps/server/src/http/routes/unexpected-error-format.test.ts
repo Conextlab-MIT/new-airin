@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { type AgentChatSession, createAgentChatSession } from "@nakama/agent";
+import { type AgentChatSession, createAgentChatSession } from "@airin/agent";
 import {
+  AirinApiError,
   type ConfigureProviderRequest,
   type CreateProviderRequest,
-  NakamaApiError,
-} from "@nakama/core";
+} from "@airin/core";
 import { asTestFetch } from "../../providers/test-helpers";
 import { buildProviderInstanceFromCreateRequest } from "../../services/provider-instance-helpers";
 import { TurnRunner } from "../../services/turn-runner";
@@ -12,7 +12,7 @@ import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { setupFreshInstallSession } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-unexpected-error-format-test-");
+setupTestConfigDir("airin-unexpected-error-format-test-");
 
 /** A real turn runner whose session `session_1` exists and gets this chat. */
 function turnsWith(get: () => Promise<AgentChatSession>) {
@@ -41,7 +41,7 @@ function turnsWith(get: () => Promise<AgentChatSession>) {
 describe("route error formatting", () => {
   const originalFetch = globalThis.fetch;
   const originalConsoleError = console.error;
-  // reportError always writes one "[nakama:<kind>] <source>" line, tracker or not.
+  // reportError always writes one "[airin:<kind>] <source>" line, tracker or not.
   let reported: string[] = [];
 
   beforeEach(() => {
@@ -77,7 +77,7 @@ describe("route error formatting", () => {
       error: "An unexpected server error occurred.",
     });
     expect(
-      reported.some((line) => line.startsWith("[nakama:http] server"))
+      reported.some((line) => line.startsWith("[airin:http] server"))
     ).toBe(true);
   });
 
@@ -102,7 +102,7 @@ describe("route error formatting", () => {
 
     expect(response.status).toBe(500);
     expect(
-      reported.some((line) => line.startsWith("[nakama:http] server"))
+      reported.some((line) => line.startsWith("[airin:http] server"))
     ).toBe(true);
   });
 
@@ -110,7 +110,7 @@ describe("route error formatting", () => {
     const { app, databaseAdapter } = createMinimalHonoApp({
       agent: {
         transcribeAudio: async () => {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Audio transcription returned empty text.",
             502
           );
@@ -133,14 +133,14 @@ describe("route error formatting", () => {
 
     expect(response.status).toBe(502);
     expect(
-      reported.some((line) => line.startsWith("[nakama:http] server"))
+      reported.some((line) => line.startsWith("[airin:http] server"))
     ).toBe(true);
   });
 
   test("send message does not leak an unexpected error's message", async () => {
     const fail = async (): Promise<never> => {
       throw new Error(
-        "ENOSPC: no space left on device, write /home/nakama/.config/nakama/nakama.db"
+        "ENOSPC: no space left on device, write /home/airin/.config/airin/airin.db"
       );
     };
 
@@ -178,12 +178,12 @@ describe("route error formatting", () => {
       error: "An unexpected server error occurred.",
     });
     expect(
-      reported.some((line) => line.startsWith("[nakama:turn] server"))
+      reported.some((line) => line.startsWith("[airin:turn] server"))
     ).toBe(true);
   });
 
-  test("a NakamaApiError is reported only when it is a 5xx", async () => {
-    const send = async (error: NakamaApiError) => {
+  test("a AirinApiError is reported only when it is a 5xx", async () => {
+    const send = async (error: AirinApiError) => {
       reported = [];
 
       const { app, databaseAdapter } = createMinimalHonoApp({
@@ -211,19 +211,19 @@ describe("route error formatting", () => {
       return { reported: [...reported], status: response.status };
     };
 
-    const refused = await send(new NakamaApiError("Forbidden", 403));
+    const refused = await send(new AirinApiError("Forbidden", 403));
     expect(refused.status).toBe(403);
-    expect(refused.reported.some((line) => line.startsWith("[nakama:"))).toBe(
+    expect(refused.reported.some((line) => line.startsWith("[airin:"))).toBe(
       false
     );
 
     const broken = await send(
-      new NakamaApiError("Database not configured.", 500)
+      new AirinApiError("Database not configured.", 500)
     );
 
     expect(broken.status).toBe(500);
     expect(
-      broken.reported.some((line) => line.startsWith("[nakama:http] server"))
+      broken.reported.some((line) => line.startsWith("[airin:http] server"))
     ).toBe(true);
   });
 
@@ -252,7 +252,7 @@ describe("route error formatting", () => {
 
     expect(response.status).toBe(500);
     expect(
-      reported.some((line) => line.startsWith("[nakama:http] server"))
+      reported.some((line) => line.startsWith("[airin:http] server"))
     ).toBe(true);
   });
   test("provider routes reject invalid fields before service calls", async () => {
@@ -382,7 +382,7 @@ describe("route error formatting", () => {
     }
 
     expect(
-      reported.some((line) => line.startsWith("[nakama:http] server"))
+      reported.some((line) => line.startsWith("[airin:http] server"))
     ).toBe(false);
   });
 });

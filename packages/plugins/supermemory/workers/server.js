@@ -5373,10 +5373,10 @@ async function runWorker(directory, pluginDataDir) {
   }
 }
 if (import.meta.main) {
-  const directory = process.env.NAKAMA_WORKER_DATA_DIR;
-  const pluginDataDir = process.env.NAKAMA_PLUGIN_DATA_DIR;
+  const directory = process.env.AIRIN_WORKER_DATA_DIR;
+  const pluginDataDir = process.env.AIRIN_PLUGIN_DATA_DIR;
   if (!(directory && pluginDataDir)) {
-    throw new Error("Run this worker through Nakama");
+    throw new Error("Run this worker through Airin");
   }
   await runWorker(directory, pluginDataDir);
 }

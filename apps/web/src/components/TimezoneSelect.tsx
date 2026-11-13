@@ -5,10 +5,10 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@nakama/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@nakama/ui/popover";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@airin/ui/popover";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { ArrowDown01Icon } from "hugeicons-react";
 import { useMemo, useState } from "react";
 import { useTimezoneCatalog } from "@/hooks/use-timezones";

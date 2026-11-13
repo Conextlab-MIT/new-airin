@@ -8,7 +8,7 @@ describe("prepareTelegramFallbackReply", () => {
 
     const footer =
       `context-engineering-slides.html: ${shareUrl}\n` +
-      "Set Web Public URL in Nakama settings for absolute share links.";
+      "Set Web Public URL in Airin settings for absolute share links.";
 
     expect(prepareTelegramFallbackReply(footer)).toBe(footer);
     expect(prepareTelegramFallbackReply(footer)).toContain("tc_share_");

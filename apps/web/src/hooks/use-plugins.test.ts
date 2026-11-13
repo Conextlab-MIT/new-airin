@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { OrgPluginDetail } from "@nakama/core";
+import type { OrgPluginDetail } from "@airin/core";
 import {
   groupAssignableTools,
   nextPluginVersions,

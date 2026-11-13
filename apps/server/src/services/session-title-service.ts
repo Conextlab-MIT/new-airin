@@ -1,6 +1,6 @@
-import { generateSessionTitleFromMessages } from "@nakama/agent";
-import type { ChatMessage, UserConfig } from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+import { generateSessionTitleFromMessages } from "@airin/agent";
+import type { ChatMessage, UserConfig } from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import { createProviderForProfile } from "./provider-instance-helpers";
 
 const SESSION_TITLE_FALLBACK = "Untitled";

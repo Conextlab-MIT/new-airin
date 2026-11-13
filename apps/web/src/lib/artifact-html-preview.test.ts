@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { MAX_HTML_ARTIFACT_BYTES } from "@nakama/core/artifact-mime";
+import { MAX_HTML_ARTIFACT_BYTES } from "@airin/core/artifact-mime";
 import { Window } from "happy-dom";
 import {
   ARTIFACT_HTML_IFRAME_SANDBOX,

@@ -27,7 +27,7 @@ function agentSkill(
     name,
     sourcePath:
       extras.sourcePath ??
-      `/tmp/nakama/orgs/o1/profiles/p1/skills/${name}/SKILL.md`,
+      `/tmp/airin/orgs/o1/profiles/p1/skills/${name}/SKILL.md`,
   };
 }
 

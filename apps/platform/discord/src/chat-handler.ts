@@ -1,40 +1,40 @@
-import type { NakamaClient, RemoteChatSession } from "@nakama/client";
-import { isAttachOnlyCommand } from "@nakama/core";
+import type { AirinClient, RemoteChatSession } from "@airin/client";
+import { isAttachOnlyCommand } from "@airin/core";
 import {
   formatAgentQuestionnaireMessage,
   hasActiveAgentQuestionnaire,
-} from "@nakama/core/agent-questionnaire";
-import { formatClientError } from "@nakama/core/api-error";
+} from "@airin/core/agent-questionnaire";
+import { formatClientError } from "@airin/core/api-error";
 import {
   clearActiveStream,
   isAbortError,
   isStreamActive,
   registerActiveStream,
   stopActiveStream,
-} from "@nakama/core/channel-active-stream";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
-import { describeChannelStatus } from "@nakama/core/channel-commands";
+} from "@airin/core/channel-active-stream";
+import { createChatLock } from "@airin/core/channel-chat-lock";
+import { describeChannelStatus } from "@airin/core/channel-commands";
 import {
   type ChannelOrgStore,
   findOrgBySelectionInput,
   formatOrgSwitchConfirmation,
   prepareChannelOrgContext,
-} from "@nakama/core/channel-org";
+} from "@airin/core/channel-org";
 import type {
   ChannelSessionStore,
   ChatSessionRecord,
-} from "@nakama/core/channel-session-store";
-import { createTypingLoop } from "@nakama/core/channel-typing-loop";
+} from "@airin/core/channel-session-store";
+import { createTypingLoop } from "@airin/core/channel-typing-loop";
 import type {
   ImageAttachment,
   SendMessageInput,
   SessionSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   addDiscordAllowedUserId,
   hasActiveHandshakeCode,
   looksLikePairingCode,
-} from "@nakama/core/discord-config";
+} from "@airin/core/discord-config";
 import {
   filterProfilesForChatAccess,
   formatProfileSwitchConfirmation,
@@ -43,7 +43,7 @@ import {
   pickProfileForOrg,
   resolveProfileInput,
   resolveProfileInScopes,
-} from "@nakama/core/profiles";
+} from "@airin/core/profiles";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -116,20 +116,20 @@ const LINK_IN_PRIVATE_REPLY =
   "Link your account in a private DM with this bot first.";
 
 const PAIRING_PROMPT =
-  "Welcome to Nakama.\n\n" +
+  "Welcome to Airin.\n\n" +
   "Paste your pairing code from Integrations → Discord in the web dashboard. " +
   "You only need to do this once.";
 
 const NO_CODE_PROMPT =
   "This bot is not linked yet.\n\n" +
-  "Open Nakama Integrations → Discord, save your bot token, and copy the pairing code. " +
+  "Open Airin Integrations → Discord, save your bot token, and copy the pairing code. " +
   "Then send that code here in a DM.";
 
 const ALLOW_NOT_AUTHORIZED = "You are not authorized to use this command.";
 
 export interface ChatHandlerDeps {
   authStore: DiscordAuthStore;
-  client: NakamaClient;
+  client: AirinClient;
   config: DiscordBridgeConfig;
   getBotInfo?: () => DiscordBotInfo | undefined;
   orgStore: ChannelOrgStore;
@@ -640,7 +640,7 @@ function createScopedChatHandler(deps: ChatHandlerDeps) {
       if (commandName === "org" || commandName === "profile") {
         if (
           selection &&
-          (selection[0] !== "nakama" || selection[2] !== userId)
+          (selection[0] !== "airin" || selection[2] !== userId)
         ) {
           await messenger.send("Open your own /org or /profile picker.");
 
@@ -1132,7 +1132,7 @@ function createScopedChatHandler(deps: ChatHandlerDeps) {
           (component) =>
             component.type === ComponentType.StringSelect &&
             component.customId.startsWith(
-              `nakama:${kind}:${interaction.user.id}:`
+              `airin:${kind}:${interaction.user.id}:`
             ) &&
             component.customId.split(":")[4] === selection?.[4]
         );
@@ -1185,7 +1185,7 @@ function createScopedChatHandler(deps: ChatHandlerDeps) {
       : 0;
 
     const customId = (pageIndex: number | "apply" | "cancel") =>
-      `nakama:${kind}:${interaction.user.id}:${pageIndex}${kind === "profile" ? `:${org!.id}` : ""}`;
+      `airin:${kind}:${interaction.user.id}:${pageIndex}${kind === "profile" ? `:${org!.id}` : ""}`;
 
     const currentId =
       kind === "org" ? org?.id : await resolveSessionProfileId(conversationKey);
@@ -1416,7 +1416,7 @@ function createScopedChatHandler(deps: ChatHandlerDeps) {
   async function listSelectableProfiles(orgId?: string) {
     const { profiles } = await client.listProfiles(orgId);
 
-    return filterProfilesForChatAccess(profiles, { excludeSuperNakama: true });
+    return filterProfilesForChatAccess(profiles, { excludeSuperAirin: true });
   }
 
   async function replyStatus(
@@ -1604,7 +1604,7 @@ function createScopedChatHandler(deps: ChatHandlerDeps) {
     const currentId = sessionStore.get(chatId)?.sessionId;
 
     const menu = new StringSelectMenuBuilder()
-      .setCustomId(`nakama:sessions:${interaction.user.id}`)
+      .setCustomId(`airin:sessions:${interaction.user.id}`)
       .setPlaceholder("Choose a session to resume")
       .addOptions(
         sessions.map((session) => ({
@@ -1724,7 +1724,7 @@ function deriveThreadName(messageText: string): string {
   const cleaned = messageText.replace(/\s+/g, " ").trim();
 
   if (!cleaned) {
-    return "Nakama chat";
+    return "Airin chat";
   }
 
   // Discord thread names are capped at 100 characters.

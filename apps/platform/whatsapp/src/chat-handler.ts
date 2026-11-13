@@ -1,48 +1,48 @@
 import type {
-  NakamaClient,
+  AirinClient,
   RemoteChatSession,
   SendStreamOptions,
-} from "@nakama/client";
+} from "@airin/client";
 import {
   extractPairedTurnArtifacts,
   isAttachOnlyCommand,
   pushDeliverableArtifact,
-} from "@nakama/core";
-import { formatClientError } from "@nakama/core/api-error";
+} from "@airin/core";
+import { formatClientError } from "@airin/core/api-error";
 import {
   clearActiveStream,
   isAbortError,
   registerActiveStream,
   stopActiveStream,
-} from "@nakama/core/channel-active-stream";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
-import { describeChannelStatus } from "@nakama/core/channel-commands";
+} from "@airin/core/channel-active-stream";
+import { createChatLock } from "@airin/core/channel-chat-lock";
+import { describeChannelStatus } from "@airin/core/channel-commands";
 import {
   type ChannelOrgStore,
   findOrgBySelectionInput,
   formatOrgSelectionPrompt,
   formatOrgSwitchConfirmation,
   prepareChannelOrgContext,
-} from "@nakama/core/channel-org";
-import type { ChannelSessionStore } from "@nakama/core/channel-session-store";
-import { createTypingLoop } from "@nakama/core/channel-typing-loop";
+} from "@airin/core/channel-org";
+import type { ChannelSessionStore } from "@airin/core/channel-session-store";
+import { createTypingLoop } from "@airin/core/channel-typing-loop";
 import type {
   SendMessageInput,
   SendMessageRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   MAX_DOCUMENT_BYTES,
   MAX_IMAGE_BYTES,
   normalizeDocumentMediaType,
   validateDocumentAttachments,
   validateImageAttachments,
-} from "@nakama/core/message-content";
-import { pickProfileForOrg } from "@nakama/core/profiles";
+} from "@airin/core/message-content";
+import { pickProfileForOrg } from "@airin/core/profiles";
 import {
   DEFAULT_WHATSAPP_REQUIRE_GROUP_MENTION,
   hasActivePairingCode,
   looksLikePairingCode,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 import {
   downloadContentFromMessage,
   type WASocket,
@@ -77,7 +77,7 @@ import { WhatsAppTodoStatusMessage } from "./todo-status-message";
 
 /** Optional verbose channel worker logging (per-message structural info). */
 function isChannelDebugEnabled(): boolean {
-  return process.env.NAKAMA_CH_DEBUG === "1";
+  return process.env.AIRIN_CH_DEBUG === "1";
 }
 
 const chatLock = createChatLock();
@@ -91,13 +91,13 @@ const LINK_IN_PRIVATE_REPLY =
 const ALREADY_LINKED_REPLY = "This number is already linked.";
 
 const PAIRING_PROMPT =
-  "Welcome to Nakama.\n\n" +
+  "Welcome to Airin.\n\n" +
   "Paste your pairing code from Integrations \u2192 WhatsApp in the web dashboard. " +
   "You only need to do this once for this number.";
 
 export interface ChatHandlerDeps {
   authStore: WhatsAppAuthStore;
-  client: NakamaClient;
+  client: AirinClient;
   config: WhatsAppBridgeConfig;
   getSocket: () => WASocket | null;
   orgStore: ChannelOrgStore;

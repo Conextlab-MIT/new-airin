@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/use-auth";
+import {
+  isAgentChatMuted,
+  syncMutedAgentsToCache,
+} from "@/lib/agent-chat-prefs";
 import { client, formatError } from "@/lib/client";
 
 /** Fired after this device's subscription changes, so every switch re-reads it. */
-const WEB_PUSH_CHANGED = "nakama:web-push-changed";
+const WEB_PUSH_CHANGED = "airin:web-push-changed";
 
-/** Fired when a reply finishes after the user left Nakama. */
-export const REPLY_READY_AWAY = "nakama:reply-ready-away";
+/** Fired when a reply finishes after the user left Airin. */
+export const REPLY_READY_AWAY = "airin:reply-ready-away";
 
 /** Kept per tab, so a reload or a discarded tab still shows the offer. */
-const MISSED_REPLY_KEY = "nakama.webPushPrompt.missedReply";
+const MISSED_REPLY_KEY = "airin.webPushPrompt.missedReply";
 
-/** Nakama is on screen and has focus here. */
+/** Airin is on screen and has focus here. */
 function isOnScreen(): boolean {
   return document.visibilityState === "visible" && document.hasFocus();
 }
@@ -72,7 +76,7 @@ export const webPushSupported = isDesktopApp
   ? typeof window !== "undefined" && "Notification" in window
   : browserPushSupported;
 
-const DESKTOP_NOTIFY_KEY = "nakama.desktopNotify";
+const DESKTOP_NOTIFY_KEY = "airin.desktopNotify";
 
 function readDesktopNotify(): boolean {
   try {
@@ -100,19 +104,25 @@ function writeDesktopNotify(on: boolean): void {
 /**
  * A reply ended. When the user left during the turn, this marks the reply as
  * missed for the notification offer. The desktop app also shows a local
- * notification while Nakama is not in front; the browser gets Web Push.
+ * notification while Airin is not in front; the browser gets Web Push.
  */
 export function notifyReplyReady(message: {
   body: string;
   hidesAtStart: number;
   onOpen: () => void;
+  /** When set, a muted agent chat skips the desktop banner. */
+  profileId?: string;
   tag: string;
   title: string;
 }): void {
+  const muted =
+    message.profileId != null && isAgentChatMuted(message.profileId);
+
   // Hidden only, not unfocused: a window beside another app is still watched.
   if (
-    document.visibilityState === "hidden" ||
-    pageHides !== message.hidesAtStart
+    !muted &&
+    (document.visibilityState === "hidden" ||
+      pageHides !== message.hidesAtStart)
   ) {
     try {
       sessionStorage.setItem(MISSED_REPLY_KEY, "1");
@@ -123,7 +133,7 @@ export function notifyReplyReady(message: {
     window.dispatchEvent(new Event(REPLY_READY_AWAY));
   }
 
-  if (isOnScreen() || !(isDesktopApp && readDesktopNotify())) {
+  if (muted || isOnScreen() || !(isDesktopApp && readDesktopNotify())) {
     return;
   }
 
@@ -286,6 +296,10 @@ export function useWebPush() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    void syncMutedAgentsToCache();
+  }, []);
+
+  useEffect(() => {
     if (!webPushSupported) {
       setEnabled(false);
 
@@ -381,7 +395,7 @@ export function useWebPush() {
 }
 
 /**
- * Tells the server while Nakama is on screen here, so a reply that lands while
+ * Tells the server while Airin is on screen here, so a reply that lands while
  * the user is looking at it does not also buzz their phone.
  */
 export function usePushPresence(): void {

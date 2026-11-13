@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
-import type { SetupChecklistResponse } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { SetupChecklistResponse } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { SkillsService } from "../../services/skills-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { loginUserSession, seedOrgAdmin } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-user-context-routes-test-");
+setupTestConfigDir("airin-user-context-routes-test-");
 
 const ORG_ID = "org_checklist";
 

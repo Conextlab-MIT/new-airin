@@ -1,13 +1,13 @@
 import {
+  AirinApiError,
   fetchGitHubSkillBundle,
-  NakamaApiError,
   parseSkillMarkdown,
   type SkillFrontmatter,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   SkillInstallPreviewResponse,
   SkillsMarketplaceResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { z } from "zod";
 import { resolveSkillsAddCommand } from "./skills-service";
 
@@ -47,7 +47,7 @@ export async function searchSkillsMarketplace(
 
     body = await response.json();
   } catch {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "skills.sh is unavailable. Install from a GitHub URL instead.",
       502
     );
@@ -74,7 +74,7 @@ export async function previewSkillInstall(
   try {
     ({ frontmatter } = parseSkillMarkdown(bundle.content, url));
   } catch (error) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       error instanceof Error
         ? error.message
         : "Skill file is missing or has invalid frontmatter.",

@@ -15,7 +15,7 @@ describe("isLegacySoulPlaceholder", () => {
 
 describe("initSoulDirectory seeding", () => {
   test("upgrades legacy placeholder SOUL.md", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "nakama-soul-legacy-"));
+    const directory = await mkdtemp(join(tmpdir(), "airin-soul-legacy-"));
 
     try {
       await writeFile(
@@ -33,7 +33,7 @@ describe("initSoulDirectory seeding", () => {
   });
 
   test("does not overwrite customized SOUL.md", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "nakama-soul-custom-"));
+    const directory = await mkdtemp(join(tmpdir(), "airin-soul-custom-"));
 
     try {
       await writeFile(
@@ -53,7 +53,7 @@ describe("initSoulDirectory seeding", () => {
 
   test("creates full stack for first install", async () => {
     const directory = await mkdtemp(
-      join(tmpdir(), "nakama-soul-first-install-")
+      join(tmpdir(), "airin-soul-first-install-")
     );
 
     try {

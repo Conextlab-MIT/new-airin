@@ -1,12 +1,12 @@
 import {
   type AgentChannel,
+  AirinApiError,
   COMPOSIO_CUSTOM_AUTH_REQUIRED,
   COMPOSIO_TOOLKIT_SLUG_PATTERN,
   type ComposioToolErrorResult,
-  NakamaApiError,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import {
   isLoopbackComposioCallbackBaseUrl,
@@ -360,12 +360,12 @@ export async function buildComposioConnectTools(
             return {
               code: "COMPOSIO_POLICY",
               error:
-                "Cannot start Composio OAuth from this channel: the callback URL is localhost. Set a reachable public web URL (Settings → Web public URL, or NAKAMA_WEB_PUBLIC_URL), restart the Telegram/WhatsApp/Discord bridge, then ask again.",
+                "Cannot start Composio OAuth from this channel: the callback URL is localhost. Set a reachable public web URL (Settings → Web public URL, or AIRIN_WEB_PUBLIC_URL), restart the Telegram/WhatsApp/Discord bridge, then ask again.",
               toolkitSlug,
             } satisfies ComposioToolErrorResult;
           }
 
-          const { redirectUrl } = await composioService.connectToolkit(
+          const connectResult = await composioService.connectToolkit(
             orgId,
             userId,
             toolkitSlug,
@@ -377,20 +377,29 @@ export async function buildComposioConnectTools(
               ({ orgToolkit }) => orgToolkit.toolkitSlug === toolkitSlug
             )?.orgToolkit.displayName ?? toolkitSlug;
 
+          if (connectResult.connected || !connectResult.redirectUrl) {
+            return {
+              connected: true,
+              displayName,
+              message: `${displayName} needs no sign-in and is ready. Call composio__search_actions for "${toolkitSlug}", then composio__invoke_action.`,
+              toolkitSlug,
+            };
+          }
+
           return {
             displayName,
             instructions:
               "Reply with the link as clickable markdown. Tell the user to authorize, then return to chat and ask again.",
-            message: `Share this link with the user so they can connect ${displayName}: ${redirectUrl}`,
-            redirectUrl,
+            message: `Share this link with the user so they can connect ${displayName}: ${connectResult.redirectUrl}`,
+            redirectUrl: connectResult.redirectUrl,
             toolkitSlug,
           };
         } catch (error) {
           // The model relays this text to whoever is chatting, maybe a member,
-          // so only Nakama's own messages pass. Raw Composio text goes to the log.
+          // so only Airin's own messages pass. Raw Composio text goes to the log.
           let message = "Composio could not start sign-in. Try again later.";
 
-          if (error instanceof NakamaApiError) {
+          if (error instanceof AirinApiError) {
             message = error.message;
           } else {
             console.error("[composio] connect_account failed", error);
@@ -398,7 +407,7 @@ export async function buildComposioConnectTools(
 
           // A retry cannot fix a missing auth config. Only an admin can.
           const customAuth =
-            error instanceof NakamaApiError &&
+            error instanceof AirinApiError &&
             error.code === COMPOSIO_CUSTOM_AUTH_REQUIRED;
 
           return {

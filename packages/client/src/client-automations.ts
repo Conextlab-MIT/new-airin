@@ -23,8 +23,8 @@ import type {
   UpdateAutomationRequest,
   UpdateWorkflowRequest,
   WorkflowSqliteInspectResponse,
-} from "@nakama/core/contract";
-import { withDisabledFetchIdle } from "@nakama/core/fetch-idle";
+} from "@airin/core/contract";
+import { withDisabledFetchIdle } from "@airin/core/fetch-idle";
 import { PluginsClient } from "./client-plugins";
 
 /** Automations and workflows. */

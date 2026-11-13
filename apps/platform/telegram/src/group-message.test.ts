@@ -114,10 +114,10 @@ describe("group-message helpers", () => {
             length: 8,
             offset: 0,
             type: "text_mention" as const,
-            user: { first_name: "Nakama", id: botInfo.id, is_bot: true },
+            user: { first_name: "Airin", id: botInfo.id, is_bot: true },
           },
         ],
-        text: "Nakama hello",
+        text: "Airin hello",
       },
     };
 

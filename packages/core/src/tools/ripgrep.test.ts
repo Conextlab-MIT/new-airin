@@ -6,7 +6,7 @@ import { buildRipgrepArgs, runRipgrep } from "./ripgrep";
 
 describe("runRipgrep", () => {
   test("a match on one huge line is dropped without buffering the line", async () => {
-    const root = await mkdtemp(join(tmpdir(), "nakama-rg-"));
+    const root = await mkdtemp(join(tmpdir(), "airin-rg-"));
 
     try {
       await writeFile(

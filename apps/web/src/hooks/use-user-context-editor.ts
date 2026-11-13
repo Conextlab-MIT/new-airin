@@ -1,8 +1,8 @@
-import type { UserContextStatusResponse } from "@nakama/core";
-import { renderUserContext } from "@nakama/core/user-context";
+import type { UserContextStatusResponse } from "@airin/core";
+import { renderUserContext } from "@airin/core/user-context";
 import { useState } from "react";
 
-const DRAFT_PREFIX = "nakama:user-context-draft:";
+const DRAFT_PREFIX = "airin:user-context-draft:";
 
 function readDraft(orgId: string | null | undefined): string | null {
   if (!orgId) {

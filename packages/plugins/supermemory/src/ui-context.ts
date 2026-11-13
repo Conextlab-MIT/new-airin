@@ -1,4 +1,4 @@
-import type * as UI from "@nakama/ui";
+import type * as UI from "@airin/ui";
 import type * as ReactType from "react";
 import type { JsonRecord, JsonValue } from "./actions";
 

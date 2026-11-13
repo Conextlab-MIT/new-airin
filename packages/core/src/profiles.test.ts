@@ -35,11 +35,11 @@ const profiles: ProfileSummary[] = [
   },
   {
     ...profileDefaults,
-    id: "super_nakama",
+    id: "super_airin",
     isDefault: false,
     isSuper: true,
     model: null,
-    name: "Super Nakama",
+    name: "Airin",
   },
 ];
 
@@ -50,12 +50,12 @@ describe("resolveProfileInput", () => {
     expect(resolveProfileInput(profiles, "2")?.id).toBe("profile_b");
   });
 
-  test("matches super nakama aliases", () => {
-    expect(resolveProfileInput(profiles, "super_nakama")?.id).toBe(
-      "super_nakama"
+  test("matches super airin aliases", () => {
+    expect(resolveProfileInput(profiles, "super_airin")?.id).toBe(
+      "super_airin"
     );
-    expect(resolveProfileInput(profiles, "super-nakama")?.id).toBe(
-      "super_nakama"
+    expect(resolveProfileInput(profiles, "super-airin")?.id).toBe(
+      "super_airin"
     );
   });
 
@@ -82,7 +82,7 @@ describe("resolveProfileInput", () => {
 });
 
 describe("filterProfilesForChatAccess", () => {
-  test("hides super nakama from org members and channel bridges", () => {
+  test("hides super airin from org members and channel bridges", () => {
     expect(
       filterProfilesForChatAccess(profiles, { orgRole: "member" }).map(
         (profile) => profile.id
@@ -90,18 +90,18 @@ describe("filterProfilesForChatAccess", () => {
     ).toEqual(["profile_b", "profile_a"]);
     expect(
       filterProfilesForChatAccess(profiles, {
-        excludeSuperNakama: true,
+        excludeSuperAirin: true,
         orgRole: "admin",
       }).map((profile) => profile.id)
     ).toEqual(["profile_b", "profile_a"]);
   });
 
-  test("keeps super nakama for org admins", () => {
+  test("keeps super airin for org admins", () => {
     expect(
       filterProfilesForChatAccess(profiles, { orgRole: "admin" }).map(
         (profile) => profile.id
       )
-    ).toEqual(["profile_b", "profile_a", "super_nakama"]);
+    ).toEqual(["profile_b", "profile_a", "super_airin"]);
   });
 });
 

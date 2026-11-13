@@ -2,11 +2,8 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { loadLocalAuthToken, verifyLocalAuthToken } from "@nakama/core";
-import {
-  createInMemoryDatabaseAdapter,
-  createSqliteDatabase,
-} from "@nakama/db";
+import { loadLocalAuthToken, verifyLocalAuthToken } from "@airin/core";
+import { createInMemoryDatabaseAdapter, createSqliteDatabase } from "@airin/db";
 import { AuthService } from "../services/auth-service";
 import { GoogleMeetService } from "../services/google-meet/service";
 import { OrgService } from "../services/org-service";
@@ -25,7 +22,7 @@ import {
 } from "./test-org-helpers";
 import { setupFreshInstallSession } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-http-app-test-");
+setupTestConfigDir("airin-http-app-test-");
 
 function createServerOptions() {
   const databaseAdapter = createInMemoryDatabaseAdapter();
@@ -265,21 +262,21 @@ describe("createHonoApp", () => {
 
   test("opt-in metrics and JSON logs correlate requests without logging URL secrets", async () => {
     const previous = {
-      format: process.env.NAKAMA_LOG_FORMAT,
-      level: process.env.NAKAMA_LOG_LEVEL,
-      metrics: process.env.NAKAMA_METRICS,
+      format: process.env.AIRIN_LOG_FORMAT,
+      level: process.env.AIRIN_LOG_LEVEL,
+      metrics: process.env.AIRIN_METRICS,
     };
 
     const output = spyOn(console, "log").mockImplementation(() => {});
 
     try {
-      delete process.env.NAKAMA_METRICS;
+      delete process.env.AIRIN_METRICS;
       expect(
         (await createMinimalHonoApp().app.request("/metrics")).status
       ).toBe(404);
-      process.env.NAKAMA_METRICS = "true";
-      process.env.NAKAMA_LOG_FORMAT = "json";
-      process.env.NAKAMA_LOG_LEVEL = "debug";
+      process.env.AIRIN_METRICS = "true";
+      process.env.AIRIN_LOG_FORMAT = "json";
+      process.env.AIRIN_LOG_LEVEL = "debug";
       output.mockClear();
 
       const { app, databaseAdapter } = createMinimalHonoApp({
@@ -314,9 +311,9 @@ describe("createHonoApp", () => {
       const metrics = await app.request("/metrics");
       expect(metrics.status).toBe(200);
       expect(metrics.headers.get("Content-Type")).toContain("text/plain");
-      expect(await metrics.text()).toContain("nakama_http_requests_total 2");
+      expect(await metrics.text()).toContain("airin_http_requests_total 2");
 
-      process.env.NAKAMA_LOG_LEVEL = "warn";
+      process.env.AIRIN_LOG_LEVEL = "warn";
       output.mockClear();
       await app.request("/healthz");
       expect(output).not.toHaveBeenCalled();
@@ -340,7 +337,7 @@ describe("createHonoApp", () => {
           status: 500,
         });
         expect(await (await app.request("/metrics")).text()).toContain(
-          "nakama_http_server_errors_total 1"
+          "airin_http_server_errors_total 1"
         );
       } finally {
         failure.mockRestore();
@@ -349,9 +346,9 @@ describe("createHonoApp", () => {
       output.mockRestore();
 
       for (const [key, value] of [
-        ["NAKAMA_METRICS", previous.metrics],
-        ["NAKAMA_LOG_FORMAT", previous.format],
-        ["NAKAMA_LOG_LEVEL", previous.level],
+        ["AIRIN_METRICS", previous.metrics],
+        ["AIRIN_LOG_FORMAT", previous.format],
+        ["AIRIN_LOG_LEVEL", previous.level],
       ]) {
         if (value === undefined) {
           delete process.env[key!];
@@ -363,8 +360,8 @@ describe("createHonoApp", () => {
   });
 
   test("accepts opaque bearer auth for internal clients", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-bearer-auth-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-bearer-auth-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       const options = createServerOptions();
@@ -406,17 +403,17 @@ describe("createHonoApp", () => {
         enabled: false,
       });
     } finally {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
       await rm(configDir, { force: true, recursive: true });
     }
   });
 
   test("auto-provisions local client user on first bearer auth", async () => {
     const configDir = await mkdtemp(
-      join(tmpdir(), "nakama-bearer-auth-autoprovision-")
+      join(tmpdir(), "airin-bearer-auth-autoprovision-")
     );
 
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       const options = createServerOptions();
@@ -446,7 +443,7 @@ describe("createHonoApp", () => {
         await options.databaseAdapter.getUserByEmail(LOCAL_CLIENT_EMAIL)
       ).not.toBeNull();
     } finally {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
       await rm(configDir, { force: true, recursive: true });
     }
   });

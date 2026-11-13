@@ -1,13 +1,13 @@
 import {
+  AirinApiError,
   type ChatgptOAuthCredentials,
   chatgptOAuthNeedsRefresh,
   findProviderInstance,
   isChatgptProviderConnected,
-  NakamaApiError,
   type ProviderInstance,
   readChatgptOAuthFromInstance,
   type UserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   CHATGPT_CODEX_BASE_URL,
   readChatgptPlanType,
@@ -41,14 +41,14 @@ export function resolveChatgptImageGenerationSelection(
   const model = modelId.trim();
 
   if (!oauth) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `ChatGPT provider "${instance.label}" is not connected. Reconnect in Settings → AI Providers (/settings/providers).`,
       400
     );
   }
 
   if (!model) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Configured image generation model is invalid. Update it in Settings → AI Providers (/settings/providers#image-generation).",
       400
     );
@@ -158,7 +158,7 @@ export async function generateImageWithChatgpt(
   const model = input.model?.trim();
 
   if (!model) {
-    throw new NakamaApiError("Image generation model is required.", 400);
+    throw new AirinApiError("Image generation model is required.", 400);
   }
 
   const size = normalizeImageGenerationSize(input.size);
@@ -191,11 +191,11 @@ export async function generateImageWithChatgpt(
         return rethrowTimeout(error);
       }
 
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         throw error;
       }
 
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `ChatGPT token refresh failed: ${error instanceof Error ? error.message : String(error)}`,
         502
       );
@@ -231,7 +231,7 @@ export async function generateImageWithChatgpt(
         "ChatGPT-Account-ID": credentials.accountId,
         "Content-Type": "application/json",
         "OpenAI-Beta": "responses=v1",
-        originator: "nakama",
+        originator: "airin",
       },
       method: "POST",
       signal,
@@ -261,7 +261,7 @@ export async function generateImageWithChatgpt(
 
     // Codex answers a Free account's image call with a raw 400.
     if (response.status === 400 && readChatgptPlanType(oauth) === "free") {
-      throw new NakamaApiError(CHATGPT_FREE_IMAGE_MESSAGE, 400);
+      throw new AirinApiError(CHATGPT_FREE_IMAGE_MESSAGE, 400);
     }
 
     throw buildProviderHttpError(
@@ -272,7 +272,7 @@ export async function generateImageWithChatgpt(
   }
 
   if (!response.body) {
-    throw new NakamaApiError("Image generation returned no image data.", 502);
+    throw new AirinApiError("Image generation returned no image data.", 502);
   }
 
   const image: ChatgptImageStreamResult = {};
@@ -284,14 +284,14 @@ export async function generateImageWithChatgpt(
   }).catch(rethrowTimeout);
 
   if (image.error !== undefined) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Image generation failed: ${image.error || "the provider returned an error."}`,
       502
     );
   }
 
   if (!image.b64) {
-    throw new NakamaApiError("Image generation returned no image data.", 502);
+    throw new AirinApiError("Image generation returned no image data.", 502);
   }
 
   const result: GenerateImageResult = {

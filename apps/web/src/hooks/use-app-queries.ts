@@ -14,7 +14,7 @@ import type {
   UpdateWebSearchSettingsRequest,
   UpdateWhatsAppSettingsRequest,
   WebPublicUrlSettingsResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   type QueryClient,
   type QueryKey,
@@ -27,6 +27,7 @@ import { createContext, useCallback, useContext, useEffect } from "react";
 import { useAuth } from "@/context/use-auth";
 import { prefetchTimezoneData } from "@/hooks/use-timezones";
 import { client } from "@/lib/client";
+import { needsMfaEnrollment } from "@/lib/mfa";
 import { invalidateQueries } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -641,36 +642,36 @@ export function AppQueryPrefetch() {
   return null;
 }
 
-export function useNakamaVersionQuery(enabled: boolean) {
+export function useAirinVersionQuery(enabled: boolean) {
   return useQuery({
     enabled,
-    queryFn: () => client.getNakamaVersion(),
-    queryKey: queryKeys.nakamaVersion,
+    queryFn: () => client.getAirinVersion(),
+    queryKey: queryKeys.airinVersion,
     retry: false,
     staleTime: 60 * 60 * 1000,
   });
 }
 
 /** Polls while the updater runs, and keeps polling through the restart. */
-export function useNakamaUpgradeQuery(enabled: boolean) {
+export function useAirinUpgradeQuery(enabled: boolean) {
   return useQuery({
     enabled,
-    queryFn: () => client.getNakamaUpgrade(),
-    queryKey: queryKeys.nakamaUpgrade,
+    queryFn: () => client.getAirinUpgrade(),
+    queryKey: queryKeys.airinUpgrade,
     refetchInterval: (query) =>
       query.state.data?.available || query.state.error ? 3000 : false,
     retry: false,
   });
 }
 
-export function useStartNakamaUpgrade() {
+export function useStartAirinUpgrade() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (request: { rollback?: boolean; version: string }) =>
-      client.startNakamaUpgrade(request.version, request.rollback),
+      client.startAirinUpgrade(request.version, request.rollback),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.nakamaUpgrade }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.airinUpgrade }),
   });
 }
 
@@ -686,8 +687,11 @@ export function useModelsQuery(options?: { enabled?: boolean }) {
 }
 
 export function useProfilesQuery(orgId?: string | null) {
+  const { user } = useAuth();
+  const mfaPending = needsMfaEnrollment(user);
+
   return useQuery({
-    enabled: orgId === undefined || Boolean(orgId),
+    enabled: !mfaPending && (orgId === undefined || Boolean(orgId)),
     queryFn: async () => (await client.listProfiles()).profiles,
     // One key for every caller, so the sidebar and the chat page share a
     // request. The cache is cleared when the active org changes.

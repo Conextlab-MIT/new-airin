@@ -1,5 +1,5 @@
-import type { AgentTodo } from "@nakama/core/contract";
-import { renderTelegramPlainText } from "@nakama/core/telegram-rich-text";
+import type { AgentTodo } from "@airin/core/contract";
+import { renderTelegramPlainText } from "@airin/core/telegram-rich-text";
 
 export function prepareTelegramReply(text: string): string {
   return text.trim();
@@ -66,7 +66,7 @@ function formatTelegramTodoLine(todo: AgentTodo): string {
   }
 }
 
-export const HELP_TEXT = `Nakama Telegram commands:
+export const HELP_TEXT = `Airin Telegram commands:
 
 /start — welcome and show this message
 /help — show this message

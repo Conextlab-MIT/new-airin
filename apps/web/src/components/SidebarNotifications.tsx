@@ -1,5 +1,5 @@
-import { Popover, PopoverContent, PopoverTrigger } from "@nakama/ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@airin/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
 import { ArrowUp01Icon, Notification01Icon } from "hugeicons-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";

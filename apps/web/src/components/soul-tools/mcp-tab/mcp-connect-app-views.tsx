@@ -1,13 +1,10 @@
-import type {
-  McpRegistryServer,
-  McpServerSummary,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { buttonVariants } from "@nakama/ui/button-variants";
-import { DialogTitle } from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import type { McpRegistryServer, McpServerSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { buttonVariants } from "@airin/ui/button-variants";
+import { DialogTitle } from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Add01Icon,

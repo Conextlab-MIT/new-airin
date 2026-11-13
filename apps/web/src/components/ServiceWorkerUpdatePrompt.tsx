@@ -1,9 +1,9 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import { useState } from "react";
 import { useServiceWorkerUpdate } from "@/hooks/use-service-worker-update";
 
 /** Set for the rest of the browser session after the user picks Later. */
-const UPDATE_LATER_KEY = "nakama-update-later";
+const UPDATE_LATER_KEY = "airin-update-later";
 
 function readLater(): boolean {
   try {
@@ -38,7 +38,7 @@ export function ServiceWorkerUpdatePrompt() {
       role="status"
     >
       <p className="min-w-0 flex-1 truncate text-foreground text-sm">
-        {version ? `Nakama ${version} is ready.` : "A new version is ready."}
+        {version ? `Airin ${version} is ready.` : "A new version is ready."}
       </p>
       <div className="flex shrink-0 gap-1">
         <Button onClick={postpone} size="sm" type="button" variant="ghost">

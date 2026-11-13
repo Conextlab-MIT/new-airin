@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { getUserConfigDir, readTextOrNull, writeTextFile } from "@nakama/core";
+import { getUserConfigDir, readTextOrNull, writeTextFile } from "@airin/core";
 import { stripAnsi } from "./text-measure";
 
 type NamedColor = "default" | "cyan" | "yellow" | "red" | "green";
@@ -31,7 +31,7 @@ export interface StyledLine {
   segments: StyledSegment[];
 }
 
-/** Persistable CLI runtime hints under `~/.nakama/cli-state.json`. */
+/** Persistable CLI runtime hints under `~/.airin/cli-state.json`. */
 interface CliState {
   macosTheme?: Theme;
   /** mtimeMs of `~/Library/Preferences/.GlobalPreferences.plist` when cached. */

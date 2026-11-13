@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, symlink, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { getProfileSoulDir, NakamaApiError } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { AirinApiError, getProfileSoulDir } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -15,7 +15,7 @@ import {
   type TestBrowserSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-profiles-artifacts-auth-test-");
+setupTestConfigDir("airin-profiles-artifacts-auth-test-");
 
 test("workspace rename requires platform admin access and updates pins for every user only in this profile", async () => {
   const databaseAdapter = createInMemoryDatabaseAdapter();
@@ -27,7 +27,7 @@ test("workspace rename requires platform admin access and updates pins for every
         const profile = await databaseAdapter.getProfile(profileId);
 
         if (!profile || profile.orgId !== orgId) {
-          throw new NakamaApiError("Not found", 404);
+          throw new AirinApiError("Not found", 404);
         }
 
         return { profile };
@@ -265,7 +265,7 @@ function createApp() {
   const agent = {
     getProfile: async (_orgId: string, profileId: string) => {
       if (profileId !== "profile_1") {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       return {
@@ -319,7 +319,7 @@ function createApp() {
       scopeCalls.push(createdByUserId);
 
       if (filename === "missing.md") {
-        throw new NakamaApiError(`Artifact not found: ${filename}`, 404);
+        throw new AirinApiError(`Artifact not found: ${filename}`, 404);
       }
 
       return {
@@ -812,7 +812,7 @@ test("personal file pins persist and enforce user, org, profile and path boundar
         const profile = await databaseAdapter.getProfile(profileId);
 
         if (!profile || profile.orgId !== orgId) {
-          throw new NakamaApiError("Not found", 404);
+          throw new AirinApiError("Not found", 404);
         }
 
         return { profile };

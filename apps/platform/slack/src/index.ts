@@ -1,27 +1,27 @@
 import { join } from "node:path";
-import { NakamaClient } from "@nakama/client";
+import { AirinClient } from "@airin/client";
 import {
   installErrorHandlers,
   installErrorTrackingSink,
   log,
   splitTelegramChunks,
-} from "@nakama/core";
-import { hasActiveStreams } from "@nakama/core/channel-active-stream";
-import { channelOwnerFromEnv } from "@nakama/core/channel-config-shared";
-import { ChannelSessionStore } from "@nakama/core/channel-session-store";
+} from "@airin/core";
+import { hasActiveStreams } from "@airin/core/channel-active-stream";
+import { channelOwnerFromEnv } from "@airin/core/channel-config-shared";
+import { ChannelSessionStore } from "@airin/core/channel-session-store";
 import {
   ensureServerRunning,
   stopSpawnedServer,
-} from "@nakama/core/ensure-server";
-import { loadLocalAuthToken } from "@nakama/core/local-auth";
-import { resolveWebPublicUrl } from "@nakama/core/runtime";
+} from "@airin/core/ensure-server";
+import { loadLocalAuthToken } from "@airin/core/local-auth";
+import { resolveWebPublicUrl } from "@airin/core/runtime";
 import {
   callSlackApi,
   getSlackConfigDir,
   loadSlackConfigFile,
   type SlackMember,
-} from "@nakama/core/slack-config";
-import { createSlackWorkerHeartbeat } from "@nakama/core/slack-worker";
+} from "@airin/core/slack-config";
+import { createSlackWorkerHeartbeat } from "@airin/core/slack-worker";
 import {
   createChatHandler,
   createSlackEventHandler,
@@ -58,7 +58,7 @@ async function shutdown(code: number): Promise<never> {
 
   if (hasActiveStreams()) {
     console.warn(
-      "Leaving the spawned Nakama server running so in-flight agent turns can finish; the next worker start will reuse it."
+      "Leaving the spawned Airin server running so in-flight agent turns can finish; the next worker start will reuse it."
     );
   } else {
     stopSpawnedServer(spawnedChild);
@@ -142,8 +142,8 @@ try {
   const { serverUrl, spawnedChild: child } = await ensureServerRunning();
   spawnedChild = child;
 
-  const client = new NakamaClient({
-    authToken: (await loadLocalAuthToken("slack@nakama.internal")) ?? undefined,
+  const client = new AirinClient({
+    authToken: (await loadLocalAuthToken("slack@airin.internal")) ?? undefined,
     baseUrl: serverUrl,
     clientOrigin: resolveWebPublicUrl(),
   });

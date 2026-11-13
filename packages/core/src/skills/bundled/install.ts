@@ -20,7 +20,7 @@ const FORCE_REFRESH_BUNDLED_SKILL_NAMES = new Set<string>([
   "artifact-design",
   "slide-deck-design",
   "archive-profile-memory",
-  "nakama-guide",
+  "airin-guide",
   "grounded-research",
 ]);
 

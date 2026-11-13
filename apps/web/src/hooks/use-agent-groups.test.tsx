@@ -4,8 +4,8 @@ import type {
   AgentGroupRun,
   AgentGroupSessionDetail,
   AgentGroupThreadDetail,
-} from "@nakama/core/agent-groups";
-import type { DocumentAttachment } from "@nakama/core/contract";
+} from "@airin/core/agent-groups";
+import type { DocumentAttachment } from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

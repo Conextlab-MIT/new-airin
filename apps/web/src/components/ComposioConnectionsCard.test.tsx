@@ -1,6 +1,6 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core/api-error";
-import { COMPOSIO_CUSTOM_AUTH_REQUIRED } from "@nakama/core/contract";
+import { AirinApiError } from "@airin/core/api-error";
+import { COMPOSIO_CUSTOM_AUTH_REQUIRED } from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -130,7 +130,7 @@ async function openMissingAuthConfigDialog(role: "admin" | "member") {
     }),
     spyOn(client, "listProfiles").mockResolvedValue({ profiles: [] }),
     spyOn(client, "connectComposioToolkit").mockRejectedValue(
-      new NakamaApiError("No managed auth.", 422, undefined, undefined, {
+      new AirinApiError("No managed auth.", 422, undefined, undefined, {
         code: COMPOSIO_CUSTOM_AUTH_REQUIRED,
       })
     ),

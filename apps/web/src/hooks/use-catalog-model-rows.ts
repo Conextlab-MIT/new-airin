@@ -1,4 +1,4 @@
-import type { ProviderModelOption } from "@nakama/core/contract";
+import type { ProviderModelOption } from "@airin/core/contract";
 import { useCallback, useMemo, useState } from "react";
 import { isCatalogShortlistProvider } from "@/components/catalog-provider-model-fields.shared";
 import type { ModelListRow } from "@/components/ModelListEditor";

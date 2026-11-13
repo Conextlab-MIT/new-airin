@@ -1,7 +1,7 @@
 import {
   type ProviderClient,
   resolveMessagesForNonVisionProvider,
-} from "@nakama/core";
+} from "@airin/core";
 
 export function wrapProviderForNonVision(
   provider: ProviderClient

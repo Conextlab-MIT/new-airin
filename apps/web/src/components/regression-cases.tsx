@@ -2,18 +2,18 @@ import {
   type CreateRegressionCaseRequest,
   type ListRegressionCasesResponse,
   MAX_REGRESSION_EXPECTED_RESULT_LENGTH,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { Textarea } from "@nakama/ui/textarea";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { Textarea } from "@airin/ui/textarea";
+import { toast } from "@airin/ui/toast";
 import {
   type UseMutationResult,
   useInfiniteQuery,

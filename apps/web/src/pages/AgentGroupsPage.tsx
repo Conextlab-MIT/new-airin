@@ -1,15 +1,15 @@
-import type { ProfileSummary } from "@nakama/core";
-import type { AgentGroup } from "@nakama/core/agent-groups";
-import { Button } from "@nakama/ui";
-import { ConfirmDialog } from "@nakama/ui/dialog";
+import type { ProfileSummary } from "@airin/core";
+import type { AgentGroup } from "@airin/core/agent-groups";
+import { Button } from "@airin/ui";
+import { ConfirmDialog } from "@airin/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dropdown-menu";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
 import {
   Delete02Icon,
   MoreHorizontalIcon,

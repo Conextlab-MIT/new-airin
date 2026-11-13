@@ -1,4 +1,4 @@
-import type { TransferProgress } from "@nakama/client";
+import type { TransferProgress } from "@airin/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import { invalidateQueries } from "@/lib/query-client";

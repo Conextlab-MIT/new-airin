@@ -2,19 +2,19 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import {
+  AirinApiError,
   assertConfigPathSegment,
   type JsonSchema,
-  NakamaApiError,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   MeetAction,
   MeetActionResults,
   MeetImportProgress,
   Meeting,
-} from "@nakama/core/google-meet";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core/google-meet";
+import type { DatabaseAdapter } from "@airin/db";
 import type { ServerWebSocket, WebSocketHandler } from "bun";
 import { z } from "zod";
 import type { ComposioService } from "../composio-service";
@@ -202,9 +202,9 @@ export class GoogleMeetService {
     }
 
     const unused = [
-      "NAKAMA_MEET_CAPTURE_HOST",
-      "NAKAMA_MEET_CAPTURE_ORIGIN",
-      "NAKAMA_MEET_CAPTURE_PORT",
+      "AIRIN_MEET_CAPTURE_HOST",
+      "AIRIN_MEET_CAPTURE_ORIGIN",
+      "AIRIN_MEET_CAPTURE_PORT",
     ].filter((name) => process.env[name] !== undefined);
 
     if (unused.length) {
@@ -235,7 +235,7 @@ export class GoogleMeetService {
   ensureOrganization(orgId: string): Promise<void> {
     if (this.abort.signal.aborted || this.paused) {
       return Promise.reject(
-        new NakamaApiError("Google Meet is temporarily unavailable", 503)
+        new AirinApiError("Google Meet is temporarily unavailable", 503)
       );
     }
 
@@ -261,7 +261,7 @@ export class GoogleMeetService {
 
   private async initializeOrganization(orgId: string) {
     if (!(await this.db.getOrganizationById(orgId))) {
-      throw new NakamaApiError("Organization unavailable", 404);
+      throw new AirinApiError("Organization unavailable", 404);
     }
 
     const directory = this.directory(orgId);
@@ -322,7 +322,7 @@ export class GoogleMeetService {
           !(orgId && profileId && actor.id) ||
           (actor.role !== "admin" && actor.role !== "member")
         ) {
-          throw new NakamaApiError("Forbidden", 403);
+          throw new AirinApiError("Forbidden", 403);
         }
 
         const member = await this.db.getOrgMember(orgId, actor.id);
@@ -332,7 +332,7 @@ export class GoogleMeetService {
           (member.role !== "admin" && member.role !== "member") ||
           !(await this.db.getProfileForOrg(profileId, orgId))
         ) {
-          throw new NakamaApiError("Forbidden", 403);
+          throw new AirinApiError("Forbidden", 403);
         }
 
         const assigned = await this.db.listToolsForProfile(profileId);
@@ -345,7 +345,7 @@ export class GoogleMeetService {
               tool.orgId === orgId
           )
         ) {
-          throw new NakamaApiError("Forbidden", 403);
+          throw new AirinApiError("Forbidden", 403);
         }
 
         const parsedInput = meetingActionSchemas[action].parse(input);
@@ -389,7 +389,7 @@ export class GoogleMeetService {
     captureSocketUrl?: string
   ): Promise<MeetActionResults[Action]> {
     if (!actor.id || (actor.role !== "admin" && actor.role !== "member")) {
-      return Promise.reject(new NakamaApiError("Forbidden", 403));
+      return Promise.reject(new AirinApiError("Forbidden", 403));
     }
 
     if (
@@ -398,14 +398,14 @@ export class GoogleMeetService {
       this.blockedOrganizations.has(orgId)
     ) {
       return Promise.reject(
-        new NakamaApiError("Google Meet is temporarily unavailable", 503)
+        new AirinApiError("Google Meet is temporarily unavailable", 503)
       );
     }
 
     const count = this.activeActions.get(orgId) ?? 0;
 
     if (count >= 4) {
-      return Promise.reject(new NakamaApiError("Google Meet is busy", 429));
+      return Promise.reject(new AirinApiError("Google Meet is busy", 429));
     }
 
     this.activeActions.set(orgId, count + 1);
@@ -428,7 +428,7 @@ export class GoogleMeetService {
       const organization = await this.db.getOrganizationById(orgId);
 
       if (!organization || organization.archivedAt) {
-        throw new NakamaApiError("Organization unavailable", 404);
+        throw new AirinApiError("Organization unavailable", 404);
       }
 
       if (
@@ -566,11 +566,11 @@ export class GoogleMeetService {
   /** Starts pairing a browser. The code is shown to the member, who approves it. */
   startPairing(userAgent: string | null) {
     if (this.paused || this.abort.signal.aborted) {
-      throw new NakamaApiError("Google Meet is temporarily unavailable", 503);
+      throw new AirinApiError("Google Meet is temporarily unavailable", 503);
     }
 
     if (this.pairings.size >= MAX_PAIRINGS) {
-      throw new NakamaApiError("Too many pending pairings", 429);
+      throw new AirinApiError("Too many pending pairings", 429);
     }
 
     let code = pairingCode();
@@ -605,7 +605,7 @@ export class GoogleMeetService {
     const pairing = this.pairings.get(pairId);
 
     if (!pairing || pairing.expiresAt <= Date.now()) {
-      throw new NakamaApiError("Pairing not found", 404);
+      throw new AirinApiError("Pairing not found", 404);
     }
 
     if (!pairing.approved) {
@@ -657,7 +657,7 @@ export class GoogleMeetService {
     }
 
     if (this.paused || this.abort.signal.aborted) {
-      throw new NakamaApiError("Google Meet is temporarily unavailable", 503);
+      throw new AirinApiError("Google Meet is temporarily unavailable", 503);
     }
 
     const orgId = Buffer.from(match[1], "base64url").toString("utf8");
@@ -1086,7 +1086,7 @@ export class GoogleMeetService {
 
   pauseOrganization(orgId: string) {
     if ([...this.tasks.values()].includes(orgId)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Wait for Google Meet imports before archiving this organization",
         409
       );
@@ -1104,8 +1104,8 @@ export class GoogleMeetService {
       this.sockets.size ||
       this.sessions.size
     ) {
-      // A NakamaApiError, so the scheduled backup status keeps this reason for the admin
-      throw new NakamaApiError(
+      // A AirinApiError, so the scheduled backup status keeps this reason for the admin
+      throw new AirinApiError(
         "Stop Google Meet capture and wait for imports/transcription before backing up or restoring",
         409
       );

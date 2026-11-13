@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import { Delete02Icon } from "hugeicons-react";
 import { ComposioToolkitAssignPicker } from "@/components/ComposioToolkitAssignPicker";
 import type { RemoveAssignmentTarget } from "@/pages/profiles/profiles-page.shared";

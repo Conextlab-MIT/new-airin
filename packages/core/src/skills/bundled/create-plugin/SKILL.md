@@ -1,6 +1,6 @@
 ---
 name: create-plugin
-description: Draft or build a custom Nakama plugin with actions, a dashboard page, skills, workers, and migrations. Use when the user asks to create or change a plugin.
+description: Draft or build a custom Airin plugin with actions, a dashboard page, skills, workers, and migrations. Use when the user asks to create or change a plugin.
 ---
 
 Create a local draft for human review. Never install or enable the plugin yourself.
@@ -62,7 +62,7 @@ Host calls, one at a time: `await context.host({op:"profiles"})`, `{op:"tools",a
 
 Keep the template's structure: the JSX pragma lines, module-level `let React;`, `React = ctx.React;` in `apply`, `ctx.styles(css)`, one `ctx.slots.register("page", Page)`, and optional `tool:<actionKey>` renderers (they get `action`, `input`, `result`, `status`). Call actions with `await ctx.host.call(actionKey, input)`. Clean up effects.
 
-`ctx.ui` gives: `Button` (variants `default`, `outline`, `ghost`, `secondary`, `destructive`, `link`; `size="sm"` in rows), `Input`, `Textarea`, `FormField`, `Select` parts, `Switch`, `Checkbox`, `Card` parts, `Dialog` parts, `ConfirmDialog`, `DropdownMenu` parts, `Tooltip`, `Spinner`, `Table` parts, and `CodeBlock`. There is no `toast()`, `cn()`, or icon set. Open `src/nakama-plugin.d.ts` only to look up the props of a component the template does not use.
+`ctx.ui` gives: `Button` (variants `default`, `outline`, `ghost`, `secondary`, `destructive`, `link`; `size="sm"` in rows), `Input`, `Textarea`, `FormField`, `Select` parts, `Switch`, `Checkbox`, `Card` parts, `Dialog` parts, `ConfirmDialog`, `DropdownMenu` parts, `Tooltip`, `Spinner`, `Table` parts, and `CodeBlock`. There is no `toast()`, `cn()`, or icon set. Open `src/airin-plugin.d.ts` only to look up the props of a component the template does not use.
 
 Style rules (`build-plugin.mjs` checks most of them):
 

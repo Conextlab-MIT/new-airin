@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readWorkerDesiredState, setWorkerDesiredRunning } from "@nakama/core";
-import { saveWhatsAppConfig } from "@nakama/core/whatsapp-config";
-import { readWhatsAppHostChannels } from "@nakama/core/whatsapp-worker";
+import { readWorkerDesiredState, setWorkerDesiredRunning } from "@airin/core";
+import { saveWhatsAppConfig } from "@airin/core/whatsapp-config";
+import { readWhatsAppHostChannels } from "@airin/core/whatsapp-worker";
 import { WorkerManagerService } from "./worker-manager-service";
 
 type Pm2Client = NonNullable<
@@ -37,8 +37,8 @@ const projectRoot = "/tmp/test-project";
 let configDir: string | null = null;
 
 beforeEach(async () => {
-  configDir = await mkdtemp(join(tmpdir(), "nakama-whatsapp-host-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  configDir = await mkdtemp(join(tmpdir(), "airin-whatsapp-host-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
 });
 
 afterEach(async () => {
@@ -47,7 +47,7 @@ afterEach(async () => {
     configDir = null;
   }
 
-  delete process.env.NAKAMA_CONFIG_DIR;
+  delete process.env.AIRIN_CONFIG_DIR;
 });
 
 describe("WhatsApp host worker", () => {
@@ -85,13 +85,9 @@ describe("WhatsApp host worker", () => {
     ).toBe(token);
     expect(start).toHaveBeenCalledTimes(1);
     expect(start.mock.calls[0][0].name).toBe("whatsapp-host");
-    expect(start.mock.calls[0][0].env.NAKAMA_WHATSAPP_HOST).toBe("1");
-    expect(start.mock.calls[0][0].env.NAKAMA_WHATSAPP_CONTEXT_TOKEN).toBe(
-      token
-    );
-    expect(
-      start.mock.calls[0][0].env.NAKAMA_CHANNEL_PROFILE_ID
-    ).toBeUndefined();
+    expect(start.mock.calls[0][0].env.AIRIN_WHATSAPP_HOST).toBe("1");
+    expect(start.mock.calls[0][0].env.AIRIN_WHATSAPP_CONTEXT_TOKEN).toBe(token);
+    expect(start.mock.calls[0][0].env.AIRIN_CHANNEL_PROFILE_ID).toBeUndefined();
     expect(await readWhatsAppHostChannels()).toEqual([first, second]);
     expect(await service.verifyWhatsAppContextToken(token)).toBe(true);
     expect(await service.verifyWhatsAppContextToken("forged")).toBe(false);

@@ -1,4 +1,4 @@
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import type {
   DeleteRetainedPluginDataRequest,
   InstallLocalPluginRequest,
@@ -11,7 +11,7 @@ import type {
   SkillSummary,
   ToolSummary,
   UpdateOrgPluginRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   queryOptions,
   useMutation,
@@ -734,7 +734,7 @@ export function pluginRowActions(plugin: OrgPluginDetail): {
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Error causes may come from browser or network code and are narrowed by this handler.
 export function apiErrorStatus(error: unknown): number | undefined {
-  if (error instanceof NakamaApiError) {
+  if (error instanceof AirinApiError) {
     return error.status;
   }
 

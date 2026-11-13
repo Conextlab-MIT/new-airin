@@ -4,7 +4,7 @@ import type {
   NotificationDestinationSummary,
   NotificationDestinationWithSecret,
   UserOrgSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

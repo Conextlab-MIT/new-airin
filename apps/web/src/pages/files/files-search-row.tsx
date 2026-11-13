@@ -1,11 +1,11 @@
-import { Input } from "@nakama/ui/input";
+import { Input } from "@airin/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
+} from "@airin/ui/select";
 import { Search01Icon } from "hugeicons-react";
 import {
   ARTIFACT_TYPE_FILTER_LABELS,

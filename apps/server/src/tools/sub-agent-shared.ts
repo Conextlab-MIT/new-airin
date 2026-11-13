@@ -1,5 +1,5 @@
-import type { OrgRole } from "@nakama/core";
-import type { AgentGroupMemoryChange } from "@nakama/core/agent-groups";
+import type { OrgRole } from "@airin/core";
+import type { AgentGroupMemoryChange } from "@airin/core/agent-groups";
 
 export const DEFAULT_SUB_AGENT_TIMEOUT_MS = 300_000;
 

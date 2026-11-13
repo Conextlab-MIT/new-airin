@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../services/agent-service";
 import { setupTestConfigDir } from "../test-config-dir";
 import { createMinimalHonoApp } from "./test-app-helpers";
@@ -9,7 +9,7 @@ import {
   type TestBrowserSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-automation-worker-settings-test-");
+setupTestConfigDir("airin-automation-worker-settings-test-");
 
 function createApp() {
   const databaseAdapter = createInMemoryDatabaseAdapter();

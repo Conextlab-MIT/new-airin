@@ -1,6 +1,6 @@
+import { Button } from "@airin/ui/button";
+import { Switch } from "@airin/ui/switch";
 import { Tabs } from "@base-ui/react/tabs";
-import { Button } from "@nakama/ui/button";
-import { Switch } from "@nakama/ui/switch";
 import { Add01Icon } from "hugeicons-react";
 import { useState } from "react";
 import { SkillProposalsPanel } from "@/components/profiles/SkillProposalsPanel";

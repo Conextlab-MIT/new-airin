@@ -16,9 +16,9 @@ describe("detectMacOsTheme", () => {
     clearMacOsThemeSessionCache();
 
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     if (configDir) {
@@ -28,9 +28,9 @@ describe("detectMacOsTheme", () => {
   });
 
   async function withTempConfigDir(): Promise<void> {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-cli-theme-"));
-    previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-cli-theme-"));
+    previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = configDir;
     clearMacOsThemeSessionCache();
   }
 

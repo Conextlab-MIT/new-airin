@@ -2091,3 +2091,154 @@ li[data-state="active"] .meet-step-mark {
     padding: 16px;
   }
 }
+
+/* Owner chat effort slider (ChatGPT-style gradient track). */
+.owner-effort-slider {
+  height: 0.7rem;
+  appearance: none;
+  outline: none;
+  background: linear-gradient(
+    90deg,
+    #7dd3fc 0%,
+    #38bdf8 40%,
+    #818cf8 78%,
+    #a78bfa 100%
+  );
+  border-radius: 999px;
+}
+
+.owner-effort-slider-ultra {
+  background: linear-gradient(
+    90deg,
+    #38bdf8 0%,
+    #0ea5e9 45%,
+    #38bdf8 70%,
+    #818cf8 100%
+  );
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
+}
+
+.owner-effort-slider::-webkit-slider-thumb {
+  width: 1.15rem;
+  height: 1.15rem;
+  appearance: none;
+  cursor: pointer;
+  background: #fff;
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.12),
+    0 2px 6px rgba(15, 23, 42, 0.2);
+}
+
+.owner-effort-slider::-moz-range-thumb {
+  width: 1.15rem;
+  height: 1.15rem;
+  cursor: pointer;
+  background: #fff;
+  border: 0;
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.12),
+    0 2px 6px rgba(15, 23, 42, 0.2);
+}
+
+.owner-effort-slider:disabled {
+  opacity: 0.5;
+}
+
+/* Ultra: soda / bubble fizz over the track. */
+.owner-effort-bubbles span {
+  position: absolute;
+  bottom: 0;
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 255, 0.95),
+    rgba(125, 211, 252, 0.55) 55%,
+    rgba(56, 189, 248, 0.15) 100%
+  );
+  border-radius: 999px;
+  box-shadow: 0 0 4px rgba(56, 189, 248, 0.35);
+  animation: owner-effort-soda 1.35s ease-in infinite;
+}
+
+.owner-effort-bubbles span:nth-child(1) {
+  left: 12%;
+  width: 5px;
+  height: 5px;
+  animation-delay: 0s;
+}
+.owner-effort-bubbles span:nth-child(2) {
+  left: 28%;
+  width: 4px;
+  height: 4px;
+  animation-delay: 0.25s;
+}
+.owner-effort-bubbles span:nth-child(3) {
+  left: 46%;
+  width: 6px;
+  height: 6px;
+  animation-delay: 0.1s;
+}
+.owner-effort-bubbles span:nth-child(4) {
+  left: 62%;
+  width: 4px;
+  height: 4px;
+  animation-delay: 0.45s;
+}
+.owner-effort-bubbles span:nth-child(5) {
+  left: 76%;
+  width: 5px;
+  height: 5px;
+  animation-delay: 0.2s;
+}
+.owner-effort-bubbles span:nth-child(6) {
+  left: 88%;
+  width: 3px;
+  height: 3px;
+  animation-delay: 0.55s;
+}
+
+@keyframes owner-effort-soda {
+  0% {
+    transform: translateY(6px) scale(0.7);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-14px) scale(1.15);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owner-effort-bubbles span {
+    opacity: 0;
+    animation: none;
+  }
+}
+
+/* Owner chat: official WhatsApp doodle tiles (gist abdurrahmanekr/2747d704…). */
+.chat-wa-wallpaper {
+  background-color: var(--background);
+}
+
+.chat-wa-wallpaper::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  background-image: url("/chat/wa-doodle-light.png");
+  background-repeat: repeat;
+  background-position: center top;
+  background-size: 400px auto;
+  opacity: 0.08;
+}
+
+.dark .chat-wa-wallpaper::before {
+  background-image: url("/chat/wa-doodle-dark.png");
+  background-size: 360px auto;
+  opacity: 0.03;
+}

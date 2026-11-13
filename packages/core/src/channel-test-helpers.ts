@@ -50,7 +50,7 @@ export function createTestOrgStore(
   channel: ChannelOrgSelectionChannel
 ): ChannelOrgStore {
   return new ChannelOrgStore(
-    path.join(homeDir, ".nakama", channel, "org-selection.json")
+    path.join(homeDir, ".airin", channel, "org-selection.json")
   );
 }
 
@@ -75,17 +75,17 @@ export async function withTempHome<T>(
   await previous;
 
   const homeDir = await mkdtemp(path.join(os.tmpdir(), prefix));
-  const configDir = path.join(homeDir, ".nakama");
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = path.join(homeDir, ".airin");
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = configDir;
 
   try {
     return await run(homeDir);
   } finally {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     await rm(homeDir, { force: true, recursive: true });

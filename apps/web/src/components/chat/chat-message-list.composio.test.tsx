@@ -1,6 +1,6 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core/api-error";
-import { COMPOSIO_CUSTOM_AUTH_REQUIRED } from "@nakama/core/contract";
+import { AirinApiError } from "@airin/core/api-error";
+import { COMPOSIO_CUSTOM_AUTH_REQUIRED } from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
@@ -23,7 +23,7 @@ afterEach(async () => {
   }
 });
 
-const NO_MANAGED_AUTH = new NakamaApiError(
+const NO_MANAGED_AUTH = new AirinApiError(
   "Composio has no managed auth for Google Forms.",
   422,
   "/v1/composio/toolkits/googleforms/connect",
@@ -198,7 +198,7 @@ async function clickConnect(role: "admin" | "member") {
 /** A member opens a chat with a shared agent they cannot read. */
 async function renderSharedAgentCard(onAgent: boolean) {
   const getProfile = spyOn(client, "getProfile").mockRejectedValue(
-    new NakamaApiError("Forbidden", 403, "/v1/profiles/p-shared")
+    new AirinApiError("Forbidden", 403, "/v1/profiles/p-shared")
   );
 
   restoreLater([mockToolkits(), getProfile]);

@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { ArrowDown01Icon } from "hugeicons-react";
 import type { RefObject } from "react";
 import {

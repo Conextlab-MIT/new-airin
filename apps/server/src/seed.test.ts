@@ -7,8 +7,8 @@ import {
   isProviderConfigured,
   loadUserConfig,
   saveUserConfig,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { createMinimalHonoApp } from "./http/test-app-helpers";
 import { createProviderFromActiveConfig } from "./providers";
 import { runFirstBootSeed } from "./seed";
@@ -16,12 +16,12 @@ import { AuthService } from "./services/auth-service";
 import { OrgService } from "./services/org-service";
 
 const SEED_ENV_KEYS = [
-  "NAKAMA_SEED_ADMIN_EMAIL",
-  "NAKAMA_SEED_ADMIN_NAME",
-  "NAKAMA_SEED_ADMIN_PASSWORD",
-  "NAKAMA_SEED_ADMIN_PASSWORD_HASH",
-  "NAKAMA_SEED_ORG_NAME",
-  "NAKAMA_CONFIG_DIR",
+  "AIRIN_SEED_ADMIN_EMAIL",
+  "AIRIN_SEED_ADMIN_NAME",
+  "AIRIN_SEED_ADMIN_PASSWORD",
+  "AIRIN_SEED_ADMIN_PASSWORD_HASH",
+  "AIRIN_SEED_ORG_NAME",
+  "AIRIN_CONFIG_DIR",
 ] as const;
 
 describe("runFirstBootSeed", () => {
@@ -55,8 +55,8 @@ describe("runFirstBootSeed", () => {
 
   async function withFreshConfigDir(): Promise<void> {
     snapshotEnv();
-    configDir = await mkdtemp(join(tmpdir(), "nakama-seed-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-seed-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   }
 
   function createServices() {
@@ -86,12 +86,12 @@ describe("runFirstBootSeed", () => {
       runFirstBootSeed({
         ...services,
         env: {
-          NAKAMA_SEED_ADMIN_EMAIL: "admin@example.com",
-          NAKAMA_SEED_ADMIN_NAME: "",
-          NAKAMA_SEED_ADMIN_PASSWORD: "seedpass123",
+          AIRIN_SEED_ADMIN_EMAIL: "admin@example.com",
+          AIRIN_SEED_ADMIN_NAME: "",
+          AIRIN_SEED_ADMIN_PASSWORD: "seedpass123",
         },
       })
-    ).rejects.toThrow(/NAKAMA_SEED_ADMIN_NAME/);
+    ).rejects.toThrow(/AIRIN_SEED_ADMIN_NAME/);
 
     expect(await services.databaseAdapter.countHumanUsers()).toBe(0);
   });
@@ -103,9 +103,9 @@ describe("runFirstBootSeed", () => {
     const hash = "$2b$10$49ViSXq0L/bAGSSHXZ5iu.UCyS12mUXKXn.dy7SGmsl8nV8bGJSli";
 
     const env = {
-      NAKAMA_SEED_ADMIN_EMAIL: "owner@example.com",
-      NAKAMA_SEED_ADMIN_NAME: "Owner",
-      NAKAMA_SEED_ADMIN_PASSWORD_HASH: hash,
+      AIRIN_SEED_ADMIN_EMAIL: "owner@example.com",
+      AIRIN_SEED_ADMIN_NAME: "Owner",
+      AIRIN_SEED_ADMIN_PASSWORD_HASH: hash,
     };
 
     expect(await runFirstBootSeed({ ...services, env })).toEqual({
@@ -133,9 +133,9 @@ describe("runFirstBootSeed", () => {
     const services = createServices();
 
     const env = {
-      NAKAMA_SEED_ADMIN_EMAIL: "owner@example.com",
-      NAKAMA_SEED_ADMIN_NAME: "Owner",
-      NAKAMA_SEED_ADMIN_PASSWORD_HASH: "bad-hash",
+      AIRIN_SEED_ADMIN_EMAIL: "owner@example.com",
+      AIRIN_SEED_ADMIN_NAME: "Owner",
+      AIRIN_SEED_ADMIN_PASSWORD_HASH: "bad-hash",
     };
 
     await expect(runFirstBootSeed({ ...services, env })).rejects.toThrow(
@@ -146,7 +146,7 @@ describe("runFirstBootSeed", () => {
         ...services,
         env: {
           ...env,
-          NAKAMA_SEED_ADMIN_PASSWORD: "password123",
+          AIRIN_SEED_ADMIN_PASSWORD: "password123",
         },
       })
     ).rejects.toThrow(/exactly one/);
@@ -169,9 +169,9 @@ describe("runFirstBootSeed", () => {
     const result = await runFirstBootSeed({
       ...services,
       env: {
-        NAKAMA_SEED_ADMIN_EMAIL: "admin@example.com",
-        NAKAMA_SEED_ADMIN_NAME: "Admin",
-        NAKAMA_SEED_ADMIN_PASSWORD: "seedpass123",
+        AIRIN_SEED_ADMIN_EMAIL: "admin@example.com",
+        AIRIN_SEED_ADMIN_NAME: "Admin",
+        AIRIN_SEED_ADMIN_PASSWORD: "seedpass123",
       },
     });
 
@@ -203,9 +203,9 @@ describe("runFirstBootSeed", () => {
     const result = await runFirstBootSeed({
       ...services,
       env: {
-        NAKAMA_SEED_ADMIN_EMAIL: "admin@example.com",
-        NAKAMA_SEED_ADMIN_NAME: "Admin",
-        NAKAMA_SEED_ADMIN_PASSWORD: "seedpass123",
+        AIRIN_SEED_ADMIN_EMAIL: "admin@example.com",
+        AIRIN_SEED_ADMIN_NAME: "Admin",
+        AIRIN_SEED_ADMIN_PASSWORD: "seedpass123",
       },
     });
 
@@ -221,9 +221,9 @@ describe("runFirstBootSeed", () => {
     const result = await runFirstBootSeed({
       ...services,
       env: {
-        NAKAMA_SEED_ADMIN_EMAIL: "admin@example.com",
-        NAKAMA_SEED_ADMIN_NAME: "Admin",
-        NAKAMA_SEED_ADMIN_PASSWORD: "seedpass123",
+        AIRIN_SEED_ADMIN_EMAIL: "admin@example.com",
+        AIRIN_SEED_ADMIN_NAME: "Admin",
+        AIRIN_SEED_ADMIN_PASSWORD: "seedpass123",
       },
     });
 

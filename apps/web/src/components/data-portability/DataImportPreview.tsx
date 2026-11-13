@@ -1,7 +1,7 @@
-import type { DataImportPreviewResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import type { DataImportPreviewResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { Alert02Icon, Archive01Icon, Rotate02Icon } from "hugeicons-react";
 import type { ReactNode } from "react";
 import { formatDataPortabilityBytes } from "@/hooks/use-data-portability";

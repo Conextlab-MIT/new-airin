@@ -1,5 +1,5 @@
 // The AudioContext supplies mono audio at 24 kHz; only PCM16 encoding is needed.
-class NakamaPcmProcessor extends globalThis.AudioWorkletProcessor {
+class AirinPcmProcessor extends globalThis.AudioWorkletProcessor {
   constructor() {
     super();
     this.stopped = false;
@@ -32,4 +32,4 @@ class NakamaPcmProcessor extends globalThis.AudioWorkletProcessor {
   }
 }
 
-globalThis.registerProcessor("nakama-pcm", NakamaPcmProcessor);
+globalThis.registerProcessor("airin-pcm", AirinPcmProcessor);

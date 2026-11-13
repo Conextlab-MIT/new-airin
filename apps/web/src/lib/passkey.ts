@@ -1,4 +1,4 @@
-import type { PasskeyCredentialResponse } from "@nakama/core/contract";
+import type { PasskeyCredentialResponse } from "@airin/core/contract";
 import {
   browserSupportsWebAuthn,
   startAuthentication,

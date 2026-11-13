@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Nakama user docs
+# Airin user docs
 
 User-facing docs: `docs/website/content/docs/` (MDX). Audience = org admins, operators, chat users — not contributors.
 

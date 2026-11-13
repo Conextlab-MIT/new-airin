@@ -1,4 +1,4 @@
-import type { ArtifactFile, WorkspaceEntry } from "@nakama/core/contract";
+import type { ArtifactFile, WorkspaceEntry } from "@airin/core/contract";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";

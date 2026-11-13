@@ -16,7 +16,7 @@ import {
   loadUserConfig,
   readChatgptOAuthFromInstance,
   saveUserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import { readApiKeyForInstance } from "../providers/create";
 import {

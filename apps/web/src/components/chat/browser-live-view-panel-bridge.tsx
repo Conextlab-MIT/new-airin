@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import { useEffect, useMemo, useRef } from "react";
 import { useChatAttachmentPanel } from "@/context/use-chat-attachment-panel";
 import type { ChatListItem } from "@/lib/chat-history";

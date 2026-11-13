@@ -1,4 +1,4 @@
-import { Spinner } from "@nakama/ui/spinner";
+import { Spinner } from "@airin/ui/spinner";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/use-auth";
 

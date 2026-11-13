@@ -1,13 +1,13 @@
-import { ALL_MEMBERS_ID, type GroupRoster } from "@nakama/core/agent-groups";
-import type { DocumentAttachment } from "@nakama/core/contract";
+import { ALL_MEMBERS_ID, type GroupRoster } from "@airin/core/agent-groups";
+import type { DocumentAttachment } from "@airin/core/contract";
 import {
   MAX_DOCUMENT_BYTES,
   parseDataUrl,
   parseDocumentDataUrl,
-} from "@nakama/core/message-content";
-import { Button } from "@nakama/ui/button";
-import { toast } from "@nakama/ui/toast";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/core/message-content";
+import { Button } from "@airin/ui/button";
+import { toast } from "@airin/ui/toast";
+import { cn } from "@airin/ui/utils";
 import {
   Add01Icon,
   ArrowDown01Icon,

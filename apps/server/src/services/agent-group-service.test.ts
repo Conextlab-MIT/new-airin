@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { getProfileSoulDir, SOUL_TEMPLATE } from "@nakama/core";
-import { groupRoster } from "@nakama/core/agent-groups";
+import { getProfileSoulDir, SOUL_TEMPLATE } from "@airin/core";
+import { groupRoster } from "@airin/core/agent-groups";
 import { setupTestConfigDir } from "../test-config-dir";
 import { groupMemoryTool } from "../tools/group-memory-tool";
 import {
@@ -16,7 +16,7 @@ import { GROUP_MEMORY_CHARS, groupWorkspace } from "./agent-group-workspace";
 // Before the config dir cleanup, which Windows refuses while a file is open.
 afterEach(closeAgentGroupDatabases);
 
-setupTestConfigDir("nakama-agent-group-service-");
+setupTestConfigDir("airin-agent-group-service-");
 
 /** Writes the whole memory, as the user's editor would. */
 function seedMemory(sharedDir: string, content: string) {

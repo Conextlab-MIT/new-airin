@@ -1,4 +1,14 @@
 import { createHash } from "node:crypto";
+import type {
+  ChatCompletionResult,
+  ChatMessage,
+  GenerateChatInput,
+  LlmToolDefinition,
+  ProviderName,
+  StreamChatHandlers,
+  ToolCall,
+} from "@airin/core";
+import { toAnthropicUserContent, WEB_SEARCH_TOOL_NAME } from "@airin/core";
 import type Anthropic from "@anthropic-ai/sdk";
 import type {
   ContentBlock,
@@ -9,16 +19,6 @@ import type {
   ToolResultBlockParam,
   ToolUnion,
 } from "@anthropic-ai/sdk/resources/messages/messages";
-import type {
-  ChatCompletionResult,
-  ChatMessage,
-  GenerateChatInput,
-  LlmToolDefinition,
-  ProviderName,
-  StreamChatHandlers,
-  ToolCall,
-} from "@nakama/core";
-import { toAnthropicUserContent, WEB_SEARCH_TOOL_NAME } from "@nakama/core";
 import { z } from "zod";
 import { resolveModelLimits } from "../models";
 import {
@@ -97,13 +97,13 @@ export async function toAnthropicMessages(
 
         for (const part of message.providerContent) {
           const block = readRecord(part);
-          const { _nakamaPrefixHash, ...wireBlock } = block;
+          const { _airinPrefixHash, ...wireBlock } = block;
 
           if (
             replay?.model === "claude-sonnet-5-5" &&
             readRecord(replay.thinking.thinking).type === "between_tools" &&
             (block.type === "thinking" || block.type === "redacted_thinking") &&
-            _nakamaPrefixHash !==
+            _airinPrefixHash !==
               anthropicPrefixHash(result, [...content, wireBlock], replay)
           ) {
             continue;
@@ -778,7 +778,7 @@ function finalizeAnthropicResult(options: {
               ...readRecord(block),
               // Local persistence metadata, removed before every API request.
               // Hash the wire prefix (including this block), not UI/DB fields.
-              _nakamaPrefixHash: anthropicPrefixHash(
+              _airinPrefixHash: anthropicPrefixHash(
                 replay.messages,
                 blocks.slice(0, index + 1),
                 replay.replay

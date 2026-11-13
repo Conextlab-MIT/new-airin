@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { zipSync } from "fflate";
 import { asTestFetch } from "../../providers/test-helpers";
 import { setupTestConfigDir } from "../../test-config-dir";
@@ -10,7 +10,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-skills-marketplace-routes-test-");
+setupTestConfigDir("airin-skills-marketplace-routes-test-");
 
 const SKILL = `---
 name: pdf

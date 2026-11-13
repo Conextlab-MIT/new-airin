@@ -1,5 +1,5 @@
 {
-  "name": "@nakama/cli",
+  "name": "@airin/cli",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,10 +9,10 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@airin/client": "workspace:*",
+    "@airin/core": "workspace:*",
     "@crosscopy/clipboard": "^0.3.6",
     "@earendil-works/pi-tui": "0.85.1",
-    "@leeoniya/ufuzzy": "^1.0.19",
-    "@nakama/client": "workspace:*",
-    "@nakama/core": "workspace:*"
+    "@leeoniya/ufuzzy": "^1.0.19"
   }
 }

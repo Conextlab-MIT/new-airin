@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { OrgMemoryService } from "../../services/org-memory-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -8,7 +8,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-org-memory-routes-test-");
+setupTestConfigDir("airin-org-memory-routes-test-");
 
 function createApp() {
   const databaseAdapter = createInMemoryDatabaseAdapter();

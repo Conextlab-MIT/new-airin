@@ -1,13 +1,13 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import { createId } from "@nakama/core";
+import { createId } from "@airin/core";
 import type {
   RegressionCaseRun,
   RegressionCaseRunResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import type {
   StoredRegressionCaseRecord,
   StoredRegressionCaseRunRecord,
-} from "@nakama/db";
+} from "@airin/db";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import type { ServerOptions } from "../context";
 import {

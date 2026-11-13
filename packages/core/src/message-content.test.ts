@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import type { ChatMessage } from "./contract";
 import {
   countUserImages,
@@ -88,14 +88,14 @@ describe("validateImageAttachments", () => {
       validateImageAttachments([
         { data: tinyPngBase64, mediaType: "image/bmp" },
       ])
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("rejects oversized image", () => {
     const huge = "A".repeat((6 * 1024 * 1024 * 4) / 3);
     expect(() =>
       validateImageAttachments([{ data: huge, mediaType: "image/png" }])
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test.each(["!!!!", "YQ", "====", "data:image/png;base64,!!!!"])(
@@ -103,7 +103,7 @@ describe("validateImageAttachments", () => {
     (data) => {
       expect(() =>
         validateImageAttachments([{ data, mediaType: "image/png" }])
-      ).toThrow(NakamaApiError);
+      ).toThrow(AirinApiError);
     }
   );
 });
@@ -118,7 +118,7 @@ describe("validateDocumentAttachments", () => {
           mediaType: "application/octet-stream",
         },
       ])
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("rejects oversized document", () => {
@@ -127,7 +127,7 @@ describe("validateDocumentAttachments", () => {
       validateDocumentAttachments([
         { data: huge, filename: "big.pdf", mediaType: "application/pdf" },
       ])
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 
   test("rejects invalid document base64", () => {
@@ -139,7 +139,7 @@ describe("validateDocumentAttachments", () => {
           mediaType: "text/plain",
         },
       ])
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 });
 
@@ -158,7 +158,7 @@ describe("validateCombinedAttachmentCount", () => {
     ).not.toThrow();
     expect(() =>
       validateCombinedAttachmentCount(MAX_ATTACHMENTS_PER_MESSAGE - 2, 3)
-    ).toThrow(NakamaApiError);
+    ).toThrow(AirinApiError);
   });
 });
 

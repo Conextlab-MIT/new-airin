@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { DatabaseAdapter } from "@nakama/db";
+import type { DatabaseAdapter } from "@airin/db";
 import type { AuthService } from "../services/auth-service";
 import { setupTestConfigDir } from "../test-config-dir";
 import { createMinimalHonoApp } from "./test-app-helpers";
@@ -13,15 +13,15 @@ import type { HonoApp } from "./types";
  * applies: `__Host-` cookies are rejected unless they are Secure, Path=/ and
  * carry no Domain attribute, and a cookie set for a parent domain is replayed
  * to every host underneath it. A sibling host can therefore plant an
- * unprefixed `nakama_session` for `example.com`, and the test asserts the
+ * unprefixed `airin_session` for `example.com`, and the test asserts the
  * server refuses to authenticate that planted token.
  */
 
-const VICTIM_ORIGIN = "https://nakama.example.com";
+const VICTIM_ORIGIN = "https://airin.example.com";
 
 const SIBLING_ORIGIN = "https://evil.example.com";
 
-setupTestConfigDir("nakama-host-cookie-test-");
+setupTestConfigDir("airin-host-cookie-test-");
 
 interface JarCookie {
   createdAt: number;
@@ -187,7 +187,7 @@ async function bootstrapAdmin(
 function sessionCookieValue(response: Response): string {
   const setCookie = response.headers
     .getSetCookie()
-    .find((entry) => entry.startsWith("__Host-nakama_session="));
+    .find((entry) => entry.startsWith("__Host-airin_session="));
 
   if (!setCookie) {
     throw new Error("Login did not issue a host-bound session cookie.");
@@ -233,8 +233,8 @@ async function createAttackerSession(
       .map(({ name, value }) => [name, value])
   );
 
-  const session = values.get("__Host-nakama_session");
-  const csrf = values.get("__Host-nakama_csrf");
+  const session = values.get("__Host-airin_session");
+  const csrf = values.get("__Host-airin_csrf");
 
   if (!(session && csrf)) {
     throw new Error("Attacker login did not issue host-bound cookies.");
@@ -254,11 +254,11 @@ describe("host-bound browser session cookies", () => {
     const issued = setup.headers.getSetCookie();
 
     const sessionCookie = issued.find((entry) =>
-      entry.startsWith("__Host-nakama_session=")
+      entry.startsWith("__Host-airin_session=")
     );
 
     const csrfCookie = issued.find((entry) =>
-      entry.startsWith("__Host-nakama_csrf=")
+      entry.startsWith("__Host-airin_csrf=")
     );
 
     expect(sessionCookie).toBeDefined();
@@ -272,7 +272,7 @@ describe("host-bound browser session cookies", () => {
     expect(
       issued.some(
         (entry) =>
-          cookiePair(entry).name === "nakama_session" &&
+          cookiePair(entry).name === "airin_session" &&
           entry.includes("Max-Age=0")
       )
     ).toBe(true);
@@ -305,11 +305,11 @@ describe("host-bound browser session cookies", () => {
     // The attacker controls a sibling host and sets a parent-domain cookie.
     const victimJar = new BrowserCookieJar();
     victimJar.applySetCookies(SIBLING_ORIGIN, [
-      `nakama_session=${attacker.session}; Domain=example.com; Path=/; HttpOnly; Secure; SameSite=Lax`,
-      `nakama_csrf=${attacker.csrf}; Domain=example.com; Path=/; Secure; SameSite=Lax`,
+      `airin_session=${attacker.session}; Domain=example.com; Path=/; HttpOnly; Secure; SameSite=Lax`,
+      `airin_csrf=${attacker.csrf}; Domain=example.com; Path=/; Secure; SameSite=Lax`,
     ]);
     expect(victimJar.cookieHeader(VICTIM_ORIGIN)).toContain(
-      `nakama_session=${attacker.session}`
+      `airin_session=${attacker.session}`
     );
 
     // The victim has no host-bound cookie, so the planted token is the only
@@ -332,7 +332,7 @@ describe("host-bound browser session cookies", () => {
     const attackerCheck = await app.fetch(
       new Request(`${SIBLING_ORIGIN}/v1/auth/sessions`, {
         headers: {
-          Cookie: `__Host-nakama_session=${attacker.session}; __Host-nakama_csrf=${attacker.csrf}`,
+          Cookie: `__Host-airin_session=${attacker.session}; __Host-airin_csrf=${attacker.csrf}`,
         },
       })
     );
@@ -346,7 +346,7 @@ describe("host-bound browser session cookies", () => {
     await bootstrapAdmin(app, jar, VICTIM_ORIGIN);
 
     jar.applySetCookies(SIBLING_ORIGIN, [
-      "nakama_session=planted; Domain=example.com; Path=/; HttpOnly; Secure; SameSite=Lax",
+      "airin_session=planted; Domain=example.com; Path=/; HttpOnly; Secure; SameSite=Lax",
     ]);
 
     const me = await requestApp(app, jar, VICTIM_ORIGIN, "/v1/auth/me");
@@ -366,7 +366,7 @@ describe("host-bound browser session cookies", () => {
     // A user upgrading mid-session still holds the unprefixed host-only pair.
     const legacyJar = new BrowserCookieJar();
     legacyJar.applySetCookies(VICTIM_ORIGIN, [
-      `nakama_session=${sessionCookieValue(setup)}; Path=/; HttpOnly; SameSite=Lax`,
+      `airin_session=${sessionCookieValue(setup)}; Path=/; HttpOnly; SameSite=Lax`,
     ]);
 
     const me = await requestApp(app, legacyJar, VICTIM_ORIGIN, "/v1/auth/me");
@@ -381,9 +381,9 @@ describe("host-bound browser session cookies", () => {
     const setup = await bootstrapAdmin(app, jar, origin);
     expect(setup.status).toBe(201);
     const issuedNames = setup.headers.getSetCookie().map(cookiePair);
-    expect(issuedNames.map(({ name }) => name)).toContain("nakama_session");
+    expect(issuedNames.map(({ name }) => name)).toContain("airin_session");
     expect(issuedNames.map(({ name }) => name)).not.toContain(
-      "__Host-nakama_session"
+      "__Host-airin_session"
     );
 
     const me = await requestApp(app, jar, origin, "/v1/auth/me");
@@ -392,7 +392,7 @@ describe("host-bound browser session cookies", () => {
     const csrf = jar
       .cookieHeader(origin)
       .split("; ")
-      .find((entry) => entry.startsWith("nakama_csrf="))!
+      .find((entry) => entry.startsWith("airin_csrf="))!
       .split("=")[1]!;
 
     const logout = await requestApp(app, jar, origin, "/v1/auth/logout", {
@@ -403,7 +403,7 @@ describe("host-bound browser session cookies", () => {
     expect(logout.status).toBe(200);
     // Logout clears the host-bound pair too, so a scheme drift on the same
     // browser cannot leave a live session behind.
-    expect(jar.cookieHeader(origin)).not.toContain("nakama_session=");
-    expect(jar.cookieHeader(origin)).not.toContain("__Host-nakama_session=");
+    expect(jar.cookieHeader(origin)).not.toContain("airin_session=");
+    expect(jar.cookieHeader(origin)).not.toContain("__Host-airin_session=");
   });
 });

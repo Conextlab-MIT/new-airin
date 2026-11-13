@@ -1,4 +1,4 @@
-import { callSlackApi } from "@nakama/core/slack-config";
+import { callSlackApi } from "@airin/core/slack-config";
 
 /** Inner event of a Socket Mode `events_api` envelope. */
 export interface SlackMessageEvent {

@@ -10,8 +10,8 @@ import {
   getOrgPluginDatabasePath,
   getOrgPluginDataDir,
   PLUGIN_MANIFEST_API_VERSION,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import {
   closePluginPackageRegistry,
   pluginPackage,
@@ -63,7 +63,7 @@ export async function run() {
 
 const leakyThrowJs = `
 export async function run() {
-  throw new Error("cannot read /srv/nakama/orgs/a/data.db " + "x".repeat(2000));
+  throw new Error("cannot read /srv/airin/orgs/a/data.db " + "x".repeat(2000));
 }
 `;
 
@@ -93,7 +93,7 @@ export async function run() {
 `;
 
 const missingDepJs = `
-import "nakama-plugin-missing-dep-u3-xyz";
+import "airin-plugin-missing-dep-u3-xyz";
 export async function run() {
   return { ok: true };
 }
@@ -124,11 +124,11 @@ function manifest(id: string, extras: TestJsonRecord = {}) {
       },
     ],
     apiVersion: PLUGIN_MANIFEST_API_VERSION,
-    author: "Nakama",
+    author: "Airin",
     description: "Runtime fixture",
     id,
     license: "MIT",
-    minNakamaVersion: "0.1.0",
+    minAirinVersion: "0.1.0",
     name: id,
     skills: [],
     version: "1.0.0",
@@ -143,7 +143,7 @@ function bundle(
 ): ReturnType<typeof pluginPackage> {
   return pluginPackage({
     "actions/echo.js": actionSource,
-    "nakama.plugin.json": JSON.stringify(manifest(id, extras)),
+    "airin.plugin.json": JSON.stringify(manifest(id, extras)),
   });
 }
 
@@ -172,7 +172,7 @@ describe("plugin runtime", () => {
 
   beforeEach(async () => {
     await resetPluginAdmissionForTests();
-    configDir = await mkdtemp(join(tmpdir(), "nakama-plugin-u3-"));
+    configDir = await mkdtemp(join(tmpdir(), "airin-plugin-u3-"));
   });
 
   afterEach(async () => {
@@ -463,7 +463,7 @@ describe("plugin runtime", () => {
       })
     ).rejects.toBeInstanceOf(Error);
 
-    process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS = "200";
+    process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS = "200";
 
     try {
       await expect(
@@ -477,7 +477,7 @@ describe("plugin runtime", () => {
         })
       ).rejects.toThrow(/timed out/i);
     } finally {
-      delete process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS;
+      delete process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS;
     }
 
     const controller = new AbortController();
@@ -556,7 +556,7 @@ describe("plugin runtime", () => {
   });
 
   test("runner works when copied outside the repository cwd", async () => {
-    const elsewhere = await mkdtemp(join(tmpdir(), "nakama-plugin-runner-"));
+    const elsewhere = await mkdtemp(join(tmpdir(), "airin-plugin-runner-"));
 
     try {
       const runnerSource = fileURLToPath(

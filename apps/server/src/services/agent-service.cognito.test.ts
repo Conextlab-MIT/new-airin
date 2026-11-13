@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { ensureBundledSkillFiles, type GenerateChatInput } from "@nakama/core";
-import { pathExists } from "@nakama/core/fs";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { ensureBundledSkillFiles, type GenerateChatInput } from "@airin/core";
+import { pathExists } from "@airin/core/fs";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 import { createDefaultProfile } from "./agent-service-test-fixtures";
@@ -58,7 +58,7 @@ async function createService(): Promise<{
 }
 
 describe("cognito sessions are never persisted", () => {
-  setupTestConfigDir("nakama-cognito-");
+  setupTestConfigDir("airin-cognito-");
 
   test("the turn is readable, and exists nowhere but memory", async () => {
     const { db, service } = await createService();
@@ -260,7 +260,7 @@ async function seedProfileWithSkillManage(
 }
 
 describe("cognito sessions never write back", () => {
-  setupTestConfigDir("nakama-cognito-writeback-");
+  setupTestConfigDir("airin-cognito-writeback-");
 
   test("drops skill_manage and propose_org_memory but keeps reading org memory", async () => {
     const db = createInMemoryDatabaseAdapter();
@@ -355,7 +355,7 @@ describe("cognito sessions never write back", () => {
  * ever go red the mode has started dropping context it was never meant to.
  */
 describe("a cognito session still reads what an ordinary one reads", () => {
-  setupTestConfigDir("nakama-cognito-reads-");
+  setupTestConfigDir("airin-cognito-reads-");
 
   async function runCognitoTurn(): Promise<CapturedTurn> {
     const db = createInMemoryDatabaseAdapter();
@@ -413,7 +413,7 @@ async function sendImage(
 }
 
 describe("attachments left by a cognito session", () => {
-  setupTestConfigDir("nakama-cognito-attachments-");
+  setupTestConfigDir("airin-cognito-attachments-");
 
   test("only the owner or a platform admin can read the image", async () => {
     const { db, service } = await createService();
@@ -549,7 +549,7 @@ describe("attachments left by a cognito session", () => {
 });
 
 describe("cognito leaves no skill-usage trail", () => {
-  setupTestConfigDir("nakama-cognito-usage-");
+  setupTestConfigDir("airin-cognito-usage-");
 
   async function turnWith(cognito: boolean): Promise<number> {
     const db = createInMemoryDatabaseAdapter();
@@ -588,7 +588,7 @@ describe("cognito leaves no skill-usage trail", () => {
 });
 
 describe("cognito session state that is not the transcript", () => {
-  setupTestConfigDir("nakama-cognito-state-");
+  setupTestConfigDir("airin-cognito-state-");
 
   test("todos work in the session and persist nowhere", async () => {
     const { db, service } = await createService();

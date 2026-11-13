@@ -1,32 +1,32 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
+  AirinUpgradeResponse,
+  AirinVersionResponse,
   HealthResponse,
   LlmUsageStats,
   LlmUsageStatus,
-  NakamaUpgradeResponse,
-  NakamaVersionResponse,
   SystemStatusResponse,
   WorkerProcessInfo,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AIRIN_API_VERSION,
+  AirinApiError,
+  getAirinVersion,
   getAutomationWorkerHeartbeatStatus,
   getDiscordWorkerStatus,
-  getNakamaVersion,
   getTelegramWorkerStatus,
   getWhatsAppWorkerStatus,
   isComposioConfiguredAsync,
-  NAKAMA_API_VERSION,
-  NakamaApiError,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   type ChannelConfigScope,
   type ChannelOwner,
   isChannelOwner,
-} from "@nakama/core/channel-config-shared";
-import { getSlackWorkerStatus } from "@nakama/core/slack-worker";
-import { getTeamsWorkerStatus } from "@nakama/core/teams-worker";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core/channel-config-shared";
+import { getSlackWorkerStatus } from "@airin/core/slack-worker";
+import { getTeamsWorkerStatus } from "@airin/core/teams-worker";
+import type { DatabaseAdapter } from "@airin/db";
 import { z } from "zod";
 import type { AgentService } from "./agent-service";
 import type { AutomationRunner } from "./automation-runner";
@@ -298,7 +298,7 @@ export class SystemStatusService {
     const humanUserCount = (await this.databaseAdapter?.countHumanUsers()) ?? 0;
 
     return {
-      apiVersion: NAKAMA_API_VERSION,
+      apiVersion: AIRIN_API_VERSION,
       // Live probe — intentional here; /health skips this to stay fast.
       composioAvailable: composioConfigured
         ? await (this.composioService?.isReachable() ?? false)
@@ -309,21 +309,21 @@ export class SystemStatusService {
       providerConfigured: this.agent.providerConfigured,
       updateCheckEnabled: isUpdateCheckEnabled(),
       userConfigured: humanUserCount > 0,
-      version: getNakamaVersion(),
+      version: getAirinVersion(),
     };
   }
 }
 
-/** Off unless the operator turns it on with `NAKAMA_ENABLE_ONBOARDING`. */
+/** Off unless the operator turns it on with `AIRIN_ENABLE_ONBOARDING`. */
 export function isOnboardingEnabled(): boolean {
-  const value = process.env.NAKAMA_ENABLE_ONBOARDING?.trim().toLowerCase();
+  const value = process.env.AIRIN_ENABLE_ONBOARDING?.trim().toLowerCase();
 
   return value === "1" || value === "true";
 }
 
-/** On unless the operator turns it off with `NAKAMA_DISABLE_UPDATE_CHECK`, e.g. a host that upgrades instances itself. */
+/** On unless the operator turns it off with `AIRIN_DISABLE_UPDATE_CHECK`, e.g. a host that upgrades instances itself. */
 export function isUpdateCheckEnabled(): boolean {
-  const value = process.env.NAKAMA_DISABLE_UPDATE_CHECK?.trim().toLowerCase();
+  const value = process.env.AIRIN_DISABLE_UPDATE_CHECK?.trim().toLowerCase();
 
   return !(value === "1" || value === "true");
 }
@@ -334,7 +334,7 @@ function isString<T>(value: T): value is T & string {
 
 // Written by the docs build from the root package.json. GitHub Pages has no
 // API rate limit, unlike api.github.com (60 calls per hour per IP).
-const LATEST_VERSION_URL = "https://ahmadrosid.github.io/nakama/version.txt";
+const LATEST_VERSION_URL = "https://ahmadrosid.github.io/airin/version.txt";
 
 const RELEASE_CACHE_MS = 10 * 60 * 1000;
 
@@ -365,10 +365,10 @@ function isNewer(latest: string, current: string): boolean {
 }
 
 /** Cached for 10 minutes; a failure is cached for 1 minute. */
-export async function checkNakamaVersion(
+export async function checkAirinVersion(
   current: string,
   now = Date.now()
-): Promise<NakamaVersionResponse> {
+): Promise<AirinVersionResponse> {
   if (!cachedRelease || now - cachedRelease.at > RELEASE_CACHE_MS) {
     let parts: number[] | null = null;
 
@@ -391,10 +391,7 @@ export async function checkNakamaVersion(
     }
 
     if (!parts) {
-      throw new NakamaApiError(
-        "Could not read the latest Nakama version.",
-        502
-      );
+      throw new AirinApiError("Could not read the latest Airin version.", 502);
     }
 
     const latest = parts.join(".");
@@ -402,7 +399,7 @@ export async function checkNakamaVersion(
     cachedRelease = {
       at: now,
       latest,
-      releaseUrl: `https://github.com/ahmadrosid/nakama/releases/tag/v${latest}`,
+      releaseUrl: `https://github.com/ahmadrosid/airin/releases/tag/v${latest}`,
     };
   }
 
@@ -425,7 +422,7 @@ const upgradeStatusSchema = z.object({
 });
 
 function updaterDir(): string | null {
-  return process.env.NAKAMA_UPDATER_DIR?.trim() || null;
+  return process.env.AIRIN_UPDATER_DIR?.trim() || null;
 }
 
 const ARCHIVE_NAME = /^pre-upgrade-(\d+\.\d+\.\d+)-(\d{8}T\d{6}Z)\.tar\.gz$/;
@@ -433,8 +430,8 @@ const ARCHIVE_NAME = /^pre-upgrade-(\d+\.\d+\.\d+)-(\d{8}T\d{6}Z)\.tar\.gz$/;
 /** The updater archives the data each time it leaves a version. */
 async function listRollbacks(
   current: string
-): Promise<NakamaUpgradeResponse["rollbacks"]> {
-  const dir = process.env.NAKAMA_BACKUP_DIR?.trim();
+): Promise<AirinUpgradeResponse["rollbacks"]> {
+  const dir = process.env.AIRIN_BACKUP_DIR?.trim();
   const names = dir ? await readdir(dir).catch(() => []) : [];
   const newest = new Map<string, string>();
 
@@ -459,7 +456,7 @@ async function listRollbacks(
 export async function readUpgradeState(
   current: string,
   now = Date.now()
-): Promise<NakamaUpgradeResponse> {
+): Promise<AirinUpgradeResponse> {
   const dir = updaterDir();
 
   if (!dir) {
@@ -506,27 +503,27 @@ export async function requestUpgrade(
   version: string,
   current: string,
   action: "upgrade" | "rollback" = "upgrade"
-): Promise<NakamaUpgradeResponse> {
+): Promise<AirinUpgradeResponse> {
   const state = await readUpgradeState(current);
   const dir = updaterDir();
 
   if (!(dir && state.available)) {
-    throw new NakamaApiError("The updater service is not running.", 409);
+    throw new AirinApiError("The updater service is not running.", 409);
   }
 
   if (state.status?.state === "running") {
-    throw new NakamaApiError("An upgrade is already running.", 409);
+    throw new AirinApiError("An upgrade is already running.", 409);
   }
 
   if (
     action === "rollback" &&
     !state.rollbacks.some((entry) => entry.version === version)
   ) {
-    throw new NakamaApiError(`There is no archive of ${version}.`, 400);
+    throw new AirinApiError(`There is no archive of ${version}.`, 400);
   }
 
   if (action === "upgrade" && !isNewer(version, current)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `${version} is not a release newer than ${current}.`,
       400
     );

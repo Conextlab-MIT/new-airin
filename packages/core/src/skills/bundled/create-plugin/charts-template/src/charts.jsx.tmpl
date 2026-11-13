@@ -42,7 +42,7 @@ function scale(values, fromZero) {
   return { max, min, ticks };
 }
 
-/** @param {import("./nakama-plugin").PluginContext} ctx */
+/** @param {import("./airin-plugin").PluginContext} ctx */
 export function createCharts(ctx) {
   const { createElement, useEffect, useRef, useState } = ctx.React;
   h = createElement;

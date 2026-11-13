@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentDependencies } from "@nakama/agent";
-import type { ToolContext, ToolDefinition } from "@nakama/core";
+import type { AgentDependencies } from "@airin/agent";
+import type { ToolContext, ToolDefinition } from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   type StoredProfileRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { AgentService } from "./agent-service";
 import { createDefaultProfile } from "./agent-service-test-fixtures";
 

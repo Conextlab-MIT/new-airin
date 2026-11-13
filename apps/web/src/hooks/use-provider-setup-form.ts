@@ -1,4 +1,4 @@
-import { resolveCloudflareAccountInput } from "@nakama/core/cloudflare-provider-config";
+import { resolveCloudflareAccountInput } from "@airin/core/cloudflare-provider-config";
 import type {
   ChatgptOAuthCredentials,
   CreateProviderResponse,
@@ -8,8 +8,8 @@ import type {
   ProviderModelOption,
   WireApi,
   XaiOAuthCredentials,
-} from "@nakama/core/contract";
-import { defaultDiscoveryBaseUrl } from "@nakama/core/discovery-providers";
+} from "@airin/core/contract";
+import { defaultDiscoveryBaseUrl } from "@airin/core/discovery-providers";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ModelListRow } from "@/components/ModelListEditor";
 import { useAppContext } from "@/context/use-app-context";

@@ -6,11 +6,11 @@ import { defineConfig } from "vite";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 
-const serverUrl = process.env.NAKAMA_SERVER_URL ?? "http://127.0.0.1:4310";
+const serverUrl = process.env.AIRIN_SERVER_URL ?? "http://127.0.0.1:4310";
 
 const publicWebUrl =
-  process.env.NAKAMA_WEB_PUBLIC_URL?.trim() ||
-  process.env.NAKAMA_PUBLIC_URL?.trim();
+  process.env.AIRIN_WEB_PUBLIC_URL?.trim() ||
+  process.env.AIRIN_PUBLIC_URL?.trim();
 
 let allowedHosts: string[] | undefined;
 
@@ -57,12 +57,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(root, "src"),
-      "@nakama/core/local-auth": path.resolve(
+      "@airin/core/local-auth": path.resolve(
         root,
         "src/shims/core-local-auth.ts"
       ),
-      "@nakama/core/runtime": path.resolve(root, "src/shims/core-runtime.ts"),
-      "@nakama/core/thinking-content": path.resolve(
+      "@airin/core/runtime": path.resolve(root, "src/shims/core-runtime.ts"),
+      "@airin/core/thinking-content": path.resolve(
         root,
         "../../packages/core/src/thinking-content.ts"
       ),

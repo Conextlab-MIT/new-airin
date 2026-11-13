@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { loadLocalAuthToken } from "@nakama/core";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { loadLocalAuthToken } from "@airin/core";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AuthService } from "../services/auth-service";
 import { OrgService } from "../services/org-service";
 import { setupTestConfigDir } from "../test-config-dir";
@@ -23,7 +23,7 @@ import {
   loginUserSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-http-app-test-");
+setupTestConfigDir("airin-http-app-test-");
 
 function createServerOptions() {
   const databaseAdapter = createInMemoryDatabaseAdapter();
@@ -120,7 +120,7 @@ describe("createHonoApp", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("nakama-artifact-frame-ready");
+    expect(await response.text()).toContain("airin-artifact-frame-ready");
     const csp = response.headers.get("Content-Security-Policy") ?? "";
     expect(csp).toContain("'unsafe-inline'");
     expect(csp).toContain("frame-ancestors 'self'");
@@ -281,8 +281,8 @@ describe("createHonoApp", () => {
   });
 
   test("logs in with a password that was set with surrounding whitespace", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-password-trim-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-password-trim-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       const options = createServerOptions();
@@ -312,14 +312,14 @@ describe("createHonoApp", () => {
 
       expect(loginResponse.status).toBe(200);
     } finally {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
       await rm(configDir, { force: true, recursive: true });
     }
   });
 
   test("rotates the local auth token from a browser session", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-rotate-auth-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-rotate-auth-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       const options = createServerOptions();
@@ -349,7 +349,7 @@ describe("createHonoApp", () => {
           headers: withOrgId(
             {
               Cookie: cookieHeaderFromSetCookies(setupCookies),
-              "X-CSRF-Token": cookieValue(setupCookies, "nakama_csrf"),
+              "X-CSRF-Token": cookieValue(setupCookies, "airin_csrf"),
             },
             orgId
           ),
@@ -365,17 +365,17 @@ describe("createHonoApp", () => {
       const oldToken = await loadLocalAuthToken();
       expect(oldToken).toBe(rotatePayload.token);
     } finally {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
       await rm(configDir, { force: true, recursive: true });
     }
   });
 
   test("rejects local auth token rotation from bearer auth", async () => {
     const configDir = await mkdtemp(
-      join(tmpdir(), "nakama-rotate-auth-bearer-")
+      join(tmpdir(), "airin-rotate-auth-bearer-")
     );
 
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       const token = await loadLocalAuthToken();
@@ -395,15 +395,15 @@ describe("createHonoApp", () => {
         error: "Sign in through the dashboard to rotate the local auth token.",
       });
     } finally {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
       await rm(configDir, { force: true, recursive: true });
     }
   });
 
   test("local-token requests without X-Org-Id resolve only with a single membership", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-local-token-orgs-"));
+    const configDir = await mkdtemp(join(tmpdir(), "airin-local-token-orgs-"));
 
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       const token = await loadLocalAuthToken();
@@ -475,17 +475,17 @@ describe("createHonoApp", () => {
 
       expect(explicit.status).toBe(200);
     } finally {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
       await rm(configDir, { force: true, recursive: true });
     }
   });
 
   test("rejects local auth token rotation for non-platform-admin browser sessions", async () => {
     const configDir = await mkdtemp(
-      join(tmpdir(), "nakama-rotate-auth-member-")
+      join(tmpdir(), "airin-rotate-auth-member-")
     );
 
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       const options = createServerOptions();
@@ -544,7 +544,7 @@ describe("createHonoApp", () => {
         error: "Forbidden",
       });
     } finally {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
       await rm(configDir, { force: true, recursive: true });
     }
   });

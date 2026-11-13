@@ -1,18 +1,18 @@
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  AirinApiError,
   type ChatgptOAuthCredentials,
   getProfileSoulDir,
   inferArtifactMimeType,
   MAX_IMAGE_BYTES,
-  NakamaApiError,
   type ProviderInstance,
   pathExists,
   type ToolContext,
   type ToolDefinition,
   type UserConfig,
-} from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import { z } from "zod";
 import { createAttachmentSaver } from "../services/attachment-service";
 import {
@@ -389,10 +389,10 @@ function normalizeRelativePath(relativePath: string): string {
 }
 
 function errorMessage(error: z.infer<typeof ErrorInputSchema>): string {
-  const nakamaError = z.instanceof(NakamaApiError).safeParse(error);
+  const airinError = z.instanceof(AirinApiError).safeParse(error);
 
-  if (nakamaError.success) {
-    return nakamaError.data.message;
+  if (airinError.success) {
+    return airinError.data.message;
   }
 
   const regularError = z.instanceof(Error).safeParse(error);

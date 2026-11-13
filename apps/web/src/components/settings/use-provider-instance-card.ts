@@ -5,13 +5,13 @@ import type {
   ProviderModelOption,
   UpdateProviderRequest,
   WireApi,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   defaultDiscoveryBaseUrl,
   isDiscoveryModelProvider,
-} from "@nakama/core/discovery-providers";
-import { isOllamaCloudBaseUrl } from "@nakama/core/ollama-provider-config";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/core/discovery-providers";
+import { isOllamaCloudBaseUrl } from "@airin/core/ollama-provider-config";
+import { toast } from "@airin/ui/toast";
 import { useMemo, useState } from "react";
 import { isCatalogShortlistProvider } from "@/components/catalog-provider-model-fields.shared";
 import type { ModelListRow } from "@/components/ModelListEditor";

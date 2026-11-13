@@ -19,7 +19,7 @@ import {
   buildToolExecutionContext,
   derivePluginToolName,
   ensureDir,
-  getNakamaVersion,
+  getAirinVersion,
   getOrgPluginDatabasePath,
   getOrgPluginDataDir,
   getPluginReleaseDir,
@@ -42,7 +42,7 @@ import {
   resolvePluginReleaseEntry,
   validatePluginJsonInstance,
   validatePluginManifest,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   InstallLocalPluginRequest,
   LocalPluginDraftRequest,
@@ -51,13 +51,13 @@ import type {
   PluginRevisionRequest,
   PluginUpdateSummary,
   ReadLocalPluginFileRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import type {
   DatabaseAdapter,
   StoredOrgPluginRecord,
   StoredSkillRecord,
   StoredToolRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import * as pacote from "pacote";
 import { Parser } from "tar";
 import { z } from "zod";
@@ -174,7 +174,7 @@ const OFFICIAL_PLUGINS = new Map<
 
 const lifecycleLocks = new Map<string, Promise<unknown>>();
 
-const BUN_BIN = process.env.NAKAMA_BUN_BIN ?? "bun";
+const BUN_BIN = process.env.AIRIN_BUN_BIN ?? "bun";
 
 const PLUGIN_RUNNER_PATH = fileURLToPath(
   new URL("./plugin-runner.js", import.meta.url)
@@ -288,7 +288,7 @@ let exportPending = false;
 
 let activeMutations = 0;
 
-const MIGRATION_LEDGER_TABLE = "_nakama_plugin_migrations";
+const MIGRATION_LEDGER_TABLE = "_airin_plugin_migrations";
 
 const DEFAULT_DRAIN_TIMEOUT_MS = 6000;
 
@@ -680,7 +680,7 @@ export class PluginService {
       throw invalidLocalManifest(validated.code);
     }
 
-    const { id, minNakamaVersion } = validated.manifest;
+    const { id, minAirinVersion } = validated.manifest;
 
     // HTTP maps only the code; the reason lets the agent fix its own draft.
     const failures: Array<[boolean, string]> = [
@@ -690,9 +690,9 @@ export class PluginService {
       ],
       [id !== draft.draftId, "id_must_match_draft_folder"],
       [
-        getNakamaVersion() === "dev" ||
-          !Bun.semver.satisfies(getNakamaVersion(), `>=${minNakamaVersion}`),
-        "unsupported_nakama_version",
+        getAirinVersion() === "dev" ||
+          !Bun.semver.satisfies(getAirinVersion(), `>=${minAirinVersion}`),
+        "unsupported_airin_version",
       ],
       [OFFICIAL_PLUGINS.has(id) || id === "google-meet", "official_plugin_id"],
       [
@@ -888,7 +888,7 @@ export class PluginService {
     pluginId: string,
     developmentSnapshot = false
   ): Promise<InspectedPackage> {
-    // This allowlist is shipped with Nakama; package metadata cannot grant official status.
+    // This allowlist is shipped with Airin; package metadata cannot grant official status.
     if (!(OFFICIAL_PLUGINS.has(pluginId) && this.options.officialPackagesDir)) {
       throw new PluginHostError("not_found");
     }
@@ -2921,7 +2921,7 @@ const REGISTRY_OPTIONS = {
  * to nothing else.
  */
 function registryOptions() {
-  const token = process.env.NAKAMA_PLUGIN_NPM_TOKEN?.trim();
+  const token = process.env.AIRIN_PLUGIN_NPM_TOKEN?.trim();
 
   if (!token) {
     return REGISTRY_OPTIONS;

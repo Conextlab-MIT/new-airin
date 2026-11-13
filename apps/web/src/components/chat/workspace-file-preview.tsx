@@ -1,5 +1,5 @@
-import type { WorkspaceEntry } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { WorkspaceEntry } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft01Icon, Download04Icon } from "hugeicons-react";
 import { useEffect, useState } from "react";

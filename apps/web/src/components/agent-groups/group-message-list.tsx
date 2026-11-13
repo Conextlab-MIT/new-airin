@@ -1,10 +1,10 @@
-import type { ProfileSummary } from "@nakama/core";
+import type { ProfileSummary } from "@airin/core";
 import type {
   AgentGroupMessage,
   AgentGroupRun,
   GroupRoster,
-} from "@nakama/core/agent-groups";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/core/agent-groups";
+import { cn } from "@airin/ui/utils";
 import {
   Chat01Icon,
   CheckmarkCircle01Icon,
@@ -176,16 +176,22 @@ function messageKeys(messages: AgentGroupMessage[]): string[] {
 
 /** The typing dots of the agent that is writing. */
 function TypingRow({
+  activity,
   onOpenLive,
   speaker,
   speakerContinues,
   stopping,
 }: {
+  activity: string | null;
   onOpenLive: () => void;
   speaker: ProfileSummary | undefined;
   speakerContinues: boolean;
   stopping: boolean;
 }) {
+  const label = stopping
+    ? "Stopping after this reply"
+    : activity?.trim() || "Working…";
+
   return (
     <div className="mt-3 flex items-end gap-2">
       {speaker ? (
@@ -206,18 +212,23 @@ function TypingRow({
           </div>
         ) : null}
         <button
-          aria-label={stopping ? "Stopping, watch live" : "Watch live"}
-          className="flex h-9 cursor-pointer items-center gap-1 rounded-[1.25rem] rounded-bl-md bg-muted px-4 transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={
+            stopping ? "Stopping, watch live" : `${label}, watch live`
+          }
+          className="flex min-h-9 cursor-pointer items-center gap-2 rounded-[1.25rem] rounded-bl-md bg-muted px-4 py-2 transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onOpenLive}
           type="button"
         >
-          {[0, 1, 2].map((dot) => (
-            <span
-              className="size-2 animate-bounce rounded-full bg-muted-foreground/60"
-              key={dot}
-              style={{ animationDelay: `${dot * 150}ms` }}
-            />
-          ))}
+          <span className="flex items-center gap-1">
+            {[0, 1, 2].map((dot) => (
+              <span
+                className="size-2 animate-bounce rounded-full bg-muted-foreground/60"
+                key={dot}
+                style={{ animationDelay: `${dot * 150}ms` }}
+              />
+            ))}
+          </span>
+          <span className="text-muted-foreground text-xs">{label}</span>
         </button>
       </div>
     </div>
@@ -509,6 +520,7 @@ export function GroupMessageList({
             )}
             {run ? (
               <TypingRow
+                activity={run.activity}
                 onOpenLive={onOpenLive}
                 speaker={speaker}
                 speakerContinues={speakerContinues}

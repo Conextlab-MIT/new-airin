@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { createAgentChatSession } from "@nakama/agent";
+import { createAgentChatSession } from "@airin/agent";
 import {
   persistInlineAttachmentsInContent,
   rehydrateMessagesForProvider,
   type SaveInlineAttachmentInput,
-} from "@nakama/core";
+} from "@airin/core";
 import { type ProviderJsonRecord, parseJsonRecord } from "../shared";
 import { asTestFetch, streamFromChunks } from "../test-helpers";
 import { createChatgptProvider } from "./index";

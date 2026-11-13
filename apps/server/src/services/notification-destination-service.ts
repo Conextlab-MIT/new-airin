@@ -1,8 +1,8 @@
 import {
+  AirinApiError,
   type CreateNotificationDestinationRequest,
   createId,
   type ListNotificationDestinationsResponse,
-  NakamaApiError,
   type NotificationDestinationSummary,
   type NotificationDestinationWithSecret,
   nanoid,
@@ -10,11 +10,11 @@ import {
   normalizeUpdateNotificationDestinationRequest,
   type RegenerateNotificationDestinationKeyResponse,
   type UpdateNotificationDestinationRequest,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   DatabaseAdapter,
   StoredNotificationDestinationRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import type { AuthService } from "./auth-service";
 
 function notificationDestinationWebhookPath(destinationId: string): string {
@@ -69,7 +69,7 @@ export class NotificationDestinationService {
     const profiles = await this.databaseAdapter.listProfilesForOrg(orgId);
 
     if (!(profileId && profiles.some((profile) => profile.id === profileId))) {
-      throw new NakamaApiError("Choose an agent in this organization.", 400);
+      throw new AirinApiError("Choose an agent in this organization.", 400);
     }
   }
 
@@ -169,7 +169,7 @@ export class NotificationDestinationService {
       await this.databaseAdapter.getNotificationDestination(destinationId);
 
     if (!record || record.orgId !== orgId) {
-      throw new NakamaApiError("Notification destination not found", 404);
+      throw new AirinApiError("Notification destination not found", 404);
     }
 
     return record;

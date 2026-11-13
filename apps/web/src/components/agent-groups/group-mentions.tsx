@@ -1,5 +1,5 @@
-import type { ProfileSummary } from "@nakama/core";
-import type { GroupRoster, MentionRange } from "@nakama/core/agent-groups";
+import type { ProfileSummary } from "@airin/core";
+import type { GroupRoster, MentionRange } from "@airin/core/agent-groups";
 import type { MessageResponseProps } from "@/components/ai-elements/message";
 
 type MarkdownComponents = NonNullable<MessageResponseProps["components"]>;

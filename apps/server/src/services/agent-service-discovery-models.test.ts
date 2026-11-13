@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { loadUserConfig } from "@nakama/core";
+import { loadUserConfig } from "@airin/core";
 import type {
   CreateProviderRequest,
   CreateProviderResponse,
@@ -8,15 +8,15 @@ import type {
   ModelsResponse,
   ProviderName,
   UpdateProviderRequest,
-} from "@nakama/core/contract";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core/contract";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { createMinimalHonoApp } from "../http/test-app-helpers";
 import { setupFreshInstallSession } from "../http/test-session-helpers";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 
 describe("saving models for discovery providers", () => {
-  setupTestConfigDir("nakama-discovery-models-");
+  setupTestConfigDir("airin-discovery-models-");
 
   const picked = [{ default: true, id: "z-ai/glm-5.3-flash" }];
 

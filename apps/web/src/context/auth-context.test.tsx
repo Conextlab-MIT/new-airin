@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
-import type { AuthUserResponse, UserOrgSummary } from "@nakama/core/contract";
+import type { AuthUserResponse, UserOrgSummary } from "@airin/core/contract";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { AuthProvider } from "@/context/auth-context";
@@ -604,7 +604,7 @@ for (const action of ["login", "setup"] as const) {
           password: "password",
         },
         organization: { name: "Org A", slug: "org-a" },
-        webPublicUrl: "https://nakama.example.com",
+        webPublicUrl: "https://airin.example.com",
       };
 
       try {

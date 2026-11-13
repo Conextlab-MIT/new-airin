@@ -3,12 +3,12 @@ import type {
   ChatCompletionResult,
   GenerateChatInput,
   ProviderClient,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   MODEL_CONNECTION_CLOSED_MESSAGE,
-  NakamaApiError,
   ProviderStreamInterruptedError,
-} from "@nakama/core";
+} from "@airin/core";
 import { createAgentChatSession } from "./index";
 
 function createFlakyProvider(failures: Error[], replies: string[]) {
@@ -61,7 +61,7 @@ describe("agent chat provider retry", () => {
   test("retries a transient provider HTTP failure once and the turn succeeds", async () => {
     const { provider, getCallCount } = createFlakyProvider(
       [
-        new NakamaApiError(
+        new AirinApiError(
           "OpenAI request failed (429): rate limit exceeded",
           502
         ),
@@ -89,8 +89,8 @@ describe("agent chat provider retry", () => {
   test("fails the turn when the provider fails again after the retry", async () => {
     const { provider, getCallCount } = createFlakyProvider(
       [
-        new NakamaApiError("OpenAI request failed (503): unavailable", 502),
-        new NakamaApiError("OpenAI request failed (503): unavailable", 502),
+        new AirinApiError("OpenAI request failed (503): unavailable", 502),
+        new AirinApiError("OpenAI request failed (503): unavailable", 502),
       ],
       []
     );
@@ -99,13 +99,13 @@ describe("agent chat provider retry", () => {
 
     await expect(
       session.sendStream("Hello", { onChunk() {} })
-    ).rejects.toBeInstanceOf(NakamaApiError);
+    ).rejects.toBeInstanceOf(AirinApiError);
     expect(getCallCount()).toBe(2);
   });
 
   test("does not retry client-status provider errors", async () => {
     const { provider, getCallCount } = createFlakyProvider(
-      [new NakamaApiError("OpenAI request failed (401): invalid api key", 400)],
+      [new AirinApiError("OpenAI request failed (401): invalid api key", 400)],
       []
     );
 
@@ -113,7 +113,7 @@ describe("agent chat provider retry", () => {
 
     await expect(
       session.sendStream("Hello", { onChunk() {} })
-    ).rejects.toBeInstanceOf(NakamaApiError);
+    ).rejects.toBeInstanceOf(AirinApiError);
     expect(getCallCount()).toBe(1);
   });
 

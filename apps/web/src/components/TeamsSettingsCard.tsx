@@ -1,9 +1,9 @@
 import type {
   TeamsSettingsResponse,
   UpdateTeamsSettingsRequest,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
 import { useEffect, useState } from "react";
 import {
   SETTINGS_CARD_LOADING_SKELETON,
@@ -57,8 +57,8 @@ function MessagingEndpoint({ endpoint }: { endpoint: string | null }) {
         className="text-pretty text-amber-700 text-xs dark:text-amber-400"
         role="alert"
       >
-        Teams can only reach this server over HTTPS. Set NAKAMA_WEB_PUBLIC_URL
-        to the server's public https address, then reload this page.
+        Teams can only reach this server over HTTPS. Set AIRIN_WEB_PUBLIC_URL to
+        the server's public https address, then reload this page.
       </p>
     );
   }

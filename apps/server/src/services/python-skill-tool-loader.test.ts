@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { type DiscoveredSkill, getSkillPythonEnvBin } from "@nakama/core";
+import { type DiscoveredSkill, getSkillPythonEnvBin } from "@airin/core";
 import {
   installSkillPythonPackages,
   loadPythonSkillTool,
@@ -69,8 +69,8 @@ test.each([
 test.skipIf(process.platform === "win32")(
   "a skill with an installed environment runs under that environment's python",
   async () => {
-    const previous = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
+    const previous = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = await mkdtemp(
       path.join(os.tmpdir(), "skill-env-")
     );
 
@@ -92,12 +92,12 @@ test.skipIf(process.platform === "win32")(
       expect(result).toEqual({ env: "yes" });
     } finally {
       await rm(directory, { force: true, recursive: true });
-      await rm(process.env.NAKAMA_CONFIG_DIR, { force: true, recursive: true });
+      await rm(process.env.AIRIN_CONFIG_DIR, { force: true, recursive: true });
 
       if (previous === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previous;
+        process.env.AIRIN_CONFIG_DIR = previous;
       }
     }
   }
@@ -144,7 +144,7 @@ import sys
 
 
 def run(payload, context):
-    return {"config_dir": os.environ.get("NAKAMA_CONFIG_DIR")}
+    return {"config_dir": os.environ.get("AIRIN_CONFIG_DIR")}
 
 
 if __name__ == "__main__":
@@ -152,9 +152,9 @@ if __name__ == "__main__":
 `,
     "utf8"
   );
-  const previous = process.env.NAKAMA_CONFIG_DIR;
+  const previous = process.env.AIRIN_CONFIG_DIR;
 
-  process.env.NAKAMA_CONFIG_DIR = directory;
+  process.env.AIRIN_CONFIG_DIR = directory;
 
   try {
     const tool = await loadPythonSkillTool({
@@ -178,9 +178,9 @@ if __name__ == "__main__":
     expect(result).toEqual({ config_dir: null });
   } finally {
     if (previous === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous;
+      process.env.AIRIN_CONFIG_DIR = previous;
     }
 
     await rm(directory, { force: true, recursive: true });
@@ -190,12 +190,12 @@ if __name__ == "__main__":
 test.skipIf(process.platform === "win32")(
   "a second install of the same skill is refused while the first runs",
   async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "nakama-pip-lock-"));
-    const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    const previousPythonBin = process.env.NAKAMA_PYTHON_BIN;
+    const root = await mkdtemp(path.join(os.tmpdir(), "airin-pip-lock-"));
+    const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    const previousPythonBin = process.env.AIRIN_PYTHON_BIN;
     const previousPath = process.env.PATH;
     const skillDirectory = path.join(root, "skill");
-    // A path NAKAMA_PYTHON_BIN would need the server allowlist, so the slow
+    // A path AIRIN_PYTHON_BIN would need the server allowlist, so the slow
     // fake is found as bare python3 on PATH instead.
     const slowPython = path.join(root, "slow", "python3");
 
@@ -204,8 +204,8 @@ test.skipIf(process.platform === "win32")(
     await writeFile(path.join(skillDirectory, "requirements.txt"), "six\n");
     await writeFile(slowPython, "#!/bin/sh\nsleep 1\n");
     await chmod(slowPython, 0o755);
-    process.env.NAKAMA_CONFIG_DIR = path.join(root, "config");
-    delete process.env.NAKAMA_PYTHON_BIN;
+    process.env.AIRIN_CONFIG_DIR = path.join(root, "config");
+    delete process.env.AIRIN_PYTHON_BIN;
     process.env.PATH = `${path.dirname(slowPython)}${path.delimiter}${previousPath}`;
 
     try {
@@ -225,8 +225,8 @@ test.skipIf(process.platform === "win32")(
       expect(third).not.toMatchObject({ reason: { status: 409 } });
     } finally {
       for (const [name, value] of [
-        ["NAKAMA_CONFIG_DIR", previousConfigDir],
-        ["NAKAMA_PYTHON_BIN", previousPythonBin],
+        ["AIRIN_CONFIG_DIR", previousConfigDir],
+        ["AIRIN_PYTHON_BIN", previousPythonBin],
         ["PATH", previousPath],
       ] as const) {
         if (value === undefined) {

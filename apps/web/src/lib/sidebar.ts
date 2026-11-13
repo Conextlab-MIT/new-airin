@@ -1,12 +1,23 @@
-export const SIDEBAR_COLLAPSED_KEY = "nakama-sidebar-collapsed";
+export const SIDEBAR_COLLAPSED_KEY = "airin-sidebar-collapsed";
 
-export const SIDEBAR_RECENTS_COLLAPSED_KEY = "nakama-sidebar-recents-collapsed";
+export const SIDEBAR_RECENTS_COLLAPSED_KEY = "airin-sidebar-recents-collapsed";
 
-export const SIDEBAR_PINNED_COLLAPSED_KEY = "nakama-sidebar-pinned-collapsed";
+export const SIDEBAR_PINNED_COLLAPSED_KEY = "airin-sidebar-pinned-collapsed";
+
+/** Owner team sidebar hidden on tablet and phone (lg+ always shows it). */
+export const OWNER_SIDEBAR_HIDDEN_KEY = "airin-owner-sidebar-hidden";
 
 export function getInitialSidebarCollapsed(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function getInitialOwnerSidebarHidden(): boolean {
+  try {
+    return localStorage.getItem(OWNER_SIDEBAR_HIDDEN_KEY) === "true";
   } catch {
     return false;
   }
@@ -28,7 +39,7 @@ export function getInitialPinnedCollapsed(): boolean {
   }
 }
 
-const PINNED_PLUGINS_KEY = "nakama-sidebar-pinned-plugins";
+const PINNED_PLUGINS_KEY = "airin-sidebar-pinned-plugins";
 
 const pinnedPluginListeners = new Set<() => void>();
 

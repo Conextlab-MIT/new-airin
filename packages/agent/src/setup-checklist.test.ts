@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SkillSummary } from "@nakama/core";
+import type { SkillSummary } from "@airin/core";
 import {
   buildSetupChecklist,
   listSetupChecklistCandidates,

@@ -2,7 +2,7 @@ import type {
   McpHttpConfig,
   McpStdioConfig,
   McpTransport,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
 export type ParsedMcpServerImport = {
   name: string;

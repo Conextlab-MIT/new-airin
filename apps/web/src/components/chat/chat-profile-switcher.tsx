@@ -1,12 +1,12 @@
-import type { ProfileSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ProfileSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { cn } from "@airin/ui/utils";
 import { ArrowDown01Icon } from "hugeicons-react";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { composerIconButtonClass } from "@/lib/chat-stream";

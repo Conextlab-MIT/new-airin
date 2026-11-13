@@ -1,15 +1,15 @@
-import { ContextMenu } from "@base-ui/react/context-menu";
-import type { SessionSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { SessionSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { toast } from "@nakama/ui/toast";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { toast } from "@airin/ui/toast";
+import { cn } from "@airin/ui/utils";
+import { ContextMenu } from "@base-ui/react/context-menu";
 import {
   ArrowDown02Icon,
   ArrowMoveUpLeftIcon,

@@ -2,17 +2,17 @@ import type {
   DocumentAttachment,
   ImageAttachment,
   MessageContentPart,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   isImageDescriptionText,
   parseImageDescriptionText,
-} from "@nakama/core/image-content";
+} from "@airin/core/image-content";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   normalizeDocumentMediaType,
   parseDataUrl,
   parseDocumentDataUrl,
-} from "@nakama/core/message-content";
+} from "@airin/core/message-content";
 import type { FileUIPart } from "@/lib/ai-ui-types";
 import {
   type DisplayDocument,

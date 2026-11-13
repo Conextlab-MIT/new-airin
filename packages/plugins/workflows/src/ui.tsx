@@ -7,8 +7,8 @@ import type {
   WorkflowRunRecord,
   WorkflowRunStepRecord,
   WorkflowStep,
-} from "@nakama/core/contract";
-import type * as UI from "@nakama/ui";
+} from "@airin/core/contract";
+import type * as UI from "@airin/ui";
 import type * as ReactType from "react";
 import css from "../ui/style.css" with { type: "text" };
 import {
@@ -566,9 +566,9 @@ function failedStep(run: WorkflowRunRecord) {
   return run.steps?.find((step) => step.status === "failed");
 }
 
-const WORKFLOW_DOCS = "https://ahmadrosid.github.io/nakama/workflows";
+const WORKFLOW_DOCS = "https://ahmadrosid.github.io/airin/workflows";
 
-const DISMISSED_KEY = "nakama:workflows:dismissed-runs";
+const DISMISSED_KEY = "airin:workflows:dismissed-runs";
 
 /** Failed runs the viewer closed the banner for, kept in this browser. */
 function loadDismissed() {

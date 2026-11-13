@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { createAgentChatSession } from "@nakama/agent";
+import { createAgentChatSession } from "@airin/agent";
 import type {
   GenerateChatInput,
   LlmToolDefinition,
   ProviderClient,
   ToolCall,
-} from "@nakama/core";
-import type { StoredMcpServerRecord } from "@nakama/db";
+} from "@airin/core";
+import type { StoredMcpServerRecord } from "@airin/db";
 import { createTurnTools } from "../../../../packages/agent/src/tool-loop";
 import type { McpService } from "./mcp-service";
 import {
@@ -480,10 +480,10 @@ describe("mcp tool bridge", () => {
           description: "Inspect",
           inputSchema: {
             properties: {
-              nakamaContext: {
+              airinContext: {
                 properties: {},
                 type: "object",
-                "x-nakama-context": "current-chat",
+                "x-airin-context": "current-chat",
               },
               query: { type: "string" },
             },
@@ -518,9 +518,9 @@ describe("mcp tool bridge", () => {
     )[0]!;
 
     expect(tool.parameters?.properties).toBeDefined();
-    expect(tool.parameters?.properties).not.toHaveProperty("nakamaContext");
+    expect(tool.parameters?.properties).not.toHaveProperty("airinContext");
     await tool.run(
-      { nakamaContext: { images: [] }, query: "read it" },
+      { airinContext: { images: [] }, query: "read it" },
       {
         currentChatImages: [{ attachmentId: "att_1", mediaType: "image/png" }],
         loadAttachment: async () => ({
@@ -539,7 +539,7 @@ describe("mcp tool bridge", () => {
 
     expect(calls).toEqual([
       {
-        nakamaContext: {
+        airinContext: {
           images: [
             {
               data: Buffer.from("image").toString("base64"),
@@ -568,9 +568,9 @@ describe("mcp tool bridge", () => {
           description: "Inspect",
           inputSchema: {
             properties: {
-              nakamaContext: {
+              airinContext: {
                 type: "object",
-                "x-nakama-context": "current-chat",
+                "x-airin-context": "current-chat",
               },
             },
             type: "object",

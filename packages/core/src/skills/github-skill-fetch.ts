@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { devNull, tmpdir } from "node:os";
 import { join } from "node:path";
 import { unzipSync } from "fflate";
-import { NakamaApiError } from "../api-error";
+import { AirinApiError } from "../api-error";
 import { withDisabledFetchIdle } from "../fetch-idle";
 import { resolveGitHubSkillRawUrl } from "./github-skill-url";
 
@@ -19,7 +19,7 @@ export async function fetchGitHubSkillMarkdown(url: string): Promise<string> {
   try {
     rawUrl = resolveGitHubSkillRawUrl(url);
   } catch (error) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       error instanceof Error ? error.message : "Invalid GitHub skill URL.",
       400
     );
@@ -30,14 +30,14 @@ export async function fetchGitHubSkillMarkdown(url: string): Promise<string> {
   try {
     parsed = new URL(rawUrl);
   } catch {
-    throw new NakamaApiError("Invalid GitHub skill URL.", 400);
+    throw new AirinApiError("Invalid GitHub skill URL.", 400);
   }
 
   if (
     parsed.protocol !== "https:" ||
     parsed.hostname.toLowerCase() !== RAW_HOST
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Only public GitHub URLs are supported (github.com or raw.githubusercontent.com).",
       400
     );
@@ -51,14 +51,14 @@ export async function fetchGitHubSkillMarkdown(url: string): Promise<string> {
       withDisabledFetchIdle({
         headers: {
           Accept: "text/plain, text/markdown;q=0.9, */*;q=0.1",
-          "User-Agent": "nakama-skill-install",
+          "User-Agent": "airin-skill-install",
         },
         redirect: "error",
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       })
     );
   } catch (error) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       error instanceof Error
         ? `Failed to fetch skill from GitHub: ${error.message}`
         : "Failed to fetch skill from GitHub.",
@@ -67,7 +67,7 @@ export async function fetchGitHubSkillMarkdown(url: string): Promise<string> {
   }
 
   if (!response.ok) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Failed to fetch skill from GitHub (HTTP ${response.status}).`,
       400
     );
@@ -79,7 +79,7 @@ export async function fetchGitHubSkillMarkdown(url: string): Promise<string> {
     const declaredSize = Number(contentLength);
 
     if (Number.isFinite(declaredSize) && declaredSize > MAX_SKILL_BYTES) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Skill file is too large (max ${MAX_SKILL_BYTES} bytes).`,
         400
       );
@@ -103,11 +103,11 @@ export async function fetchGitHubSkillBundle(
   try {
     return await downloadGitHubSkillBundle(url);
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       throw error;
     }
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       error instanceof Error
         ? error.message
         : "Failed to download GitHub skill.",
@@ -138,7 +138,7 @@ async function downloadGitHubSkillBundle(
   const response = await fetch(
     `https://codeload.github.com/${owner}/${repo}/zip/${ref}`,
     withDisabledFetchIdle({
-      headers: { "User-Agent": "nakama-skill-install" },
+      headers: { "User-Agent": "airin-skill-install" },
       redirect: "error",
       signal: AbortSignal.timeout(60_000),
     })
@@ -151,7 +151,7 @@ async function downloadGitHubSkillBundle(
       response,
       50 * 1024 * 1024
     ).catch((error) => {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return null;
       }
 
@@ -167,7 +167,7 @@ async function downloadGitHubSkillBundle(
     await response.body?.cancel();
 
     if (![401, 403, 404, 429].includes(response.status)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Failed to download skill archive (HTTP ${response.status}).`,
         400
       );
@@ -194,7 +194,7 @@ function assertSkillPath(path: string): void {
           part.includes("\0")
       )
   ) {
-    throw new NakamaApiError("Invalid skill file path.", 400);
+    throw new AirinApiError("Invalid skill file path.", 400);
   }
 }
 
@@ -205,13 +205,13 @@ function checkSkillSize(
   count: number
 ): void {
   if (count > 500) {
-    throw new NakamaApiError("Skill contains too many files (max 500).", 400);
+    throw new AirinApiError("Skill contains too many files (max 500).", 400);
   }
 
   const limit = path === "SKILL.md" ? MAX_SKILL_BYTES : 5 * 1024 * 1024;
 
   if (size > limit || total > 10 * 1024 * 1024) {
-    throw new NakamaApiError("Skill file or directory is too large.", 400);
+    throw new AirinApiError("Skill file or directory is too large.", 400);
   }
 }
 
@@ -219,7 +219,7 @@ function skillBundle(files: GitHubSkillBundle["files"]): GitHubSkillBundle {
   const markdown = files.find((file) => file.path === "SKILL.md");
 
   if (!markdown) {
-    throw new NakamaApiError("Skill directory does not contain SKILL.md.", 400);
+    throw new AirinApiError("Skill directory does not contain SKILL.md.", 400);
   }
 
   return {
@@ -334,7 +334,7 @@ function readSkillZip(
     }
 
     if (![0, 4, 8].includes(fileType)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Skill symlinks and special files are not supported.",
         400
       );
@@ -388,7 +388,7 @@ export function readUploadedSkillBundle(bytes: Uint8Array): GitHubSkillBundle {
   const bundle = readSkillZip(bytes);
 
   if (!bundle) {
-    throw new NakamaApiError("Could not read the uploaded skill ZIP.", 400);
+    throw new AirinApiError("Could not read the uploaded skill ZIP.", 400);
   }
 
   return bundle;
@@ -399,7 +399,7 @@ async function downloadSkillWithGit(
   ref: string,
   directory: string
 ): Promise<GitHubSkillBundle> {
-  const temp = await mkdtemp(join(tmpdir(), "nakama-skill-"));
+  const temp = await mkdtemp(join(tmpdir(), "airin-skill-"));
   const signal = AbortSignal.timeout(60_000);
 
   const run = async (
@@ -430,7 +430,7 @@ async function downloadSkillWithGit(
         )
       );
     } catch {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Git skill download failed. Check that Git is installed and the public repository and ref are accessible.",
         400
       );
@@ -475,7 +475,7 @@ async function downloadSkillWithGit(
         !(match && ["100644", "100755"].includes(match[1]!)) ||
         match[2] !== "blob"
       ) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Skill symlinks and submodules are not supported.",
           400
         );
@@ -519,7 +519,7 @@ async function readResponseBodyCapped(
     const buffer = await response.arrayBuffer();
 
     if (buffer.byteLength > maxBytes) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Skill file is too large (max ${maxBytes} bytes).`,
         400
       );
@@ -547,7 +547,7 @@ async function readResponseBodyCapped(
 
     if (total > maxBytes) {
       await reader.cancel().catch(() => undefined);
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Skill file is too large (max ${maxBytes} bytes).`,
         400
       );

@@ -7,13 +7,13 @@ import type {
   StreamChatHandlers,
   ThinkingEffort,
   ToolCall,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   fetchWithoutIdleTimeout,
   isMessageContentPartArray,
   toOpenAIResponsesUserContent,
   WEB_SEARCH_TOOL_NAME,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import {
   buildProviderHttpError,

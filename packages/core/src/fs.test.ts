@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 async function createExistingFile(mode: number): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "nakama-fs-"));
+  const directory = await mkdtemp(join(tmpdir(), "airin-fs-"));
   temporaryDirectories.push(directory);
   const path = join(directory, "config.txt");
   await writeFile(path, "old", { mode });
@@ -63,7 +63,7 @@ describe("writeTextFile permissions", () => {
 
 describe("writeTextFile atomic replace", () => {
   test("replaces the target and removes the temp file", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "nakama-fs-atomic-"));
+    const directory = await mkdtemp(join(tmpdir(), "airin-fs-atomic-"));
     temporaryDirectories.push(directory);
     const path = join(directory, "cli.ini");
 
@@ -75,7 +75,7 @@ describe("writeTextFile atomic replace", () => {
   });
 
   test("allows overlapping writes to the same file", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "nakama-fs-atomic-"));
+    const directory = await mkdtemp(join(tmpdir(), "airin-fs-atomic-"));
     temporaryDirectories.push(directory);
     const path = join(directory, "worker-heartbeat.json");
     const values = Array.from({ length: 20 }, (_, index) => String(index));
@@ -89,7 +89,7 @@ describe("writeTextFile atomic replace", () => {
   test.skipIf(process.platform !== "win32")(
     "removes the temp file when the rename keeps failing on Windows",
     async () => {
-      const directory = await mkdtemp(join(tmpdir(), "nakama-fs-atomic-"));
+      const directory = await mkdtemp(join(tmpdir(), "airin-fs-atomic-"));
       temporaryDirectories.push(directory);
       // Renaming a file onto a directory fails with EPERM on every attempt.
       const path = join(directory, "occupied");

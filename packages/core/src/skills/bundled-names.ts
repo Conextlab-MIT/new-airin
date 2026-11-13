@@ -7,11 +7,11 @@ export const DEFAULT_BUNDLED_SKILL_NAMES = [
   "artifact-design",
   "slide-deck-design",
   "composio-integrations",
-  "nakama-guide",
+  "airin-guide",
   "grounded-research",
 ] as const;
 
-export const SUPER_NAKAMA_BUNDLED_SKILL_NAMES = [
+export const SUPER_AIRIN_BUNDLED_SKILL_NAMES = [
   "create-plugin",
   "create-profile",
   "create-skill",
@@ -33,11 +33,25 @@ export const OPT_IN_BUNDLED_SKILL_NAMES = [
   "knowledge-base-wiki",
 ] as const;
 
+/** Laundry Innovation Summit pack — assigned on pack install only. */
+export const LAUNDRY_PACK_BUNDLED_SKILL_NAMES = [
+  "laundry-local-context",
+  "laundry-promo-patterns",
+  "laundry-weather-triggers",
+  "laundry-social-media",
+  "laundry-whatsapp-support",
+  "laundry-data-analyst",
+  "laundry-finance-dataview",
+  "laundry-visibility-apify",
+  "laundry-ops",
+] as const;
+
 export const BUNDLED_SKILL_NAMES = [
   ...DEFAULT_BUNDLED_SKILL_NAMES,
-  ...SUPER_NAKAMA_BUNDLED_SKILL_NAMES,
+  ...SUPER_AIRIN_BUNDLED_SKILL_NAMES,
   ...RUNTIME_ONLY_BUNDLED_SKILL_NAMES,
   ...OPT_IN_BUNDLED_SKILL_NAMES,
+  ...LAUNDRY_PACK_BUNDLED_SKILL_NAMES,
 ] as const;
 
 export type BundledSkillName = (typeof BUNDLED_SKILL_NAMES)[number];

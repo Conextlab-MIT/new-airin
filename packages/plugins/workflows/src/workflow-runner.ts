@@ -2,7 +2,7 @@ import type {
   StoredWorkflow,
   WorkflowRunStatus,
   WorkflowStep,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   buildReceiptBag,
   executeAssert,

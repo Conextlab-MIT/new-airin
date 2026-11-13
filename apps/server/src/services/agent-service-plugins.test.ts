@@ -6,11 +6,11 @@ import {
   derivePluginToolName,
   getProfileSoulDir,
   PLUGIN_MANIFEST_API_VERSION,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   seedOrgDefaultProfile,
-} from "@nakama/db";
+} from "@airin/db";
 import {
   closePluginPackageRegistry,
   pluginPackage,
@@ -37,7 +37,7 @@ export async function run(_input, context) {
 function bundle(): ReturnType<typeof pluginPackage> {
   return pluginPackage({
     "actions/write.js": ACTION_JS,
-    "nakama.plugin.json": JSON.stringify({
+    "airin.plugin.json": JSON.stringify({
       actions: [
         {
           access: "member",
@@ -50,11 +50,11 @@ function bundle(): ReturnType<typeof pluginPackage> {
         },
       ],
       apiVersion: PLUGIN_MANIFEST_API_VERSION,
-      author: "Nakama",
+      author: "Airin",
       description: "Notes plugin",
       id: "notes",
       license: "MIT",
-      minNakamaVersion: "0.1.0",
+      minAirinVersion: "0.1.0",
       name: "Notes",
       skills: [{ directory: "skills/notes", key: "notes" }],
       version: "1.0.0",
@@ -71,18 +71,18 @@ Plugin notes skill.
 
 describe("AgentService plugin capabilities", () => {
   let configDir = "";
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-agent-u5-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-agent-u5-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     await rm(configDir, { force: true, recursive: true });
@@ -193,7 +193,7 @@ describe("AgentService plugin capabilities", () => {
     ).not.toContain("Plugin notes skill");
   });
 
-  test("web, automation, and sub-agent contexts keep org/profile/actor without Super Nakama elevation", async () => {
+  test("web, automation, and sub-agent contexts keep org/profile/actor without Airin elevation", async () => {
     const db = createInMemoryDatabaseAdapter();
     const profile = await seedOrgDefaultProfile(db, ORG_ID);
     await db.upsertProfile({ ...profile, isSuper: true });

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { HealthResponse } from "@nakama/core/contract";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { HealthResponse } from "@airin/core/contract";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AuthService } from "../services/auth-service";
 import { OrgService } from "../services/org-service";
 import { setupTestConfigDir } from "../test-config-dir";
@@ -14,7 +14,7 @@ import {
   setupFreshInstallSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-http-app-test-");
+setupTestConfigDir("airin-http-app-test-");
 
 async function withNodeEnv<T>(env: string, run: () => Promise<T>): Promise<T> {
   const previousNodeEnv = process.env.NODE_ENV;
@@ -125,8 +125,8 @@ describe("createHonoApp", () => {
     });
   });
 
-  test("reports onboarding off unless NAKAMA_ENABLE_ONBOARDING is on", async () => {
-    const previous = process.env.NAKAMA_ENABLE_ONBOARDING;
+  test("reports onboarding off unless AIRIN_ENABLE_ONBOARDING is on", async () => {
+    const previous = process.env.AIRIN_ENABLE_ONBOARDING;
     const app = createHonoApp(createServerOptions());
 
     const readFlag = async () => {
@@ -141,22 +141,22 @@ describe("createHonoApp", () => {
     };
 
     try {
-      delete process.env.NAKAMA_ENABLE_ONBOARDING;
+      delete process.env.AIRIN_ENABLE_ONBOARDING;
       expect(await readFlag()).toBe(false);
 
-      process.env.NAKAMA_ENABLE_ONBOARDING = "true";
+      process.env.AIRIN_ENABLE_ONBOARDING = "true";
       expect(await readFlag()).toBe(true);
 
-      process.env.NAKAMA_ENABLE_ONBOARDING = "1";
+      process.env.AIRIN_ENABLE_ONBOARDING = "1";
       expect(await readFlag()).toBe(true);
 
-      process.env.NAKAMA_ENABLE_ONBOARDING = "no";
+      process.env.AIRIN_ENABLE_ONBOARDING = "no";
       expect(await readFlag()).toBe(false);
     } finally {
       if (previous === undefined) {
-        delete process.env.NAKAMA_ENABLE_ONBOARDING;
+        delete process.env.AIRIN_ENABLE_ONBOARDING;
       } else {
-        process.env.NAKAMA_ENABLE_ONBOARDING = previous;
+        process.env.AIRIN_ENABLE_ONBOARDING = previous;
       }
     }
   });
@@ -207,14 +207,14 @@ describe("createHonoApp", () => {
       headers: { "Content-Type": "application/json" },
       name: "setup over HTTPS sets Secure cookies in production",
       nodeEnv: "production",
-      url: "https://nakama.example/v1/auth/setup",
+      url: "https://airin.example/v1/auth/setup",
     },
     {
       expectSecure: true,
       headers: { "Content-Type": "application/json" },
       name: "setup over HTTPS sets Secure cookies even when NODE_ENV is not production",
       nodeEnv: "development",
-      url: "https://nakama.example/v1/auth/setup",
+      url: "https://airin.example/v1/auth/setup",
     },
     {
       expectSecure: true,
@@ -234,7 +234,7 @@ describe("createHonoApp", () => {
       },
       name: "https request URL keeps Secure cookies even if X-Forwarded-Proto is http",
       nodeEnv: "production",
-      url: "https://nakama.example/v1/auth/setup",
+      url: "https://airin.example/v1/auth/setup",
     },
   ] as const;
 
@@ -456,7 +456,7 @@ describe("createHonoApp", () => {
       cookieHeader: cookieHeaderFromSetCookies(
         extractSetCookies(setupResponse)
       ),
-      csrfToken: cookieValue(extractSetCookies(setupResponse), "nakama_csrf"),
+      csrfToken: cookieValue(extractSetCookies(setupResponse), "airin_csrf"),
     };
 
     const logoutResponse = await app.fetch(
@@ -473,11 +473,11 @@ describe("createHonoApp", () => {
     const clearCookies = extractSetCookies(logoutResponse);
 
     const sessionClears = clearCookies.filter((cookie) =>
-      cookie.startsWith("nakama_session=")
+      cookie.startsWith("airin_session=")
     );
 
     const csrfClears = clearCookies.filter((cookie) =>
-      cookie.startsWith("nakama_csrf=")
+      cookie.startsWith("airin_csrf=")
     );
 
     expect(
@@ -495,10 +495,10 @@ describe("createHonoApp", () => {
     // The host-bound pair is Secure by definition and is cleared too, so a
     // session survives neither scheme on the same browser.
     expect(
-      clearCookies.some((cookie) => cookie.startsWith("__Host-nakama_session="))
+      clearCookies.some((cookie) => cookie.startsWith("__Host-airin_session="))
     ).toBe(true);
     expect(
-      clearCookies.some((cookie) => cookie.startsWith("__Host-nakama_csrf="))
+      clearCookies.some((cookie) => cookie.startsWith("__Host-airin_csrf="))
     ).toBe(true);
   });
 

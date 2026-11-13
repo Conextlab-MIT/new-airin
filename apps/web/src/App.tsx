@@ -42,6 +42,11 @@ const IntegrationsPage = lazyPage(
   "IntegrationsPage"
 );
 
+const MarketplacePage = lazyPage(
+  () => import("@/pages/MarketplacePage"),
+  "MarketplacePage"
+);
+
 const LoginPage = lazyPage(() => import("@/pages/LoginPage"), "LoginPage");
 
 const PasswordResetPage = lazyPage(
@@ -84,6 +89,11 @@ const PublicArtifactSharePage = lazyPage(
   "PublicArtifactSharePage"
 );
 
+const LaundryInnovationSummitPage = lazyPage(
+  () => import("@/pages/LaundryInnovationSummitPage"),
+  "LaundryInnovationSummitPage"
+);
+
 const LlmProvidersPage = lazyPage(
   () => import("@/pages/SettingsPage"),
   "LlmProvidersPage"
@@ -105,6 +115,11 @@ const SkillDetailPage = lazyPage(
 );
 
 const StatusPage = lazyPage(() => import("@/pages/StatusPage"), "StatusPage");
+
+const PlatformOverviewPage = lazyPage(
+  () => import("@/pages/PlatformOverviewPage"),
+  "PlatformOverviewPage"
+);
 
 const LlmUsageTab = lazyPage(() => import("@/pages/StatusPage"), "LlmUsageTab");
 
@@ -216,6 +231,14 @@ function AppShell() {
               }
               path="/s/:token"
             />
+            <Route
+              element={
+                <RouteBoundary fullScreen>
+                  <LaundryInnovationSummitPage />
+                </RouteBoundary>
+              }
+              path="/laundry-innovation-summit"
+            />
             <Route element={<AuthGuard />}>
               <Route element={<SetupGuard />}>
                 <Route
@@ -233,10 +256,20 @@ function AppShell() {
                   <Route element={<PlatformAdminGuard allowOrgAdmin />}>
                     <Route element={<StatusPage />} path="/workers" />
                   </Route>
+                  <Route element={<PlatformAdminGuard />}>
+                    <Route
+                      element={<PlatformOverviewPage />}
+                      path="/platform"
+                    />
+                  </Route>
                   <Route element={<ChatPage />} path="/chat" />
                   <Route
                     element={<ChatPage />}
                     path="/chat/:profileId/:sessionId"
+                  />
+                  <Route
+                    element={<MarketplacePage />}
+                    path={PAGE_PATHS.marketplace}
                   />
                   <Route
                     element={<CustomizePage />}

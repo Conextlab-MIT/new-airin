@@ -1,17 +1,17 @@
-import type { ProviderName } from "@nakama/core";
+import type { ProviderName } from "@airin/core";
 import {
   type CustomModelEntry,
   findCustomModel,
   isDiscoveryModelProvider,
   isOpenRouterModelSlug,
   validateCustomModels,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   commandCodeModelSupportsVision,
   NETRA_AGENT_MODEL_ID,
   netraModelSupportsVision,
   resolveNetraModelId,
-} from "@nakama/core/discovery-providers";
+} from "@airin/core/discovery-providers";
 import {
   resolveCerebrasDefaultModel,
   resolveCompatibleDefaultModel,
@@ -21,7 +21,7 @@ import {
 } from "./compatible-models";
 import { AVAILABLE_MODELS, type ProviderModelOption } from "./model-catalog";
 
-export { isOpenRouterModelSlug } from "@nakama/core";
+export { isOpenRouterModelSlug } from "@airin/core";
 
 export { AVAILABLE_MODELS, type ProviderModelOption } from "./model-catalog";
 

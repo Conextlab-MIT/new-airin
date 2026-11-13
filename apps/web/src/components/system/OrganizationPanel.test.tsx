@@ -8,7 +8,7 @@ import type {
   SkillSummary,
   SoulStatusResponse,
   ToolResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, type ReactNode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
@@ -1624,7 +1624,7 @@ test.each([
         template("agent-b", "Writer"),
         template("agent", "Already published"),
         { ...template("default", "Default Bot"), isDefault: true },
-        { ...template("super", "Super Nakama"), isSuper: true },
+        { ...template("super", "Airin"), isSuper: true },
         {
           ...template("instance", "Shared instance"),
           sharedAgent: {
@@ -3118,7 +3118,7 @@ test.each([
   }
 );
 
-test("Super Nakama hides Move agent, Duplicate and Delete agent", async () => {
+test("Airin hides Move agent, Duplicate and Delete agent", async () => {
   const { container, render, profile, queries } = observeProfileActions(false);
   const superProfile = { ...profile, isSuper: true };
 

@@ -1,6 +1,6 @@
-import type { WhatsAppAllowedPhoneDetail } from "@nakama/core/contract";
-import { parseAllowedWhatsAppPhones } from "@nakama/core/whatsapp-phones";
-import { Button } from "@nakama/ui/button";
+import type { WhatsAppAllowedPhoneDetail } from "@airin/core/contract";
+import { parseAllowedWhatsAppPhones } from "@airin/core/whatsapp-phones";
+import { Button } from "@airin/ui/button";
 import {
   ConfirmDialog,
   Dialog,
@@ -8,15 +8,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
+} from "@airin/ui/select";
 import { Delete02Icon, PencilEdit02Icon, Search01Icon } from "hugeicons-react";
 import { useState } from "react";
 import { useSaveWhatsAppSettings } from "@/hooks/use-app-queries";

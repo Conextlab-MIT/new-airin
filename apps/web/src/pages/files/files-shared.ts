@@ -1,4 +1,4 @@
-import type { ArtifactFile } from "@nakama/core/contract";
+import type { ArtifactFile } from "@airin/core/contract";
 import { createContext } from "react";
 import type { ChatArtifactRef } from "@/lib/chat-artifacts";
 import { client } from "@/lib/client";

@@ -1,13 +1,13 @@
-import type { NakamaClient, RemoteChatSession } from "@nakama/client";
-import { splitTelegramChunks } from "@nakama/core";
-import { formatClientError } from "@nakama/core/api-error";
+import type { AirinClient, RemoteChatSession } from "@airin/client";
+import { splitTelegramChunks } from "@airin/core";
+import { formatClientError } from "@airin/core/api-error";
 import {
   clearActiveStream,
   isAbortError,
   registerActiveStream,
   stopActiveStream,
-} from "@nakama/core/channel-active-stream";
-import { createChatLock } from "@nakama/core/channel-chat-lock";
+} from "@airin/core/channel-active-stream";
+import { createChatLock } from "@airin/core/channel-chat-lock";
 import {
   type ChannelCommand,
   channelCommandHelp,
@@ -15,20 +15,20 @@ import {
   describeChannelStatus,
   parseChannelCommand,
   runChannelCommand,
-} from "@nakama/core/channel-commands";
+} from "@airin/core/channel-commands";
 import {
   type ChannelOwner,
   containsPairingCode,
   hasActiveHandshakeCode,
   looksLikePairingCode,
-} from "@nakama/core/channel-config-shared";
-import type { ChannelSessionStore } from "@nakama/core/channel-session-store";
+} from "@airin/core/channel-config-shared";
+import type { ChannelSessionStore } from "@airin/core/channel-session-store";
 import {
   isTeamsUserAuthorized,
   spendExposedTeamsHandshake,
   type TeamsConfigFile,
   verifyAndPairTeamsUser,
-} from "@nakama/core/teams-config";
+} from "@airin/core/teams-config";
 
 /** The parts of a Teams message activity this slice acts on. */
 export interface TeamsActivity {
@@ -51,7 +51,7 @@ export interface TeamsActivity {
 }
 
 export interface TeamsChatHandlerDeps {
-  client: NakamaClient;
+  client: AirinClient;
   /** Read per turn, so an administrator's change applies to queued work. */
   loadConfig: () => Promise<TeamsConfigFile | null>;
   owner: ChannelOwner;
@@ -145,7 +145,7 @@ export function createTeamsChatHandler(deps: TeamsChatHandlerDeps) {
   const waitingTurns = createWaitingTurns();
 
   async function resolveSession(
-    scoped: NakamaClient,
+    scoped: AirinClient,
     sessionKey: string
   ): Promise<RemoteChatSession> {
     // A session saved for another agent never continues under this one.
@@ -185,7 +185,7 @@ export function createTeamsChatHandler(deps: TeamsChatHandlerDeps) {
   }
 
   async function createAndBindSession(
-    scoped: NakamaClient,
+    scoped: AirinClient,
     sessionKey: string
   ): Promise<RemoteChatSession> {
     const session = await scoped.createSession("teams", {

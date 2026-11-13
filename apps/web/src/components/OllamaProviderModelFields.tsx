@@ -1,4 +1,4 @@
-import type { OllamaHostMode } from "@nakama/core/contract";
+import type { OllamaHostMode } from "@airin/core/contract";
 import { BrowsableModelFields } from "@/components/BrowsableModelFields";
 import type { ModelListRow } from "@/components/ModelListEditor";
 import {

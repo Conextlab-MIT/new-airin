@@ -1,5 +1,5 @@
-import type { TransferProgress as OnProgress } from "@nakama/client";
-import { cn } from "@nakama/ui/utils";
+import type { TransferProgress as OnProgress } from "@airin/client";
+import { cn } from "@airin/ui/utils";
 import { useCallback, useRef, useState } from "react";
 import { formatDataPortabilityBytes } from "@/hooks/use-data-portability";
 

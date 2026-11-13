@@ -4,7 +4,7 @@ import type {
   PluginPackagePreviewResponse,
   PluginPackageRequest,
   PluginReleaseSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { useRef, useState } from "react";
 import {
   useDeleteRetainedPluginData,
@@ -326,7 +326,7 @@ export function groupPluginIds(
 ) {
   const builtIn = new Set(official.map((item) => item.id));
 
-  const createdBySuperNakama = new Set(
+  const createdBySuperAirin = new Set(
     releases.flatMap((item) =>
       item.source === "local" || item.source === "agent" ? [item.pluginId] : []
     )
@@ -339,13 +339,13 @@ export function groupPluginIds(
     },
     {
       ids: pluginIds.filter(
-        (id) => !builtIn.has(id) && createdBySuperNakama.has(id)
+        (id) => !builtIn.has(id) && createdBySuperAirin.has(id)
       ),
       title: "Created by you",
     },
     {
       ids: pluginIds.filter(
-        (id) => !(builtIn.has(id) || createdBySuperNakama.has(id))
+        (id) => !(builtIn.has(id) || createdBySuperAirin.has(id))
       ),
       title: "From other sources",
     },

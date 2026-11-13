@@ -1,4 +1,3 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   AcpAgentPresetsResponse,
   AcpSessionSettingsResponse,
@@ -18,25 +17,27 @@ import type {
   UpdateArtifactResponse,
   UpdateProfileRequest,
   UploadKnowledgeBaseResponse,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   attachSharedKnowledgeBaseDocument,
   detachSharedKnowledgeBaseDocument,
   getProfileSharedDocumentIds,
   getWorkspaceEntry,
   KnowledgeBaseDocumentInUseError,
   listWorkspaceFiles,
-  NakamaApiError,
   readOrganizationKnowledgeBaseDocumentContent,
   readWorkspaceFile,
   renameWorkspaceEntry,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   canChatWithProfile,
   filterProfilesForChatAccess,
-} from "@nakama/core/profiles";
+} from "@airin/core/profiles";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { listAcpAgentPresets } from "../../providers/acp/acp-agent-presets";
+import { AgentMarketplaceService } from "../../services/agent-marketplace-service";
 import { ArtifactShareService } from "../../services/artifact-share-service";
 import type { ServerOptions } from "../context";
 import {
@@ -116,7 +117,7 @@ export function registerProfileRoutes(
         })
       )
     ) {
-      throw new NakamaApiError("Forbidden", 403);
+      throw new AirinApiError("Forbidden", 403);
     }
 
     return { owner: !access.isSuper && access.ownerUserId === auth.user.id };
@@ -1357,6 +1358,15 @@ export function registerProfileRoutes(
   app.get("/v1/profiles", async (c) => {
     const auth = getRequestAuth(c);
     const orgId = requireActiveOrgIdFromContext(c);
+    // Best-effort: older marketplace installs used role titles. Never block
+    // the roster if rename fails (MFA, shared lock, etc.).
+    try {
+      await new AgentMarketplaceService(
+        agent.profiles
+      ).renameLegacyMarketplaceProfiles(orgId);
+    } catch {
+      // Roster still loads with the previous names.
+    }
     const response = await agent.listProfiles(orgId);
 
     return json<ListProfilesResponse>({
@@ -1386,7 +1396,7 @@ export function registerProfileRoutes(
     );
   });
 
-  app.post("/v1/profiles/with-super-nakama", async (c) => {
+  app.post("/v1/profiles/with-super-airin", async (c) => {
     const auth = requireOrgMemberFromContext(c);
     const orgId = requireActiveOrgIdFromContext(c);
 
@@ -1398,7 +1408,7 @@ export function registerProfileRoutes(
       })
     );
 
-    // Super Nakama has host tools, so members never route their text through it.
+    // Airin has host tools, so members never route their text through it.
     // Their description becomes the agent's prompt and the agent stays private.
     if (!auth.isPlatformAdmin) {
       return json<ProfileResponse>(
@@ -1417,7 +1427,7 @@ export function registerProfileRoutes(
     }
 
     return json<ProfileResponse>(
-      await agent.createProfileWithSuperNakama(orgId, body),
+      await agent.createProfileWithSuperAirin(orgId, body),
       201
     );
   });
@@ -1477,7 +1487,7 @@ export function registerProfileRoutes(
     await agent.getProfile(orgId, profileId);
 
     if (!options.databaseAdapter) {
-      throw new NakamaApiError("Database unavailable", 503);
+      throw new AirinApiError("Database unavailable", 503);
     }
 
     const paths = await options.databaseAdapter.listFilePins(
@@ -1497,7 +1507,7 @@ export function registerProfileRoutes(
         // Missing files and paths that no longer pass workspace guards stay hidden.
         if (
           !(
-            error instanceof NakamaApiError &&
+            error instanceof AirinApiError &&
             (error.status === 404 || error.status === 400)
           )
         ) {
@@ -1520,13 +1530,13 @@ export function registerProfileRoutes(
     );
 
     if (!parsed.success) {
-      throw new NakamaApiError("Invalid rename request", 400);
+      throw new AirinApiError("Invalid rename request", 400);
     }
 
     const database = options.databaseAdapter;
 
     if (!database) {
-      throw new NakamaApiError("Database unavailable", 503);
+      throw new AirinApiError("Database unavailable", 503);
     }
 
     return json(
@@ -1565,11 +1575,11 @@ export function registerProfileRoutes(
       .safeParse(await readJson(c.req.raw, z.unknown()));
 
     if (!parsed.success) {
-      throw new NakamaApiError("Invalid file pin", 400);
+      throw new AirinApiError("Invalid file pin", 400);
     }
 
     if (!options.databaseAdapter) {
-      throw new NakamaApiError("Database unavailable", 503);
+      throw new AirinApiError("Database unavailable", 503);
     }
 
     if (parsed.data.pinned) {
@@ -1865,7 +1875,7 @@ export function registerProfileRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
 
     if (orgId !== decodeURIComponent(c.req.param("orgId"))) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     return json(await agent.listOrganizationKnowledgeBase(orgId));
@@ -1876,7 +1886,7 @@ export function registerProfileRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
 
     if (orgId !== decodeURIComponent(c.req.param("orgId"))) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const body = await readJson(c.req.raw, uploadKnowledgeBaseSchema);
@@ -1895,7 +1905,7 @@ export function registerProfileRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
 
     if (orgId !== decodeURIComponent(c.req.param("orgId"))) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const documentId = decodeURIComponent(c.req.param("documentId"));
@@ -1925,7 +1935,7 @@ export function registerProfileRoutes(
     const orgId = requireActiveOrgIdFromContext(c);
 
     if (orgId !== decodeURIComponent(c.req.param("orgId"))) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     const document = await agent.readOrganizationKnowledgeBaseDocument(
@@ -1949,7 +1959,7 @@ export function registerProfileRoutes(
       const orgId = decodeURIComponent(c.req.param("orgId"));
 
       if (auth.activeOrgId !== orgId) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       // A root org's published set is admin-only, same as its direct reads and
@@ -1962,7 +1972,7 @@ export function registerProfileRoutes(
         auth.orgRole !== "admin" &&
         !auth.isPlatformAdmin
       ) {
-        throw new NakamaApiError("Not found", 404);
+        throw new AirinApiError("Not found", 404);
       }
 
       const document = await agent.readPublishedKnowledgeBaseDocument(
@@ -1996,7 +2006,7 @@ export function registerProfileRoutes(
           error instanceof Error &&
           error.message === "Shared knowledge base document not found."
         ) {
-          throw new NakamaApiError(error.message, 404);
+          throw new AirinApiError(error.message, 404);
         }
 
         throw error;
@@ -2022,7 +2032,7 @@ export function registerProfileRoutes(
       );
 
       if (!detached) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Shared knowledge base document is not attached to this profile.",
           404
         );
@@ -2084,7 +2094,7 @@ export function registerProfileRoutes(
     const { owner } = await requireProfileRead(c);
 
     if (!owner) {
-      throw new NakamaApiError("Forbidden", 403);
+      throw new AirinApiError("Forbidden", 403);
     }
 
     const orgId = requireActiveOrgIdFromContext(c);
@@ -2114,7 +2124,7 @@ export function registerProfileRoutes(
     );
   });
 
-  // The agents Nakama ships with, for the profile's chat agent setting.
+  // The agents Airin ships with, for the profile's chat agent setting.
   app.get("/v1/acp-agent-presets", () =>
     json<AcpAgentPresetsResponse>({
       presets: listAcpAgentPresets(),
@@ -2158,7 +2168,7 @@ export function registerProfileRoutes(
       const { profile } = await agent.getProfile(orgId, profileId);
 
       if (profile.ownerUserId !== auth.user.id) {
-        throw new NakamaApiError("Forbidden", 403);
+        throw new AirinApiError("Forbidden", 403);
       }
     }
 
@@ -2170,7 +2180,7 @@ export function registerProfileRoutes(
       try {
         await requireProfileManage(c);
       } catch (error) {
-        if (!(error instanceof NakamaApiError && error.status === 403)) {
+        if (!(error instanceof AirinApiError && error.status === 403)) {
           throw error;
         }
 
@@ -2180,13 +2190,13 @@ export function registerProfileRoutes(
       if (isOwner) {
         // Host-run agents are an admin control.
         if (body.acpAgent !== undefined) {
-          throw new NakamaApiError("Forbidden", 403);
+          throw new AirinApiError("Forbidden", 403);
         }
       } else {
         requireOrgAdmin(auth);
 
         if (!isOrgAdminAllowedProfileSettingsUpdate(body)) {
-          throw new NakamaApiError("Forbidden", 403);
+          throw new AirinApiError("Forbidden", 403);
         }
       }
     }

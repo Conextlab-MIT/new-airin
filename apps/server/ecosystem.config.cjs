@@ -7,8 +7,8 @@ module.exports = {
       autorestart: true,
       cwd: "/app",
       env: {
-        NAKAMA_HOST: "0.0.0.0",
-        NAKAMA_PORT: "4310",
+        AIRIN_HOST: "0.0.0.0",
+        AIRIN_PORT: "4310",
         NODE_ENV: "production",
       },
       name: "server",

@@ -1,7 +1,7 @@
-import { Button } from "@nakama/ui/button";
-import { ConfirmDialog } from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import {
   AlertCircleIcon,
   CheckmarkCircle01Icon,

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { withPairingConfigLock } from "@nakama/core/channel-config-shared";
+import { withPairingConfigLock } from "@airin/core/channel-config-shared";
 import {
   getTeamsConfigDir,
   loadTeamsConfigFile,
   regenerateTeamsHandshake,
   verifyAndPairTeamsUser,
-} from "@nakama/core/teams-config";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core/teams-config";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -24,7 +24,7 @@ import {
   withTokenEndpointStubbed,
 } from "../test-teams-helpers";
 
-setupTestConfigDir("nakama-teams-routes-test-");
+setupTestConfigDir("airin-teams-routes-test-");
 
 describe("teams settings", () => {
   test("an admin generates and replaces a code without restarting the worker", async () => {

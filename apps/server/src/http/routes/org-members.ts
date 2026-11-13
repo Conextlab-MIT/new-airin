@@ -1,4 +1,3 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   AddOrgMemberResponse,
   CreateOrganizationResponse,
@@ -14,7 +13,8 @@ import type {
   OrgUsageLeader,
   OrgUsageSummaryResponse,
   ProfileResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
+import { createRoute, z } from "@hono/zod-openapi";
 import { OrgUsageQuotaService } from "../../services/org-usage-quota-service";
 import type { ServerOptions } from "../context";
 import {

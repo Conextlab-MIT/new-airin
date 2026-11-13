@@ -1,13 +1,13 @@
-import type { WireApi } from "@nakama/core/contract";
-import { FormField } from "@nakama/ui/form-field";
-import { InputGroup, InputGroupInput } from "@nakama/ui/input-group";
+import type { WireApi } from "@airin/core/contract";
+import { FormField } from "@airin/ui/form-field";
+import { InputGroup, InputGroupInput } from "@airin/ui/input-group";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
+} from "@airin/ui/select";
 import type { ReactNode } from "react";
 import { BrowsableModelFields } from "@/components/BrowsableModelFields";
 import type { ModelListRow } from "@/components/ModelListEditor";

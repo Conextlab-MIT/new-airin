@@ -29,7 +29,7 @@ function record(value: JsonValue): JsonRecord {
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "nakama-data-view-"));
+  dir = mkdtempSync(join(tmpdir(), "airin-data-view-"));
   const databasePath = join(dir, "plugin.sqlite");
   const db = new Database(databasePath);
   db.exec(

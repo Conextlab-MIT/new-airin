@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
 import { z } from "zod";
 import { McpClientManager } from "./mcp-client-manager";
 import { readMcpOAuthGrant } from "./mcp-oauth";

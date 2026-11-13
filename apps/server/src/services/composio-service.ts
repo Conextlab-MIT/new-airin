@@ -1,5 +1,6 @@
 import { createCipheriv, hkdfSync, randomBytes } from "node:crypto";
 import {
+  AirinApiError,
   COMPOSIO_CUSTOM_AUTH_REQUIRED,
   type ComposioCatalogToolkitSummary,
   type ComposioConnectResponse,
@@ -12,23 +13,22 @@ import {
   type ListComposioToolkitsResponse,
   type ListProfileComposioToolkitsResponse,
   loadComposioConfigFile,
-  NakamaApiError,
   nanoid,
   normalizeEnableComposioToolkitRequest,
   normalizeUpdateProfileComposioToolkitsRequest,
   type ProfileComposioToolkitAssignment,
   resolveComposioApiKey,
   type UpdateProfileComposioToolkitsRequest,
-} from "@nakama/core";
-import type { MeetActionResults } from "@nakama/core/google-meet";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
+} from "@airin/core";
+import type { MeetActionResults } from "@airin/core/google-meet";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
 import type {
   DatabaseAdapter,
   StoredComposioToolkitRecord,
   StoredComposioUserConnectionRecord,
   StoredProfileComposioToolkitRecord,
   StoredProfileRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { z } from "zod";
 import type { AuthService } from "./auth-service";
 import {
@@ -36,13 +36,14 @@ import {
   type ComposioSessionMcpEndpoint,
   findRejectedConnectedAccountIds,
   isComposioDefaultAuthConfigMissing,
+  isComposioNoAuthApp,
 } from "./composio-api-client";
 import { withClaimedOAuthState } from "./oauth-callback-claim";
 
 // HKDF, not a bare hash, to turn the API key into an AES key. Nothing reads
 // `sessionIdEnc` back, so rows written with the old key need no migration.
 function deriveKey(secret: string): Buffer {
-  return Buffer.from(hkdfSync("sha256", secret, "", "nakama-composio", 32));
+  return Buffer.from(hkdfSync("sha256", secret, "", "airin-composio", 32));
 }
 
 function encryptComposioSecret(plaintext: string, secret: string): string {
@@ -121,9 +122,7 @@ export function isSameSiteReturnPath(path: string): boolean {
   }
 
   try {
-    return (
-      new URL(path, "http://nakama.local").origin === "http://nakama.local"
-    );
+    return new URL(path, "http://airin.local").origin === "http://airin.local";
   } catch {
     return false;
   }
@@ -394,21 +393,21 @@ export class ComposioService {
     );
 
     if (!recording) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Recording not found in your connected accounts.",
         404
       );
     }
 
     if (recording.size > 1024 ** 3) {
-      throw new NakamaApiError("Recording is larger than 1 GiB.", 400);
+      throw new AirinApiError("Recording is larger than 1 GiB.", 400);
     }
 
     const accounts = await this.googleAccounts(orgId, userId);
     const client = await this.getApiClient();
 
     if (!(client && accounts.drive)) {
-      throw new NakamaApiError("Google Drive is not connected.", 400);
+      throw new AirinApiError("Google Drive is not connected.", 400);
     }
 
     const result = unwrapMeetToolResult(
@@ -560,7 +559,7 @@ export class ComposioService {
     const resolvedKey = apiKey?.trim() || (await this.resolveApiKey());
 
     if (!resolvedKey) {
-      throw new NakamaApiError("Composio API key is required.", 400);
+      throw new AirinApiError("Composio API key is required.", 400);
     }
 
     const client = new ComposioApiClient(resolvedKey);
@@ -568,7 +567,7 @@ export class ComposioService {
     try {
       await client.listCatalogToolkits({ limit: 1 });
     } catch (error) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         error instanceof Error && isComposioAuthFailure(error)
           ? COMPOSIO_KEY_REJECTED
           : "Could not reach Composio to check the project API key. Check your network and the key in Composio, then save it again.",
@@ -582,6 +581,7 @@ export class ComposioService {
     userId: string
   ): Promise<ListComposioToolkitsResponse> {
     const configured = await isComposioConfiguredAsync();
+    const actingUserId = await this.resolveComposioActingUserId(orgId, userId);
 
     const orgToolkits = (
       await this.databaseAdapter.listComposioToolkitsForOrg(orgId)
@@ -594,7 +594,7 @@ export class ComposioService {
     const userConnectionRecords =
       await this.databaseAdapter.listComposioUserConnectionsForUser(
         orgId,
-        userId
+        actingUserId
       );
 
     const userConnections = userConnectionRecords
@@ -745,7 +745,7 @@ export class ComposioService {
   /**
    * Enabling a toolkit assigns it to the org's default profile, so a fresh
    * setup is usable without a second trip to Profiles. Other profiles stay an
-   * explicit choice: Super Nakama and channel-facing profiles should not gain a
+   * explicit choice: Airin and channel-facing profiles should not gain a
    * member's Gmail because an admin enabled it for the org.
    */
   private async assignToDefaultProfile(
@@ -823,7 +823,7 @@ export class ComposioService {
     callbackBaseUrl: string
   ): Promise<ComposioConnectResponse> {
     if (!MEET_RECORDING_TOOLKITS.has(toolkitSlug)) {
-      throw new NakamaApiError("Unsupported recording source.", 400);
+      throw new AirinApiError("Unsupported recording source.", 400);
     }
 
     const existing = await this.databaseAdapter.getComposioToolkitBySlug(
@@ -852,7 +852,7 @@ export class ComposioService {
     const orgToolkit = await this.getOwnedToolkitBySlug(orgId, toolkitSlug);
 
     if (orgToolkit.status !== "enabled") {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "An org admin must enable this toolkit before you can connect.",
         400
       );
@@ -882,25 +882,52 @@ export class ComposioService {
 
     const callbackUrl = `${callbackBaseUrl.replace(/\/$/, "")}/v1/composio/oauth/callback?state=${encodeURIComponent(state)}`;
 
-    const link = await apiClient
-      .linkToolkitAccount(
+    let link: Awaited<ReturnType<ComposioApiClient["linkToolkitAccount"]>>;
+
+    try {
+      link = await apiClient.linkToolkitAccount(
         composioUserId(actingUserId),
         toolkitSlug,
         callbackUrl
-      )
-      .catch((error: Error) => {
-        if (isComposioDefaultAuthConfigMissing(error)) {
-          throw new NakamaApiError(
-            `Composio has no managed auth for ${orgToolkit.displayName}. An org admin must add a custom auth config for it in Composio.`,
-            422,
-            undefined,
-            undefined,
-            { code: COMPOSIO_CUSTOM_AUTH_REQUIRED }
-          );
-        }
+      );
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
 
-        throw error;
-      });
+      if (isComposioDefaultAuthConfigMissing(err)) {
+        throw new AirinApiError(
+          `Composio has no managed auth for ${orgToolkit.displayName}. An org admin must add a custom auth config for it in Composio.`,
+          422,
+          undefined,
+          undefined,
+          { code: COMPOSIO_CUSTOM_AUTH_REQUIRED }
+        );
+      }
+
+      if (!isComposioNoAuthApp(err)) {
+        throw err;
+      }
+
+      // No OAuth: mark connected with no account id, then sync session tools.
+      const connection: StoredComposioUserConnectionRecord = {
+        connectedAccountId: null,
+        createdAt: existingConnection?.createdAt ?? now,
+        id: connectionId,
+        lastError: null,
+        oauthStateHash: null,
+        orgId,
+        sessionIdEnc: null,
+        status: "connected",
+        toolkitId: orgToolkit.id,
+        updatedAt: now,
+        userId: actingUserId,
+      };
+
+      await this.databaseAdapter.upsertComposioUserConnection(connection);
+      this.invalidateProfileSessionCachesForUser(orgId, actingUserId);
+      await this.syncUserToolkit(orgId, actingUserId, toolkitSlug);
+
+      return { connected: true, redirectUrl: null };
+    }
 
     const connection: StoredComposioUserConnectionRecord = {
       connectedAccountId:
@@ -930,7 +957,7 @@ export class ComposioService {
   ): Promise<{ orgId: string; returnTo?: string; toolkitSlug: string }> {
     return withClaimedOAuthState(
       `composio:${state}`,
-      () => new NakamaApiError("Invalid OAuth state.", 400),
+      () => new AirinApiError("Invalid OAuth state.", 400),
       () => this.completeClaimedOAuth(state, options)
     );
   }
@@ -955,7 +982,7 @@ export class ComposioService {
         })
         .parse(JSON.parse(Buffer.from(state, "base64url").toString("utf8")));
     } catch {
-      throw new NakamaApiError("Invalid OAuth state.", 400);
+      throw new AirinApiError("Invalid OAuth state.", 400);
     }
 
     const orgToolkit = await this.getOwnedToolkit(
@@ -973,14 +1000,14 @@ export class ComposioService {
       connection.userId !== payload.userId ||
       connection.toolkitId !== payload.toolkitId
     ) {
-      throw new NakamaApiError("Invalid OAuth state.", 400);
+      throw new AirinApiError("Invalid OAuth state.", 400);
     }
 
     if (
       !connection.oauthStateHash ||
       this.authService.hashToken(payload.nonce) !== connection.oauthStateHash
     ) {
-      throw new NakamaApiError("Invalid OAuth state.", 400);
+      throw new AirinApiError("Invalid OAuth state.", 400);
     }
 
     const connectedAccountId =
@@ -1059,10 +1086,7 @@ export class ComposioService {
     );
 
     if (!connection || connection.status !== "connected") {
-      throw new NakamaApiError(
-        "Connect the toolkit before syncing tools.",
-        400
-      );
+      throw new AirinApiError("Connect the toolkit before syncing tools.", 400);
     }
 
     try {
@@ -1111,7 +1135,7 @@ export class ComposioService {
           connection.connectedAccountId ? [connection.connectedAccountId] : []
         )) > 0
       ) {
-        throw new NakamaApiError(STALE_CONNECTION_ERROR, 409);
+        throw new AirinApiError(STALE_CONNECTION_ERROR, 409);
       }
 
       const message = error instanceof Error ? error.message : String(error);
@@ -1176,7 +1200,7 @@ export class ComposioService {
     this.assertProfileOrg(profile, orgId);
 
     if (await this.databaseAdapter.getSharedAgentInstance(orgId, profile.id)) {
-      throw new NakamaApiError("Shared agent configuration is read-only.", 403);
+      throw new AirinApiError("Shared agent configuration is read-only.", 403);
     }
 
     const request: UpdateProfileComposioToolkitsRequest =
@@ -1195,7 +1219,7 @@ export class ComposioService {
       const toolkit = toolkitById.get(assignment.toolkitId);
 
       if (!toolkit || toolkit.orgId !== orgId) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Composio toolkit not found for this organization.",
           404
         );
@@ -1592,7 +1616,7 @@ export class ComposioService {
     const apiClient = await this.getApiClient();
 
     if (!apiClient) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Composio is not configured on this deployment.",
         503
       );
@@ -1608,7 +1632,7 @@ export class ComposioService {
     const record = await this.databaseAdapter.getComposioToolkit(toolkitId);
 
     if (!record || record.orgId !== orgId) {
-      throw new NakamaApiError("Composio toolkit not found.", 404);
+      throw new AirinApiError("Composio toolkit not found.", 404);
     }
 
     return record;
@@ -1624,7 +1648,7 @@ export class ComposioService {
     );
 
     if (!record) {
-      throw new NakamaApiError("Composio toolkit not found.", 404);
+      throw new AirinApiError("Composio toolkit not found.", 404);
     }
 
     return record;
@@ -1632,7 +1656,7 @@ export class ComposioService {
 
   private assertProfileOrg(profile: StoredProfileRecord, orgId: string): void {
     if (profile.orgId !== orgId) {
-      throw new NakamaApiError("Profile not found for this organization.", 404);
+      throw new AirinApiError("Profile not found for this organization.", 404);
     }
   }
 }

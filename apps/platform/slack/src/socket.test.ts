@@ -8,7 +8,7 @@ import { connectSlackSocket, type SlackMessageEvent } from "./socket";
 const realFetch = globalThis.fetch;
 
 const inboxPath = () =>
-  join(mkdtempSync(join(tmpdir(), "nakama-slack-inbox-")), "event-inbox.json");
+  join(mkdtempSync(join(tmpdir(), "airin-slack-inbox-")), "event-inbox.json");
 
 const tempInbox = () => new SlackEventInbox(inboxPath());
 

@@ -1,12 +1,12 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogTrigger,
-} from "@nakama/ui/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
   AiBrain01Icon,
@@ -54,6 +54,7 @@ import {
   toolGroupElapsedSeconds,
 } from "@/components/chat/assistant-tool-group.shared";
 import { ImageGenerationToolRow } from "@/components/chat/ImageGenerationToolRow";
+import { InlineHtmlFrame } from "@/components/chat/inline-html-frame";
 import { ThinkingReasoning } from "@/components/chat/ThinkingReasoning";
 import thinkingStyles from "@/components/chat/ThinkingReasoning.module.css";
 import { WebFetchToolRow } from "@/components/chat/WebFetchToolRow";
@@ -64,6 +65,7 @@ import { WorkspaceFilePreview } from "@/components/chat/workspace-file-preview";
 import { CodingAgentCommandLogo } from "@/components/coding-agent-logos";
 import { PluginSurface } from "@/components/PluginSurface";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { useOwnerSimpleUi } from "@/context/owner-simple-ui-context";
 import { useAuth } from "@/context/use-auth";
 import { useTheme } from "@/context/use-theme";
 import { useOrgPlugins } from "@/hooks/use-plugins";
@@ -101,6 +103,7 @@ import {
 import { isRunWorkflowTool } from "@/lib/chat-stream-workflow";
 import { client, formatError } from "@/lib/client";
 import { formatElapsedSeconds, useElapsedSeconds } from "@/lib/elapsed-time";
+import { splitInlineHtmlBlocks } from "@/lib/inline-html-blocks";
 import { groupPath } from "@/lib/navigation";
 import { findPluginTool } from "@/lib/plugin-runtime";
 import { splitStreamingMarkdown } from "@/lib/streaming-markdown-seal";
@@ -325,18 +328,38 @@ function AssistantTextContent({
 
   // oxlint-disable react-doctor/click-events-have-key-events react-doctor/no-static-element-interactions -- Citation anchors receive native keyboard clicks; this wrapper only delegates them.
   if (!streaming) {
-    const { markdown, citations } = formatLocalCitations(
-      content,
-      citedProfileId
-    );
+    const parts = splitInlineHtmlBlocks(content);
 
     return (
       <div
         className="flex w-full min-w-0 flex-col gap-0"
         onClick={openCitation}
       >
-        <MessageResponse>{markdown || "…"}</MessageResponse>
-        <LocalCitationFooter citations={citations} />
+        {parts.map((part) => {
+          if (part.type === "html") {
+            return (
+              <InlineHtmlFrame
+                html={part.html}
+                key={`html-${part.html.length}:${part.html.slice(0, 48)}`}
+              />
+            );
+          }
+
+          const { markdown, citations } = formatLocalCitations(
+            part.text,
+            citedProfileId
+          );
+
+          return (
+            <div
+              className="flex w-full min-w-0 flex-col gap-0"
+              key={`md-${part.text.length}:${part.text.slice(0, 48)}`}
+            >
+              <MessageResponse>{markdown || "…"}</MessageResponse>
+              <LocalCitationFooter citations={citations} />
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -698,6 +721,7 @@ function toolActivityLabel(tool: string | undefined): string {
   }
 }
 
+// oxlint-disable-next-line react-doctor/no-high-complexity-react-function -- Tool-only work stream branches by tool status and layout mode.
 function ToolOnlyWorkGroup({
   isWorkActive,
   tools,
@@ -709,13 +733,14 @@ function ToolOnlyWorkGroup({
   modelLabel?: string | null;
   profileId?: string | null;
 }) {
-  const [open, setOpen] = useState(isWorkActive);
+  const ownerSimple = useOwnerSimpleUi();
+  const [open, setOpen] = useState(() => !ownerSimple && isWorkActive);
   const [wasWorkActive, setWasWorkActive] = useState(isWorkActive);
   const elapsedSeconds = useWorkDuration(isWorkActive, tools);
 
   if (wasWorkActive !== isWorkActive) {
     setWasWorkActive(isWorkActive);
-    setOpen(isWorkActive);
+    setOpen(ownerSimple ? false : isWorkActive);
   }
 
   const done = !isWorkActive;
@@ -751,11 +776,14 @@ function ToolOnlyWorkGroup({
           </span>
         ) : (
           <span className={cn(thinkingStyles.label, thinkingStyles.shimmer)}>
-            {runningTool ? toolActivityLabel(runningTool.tool) : "Working…"}
-            {` · ${toolLabel}`}
-            {elapsedSeconds === null
+            {ownerSimple
+              ? "Working…"
+              : runningTool
+                ? toolActivityLabel(runningTool.tool)
+                : "Working…"}
+            {ownerSimple
               ? null
-              : ` · ${formatElapsedSeconds(elapsedSeconds)}`}
+              : ` · ${toolLabel}${elapsedSeconds === null ? "" : ` · ${formatElapsedSeconds(elapsedSeconds)}`}`}
           </span>
         )}
         <svg

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { SetupAuthRequest } from "@nakama/core/contract";
+import type { SetupAuthRequest } from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -11,7 +11,7 @@ import {
 } from "@/context/auth-context-shared";
 import { SetupWizard } from "./SetupWizard";
 
-const DRAFT_KEY = "nakama:setup-account-draft";
+const DRAFT_KEY = "airin:setup-account-draft";
 
 const previousSessionStorage = Object.getOwnPropertyDescriptor(
   globalThis,

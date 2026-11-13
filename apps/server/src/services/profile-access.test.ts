@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   seedOrgDefaultProfile,
-  seedOrgSuperNakamaProfile,
-} from "@nakama/db";
+  seedOrgSuperAirinProfile,
+} from "@airin/db";
 import { AutomationService } from "./automation-service";
 
 const ORG_ID = "org_test";
@@ -20,7 +20,7 @@ async function seed() {
     updatedAt: now,
   });
   const defaultProfile = await seedOrgDefaultProfile(db, ORG_ID);
-  const superProfile = await seedOrgSuperNakamaProfile(db, ORG_ID);
+  const superProfile = await seedOrgSuperAirinProfile(db, ORG_ID);
 
   return { db, defaultId: defaultProfile.id, superId: superProfile.id };
 }
@@ -32,8 +32,8 @@ const automationInput = {
   trigger: { type: "manual" as const },
 };
 
-describe("profile access: binding an automation to Super Nakama is admin-only", () => {
-  test("member cannot bind an automation to the Super Nakama profile", async () => {
+describe("profile access: binding an automation to Airin is admin-only", () => {
+  test("member cannot bind an automation to the Airin profile", async () => {
     const { db, superId } = await seed();
 
     const service = new AutomationService(db, {
@@ -45,11 +45,11 @@ describe("profile access: binding an automation to Super Nakama is admin-only", 
       orgRole: "member",
     });
 
-    await expect(attempt).rejects.toBeInstanceOf(NakamaApiError);
+    await expect(attempt).rejects.toBeInstanceOf(AirinApiError);
     await expect(attempt).rejects.toMatchObject({ status: 403 });
   });
 
-  test("admin can bind an automation to the Super Nakama profile", async () => {
+  test("admin can bind an automation to the Airin profile", async () => {
     const { db, superId } = await seed();
 
     const service = new AutomationService(db, {
@@ -69,7 +69,7 @@ describe("profile access: binding an automation to Super Nakama is admin-only", 
     expect(automation.profileId).toBe(superId);
   });
 
-  test("omitted access fail-closes Super Nakama bind on create", async () => {
+  test("omitted access fail-closes Airin bind on create", async () => {
     const { db, superId } = await seed();
 
     const service = new AutomationService(db, {
@@ -79,11 +79,11 @@ describe("profile access: binding an automation to Super Nakama is admin-only", 
     // SAFETY: The test fixture matches the contract used by this test.
     const attempt = service.create(ORG_ID, automationInput as any, superId);
 
-    await expect(attempt).rejects.toBeInstanceOf(NakamaApiError);
+    await expect(attempt).rejects.toBeInstanceOf(AirinApiError);
     await expect(attempt).rejects.toMatchObject({ status: 403 });
   });
 
-  test("member cannot rebind an automation to Super Nakama", async () => {
+  test("member cannot rebind an automation to Airin", async () => {
     const { db, defaultId, superId } = await seed();
 
     const service = new AutomationService(db, {
@@ -105,14 +105,14 @@ describe("profile access: binding an automation to Super Nakama is admin-only", 
       { orgRole: "member" }
     );
 
-    await expect(attempt).rejects.toBeInstanceOf(NakamaApiError);
+    await expect(attempt).rejects.toBeInstanceOf(AirinApiError);
     await expect(attempt).rejects.toMatchObject({ status: 403 });
     expect((await service.get(automation.id, ORG_ID))?.profileId).toBe(
       defaultId
     );
   });
 
-  test("admin can rebind an automation to Super Nakama", async () => {
+  test("admin can rebind an automation to Airin", async () => {
     const { db, defaultId, superId } = await seed();
 
     const service = new AutomationService(db, {

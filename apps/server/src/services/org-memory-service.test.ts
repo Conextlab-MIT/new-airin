@@ -7,11 +7,8 @@ import {
   getOrgMemoryHistoryDir,
   ORG_MEMORY_PREAMBLE,
   parseOrgMemoryContent,
-} from "@nakama/core";
-import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
 import { OrgMemoryService } from "./org-memory-service";
 
 describe("OrgMemoryService", () => {
@@ -28,7 +25,7 @@ describe("OrgMemoryService", () => {
   async function setup(
     archivedOrgIds: string[] = []
   ): Promise<OrgMemoryService> {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "nakama-org-memory-"));
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "airin-org-memory-"));
     const db = createInMemoryDatabaseAdapter();
     const now = new Date().toISOString();
     const archived = new Set(archivedOrgIds);

@@ -2,7 +2,7 @@ import {
   type AgentQuestionnaire,
   nanoid,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import type { AgentQuestionnaireState } from "../services/agent-questionnaire-state";
 

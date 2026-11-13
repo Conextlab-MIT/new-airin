@@ -8,7 +8,7 @@ import { setupTestConfigDir } from "./test-config-dir";
 
 const TEST_DIST_DIR = join(import.meta.dir, "__test_dist__");
 
-setupTestConfigDir("nakama-app-test-");
+setupTestConfigDir("airin-app-test-");
 
 describe("static web serving before auth", () => {
   beforeAll(() => {

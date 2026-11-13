@@ -70,7 +70,7 @@ describe("resolveTelegramWorkerStatus", () => {
 
 describe("createTelegramWorkerHeartbeat", () => {
   test("claims each identity separately", async () => {
-    await withTempHomedir("nakama-telegram-hb-", async () => {
+    await withTempHomedir("airin-telegram-hb-", async () => {
       const legacy = createTelegramWorkerHeartbeat(null);
       const orgA = createTelegramWorkerHeartbeat("org_a");
 

@@ -6,14 +6,14 @@ import {
   hasActiveStreams,
   resetActiveStreamsForTests,
   stopActiveStream,
-} from "@nakama/core/channel-active-stream";
-import { ChannelSessionStore as SessionStore } from "@nakama/core/channel-session-store";
+} from "@airin/core/channel-active-stream";
+import { ChannelSessionStore as SessionStore } from "@airin/core/channel-session-store";
 import {
   getWhatsAppConfigDir,
   regenerateWhatsAppPairingCode,
   saveWhatsAppConfig,
   syncWhatsAppOwnerPairing,
-} from "@nakama/core/whatsapp-config";
+} from "@airin/core/whatsapp-config";
 import * as baileys from "@whiskeysockets/baileys";
 import { WhatsAppAuthStore } from "./auth-store";
 import { createChatHandler, resetChatLocksForTests } from "./chat-handler";
@@ -108,7 +108,7 @@ async function createTestHandler(
   const mock = createMockClient(clientOptions);
 
   const sessionStore = new SessionStore(
-    path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+    path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
   );
 
   const orgStore = createTestOrgStore(homeDir);
@@ -861,8 +861,8 @@ describe("createChatHandler group chats", () => {
     await withTempHome(async (homeDir) => {
       const privateMessage = "private 🔒 message";
       const senderJid = "6281379292556@s.whatsapp.net";
-      const previousDebug = process.env.NAKAMA_CH_DEBUG;
-      process.env.NAKAMA_CH_DEBUG = "1";
+      const previousDebug = process.env.AIRIN_CH_DEBUG;
+      process.env.AIRIN_CH_DEBUG = "1";
       const log = spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -898,9 +898,9 @@ describe("createChatHandler group chats", () => {
         log.mockRestore();
 
         if (previousDebug === undefined) {
-          delete process.env.NAKAMA_CH_DEBUG;
+          delete process.env.AIRIN_CH_DEBUG;
         } else {
-          process.env.NAKAMA_CH_DEBUG = previousDebug;
+          process.env.AIRIN_CH_DEBUG = previousDebug;
         }
       }
     });
@@ -963,7 +963,7 @@ describe("createChatHandler group chats", () => {
     });
   });
 
-  test("group reply triggers the agent only when it quotes a Nakama message", async () => {
+  test("group reply triggers the agent only when it quotes an Airin message", async () => {
     await withTempHome(async (homeDir) => {
       await writeWhatsAppConfigIni(homeDir, {
         pairedJid: PAIRED_JID,
@@ -974,7 +974,7 @@ describe("createChatHandler group chats", () => {
         await createTestHandler(homeDir);
 
       // The linked number is the owner's own number: a reply to a message the
-      // owner typed by hand quotes the same address as a reply to Nakama.
+      // owner typed by hand quotes the same address as a reply to Airin.
       await handleMessage(
         groupInbound({
           fromMe: true,
@@ -990,7 +990,7 @@ describe("createChatHandler group chats", () => {
       await handleMessage(
         groupInbound({
           mentionedJids: [BOT_ME.id],
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -1048,7 +1048,7 @@ describe("createChatHandler group chats", () => {
       await handleMessage(
         groupInbound({
           mentionedJids: [BOT_ME.id],
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -1078,7 +1078,7 @@ describe("createChatHandler group chats", () => {
           mentionedJids: [BOT_ME.id],
           quotedParticipant: "6281352311912@s.whatsapp.net",
           quotedText: "Update Daily Well PHSS 20-08-2026\nSFT-01 Unload flow",
-          text: "@Nakama ini data laporan hari berikutnya",
+          text: "@Airin ini data laporan hari berikutnya",
         })
       );
 
@@ -1109,7 +1109,7 @@ describe("createChatHandler group chats", () => {
         groupInbound({
           mentionedJids: [BOT_ME.id],
           senderJid: "9999999999@s.whatsapp.net",
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -1185,7 +1185,7 @@ describe("createChatHandler group chats", () => {
         groupInbound({
           mentionedJids: [BOT_ME.id],
           senderJid: "9999999999@s.whatsapp.net",
-          text: `@Nakama ${PAIRING_CODE}`,
+          text: `@Airin ${PAIRING_CODE}`,
         })
       );
 
@@ -1232,7 +1232,7 @@ describe("createChatHandler group chats", () => {
       await handleMessage(
         groupInbound({
           mentionedJids: [BOT_ME.lid ?? BOT_ME.id],
-          text: "@Nakama hello group",
+          text: "@Airin hello group",
         })
       );
 
@@ -1260,7 +1260,7 @@ describe("createChatHandler group chats", () => {
           mentionedJids: [BOT_ME.id],
           senderJid: "104784384290844@lid",
           senderJids: ["104784384290844@lid", PAIRED_JID],
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -1284,7 +1284,7 @@ describe("createChatHandler group chats", () => {
           mentionedJids: [BOT_ME.id],
           senderJid: BOT_ME.lid,
           senderJids: [BOT_ME.lid ?? BOT_ME.id],
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -1329,7 +1329,7 @@ describe("createChatHandler group chats", () => {
         groupInbound({
           mentionedJids: [BOT_ME.id],
           senderJid: "628111111111@s.whatsapp.net",
-          text: "@Nakama hello",
+          text: "@Airin hello",
         })
       );
 
@@ -1389,7 +1389,7 @@ describe("createChatHandler group chats", () => {
         groupInbound({
           mentionedJids: [BOT_ME.id],
           senderJid,
-          text: "@Nakama hi",
+          text: "@Airin hi",
         })
       );
 
@@ -1411,7 +1411,7 @@ describe("createChatHandler group chats", () => {
       const { client, calls } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+        path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -1479,7 +1479,7 @@ describe("createChatHandler artifact delivery", () => {
         {
           arguments: {
             content: metaJson,
-            path: "artifacts/report.md.nakama-meta.json",
+            path: "artifacts/report.md.airin-meta.json",
           },
           id: "tool_2",
           name: "write_file",
@@ -1489,7 +1489,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: 8,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md",
       }),
       name: "write_file",
       role: "tool" as const,
@@ -1498,7 +1498,7 @@ describe("createChatHandler artifact delivery", () => {
     {
       content: JSON.stringify({
         bytesWritten: metaJson.length,
-        path: "/home/.nakama/orgs/org/profiles/default/artifacts/report.md.nakama-meta.json",
+        path: "/home/.airin/orgs/org/profiles/default/artifacts/report.md.airin-meta.json",
       }),
       name: "write_file",
       role: "tool" as const,
@@ -1553,7 +1553,7 @@ describe("createChatHandler artifact delivery", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+        path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
       );
 
       await sessionStore.load();
@@ -1918,7 +1918,7 @@ describe("createChatHandler artifact delivery", () => {
       await ctx.handleMessage(
         groupInbound({
           mentionedJids: [BOT_ME.id],
-          text: "@Nakama send report.md",
+          text: "@Airin send report.md",
         })
       );
       const documents = ctx.sent.filter((message) => message.content.document);
@@ -2009,7 +2009,7 @@ describe("stream cleanup", () => {
       });
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+        path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
       );
 
       const orgStore = createTestOrgStore(homeDir);
@@ -2054,7 +2054,7 @@ describe("createChatHandler session hot cache", () => {
       const { client, calls } = createMockClient();
 
       const sessionStore = new SessionStore(
-        path.join(homeDir, ".nakama", "whatsapp", "chat-sessions.json")
+        path.join(homeDir, ".airin", "whatsapp", "chat-sessions.json")
       );
 
       await sessionStore.load();

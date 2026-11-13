@@ -25,7 +25,7 @@ export function getComposioConfigPath(): string {
 }
 
 export function composioUserId(userId: string): string {
-  return `nakama:user:${userId}`;
+  return `airin:user:${userId}`;
 }
 
 export function resolveComposioApiKey(

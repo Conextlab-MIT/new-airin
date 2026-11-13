@@ -4,20 +4,20 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AirinApiError,
   getKnowledgeBaseDir,
   getOrgKnowledgeBaseDir,
   getProfileArtifactsDir,
   getUserConfigDir,
-  NakamaApiError,
   saveAttachmentBytes,
-} from "@nakama/core";
+} from "@airin/core";
 import { unzipSync, zipSync } from "fflate";
 import {
-  createNakamaDataExport,
+  AIRIN_ORG_EXPORT_MANIFEST,
+  AIRIN_USER_EXPORT_MANIFEST,
+  createAirinDataExport,
   MAX_IMPORT_ARCHIVE_BYTES,
   MAX_IMPORT_ENTRIES,
-  NAKAMA_ORG_EXPORT_MANIFEST,
-  NAKAMA_USER_EXPORT_MANIFEST,
 } from "../../services/data-portability";
 import {
   encryptBackup,
@@ -30,7 +30,7 @@ import {
   loginPlatformAdminSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-data-portability-routes-test-");
+setupTestConfigDir("airin-data-portability-routes-test-");
 
 function createApp() {
   return createMinimalHonoApp({
@@ -42,9 +42,8 @@ function createApp() {
 }
 
 async function createArchiveOverEntryLimit(): Promise<Buffer> {
-  const archive = (
-    await createNakamaDataExport({ rootDir: getUserConfigDir() })
-  ).data;
+  const archive = (await createAirinDataExport({ rootDir: getUserConfigDir() }))
+    .data;
 
   const entries = unzipSync(archive);
 
@@ -65,8 +64,8 @@ describe("data portability routes", () => {
       databaseAdapter
     );
 
-    const previousCap = process.env.NAKAMA_DATA_IMPORT_MAX_ARCHIVE_BYTES;
-    process.env.NAKAMA_DATA_IMPORT_MAX_ARCHIVE_BYTES = "100";
+    const previousCap = process.env.AIRIN_DATA_IMPORT_MAX_ARCHIVE_BYTES;
+    process.env.AIRIN_DATA_IMPORT_MAX_ARCHIVE_BYTES = "100";
 
     try {
       const response = await app.fetch(
@@ -80,9 +79,9 @@ describe("data portability routes", () => {
       expect((await response.json()).error).toEqual(expect.any(String));
     } finally {
       if (previousCap === undefined) {
-        delete process.env.NAKAMA_DATA_IMPORT_MAX_ARCHIVE_BYTES;
+        delete process.env.AIRIN_DATA_IMPORT_MAX_ARCHIVE_BYTES;
       } else {
-        process.env.NAKAMA_DATA_IMPORT_MAX_ARCHIVE_BYTES = previousCap;
+        process.env.AIRIN_DATA_IMPORT_MAX_ARCHIVE_BYTES = previousCap;
       }
     }
   });
@@ -125,7 +124,7 @@ describe("data portability routes", () => {
     }
   });
 
-  test("platform admin can download a Nakama export ZIP", async () => {
+  test("platform admin can download an Airin export ZIP", async () => {
     const { app, authService, databaseAdapter } = createApp();
 
     const session = await loginPlatformAdminSession(
@@ -145,7 +144,7 @@ describe("data portability routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/zip");
     expect(response.headers.get("content-disposition")).toContain(
-      "nakama-export-"
+      "airin-export-"
     );
     const archive = unzipSync(new Uint8Array(await response.arrayBuffer()));
 
@@ -177,19 +176,16 @@ describe("data portability routes", () => {
       return (await response.json()).lastError;
     };
 
-    const previousDir = process.env.NAKAMA_BACKUP_DIR;
-    const dir = await mkdtemp(join(tmpdir(), "nakama-backup-status-"));
+    const previousDir = process.env.AIRIN_BACKUP_DIR;
+    const dir = await mkdtemp(join(tmpdir(), "airin-backup-status-"));
 
-    const blocked = new NakamaApiError(
-      "the server cannot read config.ini",
-      409
-    );
+    const blocked = new AirinApiError("the server cannot read config.ini", 409);
 
     try {
-      delete process.env.NAKAMA_BACKUP_DIR;
+      delete process.env.AIRIN_BACKUP_DIR;
       expect(await lastError()).toBeNull();
 
-      process.env.NAKAMA_BACKUP_DIR = dir;
+      process.env.AIRIN_BACKUP_DIR = dir;
       expect(await lastError()).toBeNull();
 
       let started = () => {};
@@ -222,9 +218,9 @@ describe("data portability routes", () => {
       expect((await status()).status).toBe(500);
     } finally {
       if (previousDir === undefined) {
-        delete process.env.NAKAMA_BACKUP_DIR;
+        delete process.env.AIRIN_BACKUP_DIR;
       } else {
-        process.env.NAKAMA_BACKUP_DIR = previousDir;
+        process.env.AIRIN_BACKUP_DIR = previousDir;
       }
 
       await rm(dir, { force: true, recursive: true });
@@ -370,17 +366,17 @@ describe("data portability routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/zip");
     expect(response.headers.get("content-disposition")).toContain(
-      "nakama-user-export-"
+      "airin-user-export-"
     );
     const archive = unzipSync(new Uint8Array(await response.arrayBuffer()));
     expect(Object.keys(archive).sort()).toEqual([
       "attachments/attachment_dsar_target",
-      NAKAMA_USER_EXPORT_MANIFEST,
+      AIRIN_USER_EXPORT_MANIFEST,
     ]);
 
     // SAFETY: This test controls the fixture shape at this boundary.
     const manifest = JSON.parse(
-      Buffer.from(archive[NAKAMA_USER_EXPORT_MANIFEST]!).toString("utf8")
+      Buffer.from(archive[AIRIN_USER_EXPORT_MANIFEST]!).toString("utf8")
     ) as {
       memberships: unknown[];
       sessions: Array<{
@@ -592,10 +588,10 @@ describe("data portability routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/zip");
     expect(response.headers.get("content-disposition")).toContain(
-      "nakama-org-export-target-export-org-"
+      "airin-org-export-target-export-org-"
     );
     const archive = unzipSync(new Uint8Array(await response.arrayBuffer()));
-    expect(Object.keys(archive)).toContain(NAKAMA_ORG_EXPORT_MANIFEST);
+    expect(Object.keys(archive)).toContain(AIRIN_ORG_EXPORT_MANIFEST);
     expect(Object.keys(archive)).toContain(
       `profiles/${targetProfile!.id}/artifacts/report.txt`
     );
@@ -609,7 +605,7 @@ describe("data portability routes", () => {
 
     // SAFETY: This test controls the fixture shape at this boundary.
     const manifest = JSON.parse(
-      Buffer.from(archive[NAKAMA_ORG_EXPORT_MANIFEST]!).toString("utf8")
+      Buffer.from(archive[AIRIN_ORG_EXPORT_MANIFEST]!).toString("utf8")
     ) as {
       automations: Array<{ id: string; runs: Array<{ id: string }> }>;
       members: Array<{ user: { email?: string; id: string } }>;
@@ -802,8 +798,8 @@ describe("data portability routes", () => {
 
     expect((await send("restore")).status).toBe(400);
 
-    const previousCap = process.env.NAKAMA_DATA_IMPORT_MAX_ARCHIVE_BYTES;
-    process.env.NAKAMA_DATA_IMPORT_MAX_ARCHIVE_BYTES = String(
+    const previousCap = process.env.AIRIN_DATA_IMPORT_MAX_ARCHIVE_BYTES;
+    process.env.AIRIN_DATA_IMPORT_MAX_ARCHIVE_BYTES = String(
       MAX_IMPORT_ARCHIVE_BYTES
     );
 
@@ -814,9 +810,9 @@ describe("data portability routes", () => {
       ).toBe(413);
     } finally {
       if (previousCap === undefined) {
-        delete process.env.NAKAMA_DATA_IMPORT_MAX_ARCHIVE_BYTES;
+        delete process.env.AIRIN_DATA_IMPORT_MAX_ARCHIVE_BYTES;
       } else {
-        process.env.NAKAMA_DATA_IMPORT_MAX_ARCHIVE_BYTES = previousCap;
+        process.env.AIRIN_DATA_IMPORT_MAX_ARCHIVE_BYTES = previousCap;
       }
     }
 
@@ -831,9 +827,9 @@ describe("data portability routes", () => {
   });
 
   test("platform admin can restore an encrypted backup sent as a raw ZIP", async () => {
-    const previousKey = process.env.NAKAMA_SECRETS_KEY;
+    const previousKey = process.env.AIRIN_SECRETS_KEY;
     const key = Buffer.alloc(32, 4);
-    process.env.NAKAMA_SECRETS_KEY = key.toString("base64");
+    process.env.AIRIN_SECRETS_KEY = key.toString("base64");
 
     try {
       const { app, authService, databaseAdapter } = createApp();
@@ -847,7 +843,7 @@ describe("data portability routes", () => {
       await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
       const encrypted = encryptBackup(
-        (await createNakamaDataExport({ rootDir: getUserConfigDir() })).data,
+        (await createAirinDataExport({ rootDir: getUserConfigDir() })).data,
         key
       );
 
@@ -872,9 +868,9 @@ describe("data portability routes", () => {
       ).resolves.toBe("original");
     } finally {
       if (previousKey === undefined) {
-        delete process.env.NAKAMA_SECRETS_KEY;
+        delete process.env.AIRIN_SECRETS_KEY;
       } else {
-        process.env.NAKAMA_SECRETS_KEY = previousKey;
+        process.env.AIRIN_SECRETS_KEY = previousKey;
       }
     }
   });
@@ -1137,7 +1133,7 @@ describe("data portability routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(join(getUserConfigDir(), "config.ini"), "changed");
@@ -1190,7 +1186,7 @@ describe("data portability routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     const response = await app.fetch(

@@ -1,14 +1,14 @@
 import type {
   OrgPluginDetail,
   PluginReleaseSummary,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
+} from "@airin/ui/dropdown-menu";
 import { Add01Icon, MoreHorizontalIcon, Tick02Icon } from "hugeicons-react";
 import { type MouseEvent, useRef, useState } from "react";
 import { Link } from "react-router-dom";

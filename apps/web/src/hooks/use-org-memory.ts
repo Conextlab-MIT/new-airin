@@ -1,4 +1,4 @@
-import type { UpdateOrgMemoryRequest } from "@nakama/core/contract";
+import type { UpdateOrgMemoryRequest } from "@airin/core/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import { invalidateQueries } from "@/lib/query-client";

@@ -1,18 +1,18 @@
-import type { OllamaHostMode } from "@nakama/core/contract";
+import type { OllamaHostMode } from "@airin/core/contract";
 import {
   OLLAMA_CLOUD_DEFAULT_BASE_URL,
   OLLAMA_LOCAL_DEFAULT_BASE_URL,
-} from "@nakama/core/ollama-provider-config";
-import { Button } from "@nakama/ui/button";
-import { FormField } from "@nakama/ui/form-field";
-import { InputGroup, InputGroupInput } from "@nakama/ui/input-group";
+} from "@airin/core/ollama-provider-config";
+import { Button } from "@airin/ui/button";
+import { FormField } from "@airin/ui/form-field";
+import { InputGroup, InputGroupInput } from "@airin/ui/input-group";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
+} from "@airin/ui/select";
 import { useState } from "react";
 
 interface OllamaProviderSetupFieldsProps {

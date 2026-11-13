@@ -13,7 +13,7 @@ describe("resolveChatStreamTimeoutMs", () => {
     expect(resolveChatStreamTimeoutMs({})).toBe(twentyFourHoursMs);
     expect(
       resolveChatStreamTimeoutMs({
-        NAKAMA_CHAT_STREAM_TIMEOUT_MS: String(twentyFourHoursMs + 1),
+        AIRIN_CHAT_STREAM_TIMEOUT_MS: String(twentyFourHoursMs + 1),
       })
     ).toBe(twentyFourHoursMs);
   });
@@ -26,12 +26,12 @@ describe("resolveChatFirstTokenTimeoutMs", () => {
     );
     expect(
       resolveChatFirstTokenTimeoutMs({
-        NAKAMA_CHAT_FIRST_TOKEN_TIMEOUT_MS: " ",
+        AIRIN_CHAT_FIRST_TOKEN_TIMEOUT_MS: " ",
       })
     ).toBe(DEFAULT_CHAT_FIRST_TOKEN_TIMEOUT_MS);
     expect(
       resolveChatFirstTokenTimeoutMs({
-        NAKAMA_CHAT_FIRST_TOKEN_TIMEOUT_MS: "soon",
+        AIRIN_CHAT_FIRST_TOKEN_TIMEOUT_MS: "soon",
       })
     ).toBe(DEFAULT_CHAT_FIRST_TOKEN_TIMEOUT_MS);
   });
@@ -39,12 +39,12 @@ describe("resolveChatFirstTokenTimeoutMs", () => {
   test("takes an explicit value and floors it at the minimum", () => {
     expect(
       resolveChatFirstTokenTimeoutMs({
-        NAKAMA_CHAT_FIRST_TOKEN_TIMEOUT_MS: "45000",
+        AIRIN_CHAT_FIRST_TOKEN_TIMEOUT_MS: "45000",
       })
     ).toBe(45_000);
     expect(
       resolveChatFirstTokenTimeoutMs({
-        NAKAMA_CHAT_FIRST_TOKEN_TIMEOUT_MS: "1",
+        AIRIN_CHAT_FIRST_TOKEN_TIMEOUT_MS: "1",
       })
     ).toBe(MIN_CHAT_FIRST_TOKEN_TIMEOUT_MS);
   });
@@ -54,12 +54,12 @@ describe("resolveChatFirstTokenTimeoutMs", () => {
     // emitting anything. Clamping here would leave no way to turn it off.
     expect(
       resolveChatFirstTokenTimeoutMs({
-        NAKAMA_CHAT_FIRST_TOKEN_TIMEOUT_MS: "0",
+        AIRIN_CHAT_FIRST_TOKEN_TIMEOUT_MS: "0",
       })
     ).toBe(0);
     expect(
       resolveChatFirstTokenTimeoutMs({
-        NAKAMA_CHAT_FIRST_TOKEN_TIMEOUT_MS: "-1",
+        AIRIN_CHAT_FIRST_TOKEN_TIMEOUT_MS: "-1",
       })
     ).toBe(0);
   });

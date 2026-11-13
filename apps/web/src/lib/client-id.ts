@@ -1,4 +1,4 @@
-import { nanoid } from "@nakama/core/ids";
+import { nanoid } from "@airin/core/ids";
 
 /** Client-side opaque IDs that work outside secure contexts (e.g. http://LAN-IP). */
 export function createClientId(): string {

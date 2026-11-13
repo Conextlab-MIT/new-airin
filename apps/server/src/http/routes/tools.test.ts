@@ -2,10 +2,10 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  AirinApiError,
   getCustomToolsDir,
   getProfileSoulDir,
-  NakamaApiError,
-} from "@nakama/core";
+} from "@airin/core";
 import { AgentService } from "../../services/agent-service";
 import { claimLegacyCustomTools } from "../../services/custom-tool-handlers";
 import {
@@ -26,7 +26,7 @@ import {
   loginUserSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-tools-route-test-");
+setupTestConfigDir("airin-tools-route-test-");
 
 function createApp(agentOverrides: Partial<AgentService> = {}) {
   const result = createMinimalHonoApp({
@@ -145,8 +145,8 @@ describe("tool playground routes", () => {
       await writeFile(
         modulePath,
         handlerType === "python"
-          ? 'import os, json, sys\ndef run(input, context):\n    with open("playground.marker", "w") as handle:\n        handle.write("team")\n    return {"keyIsTeam": os.environ.get("NAKAMA_TOOL_API_KEY") == "team-key", "workspace": os.environ.get("NAKAMA_WORKSPACE_ROOT"), "cwd": os.getcwd(), "config": os.environ.get("NAKAMA_CONFIG_DIR")}\nif __name__ == "__main__":\n    print(json.dumps(run(json.loads(sys.stdin.read() or "{}"), {})))\n'
-          : 'import {writeFile} from "node:fs/promises"; export async function run(input, context) {await writeFile("playground.marker", "team"); return {keyIsTeam: process.env.NAKAMA_TOOL_API_KEY === "team-key", workspace: context.workspaceRoot, cwd: process.cwd(), config: process.env.NAKAMA_CONFIG_DIR ?? null};}'
+          ? 'import os, json, sys\ndef run(input, context):\n    with open("playground.marker", "w") as handle:\n        handle.write("team")\n    return {"keyIsTeam": os.environ.get("AIRIN_TOOL_API_KEY") == "team-key", "workspace": os.environ.get("AIRIN_WORKSPACE_ROOT"), "cwd": os.getcwd(), "config": os.environ.get("AIRIN_CONFIG_DIR")}\nif __name__ == "__main__":\n    print(json.dumps(run(json.loads(sys.stdin.read() or "{}"), {})))\n'
+          : 'import {writeFile} from "node:fs/promises"; export async function run(input, context) {await writeFile("playground.marker", "team"); return {keyIsTeam: process.env.AIRIN_TOOL_API_KEY === "team-key", workspace: context.workspaceRoot, cwd: process.cwd(), config: process.env.AIRIN_CONFIG_DIR ?? null};}'
       );
       await db.upsertTool({
         id: "published_parent_tool",
@@ -383,7 +383,7 @@ describe("tool playground routes", () => {
     const { app, authService, databaseAdapter } = createApp({
       getProfile: async (orgId: string, profileId: string) => {
         if (orgId !== visibleOrg || profileId !== "target") {
-          throw new NakamaApiError("Profile not found.", 404);
+          throw new AirinApiError("Profile not found.", 404);
         }
 
         return {
@@ -998,7 +998,7 @@ describe("tool playground routes", () => {
     const { app, authService, databaseAdapter } = createApp({
       runToolPlayground: async () => {
         throw new Error(
-          "SQLITE_CONSTRAINT: UNIQUE constraint failed at /home/nakama/.config/nakama/nakama.db"
+          "SQLITE_CONSTRAINT: UNIQUE constraint failed at /home/airin/.config/airin/airin.db"
         );
       },
     });
@@ -1034,7 +1034,7 @@ describe("tool playground routes", () => {
   test("run still maps a not-found message to 404 without leaking it", async () => {
     const { app, authService, databaseAdapter } = createApp({
       runToolPlayground: async () => {
-        throw new NakamaApiError("Tool not found.", 404);
+        throw new AirinApiError("Tool not found.", 404);
       },
     });
 

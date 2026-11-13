@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { getUserConfigDir, resolveWebPublicUrl } from "@nakama/core";
+import { getUserConfigDir, resolveWebPublicUrl } from "@airin/core";
 import {
   generateVapidKeys,
   sendWebPush,
@@ -11,13 +11,15 @@ import {
 /** A page that is on screen reports in at least this often. */
 const PRESENCE_TTL_MS = 75_000;
 
-/** Open Nakama pages one user can have; more only means fewer pushes held back. */
+/** Open Airin pages one user can have; more only means fewer pushes held back. */
 const MAX_PRESENCE_CLIENTS = 32;
 
-const FALLBACK_VAPID_SUBJECT = "https://github.com/ahmadrosid/nakama";
+const FALLBACK_VAPID_SUBJECT = "https://github.com/ahmadrosid/airin";
 
 export interface WebPushMessage {
   body: string;
+  /** When set, the service worker can skip muted agent chats. */
+  profileId?: string;
   /** Same tag replaces the earlier notification for that chat. */
   tag: string;
   title: string;
@@ -205,7 +207,7 @@ export class WebPushService {
   }
 
   /**
-   * Sends to every device the user subscribed, unless Nakama is on screen on
+   * Sends to every device the user subscribed, unless Airin is on screen on
    * one of them: they are already looking, and a push would only echo it.
    */
   async notify(userId: string, message: WebPushMessage): Promise<void> {

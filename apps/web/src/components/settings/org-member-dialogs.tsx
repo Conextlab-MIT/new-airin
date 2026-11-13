@@ -1,5 +1,5 @@
-import type { OrgMemberSummary, OrgRole } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { OrgMemberSummary, OrgRole } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -7,10 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@nakama/ui/popover";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@airin/ui/popover";
+import { Spinner } from "@airin/ui/spinner";
 import { useQuery } from "@tanstack/react-query";
 import { Copy01Icon, Search01Icon, Tick02Icon } from "hugeicons-react";
 import { useState } from "react";

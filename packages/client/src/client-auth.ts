@@ -22,7 +22,7 @@ import type {
   RotateLocalAuthTokenResponse,
   SetupAuthRequest,
   UpdateAuthProfileRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { ChannelsClient } from "./client-channels";
 
 /** Sign-in, MFA, passkeys, the signed-in user, and browser sessions. */

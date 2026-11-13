@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { isToolHiddenEnvKey } from "@nakama/core";
+import { isToolHiddenEnvKey } from "@airin/core";
 
 let ensured = false;
 
@@ -27,7 +27,7 @@ function applyLoginShellPath(): void {
 }
 
 export function ensureProcessPath(): void {
-  if (ensured || process.env.NAKAMA_DISABLE_FIX_PATH === "1") {
+  if (ensured || process.env.AIRIN_DISABLE_FIX_PATH === "1") {
     return;
   }
 
@@ -98,7 +98,7 @@ export function getToolExecutionEnv(): NodeJS.ProcessEnv {
   const { binDir, globalDir } = getBunGlobalPaths(home);
   const pathKey = getPathKey();
 
-  if (process.env.NAKAMA_DISABLE_FIX_PATH === "1") {
+  if (process.env.AIRIN_DISABLE_FIX_PATH === "1") {
     return {
       ...baseEnv,
       BUN_INSTALL_BIN: process.env.BUN_INSTALL_BIN ?? binDir,

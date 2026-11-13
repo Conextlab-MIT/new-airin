@@ -19,7 +19,7 @@ const TEST_CONFIG_DIR = path.join(
 
 describe("artifact shares", () => {
   afterEach(async () => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     await rm(TEST_CONFIG_DIR, { force: true, recursive: true });
   });
 
@@ -31,7 +31,7 @@ describe("artifact shares", () => {
   });
 
   test("write and read snapshot round-trip", async () => {
-    process.env.NAKAMA_CONFIG_DIR = TEST_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = TEST_CONFIG_DIR;
     await mkdir(TEST_CONFIG_DIR, { recursive: true });
 
     const orgId = "org_test";
@@ -51,7 +51,7 @@ describe("artifact shares", () => {
   });
 
   test("rejects oversized HTML snapshots without replacing the saved copy", async () => {
-    process.env.NAKAMA_CONFIG_DIR = TEST_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = TEST_CONFIG_DIR;
 
     const input = {
       bytes: Buffer.alloc(MAX_HTML_ARTIFACT_BYTES, "x"),

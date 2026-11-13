@@ -2,14 +2,14 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { DiscoveredSkill, ToolDefinition } from "@nakama/core";
+import type { DiscoveredSkill, ToolDefinition } from "@airin/core";
 import {
+  AirinApiError,
   getSkillPythonEnvBin,
   getSkillPythonEnvDir,
-  NakamaApiError,
   pathExists,
   SKILL_REQUIREMENTS_FILE,
-} from "@nakama/core";
+} from "@airin/core";
 import { spawnJsonTool } from "./custom-tool-subprocess";
 import { resolvePythonBin } from "./python-tool-loader";
 
@@ -102,7 +102,7 @@ const RUNNER_SOURCE = `import contextlib, io, json, sys
 sys.path.insert(0, sys.argv[1])
 out = io.StringIO()
 with contextlib.redirect_stdout(out):
-    exec(compile(json.load(sys.stdin)["code"], "<code>", "exec"), {"__name__": "__nakama__"})
+    exec(compile(json.load(sys.stdin)["code"], "<code>", "exec"), {"__name__": "__airin__"})
 print(json.dumps({"stdout": out.getvalue()}))`;
 
 /**
@@ -194,7 +194,7 @@ export async function installSkillPythonPackages(
 
   // Taken before the first await, so of two calls the first one always wins.
   if (installingEnvDirs.has(envDir)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Packages for this skill are already being installed.",
       409
     );
@@ -204,7 +204,7 @@ export async function installSkillPythonPackages(
 
   try {
     if (!(await pathExists(requirements))) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `This skill has no ${SKILL_REQUIREMENTS_FILE}.`,
         400
       );
@@ -258,7 +258,7 @@ function runInstallStep(bin: string, args: string[]): Promise<string> {
       (error, stdout, stderr) => {
         if (error) {
           reject(
-            new NakamaApiError(
+            new AirinApiError(
               `Installing Python packages failed: ${`${stderr}${stdout}`.slice(-2000) || error.message}`,
               422
             )

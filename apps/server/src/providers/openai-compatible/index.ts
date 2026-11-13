@@ -10,12 +10,12 @@ import type {
   StreamChatHandlers,
   ThinkingEffort,
   WireApi,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   fetchWithoutIdleTimeout,
   normalizeBaseUrl,
   ProviderStreamInterruptedError,
-} from "@nakama/core";
+} from "@airin/core";
 import OpenAI from "openai";
 import {
   parseOpenAIToolCalls,

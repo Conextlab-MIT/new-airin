@@ -1,5 +1,5 @@
-import type { AgentGroupMemoryChange } from "@nakama/core/agent-groups";
-import { cn } from "@nakama/ui/utils";
+import type { AgentGroupMemoryChange } from "@airin/core/agent-groups";
+import { cn } from "@airin/ui/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown01Icon,

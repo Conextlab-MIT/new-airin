@@ -1,10 +1,10 @@
-import type { ChannelConfigScope } from "@nakama/core/channel-config-shared";
-import type { DiscordConfigFile } from "@nakama/core/discord-config";
+import type { ChannelConfigScope } from "@airin/core/channel-config-shared";
+import type { DiscordConfigFile } from "@airin/core/discord-config";
 import {
   isDiscordUserAuthorized,
   loadDiscordConfigFile,
   verifyAndPairDiscordUser,
-} from "@nakama/core/discord-config";
+} from "@airin/core/discord-config";
 
 export class DiscordAuthStore {
   constructor(private readonly scope: ChannelConfigScope = null) {}

@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Nakama",
-  "short_name": "Nakama",
+  "name": "Airin",
+  "short_name": "Airin",
   "description": "Your agent console: chat, automations, skills and integrations.",
   "start_url": "/chat",
   "scope": "/",

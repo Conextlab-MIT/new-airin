@@ -1,5 +1,5 @@
-import type { RemoteChatSession } from "@nakama/client";
-import { NakamaApiError } from "@nakama/core/api-error";
+import type { RemoteChatSession } from "@airin/client";
+import { AirinApiError } from "@airin/core/api-error";
 import type {
   AgentChannel,
   AgentQuestionAnswer,
@@ -7,8 +7,8 @@ import type {
   AgentTodo,
   ChatContextUsage,
   ThinkingEffort,
-} from "@nakama/core/contract";
-import { isThinkingEffort } from "@nakama/core/thinking-effort";
+} from "@airin/core/contract";
+import { isThinkingEffort } from "@airin/core/thinking-effort";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
@@ -428,10 +428,11 @@ export function useChatPage() {
         body: reply,
         hidesAtStart,
         onOpen: () => navigate(buildChatPath(turnProfileId, sessionId)),
+        profileId: turnProfileId,
         tag: `session-${sessionId}`,
         title:
           profilesRef.current.find((profile) => profile.id === turnProfileId)
-            ?.name ?? "Nakama",
+            ?.name ?? "Airin",
       });
     },
     [navigate]
@@ -964,7 +965,7 @@ export function useChatPage() {
         }
 
         // The chat was deleted: open a new chat instead of an error.
-        if (err instanceof NakamaApiError && err.status === 404) {
+        if (err instanceof AirinApiError && err.status === 404) {
           navigate(buildNewChatPath(nextProfileId), { replace: true });
 
           return;
@@ -1256,7 +1257,7 @@ export function useChatPage() {
 
       stop()
         .catch((err) => {
-          if (err instanceof NakamaApiError && err.status < 500) {
+          if (err instanceof AirinApiError && err.status < 500) {
             throw err;
           }
 
@@ -1264,7 +1265,7 @@ export function useChatPage() {
         })
         .catch((err) => {
           // The session went away, and its turn with it.
-          if (err instanceof NakamaApiError && err.status === 404) {
+          if (err instanceof AirinApiError && err.status === 404) {
             return;
           }
 

@@ -3,7 +3,7 @@ import type {
   ChatgptOAuthDeviceStartResponse,
   CustomModelEntry,
   XaiOAuthCredentials,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { client } from "@/lib/client";
 
 export interface DeviceSignIn<T> {

@@ -5,7 +5,7 @@ import {
   parseIni,
   readTextOrNull,
   writeTextFile,
-} from "@nakama/core";
+} from "@airin/core";
 
 const CLI_CONFIG_KEYS = new Set(["org_id", "profile_id", "server_url"]);
 
@@ -95,7 +95,7 @@ async function writeCliConfig(
   values: Record<string, string>,
   path: string
 ): Promise<void> {
-  const lines = ["# Nakama CLI"];
+  const lines = ["# Airin CLI"];
 
   for (const key of CLI_CONFIG_KEYS) {
     const value = values[key]?.trim();

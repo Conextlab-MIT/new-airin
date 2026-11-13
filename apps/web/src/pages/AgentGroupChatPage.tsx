@@ -1,4 +1,4 @@
-import type { ProfileSummary } from "@nakama/core";
+import type { ProfileSummary } from "@airin/core";
 import {
   type AgentGroup,
   type AgentGroupMessage,
@@ -6,11 +6,12 @@ import {
   type AgentGroupSession,
   type AgentGroupSessionDetail,
   groupRoster,
-} from "@nakama/core/agent-groups";
-import type { DocumentAttachment } from "@nakama/core/contract";
-import { Button } from "@nakama/ui";
-import { Spinner } from "@nakama/ui/spinner";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/core/agent-groups";
+import type { DocumentAttachment } from "@airin/core/contract";
+import { Button } from "@airin/ui";
+import { Spinner } from "@airin/ui/spinner";
+import { toast } from "@airin/ui/toast";
+import { cn } from "@airin/ui/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { MessageAdd01Icon } from "hugeicons-react";
 import { useMemo, useRef, useState } from "react";
@@ -34,6 +35,7 @@ import {
 } from "@/components/agent-groups/group-thread-panel";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ChatAttachmentPanelProvider } from "@/context/chat-attachment-panel-context";
+import { useUiMode } from "@/context/use-ui-mode";
 import {
   PENDING_RUN,
   pendingMessage,
@@ -46,9 +48,6 @@ import { client, formatError } from "@/lib/client";
 import { groupPath, PAGE_PATHS } from "@/lib/navigation";
 import { queryKeys } from "@/lib/query-keys";
 import { ChatPageColumn } from "@/pages/chat/chat-page-layout";
-
-const COMPOSER_DOCK =
-  "sticky bottom-0 z-10 mt-auto w-full shrink-0 bg-background/95 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:pt-4 sm:pb-4";
 
 const NO_THREAD_RUNS: number[] = [];
 
@@ -256,26 +255,36 @@ function GroupHeader({
 
   return (
     <>
-      <header className="@container -mx-6 flex h-12 shrink-0 items-center gap-2 border-border border-b px-4 max-sm:hidden">
-        <div className="flex h-7 min-w-0 flex-1 items-center gap-2 px-2.5">
-          <h1 className="truncate font-semibold text-[15px] tracking-tight">
-            {group.name}
-          </h1>
-          <div className="flex @max-md:hidden shrink-0 -space-x-1.5">
-            {members.slice(0, 4).map((member) => (
-              <ProfileAvatar
-                className="outline-none"
+      <header className="@container -mx-6 flex shrink-0 flex-col border-border border-b max-sm:hidden">
+        <div className="flex h-12 items-center gap-2 px-4">
+          <div className="flex h-7 min-w-0 flex-1 items-center gap-2 px-2.5">
+            <h1 className="truncate font-semibold text-[15px] tracking-tight">
+              {group.name}
+            </h1>
+            <span className="@max-md:hidden shrink-0 text-muted-foreground text-xs">
+              {group.memberIds.length} agents
+            </span>
+          </div>
+          <div className="flex h-7 shrink-0 items-center gap-1">{actions}</div>
+        </div>
+        {members.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 border-border border-t px-6 py-2">
+            <span className="text-muted-foreground text-xs">Members</span>
+            {members.map((member) => (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-md bg-muted/60 py-0.5 pr-2 pl-1 text-xs"
                 key={member.id}
-                profile={member}
-                size="xs"
-              />
+              >
+                <ProfileAvatar
+                  className="outline-none"
+                  profile={member}
+                  size="xs"
+                />
+                {member.name}
+              </span>
             ))}
           </div>
-          <span className="@max-md:hidden shrink-0 text-muted-foreground text-xs">
-            {group.memberIds.length} agents
-          </span>
-        </div>
-        <div className="flex h-7 shrink-0 items-center gap-1">{actions}</div>
+        ) : null}
       </header>
       {navbarActions
         ? createPortal(
@@ -315,9 +324,11 @@ function GroupConversation({
 }) {
   const roster = useMemo(() => groupRoster(group, profiles), [group, profiles]);
   const { members } = roster;
+  const { uiMode } = useUiMode();
+  const ownerMode = uiMode === "owner";
 
   return (
-    <ChatPageColumn>
+    <ChatPageColumn wallpaper={ownerMode}>
       <GroupHeader group={group} members={members} />
       <div
         className="mx-auto flex min-h-0 w-full flex-1 flex-col"
@@ -334,7 +345,14 @@ function GroupConversation({
             threadRunIds={threadRunIds}
           />
         </div>
-        <div className={COMPOSER_DOCK}>
+        <div
+          className={cn(
+            "sticky bottom-0 z-10 mt-auto w-full shrink-0 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pt-4 sm:pb-4",
+            ownerMode
+              ? "bg-transparent"
+              : "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          )}
+        >
           <div className="mx-auto w-full max-w-3xl sm:px-4">
             <GroupComposer
               allowDocuments
@@ -367,6 +385,8 @@ function GroupDraft({
   const queryClient = useQueryClient();
   const roster = useMemo(() => groupRoster(group, profiles), [group, profiles]);
   const { members } = roster;
+  const { uiMode } = useUiMode();
+  const ownerMode = uiMode === "owner";
   const [pending, setPending] = useState<AgentGroupMessage | null>(null);
   const [restored, setRestored] = useState("");
   const [editing, setEditing] = useState(false);
@@ -439,7 +459,7 @@ function GroupDraft({
   }
 
   return (
-    <ChatPageColumn centered>
+    <ChatPageColumn centered wallpaper={ownerMode}>
       {/* Pinned to the column's top-right corner, like the cognito toggle in agent chat. */}
       <div className="absolute top-2 right-3 z-20 sm:right-6">
         <GroupActionsMenu onEdit={() => setEditing(true)} />

@@ -1,4 +1,4 @@
-import { CLOUDFLARE_API_ROOT, type CustomModelEntry } from "@nakama/core";
+import { CLOUDFLARE_API_ROOT, type CustomModelEntry } from "@airin/core";
 import { z } from "zod";
 import { buildProviderHttpError } from "../shared";
 

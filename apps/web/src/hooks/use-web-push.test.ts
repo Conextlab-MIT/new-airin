@@ -36,7 +36,7 @@ function replyEnds(hidesAtStart: number) {
     hidesAtStart,
     onOpen: () => undefined,
     tag: "session-1",
-    title: "Nakama",
+    title: "Airin",
   });
 }
 

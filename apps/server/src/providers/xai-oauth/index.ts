@@ -6,7 +6,7 @@ import type {
   ProviderClient,
   StreamChatHandlers,
   XaiOAuthCredentials,
-} from "@nakama/core";
+} from "@airin/core";
 import { generateOpenAIResponsesChat } from "../openai/responses";
 import {
   resolveXaiOAuthCredentials,

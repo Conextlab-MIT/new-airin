@@ -4,7 +4,7 @@
  *
  * Prompt text picks the behavior:
  *   - "tool"  sends a tool_call and a completed tool_call_update first
- *   - "mcp-tools" asks the Nakama MCP endpoint for its tools and reports them
+ *   - "mcp-tools" asks the Airin MCP endpoint for its tools and reports them
  *   - "mcp"   reports how many MCP servers the session was created with, and its _meta
  *   - "thought" sends a thought chunk before the reply
  *   - "env"   lists which secret-shaped env vars the agent process can see
@@ -42,8 +42,8 @@ function initialConfigOptions(): acp.SessionConfigOption[] {
 }
 
 const ENV_PROBE = [
-  "NAKAMA_SECRETS_KEY",
-  "NAKAMA_PROVIDER_API_KEY_OPENAI",
+  "AIRIN_SECRETS_KEY",
+  "AIRIN_PROVIDER_API_KEY_OPENAI",
   "ANTHROPIC_API_KEY",
 ];
 
@@ -72,8 +72,7 @@ class FakeAgent {
     this.mcpUrl =
       params.mcpServers
         .flatMap((server) => ("env" in server ? server.env : []))
-        .find((variable) => variable.name === "NAKAMA_ACP_MCP_URL")?.value ??
-      "";
+        .find((variable) => variable.name === "AIRIN_ACP_MCP_URL")?.value ?? "";
     const sessionId = `session-${this.sessionIds.length + 1}`;
     this.sessionIds.push(sessionId);
 

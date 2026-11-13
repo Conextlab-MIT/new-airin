@@ -4,9 +4,9 @@ import {
   loadWhatsAppConfigFile,
   resolveWhatsAppOutboundPort,
   WHATSAPP_OUTBOUND_TOKEN_HEADER,
-} from "@nakama/core";
-import type { ChannelConfigScope } from "@nakama/core/channel-config-shared";
-import { saveWhatsAppOutboundPort } from "@nakama/core/whatsapp-config";
+} from "@airin/core";
+import type { ChannelConfigScope } from "@airin/core/channel-config-shared";
+import { saveWhatsAppOutboundPort } from "@airin/core/whatsapp-config";
 import type { WASocket } from "@whiskeysockets/baileys";
 import { rememberWhatsAppOutbound } from "./inbound-message";
 

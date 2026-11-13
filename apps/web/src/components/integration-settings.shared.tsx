@@ -1,7 +1,7 @@
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { CheckmarkCircle01Icon } from "hugeicons-react";
 import type { ReactNode } from "react";
 import { useStartWorker } from "@/hooks/use-worker-actions";

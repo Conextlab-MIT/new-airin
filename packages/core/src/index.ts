@@ -1,64 +1,40 @@
+export * from "./agent-marketplace";
+
 export * from "./agent-questionnaire";
 
 export * from "./agent-todo";
-
+export { getAirinVersion } from "./airin-version";
 export * from "./api-error";
-
 export * from "./artifact-mime";
-
 export * from "./artifact-shares";
-
 export * from "./artifacts";
-
 export * from "./attachments/content";
-
 export * from "./attachments/store";
-
 export * from "./audio-transcription";
-
 export * from "./automation-delivery";
-
 export * from "./automation-delivery-destination";
-
 export * from "./automation-run-read";
-
 export * from "./automation-scheduler";
-
 export * from "./automation-validate";
-
 export * from "./automation-worker";
-
 export * from "./bridge-api";
-
 export * from "./browser-session-cookies";
-
 export * from "./channel-artifact-delivery";
-
 export * from "./channel-artifacts";
-
 export * from "./channel-org";
-
 export * from "./channels";
-
 export * from "./chat-stream-timeout";
-
 export * from "./cloudflare-provider-config";
-
 export * from "./compatible-provider-config";
-
 export * from "./composio";
-
 export * from "./composio-config";
-
 export * from "./config";
-
 export * from "./contract";
-
 // Explicit Discord exports — omit helpers that collide with telegram-* names
 // (maskBotToken, generateHandshakeCode, normalizeHandshakeInput, parseAllowedUserIds,
 // isHeartbeatAlive, isProcessAlive). Shared implementations live in
-// channel-config-shared.ts; import Discord variants from @nakama/core/discord-config
-// or @nakama/core/discord-worker when required.
+// channel-config-shared.ts; import Discord variants from @airin/core/discord-config
+// or @airin/core/discord-worker when required.
 export {
   getDiscordConfigDir,
   getDiscordConfigPath,
@@ -68,40 +44,22 @@ export {
   resolveDiscordApplicationId,
   saveDiscordConfig,
 } from "./discord-config";
-
 export { getDiscordWorkerStatus } from "./discord-worker";
-
 export * from "./document-content";
-
 export * from "./email-config";
-
 export * from "./error-tracking";
-
 export * from "./error-tracking-config";
-
 export * from "./error-tracking-queue";
-
 export * from "./error-tracking-sentry";
-
 export * from "./fetch-idle";
-
 export * from "./fs";
-
 export * from "./ids";
-
 export * from "./image-content";
-
 export * from "./knowledge-base";
-
 export * from "./local-auth";
-
 export { log } from "./logger";
-
 export { createSmtpSender } from "./mail/smtp-sender";
-
 export * from "./message-content";
-
-export { getNakamaVersion } from "./nakama-version";
 
 export * from "./notification-destinations";
 

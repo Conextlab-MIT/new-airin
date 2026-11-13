@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { loadLocalAuthToken } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { loadLocalAuthToken } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AuthService } from "../../services/auth-service";
 import { OrgService } from "../../services/org-service";
 import { createHonoApp } from "../app";

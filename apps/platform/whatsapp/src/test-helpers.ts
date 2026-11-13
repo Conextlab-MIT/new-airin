@@ -1,28 +1,28 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
-  NakamaClient,
+  AirinClient,
   SendMessageArg,
   SendStreamOptions,
   StreamHandlers,
-} from "@nakama/client";
+} from "@airin/client";
 import {
   assertBridgeClientMethods,
   parseListProfilesResponse,
   parseListUserOrgsResponse,
-} from "@nakama/core/bridge-api";
-import type { ChannelOrgStore } from "@nakama/core/channel-org";
+} from "@airin/core/bridge-api";
+import type { ChannelOrgStore } from "@airin/core/channel-org";
 import {
   createDefaultTestOrgs,
   createMultiTestOrgs,
   createTestOrgStore as createSharedTestOrgStore,
   withTempHome as withSharedTempHome,
-} from "@nakama/core/channel-test-helpers";
+} from "@airin/core/channel-test-helpers";
 import type {
   ChatMessage,
   ProfileSummary,
   UserOrgSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 
 export interface MockStreamControl {
   complete(reply?: string): void;
@@ -293,7 +293,7 @@ export function createMockClient(
   };
 
   // SAFETY: Tests call only the client methods supplied by this mock.
-  const client = clientFixture as NakamaClient;
+  const client = clientFixture as AirinClient;
 
   assertBridgeClientMethods(client);
 
@@ -336,11 +336,11 @@ export async function writeWhatsAppConfigIni(
     requireGroupMention?: boolean;
   }
 ): Promise<void> {
-  const dir = path.join(homeDir, ".nakama", "whatsapp");
+  const dir = path.join(homeDir, ".airin", "whatsapp");
   await mkdir(dir, { recursive: true });
 
   const lines = [
-    "# Nakama WhatsApp bridge",
+    "# Airin WhatsApp bridge",
     `phone_number=${config.phoneNumber}`,
     `profile_id=${config.profileId ?? "default"}`,
   ];
@@ -403,5 +403,5 @@ export function createTestOrgStore(homeDir: string): ChannelOrgStore {
 export async function withTempHome<T>(
   run: (homeDir: string) => Promise<T>
 ): Promise<T> {
-  return withSharedTempHome("nakama-whatsapp-home-", run);
+  return withSharedTempHome("airin-whatsapp-home-", run);
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { JsonValue, ToolContext, ToolDefinition } from "@nakama/core";
+import type { JsonValue, ToolContext, ToolDefinition } from "@airin/core";
 import { z } from "zod";
 import { asTestFetch } from "../providers/test-helpers";
 import { saveAgentBrowserConfig } from "../services/agent-browser-service";
@@ -9,7 +9,7 @@ import {
 } from "../test-config-dir";
 import { createBrowserTools } from "./browser-tools";
 
-setupTestConfigDir("nakama-browser-tools-test-");
+setupTestConfigDir("airin-browser-tools-test-");
 
 const secrets = setupTestManagedSecrets();
 
@@ -28,7 +28,7 @@ const context: ToolContext = {
   userId: "user-1",
 };
 
-const USER_BROWSER = "nakama-org-a-user-user-1";
+const USER_BROWSER = "airin-org-a-user-user-1";
 
 const ImagesResultSchema = z.object({
   images: z.array(z.object({ data: z.string(), mediaType: z.string() })),
@@ -47,7 +47,7 @@ function tool(name: string): ToolDefinition {
 describe("browser tools", () => {
   const originalFetch = globalThis.fetch;
   const originalKey = process.env.KERNEL_API_KEY;
-  const originalProvider = process.env.NAKAMA_BROWSER_PROVIDER;
+  const originalProvider = process.env.AIRIN_BROWSER_PROVIDER;
   let calls: KernelCall[] = [];
   let browserExists = true;
   let playwrightResponse: (call: KernelCall) => Response;
@@ -55,7 +55,7 @@ describe("browser tools", () => {
 
   beforeEach(() => {
     delete process.env.KERNEL_API_KEY;
-    delete process.env.NAKAMA_BROWSER_PROVIDER;
+    delete process.env.AIRIN_BROWSER_PROVIDER;
     calls = [];
     browserExists = true;
     executorLimitReached = false;
@@ -139,7 +139,7 @@ describe("browser tools", () => {
 
     for (const [key, value] of [
       ["KERNEL_API_KEY", originalKey],
-      ["NAKAMA_BROWSER_PROVIDER", originalProvider],
+      ["AIRIN_BROWSER_PROVIDER", originalProvider],
     ] as const) {
       if (value === undefined) {
         delete process.env[key];
@@ -185,7 +185,7 @@ describe("browser tools", () => {
 
     expect(executed.map((call) => [call.path, call.body?.executor])).toEqual([
       [`/browsers/${USER_BROWSER}/playwright/execute`, "chat-1"],
-      ["/browsers/nakama-org-a-user-user-2/playwright/execute", "chat-2"],
+      ["/browsers/airin-org-a-user-user-2/playwright/execute", "chat-2"],
     ]);
   });
 

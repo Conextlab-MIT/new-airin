@@ -35,6 +35,7 @@ export type PageId =
   | "tools"
   | "skills"
   | "mcp"
+  | "marketplace"
   | "automations"
   | "organization"
   | "settings"
@@ -121,7 +122,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem(
         "customize",
         "Settings",
-        "Manage Nakama settings, tools, and integrations",
+        "Manage Airin settings, tools, and integrations",
         SlidersHorizontalIcon
       ),
     ],
@@ -193,6 +194,12 @@ export function sidebarPageId(page: PageId): PageId {
 }
 
 export const STANDALONE_PAGES: Partial<Record<PageId, NavItem>> = {
+  marketplace: navItem(
+    "marketplace",
+    "Marketplace",
+    "Install ready-made AI agents for your team",
+    PackageIcon
+  ),
   notifications: navItem(
     "notifications",
     "Notifications",
@@ -243,7 +250,11 @@ interface PageAccess {
 
 /** Whether this user can open the page, so it is not redirected away. */
 export function canOpenPage(pageId: PageId, access: PageAccess): boolean {
-  if (pageId === "google-meet" || pageId === "groups") {
+  if (
+    pageId === "google-meet" ||
+    pageId === "groups" ||
+    pageId === "marketplace"
+  ) {
     return canAccessIntegrationsPage(access.orgRole);
   }
 
@@ -494,6 +505,7 @@ export const PAGE_PATHS: Record<PageId, string> = {
   files: "/files",
   "google-meet": "/google-meet",
   groups: "/groups",
+  marketplace: "/marketplace",
   mcp: "/settings/mcp",
   notifications: "/notifications",
   organization: "/organization",
@@ -515,6 +527,7 @@ const PREFIX_PAGE_IDS: readonly [string, PageId][] = [
   [PAGE_PATHS["plugin-management"], "plugin-management"],
   [PAGE_PATHS.chat, "chat"],
   [PAGE_PATHS.groups, "groups"],
+  [PAGE_PATHS.marketplace, "marketplace"],
   [PAGE_PATHS.organization, "organization"],
   [PAGE_PATHS.soul, "soul"],
   [PAGE_PATHS.profiles, "profiles"],

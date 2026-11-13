@@ -1,4 +1,4 @@
-# Nakama — one container: API, web dashboard, automation + task workers
+# Airin — one container: API, web dashboard, automation + task workers
 # Build & run: ./scripts/docker-build-run.sh
 
 # Keep image references literal so Dependabot can update all three pins.
@@ -16,14 +16,14 @@ COPY apps apps
 COPY packages packages
 
 RUN bun install --frozen-lockfile --ignore-scripts \
-  && bun run --filter @nakama/web build \
-  && bun run --filter @nakama/server build \
-  && bun run --filter @nakama/automation build \
-  && bun run --filter @nakama/telegram build \
-  && bun run --filter @nakama/whatsapp build \
-  && bun run --filter @nakama/discord build \
-  && bun run --filter @nakama/slack build \
-  && bun run --filter @nakama/teams build
+  && bun run --filter @airin/web build \
+  && bun run --filter @airin/server build \
+  && bun run --filter @airin/automation build \
+  && bun run --filter @airin/telegram build \
+  && bun run --filter @airin/whatsapp build \
+  && bun run --filter @airin/discord build \
+  && bun run --filter @airin/slack build \
+  && bun run --filter @airin/teams build
 
 FROM scratch AS build-assets
 COPY --from=web-builder /app/apps/web/dist /app/apps/web/dist
@@ -83,7 +83,7 @@ COPY --from=ffmpeg-binaries /ffmpeg /ffprobe /usr/local/bin/
 # Chrome is not installed by default. INSTALL_CHROMIUM=true adds Chromium for
 # agent PDF export (services/html-pdf.ts). INSTALL_MEET_DEPS is the old name and
 # still works. Docker's default seccomp profile blocks Chromium's sandbox for the
-# non-root Nakama user, so run this image with NAKAMA_CHROME_NO_SANDBOX=true.
+# non-root Airin user, so run this image with AIRIN_CHROME_NO_SANDBOX=true.
 ARG INSTALL_CHROMIUM=false
 ARG INSTALL_MEET_DEPS=false
 RUN if [ "$INSTALL_CHROMIUM" = "true" ] || [ "$INSTALL_MEET_DEPS" = "true" ]; then \
@@ -94,21 +94,21 @@ RUN if [ "$INSTALL_CHROMIUM" = "true" ] || [ "$INSTALL_MEET_DEPS" = "true" ]; th
 
 # A named volume copies this owner on first mount, so uid 1000 can write
 # backups and upgrade requests there.
-RUN mkdir -p /nakama/data /nakama/backups /nakama/updates \
+RUN mkdir -p /airin/data /airin/backups /airin/updates \
   && if getent group 1000 >/dev/null; then \
        G=$(getent group 1000 | cut -d: -f1); \
-       [ "$G" = nakama ] || groupmod -n nakama "$G"; \
-     else groupadd --system --gid 1000 nakama; fi \
-  && if getent passwd nakama >/dev/null; then \
-       usermod -d /nakama/data nakama; \
+       [ "$G" = airin ] || groupmod -n airin "$G"; \
+     else groupadd --system --gid 1000 airin; fi \
+  && if getent passwd airin >/dev/null; then \
+       usermod -d /airin/data airin; \
      elif getent passwd 1000 >/dev/null; then \
        U=$(getent passwd 1000 | cut -d: -f1); \
-       usermod -l nakama -g nakama -d /nakama/data "$U"; \
-     else useradd --system --uid 1000 --gid nakama --home-dir /nakama/data --create-home nakama; fi \
-  && chown nakama:nakama /nakama/data /nakama/backups /nakama/updates
+       usermod -l airin -g airin -d /airin/data "$U"; \
+     else useradd --system --uid 1000 --gid airin --home-dir /airin/data --create-home airin; fi \
+  && chown airin:airin /airin/data /airin/backups /airin/updates
 
 COPY --chown=1000:1000 package.json ./
-COPY --chown=1000:1000 scripts/nakama-updater.sh scripts/nakama-updater.sh
+COPY --chown=1000:1000 scripts/airin-updater.sh scripts/airin-updater.sh
 COPY --chown=1000:1000 apps/server apps/server
 COPY --chown=1000:1000 packages packages
 COPY --chown=1000:1000 --from=build-assets /app/apps/web/dist apps/web/dist
@@ -126,16 +126,16 @@ RUN test -f apps/server/src/services/javascript-tool-runner.js \
   && test -f node_modules/pm2/bin/pm2-runtime
 
 ENV NODE_ENV=production \
-    NAKAMA_HOST=0.0.0.0 \
-    NAKAMA_PORT=4310 \
-    NAKAMA_CONFIG_DIR=/nakama/data \
-    DATABASE_URL=file:/nakama/data/sqlite/nakama.sqlite \
-    BUN_INSTALL_BIN=/nakama/data/.bun/bin \
-    BUN_INSTALL_GLOBAL_DIR=/nakama/data/.bun/install/global
+    AIRIN_HOST=0.0.0.0 \
+    AIRIN_PORT=4310 \
+    AIRIN_CONFIG_DIR=/airin/data \
+    DATABASE_URL=file:/airin/data/sqlite/airin.sqlite \
+    BUN_INSTALL_BIN=/airin/data/.bun/bin \
+    BUN_INSTALL_GLOBAL_DIR=/airin/data/.bun/install/global
 
 EXPOSE 4310
 
-VOLUME ["/nakama/data"]
+VOLUME ["/airin/data"]
 
 USER 1000
 

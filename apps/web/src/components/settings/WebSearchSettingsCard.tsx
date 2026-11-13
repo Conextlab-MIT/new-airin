@@ -1,19 +1,19 @@
-import type { WebSearchProvider } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { WebSearchProvider } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
+} from "@airin/ui/input-group";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/select";
+import { Spinner } from "@airin/ui/spinner";
 import { ViewIcon, ViewOffIcon } from "hugeicons-react";
 import { useEffect, useState } from "react";
 import {

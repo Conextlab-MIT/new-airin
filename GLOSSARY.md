@@ -1,4 +1,4 @@
-# Nakama
+# Airin
 
 An agent platform where each org runs agent profiles that talk with people through web, CLI and messaging channels.
 

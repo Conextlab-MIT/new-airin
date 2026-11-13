@@ -177,7 +177,7 @@ describe("inbound message routing", () => {
           message: {
             extendedTextMessage: {
               contextInfo: { mentionedJid: [ME.id] },
-              text: "@Nakama hello",
+              text: "@Airin hello",
             },
           },
         },
@@ -245,7 +245,7 @@ describe("inbound message routing", () => {
         message: {
           extendedTextMessage: {
             contextInfo: { mentionedJid: [ME.lid] },
-            text: "@Nakama hello",
+            text: "@Airin hello",
           },
         },
       },
@@ -264,7 +264,7 @@ describe("inbound message routing", () => {
       quotedText: null,
       senderJid: "9999999999@s.whatsapp.net",
       senderJids: ["9999999999@s.whatsapp.net", "104784384290844@lid"],
-      text: "@Nakama hello",
+      text: "@Airin hello",
     });
   });
 
@@ -286,7 +286,7 @@ describe("inbound message routing", () => {
               },
               stanzaId: "QUOTED_MSG_1",
             },
-            text: "@Nakama ini data laporan hari berikutnya",
+            text: "@Airin ini data laporan hari berikutnya",
           },
         },
       },
@@ -298,6 +298,6 @@ describe("inbound message routing", () => {
     expect(inbound?.quotedText).toBe(
       "Update Daily Well PHSS 20-08-2026\nSFT-01 Unload flow"
     );
-    expect(inbound?.text).toBe("@Nakama ini data laporan hari berikutnya");
+    expect(inbound?.text).toBe("@Airin ini data laporan hari berikutnya");
   });
 });

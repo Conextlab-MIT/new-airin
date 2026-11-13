@@ -5,8 +5,8 @@ import {
   createTeamsWorkerHeartbeat,
   saveTeamsConfig,
   saveTeamsInboundPort,
-} from "@nakama/core";
-import { getTeamsConfigPath } from "@nakama/core/teams-config";
+} from "@airin/core";
+import { getTeamsConfigPath } from "@airin/core/teams-config";
 import { setupTestConfigDir } from "../../test-config-dir";
 import {
   CREDENTIALS,
@@ -24,7 +24,7 @@ afterEach(async () => {
   }
 });
 
-setupTestConfigDir("nakama-teams-proxy-test-");
+setupTestConfigDir("airin-teams-proxy-test-");
 
 /** A stand-in for the worker's SDK listener, bound to loopback like the real one. */
 function startFakeWorker(
@@ -87,7 +87,7 @@ describe("teams webhook proxy", () => {
           headers: {
             Authorization: "Bearer teams-service-token",
             "Content-Type": "application/json",
-            Cookie: "nakama_session=should-not-be-forwarded",
+            Cookie: "airin_session=should-not-be-forwarded",
           },
           method: "POST",
         }
@@ -344,7 +344,7 @@ describe("teams webhook proxy", () => {
       profileId,
       () =>
         new Response(
-          "<pre>SyntaxError: Unexpected token<br> &nbsp; &nbsp;at parse (/Users/someone/nakama/node_modules/body-parser/lib/types/json.js:91:21)</pre>",
+          "<pre>SyntaxError: Unexpected token<br> &nbsp; &nbsp;at parse (/Users/someone/airin/node_modules/body-parser/lib/types/json.js:91:21)</pre>",
           { headers: { "Content-Type": "text/html" }, status: 400 }
         )
     );
@@ -410,7 +410,7 @@ describe("teams webhook proxy", () => {
 
     // A worker killed without its shutdown: the heartbeat is seconds old, but
     // the process that wrote it is gone.
-    const heartbeatModule = import.meta.resolve("@nakama/core/teams-worker");
+    const heartbeatModule = import.meta.resolve("@airin/core/teams-worker");
 
     const child = Bun.spawn({
       cmd: [

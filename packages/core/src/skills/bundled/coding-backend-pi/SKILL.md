@@ -7,10 +7,10 @@ You are preparing a coding agent run for [pi.dev](https://github.com/earendil-wo
 
 ## Prerequisites
 - pi installed: `npm install -g @earendil-works/pi-coding-agent` or `bun install -g --trust @earendil-works/pi-coding-agent`.
-- Provider auth configured in Settings → AI Providers (/settings/providers). Nakama writes a temporary `models.json` (via `PI_CODING_AGENT_DIR`) that overrides the pi provider's `baseUrl` and `apiKey` so requests route through your configured provider.
+- Provider auth configured in Settings → AI Providers (/settings/providers). Airin writes a temporary `models.json` (via `PI_CODING_AGENT_DIR`) that overrides the pi provider's `baseUrl` and `apiKey` so requests route through your configured provider.
 
 ## Command Usage
-For non-interactive print mode tasks, Nakama passes `--provider` and `--model` from your configured provider:
+For non-interactive print mode tasks, Airin passes `--provider` and `--model` from your configured provider:
 ```bash
 pi --provider anthropic --model claude-sonnet-4-6 -p 'Add retry logic to API calls and update tests'
 ```

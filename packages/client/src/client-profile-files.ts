@@ -1,4 +1,4 @@
-import { NakamaApiError } from "@nakama/core/api-error";
+import { AirinApiError } from "@airin/core/api-error";
 import type {
   ArtifactShareStatusResponse,
   DeleteArtifactResponse,
@@ -26,7 +26,7 @@ import type {
   UploadKnowledgeBaseResponse,
   UploadOrganizationKnowledgeBaseResponse,
   WorkspaceEntry,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { readBoundedFile } from "./client-helpers";
 import { ProfilesClient } from "./client-profiles";
 
@@ -266,7 +266,7 @@ export class ProfileFilesClient extends ProfilesClient {
 
       return true;
     } catch (error) {
-      if (error instanceof NakamaApiError && error.status === 404) {
+      if (error instanceof AirinApiError && error.status === 404) {
         return false;
       }
 

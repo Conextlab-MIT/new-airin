@@ -6,8 +6,8 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
       name="viewport"
     >
-    <title>Nakama</title>
-    <link href="/nakama-mark-white.svg" rel="icon" type="image/svg+xml">
+    <title>Airin</title>
+    <link href="/airin-mark-white.svg" rel="icon" type="image/svg+xml">
     <link href="/manifest.webmanifest" rel="manifest">
     <link href="/icons/apple-touch-icon-v2.png" rel="apple-touch-icon">
     <meta
@@ -22,16 +22,14 @@
     >
     <meta content="yes" name="mobile-web-app-capable">
     <meta content="yes" name="apple-mobile-web-app-capable">
-    <meta content="Nakama" name="apple-mobile-web-app-title">
+    <meta content="Airin" name="apple-mobile-web-app-title">
     <script>
     "use strict";
 
     (() => {
-      var stored = localStorage.getItem("nakama-theme");
-
-      var resolved = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
+      var stored = localStorage.getItem("airin-theme");
+      // Fresh installs default to light for business owners.
+      var resolved = "light";
 
       if (stored === "light" || stored === "dark") {
         resolved = stored;
@@ -49,7 +47,7 @@
       if (favicon) {
         favicon.setAttribute(
           "href",
-          resolved === "light" ? "/nakama-mark.svg" : "/nakama-mark-white.svg"
+          resolved === "light" ? "/airin-mark.svg" : "/airin-mark-white.svg"
         );
       }
     })();

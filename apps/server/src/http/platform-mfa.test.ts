@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { DEMO_LOGIN_HOST } from "@nakama/core/demo-login";
+import { DEMO_LOGIN_HOST } from "@airin/core/demo-login";
 import { getMfaEncryptionKey } from "../services/mfa-config";
 import {
   createTotpCode,
@@ -16,7 +16,7 @@ import {
   setupFreshInstallSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-platform-mfa-test-");
+setupTestConfigDir("airin-platform-mfa-test-");
 
 test("platform admin configures MFA and login requires the user's TOTP", async () => {
   const { app, authService, databaseAdapter } = createMinimalHonoApp();

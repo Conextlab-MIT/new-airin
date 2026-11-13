@@ -1,4 +1,4 @@
-import type { AgentTodo } from "@nakama/core/contract";
+import type { AgentTodo } from "@airin/core/contract";
 
 const WHATSAPP_MAX_MESSAGE_LENGTH = 65_536;
 
@@ -152,7 +152,7 @@ function formatWhatsAppTodoLine(todo: AgentTodo): string {
   }
 }
 
-export const HELP_TEXT = `Nakama WhatsApp commands:
+export const HELP_TEXT = `Airin WhatsApp commands:
 
 /help \u2014 show this message
 /stop \u2014 stop the agent's current reply (works during tool runs)

@@ -2,17 +2,17 @@ import type {
   ProfileSummary,
   SoulFileStatus,
   SoulStackFiles,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/select";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { ArrowRight01Icon, RefreshIcon } from "hugeicons-react";
 import type { ReactNode } from "react";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
@@ -161,7 +161,7 @@ export function SoulTabShell({
           <div className="mb-4">
             <h2 className="type-section-title">Profiles</h2>
             <p className="type-body mt-1 text-xs">
-              Each profile has its own soul stack under ~/.nakama/profiles/.
+              Each profile has its own soul stack under ~/.airin/profiles/.
             </p>
           </div>
 

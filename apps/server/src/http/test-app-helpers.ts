@@ -1,7 +1,4 @@
-import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
 import { AgentGroupService } from "../services/agent-group-service";
 import { AuthService } from "../services/auth-service";
 import { OrgService } from "../services/org-service";

@@ -2,8 +2,8 @@ import type { Database, SQLQueryBindings } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { orgIdFromSkillSourcePath } from "@nakama/core";
-import { GENERATE_IMAGE_TOOL_ID } from "@nakama/core/tools/protected";
+import { orgIdFromSkillSourcePath } from "@airin/core";
+import { GENERATE_IMAGE_TOOL_ID } from "@airin/core/tools/protected";
 
 const BOOTSTRAP_SCHEMA_VERSION = 1;
 
@@ -59,7 +59,7 @@ export function migrateDatabase(db: Database): void {
   migrateLegacyProfileIds(db);
   atomic(migrateCodingDelegationSkillName);
   atomic(migrateArtifactDesignSkillName);
-  atomic(migrateSuperNakamaNaming);
+  atomic(migrateSuperAirinNaming);
   atomic(migrateWorkspaceSettingsTable);
   atomic(migrateLlmUsageOrgScope);
   atomic((database) =>
@@ -1731,10 +1731,11 @@ export function migrateArtifactDesignSkillName(db: Database): void {
 }
 
 // Only the stock name moves; a renamed super profile keeps its name.
-export function migrateSuperNakamaNaming(db: Database): void {
+export function migrateSuperAirinNaming(db: Database): void {
   db.exec(`
-    UPDATE profiles SET name = 'Super Nakama' WHERE is_super = 1 AND name = 'Super Bot';
-    UPDATE profile_change_events SET source = 'super_nakama' WHERE source = 'super_bot';
+    UPDATE profiles SET name = 'Airin' WHERE is_super = 1 AND name = 'Super Bot';
+    UPDATE profiles SET name = 'Airin' WHERE is_super = 1 AND name = 'Super Airin';
+    UPDATE profile_change_events SET source = 'super_airin' WHERE source = 'super_bot';
   `);
 }
 

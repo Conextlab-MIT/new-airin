@@ -1,4 +1,6 @@
 import type {
+  AirinUpgradeResponse,
+  AirinVersionResponse,
   AutomationWorkerSettingsResponse,
   BackupStatusResponse,
   ChatgptOAuthDeviceCompleteRequest,
@@ -15,8 +17,6 @@ import type {
   HealthResponse,
   ListProvidersResponse,
   ModelsResponse,
-  NakamaUpgradeResponse,
-  NakamaVersionResponse,
   PluginWorkerStatus,
   ProfilePackImportRequest,
   ProfilePackImportResponse,
@@ -33,8 +33,8 @@ import type {
   XaiOAuthDeviceCompleteRequest,
   XaiOAuthDeviceCompleteResponse,
   XaiOAuthDeviceStartResponse,
-} from "@nakama/core/contract";
-import { NakamaClientCore } from "./client-core";
+} from "@airin/core/contract";
+import { AirinClientCore } from "./client-core";
 import type { JsonValue } from "./client-helpers";
 import {
   createUploadFetch,
@@ -44,7 +44,7 @@ import {
 import type { TransferProgress } from "./types";
 
 /** Server status, data import and export, workers, models, and providers. */
-export class SystemClient extends NakamaClientCore {
+export class SystemClient extends AirinClientCore {
   async health(): Promise<HealthResponse> {
     return this.request<HealthResponse>("/health");
   }
@@ -93,19 +93,19 @@ export class SystemClient extends NakamaClientCore {
     );
   }
 
-  async getNakamaVersion(): Promise<NakamaVersionResponse> {
-    return this.request<NakamaVersionResponse>("/v1/system/version");
+  async getAirinVersion(): Promise<AirinVersionResponse> {
+    return this.request<AirinVersionResponse>("/v1/system/version");
   }
 
-  async getNakamaUpgrade(): Promise<NakamaUpgradeResponse> {
-    return this.request<NakamaUpgradeResponse>("/v1/system/upgrade");
+  async getAirinUpgrade(): Promise<AirinUpgradeResponse> {
+    return this.request<AirinUpgradeResponse>("/v1/system/upgrade");
   }
 
-  async startNakamaUpgrade(
+  async startAirinUpgrade(
     version: string,
     rollback = false
-  ): Promise<NakamaUpgradeResponse> {
-    return this.request<NakamaUpgradeResponse>("/v1/system/upgrade", {
+  ): Promise<AirinUpgradeResponse> {
+    return this.request<AirinUpgradeResponse>("/v1/system/upgrade", {
       body: JSON.stringify({ rollback, version }),
       method: "POST",
     });
@@ -150,7 +150,7 @@ export class SystemClient extends NakamaClientCore {
       data: await response.arrayBuffer(),
       filename:
         readContentDispositionFilename(response.headers) ??
-        "nakama-user-export.zip",
+        "airin-user-export.zip",
     };
   }
 
@@ -227,7 +227,7 @@ export class SystemClient extends NakamaClientCore {
       data: await response.arrayBuffer(),
       filename:
         readContentDispositionFilename(response.headers) ??
-        "nakama-profile-export.zip",
+        "airin-profile-export.zip",
     };
   }
 

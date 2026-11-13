@@ -24,7 +24,7 @@ function mediaBoxes(pdf: Buffer): string[] {
 }
 
 beforeEach(async () => {
-  dir = await mkdtemp(path.join(os.tmpdir(), "nakama-html-pdf-"));
+  dir = await mkdtemp(path.join(os.tmpdir(), "airin-html-pdf-"));
   artifactsDir = path.join(dir, "artifacts");
   await mkdir(artifactsDir);
 });
@@ -51,14 +51,14 @@ test("reports 501 when the configured Chrome does not exist", async () => {
 });
 
 test.skipIf(process.platform === "win32")(
-  "starts Chrome without its sandbox when NAKAMA_CHROME_NO_SANDBOX is true",
+  "starts Chrome without its sandbox when AIRIN_CHROME_NO_SANDBOX is true",
   async () => {
     const chrome = path.join(dir, "chrome");
     const argsFile = path.join(dir, "args");
     await writeFile(chrome, `#!/bin/sh\necho "$@" > "${argsFile}"\n`);
     await chmod(chrome, 0o755);
-    const original = process.env.NAKAMA_CHROME_NO_SANDBOX;
-    process.env.NAKAMA_CHROME_NO_SANDBOX = "true";
+    const original = process.env.AIRIN_CHROME_NO_SANDBOX;
+    process.env.AIRIN_CHROME_NO_SANDBOX = "true";
 
     try {
       await expect(
@@ -66,9 +66,9 @@ test.skipIf(process.platform === "win32")(
       ).rejects.toMatchObject({ status: 501 });
     } finally {
       if (original === undefined) {
-        delete process.env.NAKAMA_CHROME_NO_SANDBOX;
+        delete process.env.AIRIN_CHROME_NO_SANDBOX;
       } else {
-        process.env.NAKAMA_CHROME_NO_SANDBOX = original;
+        process.env.AIRIN_CHROME_NO_SANDBOX = original;
       }
     }
 

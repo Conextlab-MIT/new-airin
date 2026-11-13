@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import { openPrivateDatabase } from "./adapters/sqlite";
 
 // Windows has no POSIX mode bits, so the assertions below cannot mean anything
-// there. Everything else under ~/.nakama is 0600/0700; the database holds
+// there. Everything else under ~/.airin is 0600/0700; the database holds
 // plaintext MCP credentials and every transcript, so it follows the same rule.
 const posix = process.platform !== "win32";
 
@@ -23,8 +23,8 @@ function modeOf(path: string): number {
 
 describe("database permissions", () => {
   test("persistent connections keep durable settings and committed data after reopen", () => {
-    const root = mkdtempSync(join(tmpdir(), "nakama-db-durable-"));
-    const databasePath = join(root, "nakama.sqlite");
+    const root = mkdtempSync(join(tmpdir(), "airin-db-durable-"));
+    const databasePath = join(root, "airin.sqlite");
     let db = openPrivateDatabase(databasePath);
 
     try {
@@ -53,8 +53,8 @@ describe("database permissions", () => {
   });
 
   test.skipIf(!posix)("a fresh database is private", () => {
-    const root = mkdtempSync(join(tmpdir(), "nakama-db-perms-"));
-    const databasePath = join(root, "data", "sqlite", "nakama.sqlite");
+    const root = mkdtempSync(join(tmpdir(), "airin-db-perms-"));
+    const databasePath = join(root, "data", "sqlite", "airin.sqlite");
 
     try {
       const db = openPrivateDatabase(databasePath);
@@ -72,8 +72,8 @@ describe("database permissions", () => {
   });
 
   test.skipIf(!posix)("startup tightens a world-readable database", () => {
-    const root = mkdtempSync(join(tmpdir(), "nakama-db-perms-"));
-    const databasePath = join(root, "data", "sqlite", "nakama.sqlite");
+    const root = mkdtempSync(join(tmpdir(), "airin-db-perms-"));
+    const databasePath = join(root, "data", "sqlite", "airin.sqlite");
 
     try {
       mkdirSync(dirname(databasePath), { recursive: true });

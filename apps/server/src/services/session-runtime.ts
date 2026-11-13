@@ -1,7 +1,7 @@
-import type { AgentChatSession } from "@nakama/agent";
-import type { AgentChannel, ChatMessage, OrgRole } from "@nakama/core";
-import { NakamaApiError, parseAgentChannel } from "@nakama/core";
-import type { StoredSessionRecord } from "@nakama/db";
+import type { AgentChatSession } from "@airin/agent";
+import type { AgentChannel, ChatMessage, OrgRole } from "@airin/core";
+import { AirinApiError, parseAgentChannel } from "@airin/core";
+import type { StoredSessionRecord } from "@airin/db";
 import {
   type EphemeralSession,
   EphemeralSessionStore,
@@ -202,7 +202,7 @@ export class SessionRuntime {
     const channel = parseAgentChannel(record.channel);
 
     if (!channel) {
-      throw new NakamaApiError("Session channel is invalid.", 400);
+      throw new AirinApiError("Session channel is invalid.", 400);
     }
 
     const revision = await this.deps.revisionFor(orgId, record.profileId);
@@ -354,7 +354,7 @@ export class SessionRuntime {
     const channel = parseAgentChannel(entry.record.channel);
 
     if (!channel) {
-      throw new NakamaApiError("Session refresh failed. Try again.", 503);
+      throw new AirinApiError("Session refresh failed. Try again.", 503);
     }
 
     entry.session = await this.build(

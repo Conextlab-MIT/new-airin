@@ -1,8 +1,8 @@
 /** @jsxRuntime classic */
 /** @jsx React.createElement */
 /** @jsxFrag React.Fragment */
-// The host supplies React and Nakama's UI kit through ctx.
-// Never import react, react-dom, or @nakama/* packages here.
+// The host supplies React and Airin's UI kit through ctx.
+// Never import react, react-dom, or @airin/* packages here.
 import css from "./ui.css" with { type: "text" };
 
 export const inject = ["slots", "host", "styles", "ui"];
@@ -11,7 +11,7 @@ export const inject = ["slots", "host", "styles", "ui"];
 // need this binding. apply() sets it before the host renders anything.
 let React;
 
-/** @param {import("./nakama-plugin").PluginContext} ctx */
+/** @param {import("./airin-plugin").PluginContext} ctx */
 export function apply(ctx) {
   React = ctx.React;
   const { Button, Card, CardContent, Input, Spinner } = ctx.ui;

@@ -1,6 +1,6 @@
-import type { ProfileChangeEvent } from "@nakama/core";
-import { Button } from "@nakama/ui/button";
-import { Dialog, DialogSheetContent, DialogTitle } from "@nakama/ui/dialog";
+import type { ProfileChangeEvent } from "@airin/core";
+import { Button } from "@airin/ui/button";
+import { Dialog, DialogSheetContent, DialogTitle } from "@airin/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft01Icon } from "hugeicons-react";
 import { useState } from "react";
@@ -41,8 +41,8 @@ function formatSourceLabel(source: ProfileChangeEvent["source"]): string {
   switch (source) {
     case "dashboard":
       return "Dashboard";
-    case "super_nakama":
-      return "Super Nakama";
+    case "super_airin":
+      return "Airin";
     case "skill_manage":
       return "Skill manager";
     case "pack_import":

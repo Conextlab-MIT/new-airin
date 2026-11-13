@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { sessionTurnRegistry } from "../../services/session-turn-registry";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { loginUserSession, seedOrgAdmin } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-sessions-stop-test-");
+setupTestConfigDir("airin-sessions-stop-test-");
 
 const ORG = "org_stop";
 
@@ -105,13 +105,13 @@ describe("POST /v1/sessions/:id/stop", () => {
 });
 
 describe("POST /v1/sessions/:id/messages", () => {
-  const savedPublicUrl = process.env.NAKAMA_WEB_PUBLIC_URL;
+  const savedPublicUrl = process.env.AIRIN_WEB_PUBLIC_URL;
 
   afterEach(() => {
     if (savedPublicUrl === undefined) {
-      delete process.env.NAKAMA_WEB_PUBLIC_URL;
+      delete process.env.AIRIN_WEB_PUBLIC_URL;
     } else {
-      process.env.NAKAMA_WEB_PUBLIC_URL = savedPublicUrl;
+      process.env.AIRIN_WEB_PUBLIC_URL = savedPublicUrl;
     }
   });
 
@@ -120,9 +120,9 @@ describe("POST /v1/sessions/:id/messages", () => {
     publicUrl: string | null = "https://team.example.com"
   ) {
     if (publicUrl) {
-      process.env.NAKAMA_WEB_PUBLIC_URL = publicUrl;
+      process.env.AIRIN_WEB_PUBLIC_URL = publicUrl;
     } else {
-      delete process.env.NAKAMA_WEB_PUBLIC_URL;
+      delete process.env.AIRIN_WEB_PUBLIC_URL;
     }
 
     const databaseAdapter = createInMemoryDatabaseAdapter();

@@ -12,14 +12,14 @@ import type {
   StreamChatHandlers,
   ThinkingEffort,
   ToolCall,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   fetchWithoutIdleTimeout,
   messagesIncludeUserDocuments,
   messagesIncludeUserImages,
   normalizeBaseUrl,
   toOpenAIChatUserContent,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import {
   buildChatCompletionResult,

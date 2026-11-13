@@ -25,13 +25,13 @@ describe("loadLocalAuthToken", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
-    delete process.env.NAKAMA_LOCAL_AUTH_TOKEN;
+    delete process.env.AIRIN_CONFIG_DIR;
+    delete process.env.AIRIN_LOCAL_AUTH_TOKEN;
   });
 
   test("generates a token when none is configured", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-local-auth-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-local-auth-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const token = await loadLocalAuthToken();
     expect(token).toStartWith("tc_local_");
@@ -51,13 +51,13 @@ describe("loadLocalAuthToken", () => {
 
     expect(storedToken.trim()).toBe(token);
     await expect(verifyLocalAuthToken(token)).resolves.toEqual({
-      email: "local-client@nakama.internal",
+      email: "local-client@airin.internal",
     });
   });
 
   test("reuses the token from the private local token file", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-local-auth-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-local-auth-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const tokenValue = "tc_local_configured_token";
 
     await saveUserConfig({
@@ -71,7 +71,7 @@ describe("loadLocalAuthToken", () => {
       "utf8"
     );
 
-    const token = await loadLocalAuthToken("whatsapp@nakama.internal");
+    const token = await loadLocalAuthToken("whatsapp@airin.internal");
     expect(token).toBe(tokenValue);
 
     const rawConfig = await readFile(getUserConfigPath(), "utf8");
@@ -82,28 +82,28 @@ describe("loadLocalAuthToken", () => {
   });
 
   test("verifies the configured local auth token", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-local-auth-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-local-auth-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const token = await loadLocalAuthToken();
 
     await expect(verifyLocalAuthToken(token!)).resolves.toEqual({
-      email: "local-client@nakama.internal",
+      email: "local-client@airin.internal",
     });
     await expect(verifyLocalAuthToken("wrong-token")).resolves.toBeNull();
   });
 
   test("prefers env token for production-style setup", async () => {
-    process.env.NAKAMA_LOCAL_AUTH_TOKEN = "tc_local_from_env";
+    process.env.AIRIN_LOCAL_AUTH_TOKEN = "tc_local_from_env";
     await expect(loadLocalAuthToken()).resolves.toBe("tc_local_from_env");
     await expect(verifyLocalAuthToken("tc_local_from_env")).resolves.toEqual({
-      email: "local-client@nakama.internal",
+      email: "local-client@airin.internal",
     });
   });
 
   test("rotateLocalAuthToken replaces the stored token and invalidates the old one", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-local-auth-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-local-auth-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const original = await loadLocalAuthToken();
     const rotated = await rotateLocalAuthToken();
@@ -112,14 +112,14 @@ describe("loadLocalAuthToken", () => {
     expect(rotated).not.toBe(original);
     await expect(verifyLocalAuthToken(original!)).resolves.toBeNull();
     await expect(verifyLocalAuthToken(rotated)).resolves.toEqual({
-      email: "local-client@nakama.internal",
+      email: "local-client@airin.internal",
     });
     await expect(loadLocalAuthToken()).resolves.toBe(rotated);
   });
 
   test("rotateLocalAuthToken preserves the full user config", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-local-auth-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-local-auth-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const original = await loadLocalAuthToken();
 
@@ -159,7 +159,7 @@ describe("loadLocalAuthToken", () => {
   });
 
   test("rotateLocalAuthToken refuses when the token comes from env", async () => {
-    process.env.NAKAMA_LOCAL_AUTH_TOKEN = "tc_local_from_env";
+    process.env.AIRIN_LOCAL_AUTH_TOKEN = "tc_local_from_env";
     await expect(rotateLocalAuthToken()).rejects.toBeInstanceOf(
       LocalAuthTokenManagedExternallyError
     );

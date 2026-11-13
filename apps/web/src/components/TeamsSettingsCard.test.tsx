@@ -1,5 +1,5 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
-import type { TeamsSettingsResponse } from "@nakama/core/contract";
+import type { TeamsSettingsResponse } from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -29,7 +29,7 @@ function settings(
     handshakeCode: null,
     handshakeExpiresAt: null,
     messagingEndpoint:
-      "https://nakama.example.com/v1/channels/teams/profile-a/messages",
+      "https://airin.example.com/v1/channels/teams/profile-a/messages",
     pairedUserIds: [],
     profileId: "profile-a",
     tenantId: null,
@@ -359,7 +359,7 @@ test("shows the messaging endpoint to register with the bot", async () => {
   const container = await renderCard();
 
   expect(container.textContent).toContain(
-    "https://nakama.example.com/v1/channels/teams/profile-a/messages"
+    "https://airin.example.com/v1/channels/teams/profile-a/messages"
   );
 });
 

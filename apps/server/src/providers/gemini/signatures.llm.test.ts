@@ -1,6 +1,6 @@
 // Re-record with GEMINI_API_KEY and LLM_VCR_MODE=record; otherwise replay offline.
 import { expect, test } from "bun:test";
-import type { GenerateChatInput } from "@nakama/core";
+import type { GenerateChatInput } from "@airin/core";
 import { withMswCassette } from "../../testing/llm-msw-cassette";
 import { createGeminiProvider, toGeminiContents } from "./index";
 

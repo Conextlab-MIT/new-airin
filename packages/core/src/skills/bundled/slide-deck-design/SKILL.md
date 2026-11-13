@@ -60,7 +60,7 @@ In `deck.html`: cover (`.cover`), numbered list (`.row`, up to 4 rows), statemen
 ## Resources
 
 1. The deck works offline: keep styles, scripts, fonts, and images in the HTML, with no CDN, font, or other URL. Embed a brand font with `@font-face` and a `data:font/woff2;base64,...` URL, first in `--sans` or `--mono`, only the weights used.
-2. Do not use `window.print()`, `alert()`, popups, network requests, or browser storage. Users get the PDF from Nakama's artifact controls.
+2. Do not use `window.print()`, `alert()`, popups, network requests, or browser storage. Users get the PDF from Airin's artifact controls.
 3. If a browser preview is requested and available, step through every slide once and fix overflow. Do not claim visual checks from reading the source.
 
 Before you save, check every slide against Style and Content, and fix what fails.

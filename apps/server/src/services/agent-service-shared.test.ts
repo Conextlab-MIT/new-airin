@@ -7,9 +7,9 @@ import {
   type ProfileResponse,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
-import type { AgentGroupMemoryChange } from "@nakama/core/agent-groups";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import type { AgentGroupMemoryChange } from "@airin/core/agent-groups";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { groupWorkspace } from "./agent-group-workspace";
 import { AgentService } from "./agent-service";
@@ -20,8 +20,8 @@ const TEST_ORG_ID = "org_test";
 
 const ORG_ID = "org_test";
 
-interface AgentServiceSuperNakamaToolsAccess {
-  superNakamaTools: ToolDefinition[];
+interface AgentServiceSuperAirinToolsAccess {
+  superAirinTools: ToolDefinition[];
 }
 
 function privateServiceAccess<T>(service: AgentService): T {
@@ -30,7 +30,7 @@ function privateServiceAccess<T>(service: AgentService): T {
 }
 
 describe("shared agent direct configuration", () => {
-  setupTestConfigDir("nakama-shared-direct-config-");
+  setupTestConfigDir("airin-shared-direct-config-");
 
   test("blocks source configuration writes after revocation and keeps team memory writable", async () => {
     const db = createInMemoryDatabaseAdapter();
@@ -148,8 +148,8 @@ describe("shared agent direct configuration", () => {
   });
 });
 
-describe("Super Nakama provider inheritance", () => {
-  setupTestConfigDir("nakama-inherited-provider-");
+describe("Airin provider inheritance", () => {
+  setupTestConfigDir("airin-inherited-provider-");
 
   test("persists each resolved provider selection on the new profile", async () => {
     for (const source of ["server default", "profile", "session"] as const) {
@@ -191,9 +191,9 @@ describe("Super Nakama provider inheritance", () => {
       );
 
       // SAFETY: This test checks the private tool built from its profile fixture.
-      const tool = privateServiceAccess<AgentServiceSuperNakamaToolsAccess>(
+      const tool = privateServiceAccess<AgentServiceSuperAirinToolsAccess>(
         service
-      ).superNakamaTools.find((entry) => entry.name === "create_profile");
+      ).superAirinTools.find((entry) => entry.name === "create_profile");
 
       expect(tool).toBeDefined();
 
@@ -220,7 +220,7 @@ describe("Super Nakama provider inheritance", () => {
 });
 
 describe("AgentService sub-agent roles", () => {
-  setupTestConfigDir("nakama-sub-agent-role-");
+  setupTestConfigDir("airin-sub-agent-role-");
 
   test("reports completed memory writes but refuses a provider's late write after timeout", async () => {
     const db = createInMemoryDatabaseAdapter();
@@ -229,7 +229,7 @@ describe("AgentService sub-agent roles", () => {
     const service = new AgentService(null, null, db);
 
     const sharedDir = path.join(
-      process.env.NAKAMA_CONFIG_DIR!,
+      process.env.AIRIN_CONFIG_DIR!,
       "group",
       "shared"
     );

@@ -1,5 +1,5 @@
-import type { AgentChannel, SetupChecklistItem } from "@nakama/core/contract";
-import { parseUserContext } from "@nakama/core/user-context";
+import type { AgentChannel, SetupChecklistItem } from "@airin/core/contract";
+import { parseUserContext } from "@airin/core/user-context";
 import type { AgentActivity } from "@/components/moodstone";
 import type { ChatListItem, FailedChatTurn } from "@/lib/chat-history";
 import { createClientId } from "@/lib/client-id";
@@ -11,6 +11,11 @@ import { createClientId } from "@/lib/client-id";
  */
 export function welcomeAnimationKey(cognito: boolean): string {
   return cognito ? "cognito" : "greeting";
+}
+
+/** Off the cognito surface, the desktop top bar holds the toggle. */
+export function emptyStateControlClass(cognitoSurface: boolean) {
+  return cognitoSurface ? undefined : "sm:hidden";
 }
 
 /**
@@ -51,7 +56,7 @@ export function shouldShowGoalPrompt({
   return !parseUserContext(userContext).answers.help?.trim();
 }
 
-const SETUP_CHECKLIST_STORAGE_PREFIX = "nakama:setup-checklist:";
+const SETUP_CHECKLIST_STORAGE_PREFIX = "airin:setup-checklist:";
 
 /** The checklist a user got from their goal, and what they did with it. */
 export interface StoredSetupChecklist {

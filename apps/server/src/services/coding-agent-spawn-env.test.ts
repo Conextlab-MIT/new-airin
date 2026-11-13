@@ -71,14 +71,14 @@ describe("coding-agent spawn env", () => {
       await readFile(`${env.env.PI_CODING_AGENT_DIR}/models.json`, "utf-8")
     );
 
-    expect(modelsJson.providers.nakama).toBeDefined();
-    expect(modelsJson.providers.nakama.baseUrl).toBe(
+    expect(modelsJson.providers.airin).toBeDefined();
+    expect(modelsJson.providers.airin.baseUrl).toBe(
       "https://custom.example.com/v1"
     );
-    expect(modelsJson.providers.nakama.apiKey).toBe("NAKAMA_HARNESS_API_KEY");
+    expect(modelsJson.providers.airin.apiKey).toBe("AIRIN_HARNESS_API_KEY");
     expect(JSON.stringify(modelsJson)).not.toContain("sk-custom-test");
-    expect(env.env.NAKAMA_HARNESS_API_KEY).toBe("sk-custom-test");
-    expect(modelsJson.providers.nakama.api).toBe("openai-completions");
+    expect(env.env.AIRIN_HARNESS_API_KEY).toBe("sk-custom-test");
+    expect(modelsJson.providers.airin.api).toBe("openai-completions");
     await env.cleanup?.();
   });
 
@@ -99,13 +99,13 @@ describe("coding-agent spawn env", () => {
       "utf8"
     );
 
-    expect(config).toContain("{env:NAKAMA_HARNESS_API_KEY}");
+    expect(config).toContain("{env:AIRIN_HARNESS_API_KEY}");
     expect(config).not.toContain("private-opencode-key");
-    expect(spawn.env.NAKAMA_HARNESS_API_KEY).toBe("private-opencode-key");
+    expect(spawn.env.AIRIN_HARNESS_API_KEY).toBe("private-opencode-key");
     await spawn.cleanup?.();
   });
 
-  test("uses nakama provider in models.json for anthropic with custom base URL", async () => {
+  test("uses airin provider in models.json for anthropic with custom base URL", async () => {
     const env = await buildPiSpawnEnv(
       activeAnthropicRouting({
         apiKey: "sk-proxy-test",
@@ -123,11 +123,11 @@ describe("coding-agent spawn env", () => {
       await readFile(`${env.env.PI_CODING_AGENT_DIR}/models.json`, "utf-8")
     );
 
-    // Custom base URL → nakama provider with openai-completions, NOT anthropic
-    expect(modelsJson.providers.nakama).toBeDefined();
+    // Custom base URL → airin provider with openai-completions, NOT anthropic
+    expect(modelsJson.providers.airin).toBeDefined();
     expect(modelsJson.providers.anthropic).toBeUndefined();
-    expect(modelsJson.providers.nakama.api).toBe("openai-completions");
-    expect(modelsJson.providers.nakama.baseUrl).toBe(
+    expect(modelsJson.providers.airin.api).toBe("openai-completions");
+    expect(modelsJson.providers.airin.baseUrl).toBe(
       "https://proxy.example.com/v1"
     );
     await env.cleanup?.();
@@ -153,10 +153,8 @@ describe("coding-agent spawn env", () => {
 
     // Default base URL → override built-in anthropic provider
     expect(modelsJson.providers.anthropic).toBeDefined();
-    expect(modelsJson.providers.nakama).toBeUndefined();
-    expect(modelsJson.providers.anthropic.apiKey).toBe(
-      "NAKAMA_HARNESS_API_KEY"
-    );
+    expect(modelsJson.providers.airin).toBeUndefined();
+    expect(modelsJson.providers.anthropic.apiKey).toBe("AIRIN_HARNESS_API_KEY");
     expect(JSON.stringify(modelsJson)).not.toContain("sk-ant-test");
     await env.cleanup?.();
   });
@@ -190,7 +188,7 @@ describe("coding-agent spawn env", () => {
     const env = mergeCodingAgentSpawnEnv(
       { ANTHROPIC_API_KEY: "base-key", HOME: "/tmp", UNSET_FLAG: undefined },
       {
-        ANTHROPIC_API_KEY: "sk-from-nakama",
+        ANTHROPIC_API_KEY: "sk-from-airin",
         ANTHROPIC_BASE_URL: "https://api.anthropic.com",
       },
       {
@@ -202,7 +200,7 @@ describe("coding-agent spawn env", () => {
       }
     );
 
-    expect(env.ANTHROPIC_API_KEY).toBe("sk-from-nakama");
+    expect(env.ANTHROPIC_API_KEY).toBe("sk-from-airin");
     expect(env.CUSTOM_FLAG).toBe("1");
     expect(env.HOME).toBe("/tmp");
     expect(env).not.toHaveProperty("UNSET_FLAG");
@@ -211,25 +209,25 @@ describe("coding-agent spawn env", () => {
   test("does not pass managed secrets from the server or caller", () => {
     const env = mergeCodingAgentSpawnEnv(
       {
+        AIRIN_SECRETS_KEY: "master",
         EXA_API_KEY_FILE: "/secret",
-        NAKAMA_SECRETS_KEY: "master",
         NODE_ENV: "test",
         PATH: "/bin",
       },
-      { NAKAMA_HARNESS_API_KEY: "selected" },
+      { AIRIN_HARNESS_API_KEY: "selected" },
       {
         callerEnv: {
+          AIRIN_EMAIL_PASSWORD: "password",
           COMPOSIO_API_KEY: "other",
-          NAKAMA_EMAIL_PASSWORD: "password",
         },
       }
     );
 
-    expect(env.NAKAMA_HARNESS_API_KEY).toBe("selected");
-    expect(env.NAKAMA_SECRETS_KEY).toBeUndefined();
+    expect(env.AIRIN_HARNESS_API_KEY).toBe("selected");
+    expect(env.AIRIN_SECRETS_KEY).toBeUndefined();
     expect(env.EXA_API_KEY_FILE).toBeUndefined();
     expect(env.COMPOSIO_API_KEY).toBeUndefined();
-    expect(env.NAKAMA_EMAIL_PASSWORD).toBeUndefined();
+    expect(env.AIRIN_EMAIL_PASSWORD).toBeUndefined();
   });
 
   test("redacts secrets for prompt context", () => {

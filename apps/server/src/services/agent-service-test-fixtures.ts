@@ -1,4 +1,4 @@
-import type { StoredProfileRecord } from "@nakama/db";
+import type { StoredProfileRecord } from "@airin/db";
 import type { AgentService } from "./agent-service";
 import type { TurnStart } from "./turn-runner";
 

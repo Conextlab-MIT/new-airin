@@ -384,7 +384,7 @@ async function writeWhatsAppConfigFile(
   orgId: WhatsAppConfigScope = null
 ): Promise<void> {
   const lines = [
-    "# Nakama WhatsApp bridge",
+    "# Airin WhatsApp bridge",
     `profile_id=${config.profileId}`,
     ...(config.phoneNumber.trim()
       ? [`phone_number=${config.phoneNumber}`]
@@ -753,7 +753,7 @@ export async function verifyAndPairWhatsAppUser(
       );
 
       return {
-        message: "Linked successfully. You can chat with Nakama now.",
+        message: "Linked successfully. You can chat with Airin now.",
         ok: true,
       };
     });

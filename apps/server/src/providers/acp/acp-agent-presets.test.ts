@@ -151,14 +151,14 @@ describe("ACP agent launch", () => {
   test.skipIf(process.platform === "win32")(
     "on Linux, reads PATH by exact name only",
     () => {
-      const bin = binFolder("nakama-test-agent");
+      const bin = binFolder("airin-test-agent");
 
       const launch = resolveAcpAgentLaunch(
-        { args: [], command: "nakama-test-agent" },
+        { args: [], command: "airin-test-agent" },
         { env: cleanEnv({ Path: bin }), platform: "linux" }
       );
 
-      expect(launch.command).toBe("nakama-test-agent");
+      expect(launch.command).toBe("airin-test-agent");
     }
   );
 

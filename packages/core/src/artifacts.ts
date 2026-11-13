@@ -14,7 +14,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import {
   assertHtmlArtifactSize,
   inferArtifactMimeType,
@@ -45,7 +45,7 @@ import { buildToolExecutionContext } from "./tools/context";
 import { guardFilePath, PathGuardError } from "./tools/paths";
 import { jsonSchemaFromZod, parseToolInput } from "./tools/schema";
 
-const ARTIFACT_META_SUFFIX = ".nakama-meta.json";
+const ARTIFACT_META_SUFFIX = ".airin-meta.json";
 
 // ponytail: per-process locking; coordinate replicas before sharing writable workspaces.
 const workspaceRenameLock = createChatLock();
@@ -214,8 +214,8 @@ async function readArtifactMeta(
 
 // Callers may pass the absolute path listArtifacts returned, so name only the
 // basename: the full path is the server filesystem layout.
-function artifactNotFound(filename: string): NakamaApiError {
-  return new NakamaApiError(
+function artifactNotFound(filename: string): AirinApiError {
+  return new AirinApiError(
     `Artifact not found: ${path.basename(filename)}`,
     404
   );
@@ -226,7 +226,7 @@ function artifactNotFound(filename: string): NakamaApiError {
 function artifactNotFoundOr(
   error: Error,
   filename: string
-): Error | NakamaApiError {
+): Error | AirinApiError {
   const code = "code" in error ? error.code : undefined;
 
   return code === "ENOENT" || code === "ENOTDIR"
@@ -389,7 +389,7 @@ export async function writeArtifactFile(input: {
   const fileStat = await stat(filePath).catch(() => null);
 
   if (!fileStat?.isFile()) {
-    throw new NakamaApiError(`Artifact not found: ${displayName}`, 404);
+    throw new AirinApiError(`Artifact not found: ${displayName}`, 404);
   }
 
   const metadata = await readArtifactMeta(
@@ -405,7 +405,7 @@ export async function writeArtifactFile(input: {
   );
 
   if (!isMarkdownArtifactMimeType(metadata.mimeType)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Only markdown artifacts can be edited: ${displayName}`,
       400
     );
@@ -482,7 +482,7 @@ async function resolveWorkspacePath(root: string, filename: string) {
     filename.includes("\\") ||
     filename.split("/").includes("..")
   ) {
-    throw new NakamaApiError("Invalid workspace path", 400);
+    throw new AirinApiError("Invalid workspace path", 400);
   }
 
   try {
@@ -494,7 +494,7 @@ async function resolveWorkspacePath(root: string, filename: string) {
     ).resolved;
   } catch (error) {
     if (error instanceof PathGuardError) {
-      throw new NakamaApiError("Invalid workspace path", 400);
+      throw new AirinApiError("Invalid workspace path", 400);
     }
 
     throw error;
@@ -594,7 +594,7 @@ async function entryAt(root: string, filename: string) {
   });
 
   if (!(info.isFile() || info.isDirectory())) {
-    throw new NakamaApiError("File not found", 404);
+    throw new AirinApiError("File not found", 404);
   }
 
   const entry: WorkspaceEntry = {
@@ -638,7 +638,7 @@ async function readFileAt(
   assertHtmlArtifactSize(file.filePath, file.entry.sizeBytes, file.contentType);
 
   if (file.entry.kind !== "file") {
-    throw new NakamaApiError("File not found", 404);
+    throw new AirinApiError("File not found", 404);
   }
 
   // Same Word branch the artifacts reader has. A preview panel cannot do
@@ -667,7 +667,7 @@ function assertRenamableWorkspacePath(filename: string) {
     filename.includes("\\") ||
     Array.from(filename).some((char) => char.charCodeAt(0) < 32)
   ) {
-    throw new NakamaApiError("Invalid workspace path", 400);
+    throw new AirinApiError("Invalid workspace path", 400);
   }
 
   const top = parts[0]!.toLowerCase();
@@ -701,8 +701,8 @@ function assertRenamableWorkspacePath(filename: string) {
       fixedNames.some((name) => name.toLowerCase() === top)) ||
     normalized.endsWith(ARTIFACT_META_SUFFIX)
   ) {
-    throw new NakamaApiError(
-      "This path is managed by Nakama and cannot be renamed.",
+    throw new AirinApiError(
+      "This path is managed by Airin and cannot be renamed.",
       400
     );
   }
@@ -752,7 +752,7 @@ async function moveWorkspacePath(source: string, target: string) {
       throw error;
     }
   } else {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Only regular files and folders can be renamed.",
       400
     );
@@ -775,7 +775,7 @@ export async function renameWorkspaceEntry(input: {
     /[<>:"/\\|?*]/.test(newName) ||
     Buffer.byteLength(newName) > 255
   ) {
-    throw new NakamaApiError("Enter a valid file or folder name.", 400);
+    throw new AirinApiError("Enter a valid file or folder name.", 400);
   }
 
   assertRenamableWorkspacePath(input.path);
@@ -789,7 +789,7 @@ export async function renameWorkspaceEntry(input: {
       const root = await realpath(getProfileSoulDir(orgId, profileId));
 
       if (source.filePath !== path.join(root, input.path)) {
-        throw new NakamaApiError("Symbolic links cannot be renamed.", 400);
+        throw new AirinApiError("Symbolic links cannot be renamed.", 400);
       }
 
       result = {
@@ -814,7 +814,7 @@ export async function renameWorkspaceEntry(input: {
         (await workspacePathExists(target)) ||
         (await workspacePathExists(targetMeta))
       ) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "A file or folder with that name already exists.",
           409
         );
@@ -843,7 +843,7 @@ export async function renameWorkspaceEntry(input: {
           "code" in error &&
           error.code === "EEXIST"
         ) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "A file or folder with that name already exists.",
             409
           );

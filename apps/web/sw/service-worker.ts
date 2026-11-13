@@ -39,6 +39,7 @@ self.addEventListener("message", (event) => {
 /** Sent by the server when a chat reply is ready (`web-push-service.ts`). */
 interface ReplyPush {
   body: string;
+  profileId?: string;
   tag: string;
   title: string;
   url: string;
@@ -46,14 +47,14 @@ interface ReplyPush {
 
 const FALLBACK_PUSH: ReplyPush = {
   body: "",
-  tag: "nakama",
-  title: "Nakama",
+  tag: "airin",
+  title: "Airin",
   url: "/",
 };
 
 function readPush(data: PushMessageData | null): ReplyPush {
   try {
-    // SAFETY: only Nakama's server holds the VAPID key this subscription was
+    // SAFETY: only Airin's server holds the VAPID key this subscription was
     // made with, and it always sends a ReplyPush.
     return (data?.json() as ReplyPush | undefined) ?? FALLBACK_PUSH;
   } catch {
@@ -61,19 +62,46 @@ function readPush(data: PushMessageData | null): ReplyPush {
   }
 }
 
+async function isProfileMuted(profileId: string | undefined): Promise<boolean> {
+  if (!profileId) {
+    return false;
+  }
+
+  try {
+    const cache = await caches.open("airin-agent-mute-v1");
+    const response = await cache.match("/muted-agents");
+
+    if (!response) {
+      return false;
+    }
+
+    const muted: unknown = await response.json();
+
+    return Array.isArray(muted) && muted.includes(profileId);
+  } catch {
+    return false;
+  }
+}
+
 self.addEventListener("push", (event) => {
   const message = readPush(event.data);
 
-  // Always show something: Safari drops a subscription whose pushes stay silent.
   event.waitUntil(
-    self.registration.showNotification(message.title || "Nakama", {
-      // Android draws the badge from its alpha only: an opaque icon is a white square.
-      badge: "/icons/notification-badge-v1.png",
-      body: message.body,
-      data: { url: message.url },
-      icon: "/icons/icon-192-v2.png",
-      tag: message.tag,
-    })
+    (async () => {
+      if (await isProfileMuted(message.profileId)) {
+        return;
+      }
+
+      // Always show something: Safari drops a subscription whose pushes stay silent.
+      await self.registration.showNotification(message.title || "Airin", {
+        // Android draws the badge from its alpha only: an opaque icon is a white square.
+        badge: "/icons/notification-badge-v1.png",
+        body: message.body,
+        data: { url: message.url },
+        icon: "/icons/icon-192-v2.png",
+        tag: message.tag,
+      });
+    })()
   );
 });
 

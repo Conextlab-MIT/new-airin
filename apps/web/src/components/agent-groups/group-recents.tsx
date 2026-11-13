@@ -1,4 +1,4 @@
-import type { AgentGroupSession } from "@nakama/core/agent-groups";
+import type { AgentGroupSession } from "@airin/core/agent-groups";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {

@@ -1,8 +1,4 @@
-import type {
-  ImageAttachment,
-  ToolContext,
-  ToolDefinition,
-} from "@nakama/core";
+import type { ImageAttachment, ToolContext, ToolDefinition } from "@airin/core";
 import { z } from "zod";
 import { resolveAgentBrowserConfig } from "../services/agent-browser-service";
 import {
@@ -289,7 +285,7 @@ const start = await page.evaluate(({ pixels, selector }) => {
     });
     el = scrollers.sort((a, b) => b.scrollHeight - a.scrollHeight)[0] ?? document.scrollingElement;
   }
-  window.__nakamaScrollTarget = el;
+  window.__airinScrollTarget = el;
   const before = { height: el.scrollHeight, top: Math.round(el.scrollTop) };
   el.scrollBy(0, pixels);
   const target = el === document.scrollingElement ? "page" : el.tagName.toLowerCase() + (el.id ? "#" + el.id : "");
@@ -300,16 +296,16 @@ await page.waitForTimeout(1500);
 // Feeds such as LinkedIn load the next posts only after the bottom is reached,
 // so give them a few seconds before calling it the end.
 const bottom = await page.evaluate(() => {
-  const el = window.__nakamaScrollTarget;
+  const el = window.__airinScrollTarget;
   return el.scrollTop + el.clientHeight >= el.scrollHeight - 4 ? el.scrollHeight : null;
 });
 if (bottom !== null) {
   await page
-    .waitForFunction((height) => window.__nakamaScrollTarget.scrollHeight > height, bottom, { timeout: 8000 })
+    .waitForFunction((height) => window.__airinScrollTarget.scrollHeight > height, bottom, { timeout: 8000 })
     .catch(() => null);
 }
 const after = await page.evaluate(() => {
-  const el = window.__nakamaScrollTarget;
+  const el = window.__airinScrollTarget;
   return {
     atEnd: el.scrollTop + el.clientHeight >= el.scrollHeight - 4,
     height: el.scrollHeight,

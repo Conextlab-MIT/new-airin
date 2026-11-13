@@ -2,7 +2,7 @@ import type {
   AutomationRunRecord,
   AutomationTrigger,
   StoredAutomation,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { Cron } from "croner";
 import { type ChatListItem, chatMessagesToListItems } from "@/lib/chat-history";
 

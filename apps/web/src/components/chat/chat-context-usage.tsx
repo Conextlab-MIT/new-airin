@@ -1,11 +1,11 @@
-import type { ChatUsage } from "@nakama/core/contract";
+import type { ChatUsage } from "@airin/core/contract";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTrigger,
-} from "@nakama/ui/popover";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/popover";
+import { cn } from "@airin/ui/utils";
 import {
   type ChatContextUsage,
   contextUsageRatio,

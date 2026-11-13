@@ -1,5 +1,5 @@
-import type { CreateProviderResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { CreateProviderResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import { useState } from "react";
 import { ProviderSetupForm } from "@/components/ProviderSetupForm";
 import { useUpdateProfileMutation } from "@/hooks/use-resource-mutations";

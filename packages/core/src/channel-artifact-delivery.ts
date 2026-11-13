@@ -163,7 +163,7 @@ export function formatArtifactShareFooter(
 
   if (!options.webPublicUrlConfigured) {
     lines.push(
-      "Set Web Public URL in Nakama settings for absolute share links."
+      "Set Web Public URL in Airin settings for absolute share links."
     );
   }
 

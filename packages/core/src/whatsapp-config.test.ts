@@ -18,7 +18,7 @@ import {
 
 describe("organization isolation", () => {
   test("isolates settings and reconnects between organizations", async () => {
-    await withTempHomedir("nakama-wa-orgs-", async () => {
+    await withTempHomedir("airin-wa-orgs-", async () => {
       await saveWhatsAppConfig({ profileId: "well-test" }, "org_a");
       await saveWhatsAppConfig({ profileId: "finance" }, "org_b");
       await syncWhatsAppOwnerPairing(
@@ -48,7 +48,7 @@ describe("organization isolation", () => {
 
 describe("getWhatsAppWorkerStatus", () => {
   test("reports a rejected link only while the worker runs", async () => {
-    await withTempHomedir("nakama-wa-link-error-", async () => {
+    await withTempHomedir("airin-wa-link-error-", async () => {
       await saveWhatsAppConfig({ profileId: "finance" }, "org_a");
       const heartbeat = createWhatsAppWorkerHeartbeat("org_a");
 
@@ -170,7 +170,7 @@ describe("parseAllowedWhatsAppPhones", () => {
 
 describe("saveWhatsAppConfig", () => {
   test("creates config with a fresh expiring pairing code", async () => {
-    await withTempHomedir("nakama-core-wa-home-", async () => {
+    await withTempHomedir("airin-core-wa-home-", async () => {
       const result = await saveWhatsAppConfig({ profileId: "profile_custom" });
 
       expect(result.pairingCode).toMatch(/^[0-9A-F]{32}$/);
@@ -188,7 +188,7 @@ describe("saveWhatsAppConfig", () => {
   });
 
   test("keeps a live pairing code across an unrelated save", async () => {
-    await withTempHomedir("nakama-core-wa-home-", async () => {
+    await withTempHomedir("airin-core-wa-home-", async () => {
       const first = await saveWhatsAppConfig({ profileId: "profile_custom" });
       const result = await saveWhatsAppConfig({ profileId: "profile_custom" });
 
@@ -197,7 +197,7 @@ describe("saveWhatsAppConfig", () => {
   });
 
   test("preserves pairedJid when updating other fields", async () => {
-    await withTempHomedir("nakama-core-wa-home-", async (tempHome) => {
+    await withTempHomedir("airin-core-wa-home-", async (tempHome) => {
       await saveWhatsAppConfig({ phoneNumber: "+1234567890" });
       const first = await loadWhatsAppConfigFile();
 
@@ -208,10 +208,10 @@ describe("saveWhatsAppConfig", () => {
         profile_id: first!.profileId,
       };
 
-      const dir = path.join(tempHome, ".nakama", "whatsapp");
+      const dir = path.join(tempHome, ".airin", "whatsapp");
 
       const lines = [
-        "# Nakama WhatsApp bridge",
+        "# Airin WhatsApp bridge",
         ...Object.entries(configWithJid).map(([k, v]) => `${k}=${v}`),
         "",
       ];
@@ -229,7 +229,7 @@ describe("saveWhatsAppConfig", () => {
   });
 
   test("keeps names and add times for allowed phones", async () => {
-    await withTempHomedir("nakama-core-wa-home-", async () => {
+    await withTempHomedir("airin-core-wa-home-", async () => {
       const first = await saveWhatsAppConfig({
         allowedPhones: "628111111111",
         profileId: "default",
@@ -267,7 +267,7 @@ describe("saveWhatsAppConfig", () => {
   });
 
   test("saves requireGroupMention and defaults to true when omitted", async () => {
-    await withTempHomedir("nakama-core-wa-home-", async () => {
+    await withTempHomedir("airin-core-wa-home-", async () => {
       const created = await saveWhatsAppConfig({ profileId: "default" });
       expect(created.requireGroupMention).toBe(true);
       expect((await loadWhatsAppConfigFile())?.requireGroupMention).toBe(true);
@@ -285,8 +285,8 @@ describe("saveWhatsAppConfig", () => {
   });
 
   test("keeps group access open for a config saved before the setting existed", async () => {
-    await withTempHomedir("nakama-core-wa-home-", async (homeDir) => {
-      const dir = path.join(homeDir, ".nakama", "whatsapp");
+    await withTempHomedir("airin-core-wa-home-", async (homeDir) => {
+      const dir = path.join(homeDir, ".airin", "whatsapp");
       await mkdir(dir, { recursive: true });
       await writeFile(
         path.join(dir, "config.ini"),
@@ -302,7 +302,7 @@ describe("saveWhatsAppConfig", () => {
   });
 
   test("saves allowUnpairedGroupMembers apart from requireGroupMention", async () => {
-    await withTempHomedir("nakama-core-wa-home-", async () => {
+    await withTempHomedir("airin-core-wa-home-", async () => {
       const created = await saveWhatsAppConfig({ profileId: "default" });
       expect(created.allowUnpairedGroupMembers).toBe(false);
 
@@ -324,12 +324,12 @@ describe("saveWhatsAppConfig", () => {
 
 describe("resetWhatsAppSessionForReconnect", () => {
   test("clears auth dir, pairing fields, and QR while preserving phone and profile", async () => {
-    await withTempHomedir("nakama-core-wa-reset-", async (tempHome) => {
+    await withTempHomedir("airin-core-wa-reset-", async (tempHome) => {
       await saveWhatsAppConfig({
         phoneNumber: "+1234567890",
         profileId: "profile_custom",
       });
-      const dir = path.join(tempHome, ".nakama", "whatsapp");
+      const dir = path.join(tempHome, ".airin", "whatsapp");
       const authDir = path.join(dir, "auth");
       await mkdir(authDir, { recursive: true });
       await writeFile(path.join(authDir, "creds.json"), "{}", "utf8");
@@ -347,7 +347,7 @@ describe("resetWhatsAppSessionForReconnect", () => {
       await writeFile(
         path.join(dir, "config.ini"),
         [
-          "# Nakama WhatsApp bridge",
+          "# Airin WhatsApp bridge",
           ...Object.entries(configWithJid).map(([k, v]) => `${k}=${v}`),
           "",
         ].join("\n"),
@@ -380,7 +380,7 @@ describe("resetWhatsAppSessionForReconnect", () => {
   });
 
   test("throws when WhatsApp is not configured", async () => {
-    await withTempHomedir("nakama-core-wa-reset-", async () => {
+    await withTempHomedir("airin-core-wa-reset-", async () => {
       await expect(resetWhatsAppSessionForReconnect()).rejects.toThrow(
         "Enable WhatsApp in this agent’s Connections before reconnecting."
       );
@@ -388,7 +388,7 @@ describe("resetWhatsAppSessionForReconnect", () => {
   });
 
   test("succeeds when auth dir and QR file are already absent", async () => {
-    await withTempHomedir("nakama-core-wa-reset-", async () => {
+    await withTempHomedir("airin-core-wa-reset-", async () => {
       await saveWhatsAppConfig({ phoneNumber: "+1234567890" });
 
       const result = await resetWhatsAppSessionForReconnect();

@@ -1,4 +1,4 @@
-import type { ToolContext, ToolDefinition } from "@nakama/core";
+import type { ToolContext, ToolDefinition } from "@airin/core";
 import { z } from "zod";
 import { groupWorkspace } from "../services/agent-group-workspace";
 

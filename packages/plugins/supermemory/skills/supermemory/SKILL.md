@@ -1,9 +1,9 @@
 ---
 name: supermemory
-description: Use Nakama memory and knowledge with Supermemory storage, and retrieve older items saved through the plugin tools.
+description: Use Airin memory and knowledge with Supermemory storage, and retrieve older items saved through the plugin tools.
 ---
 
-Nakama automatically uses Supermemory for its existing memory and knowledge when this plugin is enabled and ready. Keep using `update-profile-memory`, `archive-profile-memory`, org-memory tools, and `knowledge_base_search`. Nakama preserves approvals, history, original uploads, and local recovery copies. Do not save the same fact again with a plugin action.
+Airin automatically uses Supermemory for its existing memory and knowledge when this plugin is enabled and ready. Keep using `update-profile-memory`, `archive-profile-memory`, org-memory tools, and `knowledge_base_search`. Airin preserves approvals, history, original uploads, and local recovery copies. Do not save the same fact again with a plugin action.
 
 The actions below manage items previously saved directly through the plugin. Use them only for that separate collection, or when the user explicitly requests it. Discover assigned tools before calling them.
 
@@ -15,5 +15,5 @@ The actions below manage items previously saved directly through the plugin. Use
 - Use exact local IDs from list/search results to forget or delete. Never guess an upstream ID or switch agent scope.
 - A pending document is still processing. Refresh it with get_document. An unknown memory can be reconciled with list_memories and its local id.
 - A deleting result is already excluded from plugin searches, but remote removal needs retry. Forgotten memories are soft-deleted upstream, not permanently erased.
-- If unavailable, explain that stored evidence could not be retrieved. Do not invent results or claim native Nakama memory was updated.
+- If unavailable, explain that stored evidence could not be retrieved. Do not invent results or claim native Airin memory was updated.
 - Connection credentials are configured by an admin in the plugin page. Never ask a user to paste them into chat.

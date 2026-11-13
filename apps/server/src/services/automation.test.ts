@@ -4,14 +4,14 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AirinApiError,
   createTelegramOutboundAdapter,
   getDiscordConfigDir,
   getDiscordConfigPath,
   getTelegramConfigDir,
   getTelegramConfigPath,
-  NakamaApiError,
-} from "@nakama/core";
-import type { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import type { createInMemoryDatabaseAdapter } from "@airin/db";
 import { z } from "zod";
 import { asTestFetch } from "../providers/test-helpers";
 import type { AgentService } from "./agent-service";
@@ -34,9 +34,9 @@ async function withTelegramConfig(
   owner: { orgId: string; profileId: string },
   run: () => Promise<void>
 ): Promise<void> {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-automation-tg-"));
-  const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(join(tmpdir(), "airin-automation-tg-"));
+  const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = configDir;
 
   try {
     await mkdir(getTelegramConfigDir(owner), { recursive: true });
@@ -48,9 +48,9 @@ async function withTelegramConfig(
     await run();
   } finally {
     if (previousConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+      process.env.AIRIN_CONFIG_DIR = previousConfigDir;
     }
 
     await rm(configDir, { force: true, recursive: true });
@@ -687,9 +687,9 @@ describe("AutomationService", () => {
   test("re-locks a member who retargets an admin-approved destination", async () => {
     const db = await createTestDb();
     const owner = { orgId: ORG_ID, profileId: PROFILE_ID };
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-automation-dest-"));
-    const previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(join(tmpdir(), "airin-automation-dest-"));
+    const previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     try {
       await mkdir(getDiscordConfigDir(owner), { recursive: true });
@@ -740,14 +740,14 @@ describe("AutomationService", () => {
           (thrown: unknown) => thrown
         );
 
-      expect(error).toBeInstanceOf(NakamaApiError);
+      expect(error).toBeInstanceOf(AirinApiError);
       // SAFETY: This test double supplies only the fields exercised by this test.
-      expect((error as NakamaApiError).status).toBe(403);
+      expect((error as AirinApiError).status).toBe(403);
     } finally {
       if (previousConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+        process.env.AIRIN_CONFIG_DIR = previousConfigDir;
       }
 
       await rm(configDir, { force: true, recursive: true });
@@ -1277,7 +1277,7 @@ describe("AutomationRunner", () => {
     expect(result.error).not.toContain(
       "socket connection was closed unexpectedly"
     );
-    expect(result.error).not.toContain("Restart the Nakama server");
+    expect(result.error).not.toContain("Restart the Airin server");
     expect(result.error?.length).toBeGreaterThan(0);
 
     const runs = await service.listRuns(automation.id);
@@ -1612,9 +1612,7 @@ describe("AutomationRunner", () => {
       expect(payloads[0]?.text).toContain(
         "AttributeError in __init__ for *glob*"
       );
-      expect(payloads[0]?.text).toContain(
-        "[Nakama] __weekly__ digest — failed"
-      );
+      expect(payloads[0]?.text).toContain("[Airin] __weekly__ digest — failed");
     });
   });
 
@@ -1667,7 +1665,7 @@ describe("AutomationRunner", () => {
 
       expect(payloads[0]?.parse_mode).toBe("HTML");
       expect(payloads[0]?.text).toContain(
-        "[Nakama] __weekly__ digest — completed"
+        "[Airin] __weekly__ digest — completed"
       );
       expect(payloads[0]?.text).not.toContain("<b>weekly</b>");
     });
@@ -1897,7 +1895,7 @@ describe("AutomationRunner", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({
       body: expect.stringContaining("News summary"),
-      subject: "[Nakama] Digest — completed",
+      subject: "[Airin] Digest — completed",
       to: "hey@ahmadrosid.com",
     });
 
@@ -2002,17 +2000,17 @@ function waitUntilIdle(runner: AutomationRunner, automationId: string) {
 
 describe("webhook automations", () => {
   test("gives webhook automations a URL on the configured public base", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "nakama-webhook-url-"));
+    const configDir = await mkdtemp(join(tmpdir(), "airin-webhook-url-"));
 
     const previous = {
-      NAKAMA_CONFIG_DIR: process.env.NAKAMA_CONFIG_DIR,
-      NAKAMA_PUBLIC_URL: process.env.NAKAMA_PUBLIC_URL,
-      NAKAMA_WEB_PUBLIC_URL: process.env.NAKAMA_WEB_PUBLIC_URL,
+      AIRIN_CONFIG_DIR: process.env.AIRIN_CONFIG_DIR,
+      AIRIN_PUBLIC_URL: process.env.AIRIN_PUBLIC_URL,
+      AIRIN_WEB_PUBLIC_URL: process.env.AIRIN_WEB_PUBLIC_URL,
     };
 
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-    delete process.env.NAKAMA_PUBLIC_URL;
-    delete process.env.NAKAMA_WEB_PUBLIC_URL;
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    delete process.env.AIRIN_PUBLIC_URL;
+    delete process.env.AIRIN_WEB_PUBLIC_URL;
 
     try {
       const { automation, service } = await createWebhookFixture();
@@ -2020,10 +2018,10 @@ describe("webhook automations", () => {
 
       expect((await service.get(automation.id))?.webhookUrl).toBeUndefined();
 
-      process.env.NAKAMA_WEB_PUBLIC_URL = "https://nakama.example.com/";
+      process.env.AIRIN_WEB_PUBLIC_URL = "https://airin.example.com/";
 
       expect((await service.get(automation.id))?.webhookUrl).toBe(
-        `https://nakama.example.com/v1/automations/${encodeURIComponent(automation.id)}/webhook`
+        `https://airin.example.com/v1/automations/${encodeURIComponent(automation.id)}/webhook`
       );
       expect(
         (await manual.service.get(manual.automation.id))?.webhookUrl
@@ -2131,7 +2129,7 @@ describe("webhook automations", () => {
     ).rejects.toThrow();
   });
 
-  test("refuses to create a secret without NAKAMA_SECRETS_KEY", async () => {
+  test("refuses to create a secret without AIRIN_SECRETS_KEY", async () => {
     const { automation, db, service } = await createWebhookFixture({
       secretsKey: "",
     });

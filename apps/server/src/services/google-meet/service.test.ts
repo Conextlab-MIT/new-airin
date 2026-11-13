@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import * as recordingImport from "../meet-recording-import";
 import { GoogleMeetService } from "./service";
 
@@ -286,9 +286,9 @@ test("start-capture without the main server's socket URL fails and saves no meet
   expect(await service.withSnapshot(async () => true)).toBe(true);
 });
 
-test("a set NAKAMA_MEET_CAPTURE_* variable logs one warning and starts fine", async () => {
-  const previous = process.env.NAKAMA_MEET_CAPTURE_HOST;
-  process.env.NAKAMA_MEET_CAPTURE_HOST = "0.0.0.0";
+test("a set AIRIN_MEET_CAPTURE_* variable logs one warning and starts fine", async () => {
+  const previous = process.env.AIRIN_MEET_CAPTURE_HOST;
+  process.env.AIRIN_MEET_CAPTURE_HOST = "0.0.0.0";
   const warn = spyOn(console, "warn").mockImplementation(() => undefined);
 
   try {
@@ -309,9 +309,9 @@ test("a set NAKAMA_MEET_CAPTURE_* variable logs one warning and starts fine", as
     warn.mockRestore();
 
     if (previous === undefined) {
-      delete process.env.NAKAMA_MEET_CAPTURE_HOST;
+      delete process.env.AIRIN_MEET_CAPTURE_HOST;
     } else {
-      process.env.NAKAMA_MEET_CAPTURE_HOST = previous;
+      process.env.AIRIN_MEET_CAPTURE_HOST = previous;
     }
   }
 });

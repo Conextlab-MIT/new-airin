@@ -1,7 +1,7 @@
 /**
  * Live LLM cassette test for the setup checklist (#2004).
  *
- * Record (uses the active DeepSeek provider saved in NAKAMA_CONFIG_DIR):
+ * Record (uses the active DeepSeek provider saved in AIRIN_CONFIG_DIR):
  *   LLM_VCR_MODE=record bun test apps/server/src/services/setup-checklist.llm.test.ts
  *
  * Replay (default when the cassette exists; CI-safe):
@@ -11,12 +11,12 @@ import { expect, test } from "bun:test";
 import {
   buildSetupChecklist,
   listSetupChecklistCandidates,
-} from "@nakama/agent";
+} from "@airin/agent";
 import {
   getActiveProviderInstance,
   loadUserConfig,
   type ProviderInstance,
-} from "@nakama/core";
+} from "@airin/core";
 import { createProviderForInstance } from "../providers/create";
 import {
   cassetteFilePath,

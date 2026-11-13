@@ -1,4 +1,4 @@
-import { normalizeBaseUrl, type ProviderClient } from "@nakama/core";
+import { normalizeBaseUrl, type ProviderClient } from "@airin/core";
 import { createAnthropicProvider } from "../anthropic";
 import { createOpenAIProvider } from "../openai";
 

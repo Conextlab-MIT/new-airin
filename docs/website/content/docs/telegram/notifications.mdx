@@ -5,7 +5,7 @@ description: "Send webhook-driven alerts through Telegram, Discord, or WhatsApp.
 
 Send payment updates, failed job alerts, and deployment notifications from external apps through Telegram, Discord, or WhatsApp.
 
-Another app calls a Nakama webhook, and Nakama posts the notification through the selected agent's connection. Users do not need to start a chat with the agent to receive each alert.
+Another app calls an Airin webhook, and Airin posts the notification through the selected agent's connection. Users do not need to start a chat with the agent to receive each alert.
 
 This is useful for things like:
 
@@ -34,7 +34,7 @@ Use **Edit** on a destination to change its name, agent, or target. To switch ch
 
 ## Webhook payload
 
-Nakama keeps the webhook contract intentionally small.
+Airin keeps the webhook contract intentionally small.
 
 Send a `POST` request with JSON like this:
 
@@ -55,11 +55,11 @@ Required headers:
 `title` is optional.
 `level` is optional and can be `info`, `success`, `warning`, or `error`.
 
-Nakama sends the title, body, and level indicator through the chosen channel. WhatsApp uses plain text; Telegram and Discord retain title emphasis.
+Airin sends the title, body, and level indicator through the chosen channel. WhatsApp uses plain text; Telegram and Discord retain title emphasis.
 
 ## Design note
 
-Nakama accepts simple notification text rather than arbitrary templates or custom channel payloads.
+Airin accepts simple notification text rather than arbitrary templates or custom channel payloads.
 
 That is intentional:
 
@@ -69,7 +69,7 @@ That is intentional:
 
 ## Notification destinations for groups and topics
 
-From **Settings → Notifications**, Nakama can create Telegram webhook destinations for a group or a forum topic.
+From **Settings → Notifications**, Airin can create Telegram webhook destinations for a group or a forum topic.
 
 If you already have a topic share link such as:
 

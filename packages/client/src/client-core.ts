@@ -1,22 +1,22 @@
 import {
-  NakamaAuthExpiredError,
+  AirinAuthExpiredError,
   readApiErrorMessage,
-} from "@nakama/core/api-error";
+} from "@airin/core/api-error";
 import {
   HOST_BOUND_BROWSER_SESSION_COOKIE_NAMES,
   PLAIN_BROWSER_SESSION_COOKIE_NAMES,
-} from "@nakama/core/browser-session-cookies";
-import type { AuthUserResponse } from "@nakama/core/contract";
-import { loadLocalAuthToken } from "@nakama/core/local-auth";
-import { resolveServerUrl } from "@nakama/core/runtime";
+} from "@airin/core/browser-session-cookies";
+import type { AuthUserResponse } from "@airin/core/contract";
+import { loadLocalAuthToken } from "@airin/core/local-auth";
+import { resolveServerUrl } from "@airin/core/runtime";
 import { readCookie } from "./browser";
 import { createApiError, isMutatingMethod } from "./client-helpers";
-import type { NakamaClientOptions } from "./types";
+import type { AirinClientOptions } from "./types";
 
 /** Connection state and the request plumbing every domain method uses. */
-export class NakamaClientCore {
+export class AirinClientCore {
   readonly baseUrl: string;
-  protected readonly fetchImpl: NonNullable<NakamaClientOptions["fetch"]>;
+  protected readonly fetchImpl: NonNullable<AirinClientOptions["fetch"]>;
   protected readonly credentials: RequestCredentials;
   protected readonly clientOrigin: string | null;
   protected authToken: string | null;
@@ -24,7 +24,7 @@ export class NakamaClientCore {
   protected orgScopeRevision = 0;
   protected activeOrgRequestRevision = 0;
 
-  constructor(options: NakamaClientOptions = {}) {
+  constructor(options: AirinClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? resolveServerUrl()).replace(/\/$/, "");
     const fetchFn = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.fetchImpl = fetchFn;
@@ -52,7 +52,7 @@ export class NakamaClientCore {
     path: string,
     init?: RequestInit,
     retried = false,
-    fetchImpl: NakamaClientOptions["fetch"] = this.fetchImpl
+    fetchImpl: AirinClientOptions["fetch"] = this.fetchImpl
   ): Promise<T> {
     const method = (init?.method ?? "GET").toUpperCase();
 
@@ -82,7 +82,7 @@ export class NakamaClientCore {
           }
         }
 
-        throw new NakamaAuthExpiredError(
+        throw new AirinAuthExpiredError(
           await readApiErrorMessage(response),
           path
         );
@@ -133,7 +133,7 @@ export class NakamaClientCore {
           }
         }
 
-        throw new NakamaAuthExpiredError(
+        throw new AirinAuthExpiredError(
           await readApiErrorMessage(response),
           path
         );

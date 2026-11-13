@@ -1,6 +1,6 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
   type AgentBrowserStatusResponse,
+  AirinApiError,
   type CheckProviderResponse,
   type ComposioSettingsResponse,
   type ConfigureProviderResponse,
@@ -12,10 +12,10 @@ import {
   formatServerError,
   type GenerateImageResponse,
   type ImageGenerationSettingsResponse,
+  type LanguageSettingsResponse,
   type ListProvidersResponse,
   type ListTimezonesResponse,
   type ModelsResponse,
-  NakamaApiError,
   type ProviderInstanceSummary,
   reportError,
   resetWhatsAppSessionForReconnect,
@@ -38,9 +38,9 @@ import {
   type WebSearchProvider,
   type WebSearchSettingsResponse,
   type WhatsAppSettingsResponse,
-} from "@nakama/core";
-import { ChannelConfigBusyError } from "@nakama/core/channel-config-shared";
-import { USER_PROVIDER_NAMES } from "@nakama/core/provider-resolution";
+} from "@airin/core";
+import { ChannelConfigBusyError } from "@airin/core/channel-config-shared";
+import { USER_PROVIDER_NAMES } from "@airin/core/provider-resolution";
 import {
   checkSlackTokensMatch,
   checkSlackWorkspaceAccess,
@@ -49,8 +49,9 @@ import {
   regenerateSlackHandshake,
   saveSlackConfig,
   validateSlackTokens,
-} from "@nakama/core/slack-config";
-import { THINKING_EFFORTS } from "@nakama/core/thinking-effort";
+} from "@airin/core/slack-config";
+import { THINKING_EFFORTS } from "@airin/core/thinking-effort";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Context, MiddlewareHandler } from "hono";
 import {
   completeChatgptOAuthDeviceSession,
@@ -222,6 +223,10 @@ export function registerModelRoutes(
   const timezoneSettingsSchema = z
     .object({ timezone: z.string() })
     .openapi("TimezoneSettingsResponse");
+
+  const languageSettingsSchema = z
+    .object({ language: z.enum(["id", "en"]) })
+    .openapi("LanguageSettingsResponse");
 
   const thinkingSettingsSchema = z
     .object({})
@@ -475,6 +480,10 @@ export function registerModelRoutes(
   const updateTimezoneRequestSchema = z
     .object({ timezone: z.string() })
     .openapi("UpdateTimezoneRequest");
+
+  const updateLanguageRequestSchema = z
+    .object({ language: z.enum(["id", "en"]) })
+    .openapi("UpdateLanguageRequest");
 
   const updateThinkingRequestSchema = z
     .object({
@@ -902,6 +911,52 @@ export function registerModelRoutes(
         },
       },
       summary: "Update the user timezone",
+      tags: ["Models"],
+    })
+  );
+  app.openAPIRegistry.registerPath(
+    createRoute({
+      method: "get",
+      operationId: "getLanguage",
+      path: "/v1/settings/language",
+      responses: {
+        200: {
+          content: { "application/json": { schema: languageSettingsSchema } },
+          description: "Language settings",
+        },
+        500: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Error",
+        },
+      },
+      summary: "Get the UI and default AI reply language",
+      tags: ["Models"],
+    })
+  );
+  app.openAPIRegistry.registerPath(
+    createRoute({
+      method: "put",
+      operationId: "setLanguage",
+      path: "/v1/settings/language",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: updateLanguageRequestSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: {
+          content: { "application/json": { schema: languageSettingsSchema } },
+          description: "Language settings",
+        },
+        500: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Error",
+        },
+      },
+      summary: "Update the UI and default AI reply language",
       tags: ["Models"],
     })
   );
@@ -1916,7 +1971,7 @@ export function registerModelRoutes(
     // the same outbound authority. Org admins keep providerId discovery, which
     // fetches a stored URL.
     if (body.baseUrl?.trim() && !auth.isPlatformAdmin) {
-      throw new NakamaApiError("Forbidden", 403);
+      throw new AirinApiError("Forbidden", 403);
     }
 
     const result = await agent.discoverModels(body);
@@ -1950,7 +2005,7 @@ export function registerModelRoutes(
     try {
       return json<CreateProviderResponse>(await agent.createProvider(body));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1972,7 +2027,7 @@ export function registerModelRoutes(
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1999,7 +2054,7 @@ export function registerModelRoutes(
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2015,7 +2070,7 @@ export function registerModelRoutes(
         await agent.checkProvider(decodeURIComponent(c.req.param("providerId")))
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2043,7 +2098,7 @@ export function registerModelRoutes(
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2074,7 +2129,7 @@ export function registerModelRoutes(
     try {
       return json(await startXaiOAuthDeviceSession(owner));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2114,7 +2169,7 @@ export function registerModelRoutes(
         new Headers({ "Cache-Control": "no-store" })
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2130,7 +2185,7 @@ export function registerModelRoutes(
     try {
       return json(await startChatgptOAuthDeviceSession());
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2163,7 +2218,7 @@ export function registerModelRoutes(
 
       return json({ chatgptOAuth, models });
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2182,7 +2237,7 @@ export function registerModelRoutes(
         await agent.configureProvider(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2214,6 +2269,23 @@ export function registerModelRoutes(
     return json<TimezoneSettingsResponse>({ timezone });
   });
 
+  app.get("/v1/settings/language", async (c) => {
+    getRequestAuth(c);
+
+    return json<LanguageSettingsResponse>({
+      language: await agent.getUserLanguage(),
+    });
+  });
+
+  app.put("/v1/settings/language", async (c) => {
+    // Install-wide UI + default agent reply language — any signed-in member.
+    getRequestAuth(c);
+    const body = await readJson(c.req.raw, updateLanguageRequestSchema);
+    const language = await agent.setUserLanguage(body.language);
+
+    return json<LanguageSettingsResponse>({ language });
+  });
+
   app.get("/v1/settings/thinking", async (c) => {
     getRequestAuth(c);
 
@@ -2242,7 +2314,7 @@ export function registerModelRoutes(
     try {
       return json<VisionSettingsResponse>(await agent.setVisionSettings(body));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2269,7 +2341,7 @@ export function registerModelRoutes(
         await agent.setTranscriptionSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2286,7 +2358,7 @@ export function registerModelRoutes(
     try {
       return json<TranscribeAudioResponse>(await agent.transcribeAudio(body));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         if (error.status >= 500) {
           void reportError(error, { kind: "http", source: "server" });
         }
@@ -2317,7 +2389,7 @@ export function registerModelRoutes(
         await agent.setImageGenerationSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2338,7 +2410,7 @@ export function registerModelRoutes(
         await agent.generateImage(body, auth.activeOrgId ?? null, auth.user.id)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         if (error.status >= 500) {
           void reportError(error, { kind: "http", source: "server" });
         }
@@ -2365,7 +2437,7 @@ export function registerModelRoutes(
     try {
       return json<EmailSettingsResponse>(await agent.setEmailSettings(body));
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2384,7 +2456,7 @@ export function registerModelRoutes(
         await agent.setEmailSecret(body.password)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2404,7 +2476,7 @@ export function registerModelRoutes(
         await agent.sendEmailTest(body.to?.trim() || auth.user.email)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2429,7 +2501,7 @@ export function registerModelRoutes(
         await agent.setWebSearchSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2452,7 +2524,7 @@ export function registerModelRoutes(
         await agent.setWebSearchSecret(body.provider, body.apiKey)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2480,7 +2552,7 @@ export function registerModelRoutes(
         await agent.saveAgentBrowserSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2592,7 +2664,7 @@ export function registerModelRoutes(
     );
 
     if (!["telegram", "discord", "whatsapp"].includes(body.platform)) {
-      throw new NakamaApiError("Unknown channel", 400);
+      throw new AirinApiError("Unknown channel", 400);
     }
 
     if (body.global) {
@@ -2600,7 +2672,7 @@ export function registerModelRoutes(
     }
 
     if (!options.databaseAdapter) {
-      throw new NakamaApiError("Database unavailable", 503);
+      throw new AirinApiError("Database unavailable", 503);
     }
 
     await workerManager.claimLegacyChannel(
@@ -2642,7 +2714,7 @@ export function registerModelRoutes(
         await agent.setTelegramSettings(orgId, body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2789,7 +2861,7 @@ export function registerModelRoutes(
         await agent.setDiscordSettings(body, await channelOwner(c))
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2891,7 +2963,7 @@ export function registerModelRoutes(
         await agent.setComposioSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2909,7 +2981,7 @@ export function registerModelRoutes(
         await agent.setComposioSecret(body.apiKey)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2961,7 +3033,7 @@ export function registerModelRoutes(
         await agent.setErrorTrackingSettings(body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -2979,7 +3051,7 @@ export function registerModelRoutes(
         await agent.sendErrorTrackingTest()
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -3009,7 +3081,7 @@ export function registerModelRoutes(
         return errorResponse("WhatsApp settings are busy. Try again.", 503);
       }
 
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 

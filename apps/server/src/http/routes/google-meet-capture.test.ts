@@ -12,7 +12,7 @@ import * as transcription from "../../services/google-meet/transcription";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { cleanups, setup } from "./google-meet-extension-setup";
 
-setupTestConfigDir("nakama-meet-capture-test-");
+setupTestConfigDir("airin-meet-capture-test-");
 
 afterEach(async () => {
   setSystemTime();
@@ -185,8 +185,8 @@ describe("Meet capture socket on the main server", () => {
 
     const port = probe.port;
     probe.stop(true);
-    const previous = process.env.NAKAMA_MEET_CAPTURE_PORT;
-    process.env.NAKAMA_MEET_CAPTURE_PORT = String(port);
+    const previous = process.env.AIRIN_MEET_CAPTURE_PORT;
+    process.env.AIRIN_MEET_CAPTURE_PORT = String(port);
     const warn = spyOn(console, "warn").mockImplementation(() => undefined);
 
     try {
@@ -198,9 +198,9 @@ describe("Meet capture socket on the main server", () => {
       warn.mockRestore();
 
       if (previous === undefined) {
-        delete process.env.NAKAMA_MEET_CAPTURE_PORT;
+        delete process.env.AIRIN_MEET_CAPTURE_PORT;
       } else {
-        process.env.NAKAMA_MEET_CAPTURE_PORT = previous;
+        process.env.AIRIN_MEET_CAPTURE_PORT = previous;
       }
     }
   });

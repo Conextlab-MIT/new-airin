@@ -9,11 +9,11 @@ import {
   rehydrateMessagesForProvider,
   type ToolCall,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { createAgentChatSession } from "./index";
 
 const pdfBase64 = Buffer.from(
-  "%PDF-1.4\n% nakama-1454 report body\n%%EOF\n"
+  "%PDF-1.4\n% airin-1454 report body\n%%EOF\n"
 ).toString("base64");
 
 const tinyPngBase64 =
@@ -170,7 +170,7 @@ describe("documents from earlier turns", () => {
       onCall: 2,
     });
 
-    const notes = "nakama-1454 notes";
+    const notes = "airin-1454 notes";
     const notesBase64 = Buffer.from(notes).toString("base64");
 
     await session.send(attach(notesBase64, filename, mediaType));

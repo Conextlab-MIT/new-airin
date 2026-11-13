@@ -23,7 +23,7 @@ const REVALIDATE_EXTENSIONS = [
   ".webmanifest",
 ];
 
-const CACHE_PREFIX = "nakama-v-";
+const CACHE_PREFIX = "airin-v-";
 
 export function classifyRequest(
   request: { method: string; mode: string; url: string },

@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { z } from "zod";
 
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import {
   isValidBaseUrl,
   normalizeBaseUrl,
@@ -16,6 +16,7 @@ import {
 } from "./compatible-provider-config";
 import { readEnvValue } from "./config";
 import type {
+  AppLanguage,
   ChatgptOAuthCredentials,
   CustomModelEntry,
   OpenRouterRoutingSettings,
@@ -84,6 +85,7 @@ const XaiOAuthSchema = z.object({
 export interface UserConfig {
   defaultProviderId: string | null;
   imageModel?: string | null;
+  language?: AppLanguage;
   localAuthToken?: string;
   localAuthTokenHash?: string;
   providers: ProviderInstance[];
@@ -93,6 +95,13 @@ export interface UserConfig {
   transcriptionModel?: string | null;
   visionModel?: string | null;
 }
+
+export const APP_LANGUAGES = [
+  "id",
+  "en",
+] as const satisfies readonly AppLanguage[];
+
+export const DEFAULT_LANGUAGE: AppLanguage = "id";
 
 export const DEFAULT_TIMEZONE = "UTC";
 
@@ -290,19 +299,19 @@ export function getOrgConfigDir(orgId: string): string {
 }
 
 export function getUserConfigDir(): string {
-  const override = process.env.NAKAMA_CONFIG_DIR?.trim();
+  const override = process.env.AIRIN_CONFIG_DIR?.trim();
 
   if (override) {
     if (!isAbsolute(override)) {
       throw new Error(
-        "NAKAMA_CONFIG_DIR must be an absolute path; relative paths resolve against process.cwd() and break profile isolation."
+        "AIRIN_CONFIG_DIR must be an absolute path; relative paths resolve against process.cwd() and break profile isolation."
       );
     }
 
     return override;
   }
 
-  return join(homedir(), ".nakama");
+  return join(homedir(), ".airin");
 }
 
 export function getUserConfigPath(): string {
@@ -417,6 +426,7 @@ export async function loadUserConfig(): Promise<UserConfig | null> {
 
   const parsed = parseIniWithSections(raw);
   const thinking = readThinkingSettings(parsed.global);
+  const language = readLanguage(parsed.global);
   const timezone = readTimezone(parsed.global);
   const providers = loadProvidersFromSections(parsed.sections);
 
@@ -429,6 +439,10 @@ export async function loadUserConfig(): Promise<UserConfig | null> {
     transcriptionModel: readTranscriptionModel(parsed.global),
     visionModel: readVisionModel(parsed.global),
   };
+
+  if (language) {
+    config.language = language;
+  }
 
   if (timezone) {
     config.timezone = timezone;
@@ -453,6 +467,66 @@ export async function loadUserTimezone(): Promise<string> {
   }
 
   return readTimezone(parseIniWithSections(raw).global) ?? DEFAULT_TIMEZONE;
+}
+
+export function isValidAppLanguage(value: string): value is AppLanguage {
+  return (APP_LANGUAGES as readonly string[]).includes(value);
+}
+
+export function parseAppLanguage(
+  value: string | undefined
+): AppLanguage | undefined {
+  const trimmed = value?.trim().toLowerCase();
+
+  return trimmed && isValidAppLanguage(trimmed) ? trimmed : undefined;
+}
+
+export async function loadUserLanguage(): Promise<AppLanguage> {
+  const raw = await readTextOrNull(getUserConfigPath());
+
+  if (raw === null) {
+    return DEFAULT_LANGUAGE;
+  }
+
+  return readLanguage(parseIniWithSections(raw).global) ?? DEFAULT_LANGUAGE;
+}
+
+export async function saveUserLanguage(
+  language: string | undefined
+): Promise<AppLanguage> {
+  const parsed = parseAppLanguage(language);
+
+  if (!parsed) {
+    throw new AirinApiError(
+      language?.trim()
+        ? `Invalid language: ${language.trim()}`
+        : "Language is required.",
+      400
+    );
+  }
+
+  const existing = await loadUserConfig();
+
+  if (existing) {
+    await saveUserConfig({ ...existing, language: parsed });
+
+    return parsed;
+  }
+
+  const raw = await readTextOrNull(getUserConfigPath());
+
+  const file =
+    raw === null ? { global: {}, sections: {} } : parseIniWithSections(raw);
+
+  const lines = buildConfigIniLines(file.global, file.sections, {
+    language: parsed,
+  });
+
+  await writeTextFile(getUserConfigPath(), lines.join("\n"), {
+    ensureDir: getUserConfigDir(),
+  });
+
+  return parsed;
 }
 
 function readVisionModel(global: Record<string, string>): string | null {
@@ -561,11 +635,11 @@ export async function saveUserTimezone(
   const trimmed = timezone?.trim() ?? "";
 
   if (!trimmed) {
-    throw new NakamaApiError("Timezone is required.", 400);
+    throw new AirinApiError("Timezone is required.", 400);
   }
 
   if (!isValidTimezone(trimmed)) {
-    throw new NakamaApiError(`Invalid timezone: ${trimmed}`, 400);
+    throw new AirinApiError(`Invalid timezone: ${trimmed}`, 400);
   }
 
   const existing = await loadUserConfig();
@@ -676,6 +750,7 @@ export async function saveUserConfig(config: UserConfig): Promise<void> {
     ...existingParsed.global,
     default_provider_id: config.defaultProviderId ?? "",
     image_model: config.imageModel ?? "",
+    language: config.language,
     local_auth_token_hash: config.localAuthTokenHash,
     thinking: thinking.enabled ? "on" : "off",
     thinking_effort: thinking.effort,
@@ -786,7 +861,7 @@ export function validateOpenRouterRoutingSettings<Value>(
   const parsed = OpenRouterRoutingSchema.safeParse(value);
 
   if (!parsed.success) {
-    throw new NakamaApiError("OpenRouter routing must be an object.", 400);
+    throw new AirinApiError("OpenRouter routing must be an object.", 400);
   }
 
   const settings: OpenRouterRoutingSettings = {};
@@ -807,7 +882,7 @@ export function validateOpenRouterRoutingSettings<Value>(
     } else if (key === "dataCollection" && collectionSetting.success) {
       settings.dataCollection = collectionSetting.data;
     } else {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Invalid OpenRouter routing setting: ${key}`,
         400
       );
@@ -989,7 +1064,7 @@ function buildConfigIniLines(
   patch: Record<string, string | undefined> = {}
 ): string[] {
   const mergedGlobal = { ...global, ...patch };
-  const lines = ["# Nakama user config"];
+  const lines = ["# Airin user config"];
 
   if (mergedGlobal.default_provider_id !== undefined) {
     lines.push(
@@ -1013,6 +1088,10 @@ function buildConfigIniLines(
 
   if (mergedGlobal.timezone?.trim()) {
     lines.push(`timezone=${mergedGlobal.timezone.trim()}`);
+  }
+
+  if (mergedGlobal.language?.trim()) {
+    lines.push(`language=${mergedGlobal.language.trim()}`);
   }
 
   if (mergedGlobal.web_public_url?.trim()) {
@@ -1070,6 +1149,10 @@ function readTimezone(values: Record<string, string>): string | undefined {
   const timezone = values.timezone?.trim();
 
   return timezone && isValidTimezone(timezone) ? timezone : undefined;
+}
+
+function readLanguage(values: Record<string, string>): AppLanguage | undefined {
+  return parseAppLanguage(values.language);
 }
 
 export function validateProviderInstanceLabel(
@@ -1135,7 +1218,7 @@ export function validateProviderApiKeyFormat(
       ? ` (expected it to start with "${rule.prefix}")`
       : ` (expected at least ${rule.minLength} characters)`;
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `That doesn't look like a valid ${label} API key${reason}.`,
       400
     );

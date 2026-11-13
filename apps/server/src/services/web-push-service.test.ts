@@ -92,8 +92,8 @@ describe("WebPushService", () => {
     const endpoint = "https://web.push.apple.com/QG9";
     await service.subscribe("u1", { endpoint, keys: await browserKeys() });
 
-    const previous = process.env.NAKAMA_WEB_PUBLIC_URL;
-    process.env.NAKAMA_WEB_PUBLIC_URL = "http://192.168.1.20:4310";
+    const previous = process.env.AIRIN_WEB_PUBLIC_URL;
+    process.env.AIRIN_WEB_PUBLIC_URL = "http://192.168.1.20:4310";
 
     const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(null, { status: 201 })
@@ -118,9 +118,9 @@ describe("WebPushService", () => {
       fetchSpy.mockRestore();
 
       if (previous === undefined) {
-        delete process.env.NAKAMA_WEB_PUBLIC_URL;
+        delete process.env.AIRIN_WEB_PUBLIC_URL;
       } else {
-        process.env.NAKAMA_WEB_PUBLIC_URL = previous;
+        process.env.AIRIN_WEB_PUBLIC_URL = previous;
       }
     }
   });

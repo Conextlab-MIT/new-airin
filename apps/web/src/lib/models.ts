@@ -4,16 +4,16 @@ import type {
   OllamaHostMode,
   ProviderModelOption,
   WireApi,
-} from "@nakama/core/contract";
-import { isDiscoveryModelProvider } from "@nakama/core/discovery-providers";
+} from "@airin/core/contract";
+import { isDiscoveryModelProvider } from "@airin/core/discovery-providers";
 import {
   OLLAMA_CLOUD_DEFAULT_BASE_URL,
   OLLAMA_LOCAL_DEFAULT_BASE_URL,
   ollamaRequiresApiKey,
-} from "@nakama/core/ollama-provider-config";
-import { isOpenRouterModelSlug } from "@nakama/core/openrouter-model-slug";
-import { formatConfiguredProviderLabel } from "@nakama/core/provider-label";
-import type { UserProviderName } from "@nakama/core/provider-resolution";
+} from "@airin/core/ollama-provider-config";
+import { isOpenRouterModelSlug } from "@airin/core/openrouter-model-slug";
+import { formatConfiguredProviderLabel } from "@airin/core/provider-label";
+import type { UserProviderName } from "@airin/core/provider-resolution";
 
 export type SelectedProvider = UserProviderName;
 

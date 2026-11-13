@@ -1,21 +1,28 @@
+import { Button } from "@airin/ui/button";
+import { DialogOverlay, DialogTitle } from "@airin/ui/dialog";
+import { cn } from "@airin/ui/utils";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { Button } from "@nakama/ui/button";
-import { DialogOverlay, DialogTitle } from "@nakama/ui/dialog";
-import { cn } from "@nakama/ui/utils";
 import { Menu01Icon } from "hugeicons-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AppSidebar } from "@/components/AppSidebar";
+import { OwnerTeamSidebar } from "@/components/OwnerTeamSidebar";
 import { ProfileRail } from "@/components/ProfileRail";
+import { useUiMode } from "@/context/use-ui-mode";
+import { useOwnerSidebarHidden } from "@/hooks/use-sidebar-collapsed";
 
 /**
  * Phone-sized navigation. The rail and sidebar cost a fixed 296px, which is
  * most of a phone screen, so below `sm` they slide over the content instead of
- * sitting beside it.
+ * sitting beside it. Owner mode can also open this after Hide on tablet.
  */
 export function MobileNavDrawer({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const { uiMode } = useUiMode();
+  const ownerMode = uiMode === "owner";
+  const { collapsed: ownerSidebarHidden, toggle: toggleOwnerSidebar } =
+    useOwnerSidebarHidden();
 
   // Any navigation dismisses the drawer, including ones triggered from menus
   // and popovers inside it.
@@ -65,8 +72,24 @@ export function MobileNavDrawer({ className }: { className?: string }) {
           data-slot="mobile-nav-drawer"
         >
           <DialogTitle className="sr-only">Navigation</DialogTitle>
-          <ProfileRail onNavigate={close} />
-          <AppSidebar variant="drawer" />
+          {ownerMode ? (
+            <OwnerTeamSidebar
+              onHide={() => {
+                if (!ownerSidebarHidden) {
+                  toggleOwnerSidebar();
+                }
+
+                close();
+              }}
+              onNavigate={close}
+              variant="drawer"
+            />
+          ) : (
+            <>
+              <ProfileRail onNavigate={close} />
+              <AppSidebar variant="drawer" />
+            </>
+          )}
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

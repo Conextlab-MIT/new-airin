@@ -4,11 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 source "$(dirname "$0")/capture-common.sh"
 SCREENSHOT_DIR="$(cd "$(dirname "$0")/.." && pwd)/public/screenshots"
-TEMP_CONFIG="/tmp/nakama-docs-telegram-screenshots-$$"
-COOKIE_JAR="/tmp/nakama-docs-telegram-cookies-$$.txt"
+TEMP_CONFIG="/tmp/airin-docs-telegram-screenshots-$$"
+COOKIE_JAR="/tmp/airin-docs-telegram-cookies-$$.txt"
 PORT=4316
 BASE_URL="http://127.0.0.1:${PORT}"
-SESSION=nakama-docs-telegram-screenshots
+SESSION=airin-docs-telegram-screenshots
 SERVER_PID=""
 VIEWPORT_WIDTH=1280
 VIEWPORT_HEIGHT=900
@@ -44,8 +44,8 @@ ensure_current_web_build "$ROOT"
 # its daemon + logs by PM2_HOME, so this keeps the captured logs isolated.
 export PM2_HOME="$TEMP_CONFIG/pm2"
 
-NAKAMA_CONFIG_DIR="$TEMP_CONFIG" NAKAMA_PORT="$PORT" \
-  bun run "$ROOT/apps/server/src/index.ts" > /tmp/nakama-docs-telegram-screenshot-server.log 2>&1 &
+AIRIN_CONFIG_DIR="$TEMP_CONFIG" AIRIN_PORT="$PORT" \
+  bun run "$ROOT/apps/server/src/index.ts" > /tmp/airin-docs-telegram-screenshot-server.log 2>&1 &
 SERVER_PID=$!
 
 for _ in $(seq 1 60); do
@@ -66,8 +66,8 @@ SETUP_BODY=$(curl --fail-with-body -sS -c "$COOKIE_JAR" -X POST "${BASE_URL}/v1/
   }")
 ORG_ID=$(printf '%s' "$SETUP_BODY" | bun -e 'const j=JSON.parse(await Bun.stdin.text()); process.stdout.write(j.activeOrgId);')
 
-CSRF_VAL=$(awk '$6=="nakama_csrf"{print $7}' "$COOKIE_JAR")
-SESSION_VAL=$(awk '$6=="nakama_session"{print $7}' "$COOKIE_JAR")
+CSRF_VAL=$(awk '$6=="airin_csrf"{print $7}' "$COOKIE_JAR")
+SESSION_VAL=$(awk '$6=="airin_session"{print $7}' "$COOKIE_JAR")
 
 # OpenAI provider so the audio transcription model picker becomes available.
 curl --fail-with-body -sS -b "$COOKIE_JAR" -X POST "${BASE_URL}/v1/providers" \
@@ -80,9 +80,9 @@ PROFILE_ID=$(curl --fail-with-body -sS -b "$COOKIE_JAR" \
   bun -e 'const j=JSON.parse(await Bun.stdin.text()); const p=j.profiles.find((profile) => profile.name === "Default Bot") ?? j.profiles[0]; process.stdout.write(p.id);')
 
 $AB --session "$SESSION" close 2>/dev/null || true
-$AB --session "$SESSION" cookies set nakama_session "$SESSION_VAL" \
+$AB --session "$SESSION" cookies set airin_session "$SESSION_VAL" \
   --url "${BASE_URL}/" --httpOnly --sameSite Lax
-$AB --session "$SESSION" cookies set nakama_csrf "$CSRF_VAL" \
+$AB --session "$SESSION" cookies set airin_csrf "$CSRF_VAL" \
   --url "${BASE_URL}/" --sameSite Lax
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ $AB --session "$SESSION" screenshot "$SCREENSHOT_DIR/telegram-bot-token.png"
 # ---------------------------------------------------------------------------
 # Seed only the isolated demo config: saving through HTTP validates the fake
 # token against Telegram and correctly rejects it.
-(cd "$ROOT" && NAKAMA_CONFIG_DIR="$TEMP_CONFIG" DOCS_ORG_ID="$ORG_ID" DOCS_PROFILE_ID="$PROFILE_ID" bun -e '
+(cd "$ROOT" && AIRIN_CONFIG_DIR="$TEMP_CONFIG" DOCS_ORG_ID="$ORG_ID" DOCS_PROFILE_ID="$PROFILE_ID" bun -e '
   const { saveTelegramConfig } = await import("./packages/core/src/telegram-config.ts");
   await saveTelegramConfig({
     orgId: process.env.DOCS_ORG_ID,
@@ -131,7 +131,7 @@ $AB --session "$SESSION" screenshot "$SCREENSHOT_DIR/telegram-pairing.png"
 # ---------------------------------------------------------------------------
 # The setup page shows worker controls after one user links. Seed only this
 # isolated demo config so the log button is visible without a real Telegram user.
-(cd "$ROOT" && NAKAMA_CONFIG_DIR="$TEMP_CONFIG" DOCS_ORG_ID="$ORG_ID" DOCS_PROFILE_ID="$PROFILE_ID" bun -e '
+(cd "$ROOT" && AIRIN_CONFIG_DIR="$TEMP_CONFIG" DOCS_ORG_ID="$ORG_ID" DOCS_PROFILE_ID="$PROFILE_ID" bun -e '
   const { saveTelegramConfig } = await import("./packages/core/src/telegram-config.ts");
   await saveTelegramConfig({
     orgId: process.env.DOCS_ORG_ID,

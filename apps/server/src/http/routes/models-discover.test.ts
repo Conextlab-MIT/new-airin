@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { DiscoverModelsRequest } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { DiscoverModelsRequest } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import {
@@ -9,7 +9,7 @@ import {
   setupFreshInstallSession,
 } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-models-discover-test-");
+setupTestConfigDir("airin-models-discover-test-");
 
 test("discover hands provider and hostMode to the service", async () => {
   const received: DiscoverModelsRequest[] = [];

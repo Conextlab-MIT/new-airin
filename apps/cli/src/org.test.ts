@@ -2,18 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NakamaClient } from "@nakama/client";
+import { AirinClient } from "@airin/client";
 import { loadSavedCliOrgId, loadSavedCliProfileId } from "./cli-config";
 import { InvalidOrgArgError, parseCliOrgArgs, switchChatOrg } from "./org";
 
 test("org switching scopes the new session and preserves the current client on failure", async () => {
-  const configDir = await mkdtemp(join(tmpdir(), "nakama-org-switch-"));
-  const previous = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(join(tmpdir(), "airin-org-switch-"));
+  const previous = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = configDir;
   let failSession = false;
   const requests: { path: string; org: string | null }[] = [];
 
-  const client = new NakamaClient({
+  const client = new AirinClient({
     baseUrl: "https://example.com",
     // SAFETY: This fetch stub forwards requests to the test server.
     fetch: (async (input, init) => {
@@ -73,9 +73,9 @@ test("org switching scopes the new session and preserves the current client on f
     expect(requests.at(-1)?.org).toBe("org_old");
   } finally {
     if (previous === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous;
+      process.env.AIRIN_CONFIG_DIR = previous;
     }
 
     await rm(configDir, { force: true, recursive: true });

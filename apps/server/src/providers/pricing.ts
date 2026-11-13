@@ -2,8 +2,8 @@ import {
   findCustomModel,
   type ProviderInstance,
   type ProviderName,
-} from "@nakama/core";
-import { DISCOVERY_MODEL_PROVIDERS } from "@nakama/core/discovery-providers";
+} from "@airin/core";
+import { DISCOVERY_MODEL_PROVIDERS } from "@airin/core/discovery-providers";
 import {
   getModelById,
   getModelsForProvider,

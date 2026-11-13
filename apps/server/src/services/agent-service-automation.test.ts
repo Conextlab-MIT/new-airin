@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { GenerateChatInput, ToolDefinition } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { GenerateChatInput, ToolDefinition } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 import { createDefaultProfile } from "./agent-service-test-fixtures";
@@ -8,7 +8,7 @@ import { createDefaultProfile } from "./agent-service-test-fixtures";
 const ORG_ID = "org_test";
 
 describe("AgentService organization knowledge base", () => {
-  setupTestConfigDir("nakama-org-knowledge-base-");
+  setupTestConfigDir("airin-org-knowledge-base-");
 
   test("serves organization documents through the profile service", async () => {
     const db = createInMemoryDatabaseAdapter();
@@ -61,7 +61,7 @@ async function captureError<T>(run: () => Promise<T>): Promise<Error | null> {
 }
 
 describe("AgentService automation resume", () => {
-  setupTestConfigDir("nakama-automation-resume-");
+  setupTestConfigDir("airin-automation-resume-");
 
   async function setup() {
     const db = createInMemoryDatabaseAdapter();
@@ -235,7 +235,7 @@ describe("AgentService automation resume", () => {
 });
 
 describe("AgentService automation tool limit", () => {
-  setupTestConfigDir("nakama-automation-tool-limit-");
+  setupTestConfigDir("airin-automation-tool-limit-");
 
   async function setup() {
     const db = createInMemoryDatabaseAdapter();

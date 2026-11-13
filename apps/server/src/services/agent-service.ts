@@ -12,13 +12,14 @@ import {
   expandLearnInLastUserMessage,
   listSetupChecklistCandidates,
   suggestToolParamsFromPrompt,
-} from "@nakama/agent";
+} from "@airin/agent";
 import type {
   AcpSessionSettingsResponse,
   AgentBrowserStatusResponse,
   AgentChannel,
   AgentQuestionnaire,
   AgentTodo,
+  AppLanguage,
   ApplyTelegramPairingRequest,
   AssignSkillRequest,
   AssignToolRequest,
@@ -35,7 +36,7 @@ import type {
   ConfigureProviderRequest,
   ConfigureProviderResponse,
   CreateProfileRequest,
-  CreateProfileWithSuperNakamaRequest,
+  CreateProfileWithSuperAirinRequest,
   CreateProviderRequest,
   CreateProviderResponse,
   CreateSkillRequest,
@@ -133,8 +134,9 @@ import type {
   WebSearchSettingsResponse,
   WhatsAppSettingsResponse,
   XaiOAuthCredentials,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   apiKeyEnvVarForProvider,
   appendOrgMemorySection,
   applyChatgptOAuthToInstance,
@@ -179,6 +181,7 @@ import {
   loadTelegramConfigFile,
   loadTelegramSettingsPublic,
   loadUserConfig,
+  loadUserLanguage,
   loadUserThinkingSettings,
   loadUserTimezone,
   loadUserTranscriptionSettings,
@@ -187,7 +190,6 @@ import {
   loadWhatsAppSettingsPublic,
   MODEL_CONNECTION_CLOSED_MESSAGE,
   messageContentHasImages,
-  NakamaApiError,
   nanoid,
   normalizeBaseUrl,
   normalizeUserContextContent,
@@ -222,6 +224,7 @@ import {
   saveErrorTrackingTestResult,
   saveTelegramConfig,
   saveUserConfig,
+  saveUserLanguage,
   saveUserThinkingSettings,
   saveUserTimezone,
   saveWebSearchConfig,
@@ -233,21 +236,21 @@ import {
   WRITABLE_SOUL_FILES,
   writeArtifactFile,
   writeSoulFile,
-} from "@nakama/core";
-import { findAgentQuestionnaireAnswers } from "@nakama/core/agent-questionnaire";
-import { isDocxFile, isLegacyDocFile } from "@nakama/core/artifact-mime";
+} from "@airin/core";
+import { findAgentQuestionnaireAnswers } from "@airin/core/agent-questionnaire";
+import { isDocxFile, isLegacyDocFile } from "@airin/core/artifact-mime";
 import {
   type ChannelConfigScope,
   isChannelOwner,
-} from "@nakama/core/channel-config-shared";
+} from "@airin/core/channel-config-shared";
 import {
   commandCodeModelSupportsVision,
   defaultDiscoveryBaseUrl,
   isDiscoveryModelProvider,
-} from "@nakama/core/discovery-providers";
-import { convertDocxToMarkdown } from "@nakama/core/docx-text";
-import { readTextIfExists } from "@nakama/core/fs";
-import { canAccessSuperNakamaProfile } from "@nakama/core/profiles";
+} from "@airin/core/discovery-providers";
+import { convertDocxToMarkdown } from "@airin/core/docx-text";
+import { readTextIfExists } from "@airin/core/fs";
+import { canAccessSuperAirinProfile } from "@airin/core/profiles";
 import {
   type DatabaseAdapter,
   mergeWorkspaceSettings,
@@ -256,9 +259,9 @@ import {
   type StoredSessionRecord,
   type StoredSessionSummaryRecord,
   type StoredToolRecord,
-  SUPER_NAKAMA_TEAM_RULES,
-  SUPER_NAKAMA_TOOL_AUTHORING_RULES,
-} from "@nakama/db";
+  SUPER_AIRIN_TEAM_RULES,
+  SUPER_AIRIN_TOOL_AUTHORING_RULES,
+} from "@airin/db";
 import { z } from "zod";
 import {
   AVAILABLE_MODELS,
@@ -314,6 +317,7 @@ import {
   createSendDiscordArtifactTools,
   sendWhatsAppArtifactTool,
 } from "../tools/send-discord-artifact-tool";
+import { SEND_TO_BOT_TOOL_NAME } from "../tools/send-to-bot-tool";
 import {
   createLoadSkillTool,
   createSkillManageTools,
@@ -331,7 +335,7 @@ import {
   type SubAgentRunResult,
 } from "../tools/sub-agent-shared";
 import { SUB_AGENT_TOOL_NAME } from "../tools/sub-agent-tool";
-import { createSuperNakamaTools } from "../tools/super-nakama-tools";
+import { createSuperAirinTools } from "../tools/super-airin-tools";
 import { createTodoTools } from "../tools/todo-tools";
 import {
   getAgentBrowserStatus,
@@ -431,7 +435,7 @@ import { SkillPostTurnReviewService } from "./skill-post-turn-review-service";
 import type { SkillProposalService } from "./skill-proposal-service";
 import type { SkillSuggestionService } from "./skill-suggestion-service";
 import type { SkillsService } from "./skills-service";
-import { SuperNakamaSessionState } from "./super-nakama-session-state";
+import { SuperAirinSessionState } from "./super-airin-session-state";
 import { telegramManagedBotPairing } from "./telegram-managed-bot-pairing";
 import {
   resolveProfileStoredTools,
@@ -454,7 +458,7 @@ export type { SubAgentRunInput, SubAgentRunResult };
 export interface CreateSessionOptions {
   codingWorkspaceRoot?: string;
   cognito?: boolean;
-  excludeSuperNakama?: boolean;
+  excludeSuperAirin?: boolean;
   isPlatformAdmin?: boolean;
   model?: string | null;
   orgRole?: OrgRole | null;
@@ -474,7 +478,7 @@ const MAX_CHILD_SESSIONS = 5;
 
 type ChatProfileAccess = Pick<
   CreateSessionOptions,
-  "excludeSuperNakama" | "isPlatformAdmin" | "orgRole"
+  "excludeSuperAirin" | "isPlatformAdmin" | "orgRole"
 > & { user?: { id: string } };
 
 /**
@@ -540,7 +544,7 @@ async function checkApiKey(
 // Only a key the provider refuses stops a save; an outage does not.
 async function rejectRefusedApiKey(instance: ProviderInstance): Promise<void> {
   if ((await checkApiKey(instance)) === "rejected") {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `${instance.label} rejected this API key. Check the key and try again.`,
       400
     );
@@ -553,10 +557,10 @@ export class AgentService {
   /** The one group service; its in-memory run state lives as long as this. */
   readonly groups: AgentGroupService;
   private readonly profileService: ProfileService;
-  private readonly superNakamaSessionState = new SuperNakamaSessionState();
+  private readonly superAirinSessionState = new SuperAirinSessionState();
   private readonly agentTodoState: AgentTodoState;
   private readonly agentQuestionnaireState: AgentQuestionnaireState;
-  private readonly superNakamaTools: ToolDefinition[];
+  private readonly superAirinTools: ToolDefinition[];
   private readonly orgMemoryTools: ToolDefinition[];
   private automationTools: ToolDefinition[] = [];
   private automationRunHistoryTools: ToolDefinition[] = [];
@@ -642,9 +646,9 @@ export class AgentService {
       this.agentQuestionnaireState
     );
     this.todoTools = createTodoTools(this.agentTodoState);
-    this.superNakamaTools = createSuperNakamaTools(
+    this.superAirinTools = createSuperAirinTools(
       this.profileService,
-      this.superNakamaSessionState,
+      this.superAirinSessionState,
       async (profileModel, context) => {
         const session =
           context.sessionId && context.orgId
@@ -853,7 +857,7 @@ export class AgentService {
         }
       } catch (error) {
         // A 4xx means the outcome was refused (e.g. old_string no longer matches), not a failure.
-        if (!(error instanceof NakamaApiError && error.status < 500)) {
+        if (!(error instanceof AirinApiError && error.status < 500)) {
           console.error(
             "Failed to record post-turn skill review outcome:",
             error
@@ -888,6 +892,20 @@ export class AgentService {
 
     if (this.userConfig) {
       this.userConfig = { ...this.userConfig, timezone: saved };
+    }
+
+    return saved;
+  }
+
+  async getUserLanguage(): Promise<AppLanguage> {
+    return this.userConfig?.language ?? loadUserLanguage();
+  }
+
+  async setUserLanguage(language: string | undefined): Promise<AppLanguage> {
+    const saved = await saveUserLanguage(language);
+
+    if (this.userConfig) {
+      this.userConfig = { ...this.userConfig, language: saved };
     }
 
     return saved;
@@ -947,7 +965,7 @@ export class AgentService {
       });
 
       if (!resolved) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Selected image parsing model is unavailable. Choose a vision-capable model.",
           400
         );
@@ -1002,7 +1020,7 @@ export class AgentService {
       });
 
       if (!resolved) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Selected audio transcription model is unavailable. Choose an OpenAI Whisper model.",
           400
         );
@@ -1042,7 +1060,7 @@ export class AgentService {
     const mediaType = input.mediaType?.trim();
 
     if (!(data && mediaType)) {
-      throw new NakamaApiError("Audio data and media type are required.", 400);
+      throw new AirinApiError("Audio data and media type are required.", 400);
     }
 
     let bytes: Buffer;
@@ -1050,17 +1068,17 @@ export class AgentService {
     try {
       bytes = Buffer.from(data, "base64");
     } catch {
-      throw new NakamaApiError("Audio data must be valid base64.", 400);
+      throw new AirinApiError("Audio data must be valid base64.", 400);
     }
 
     if (bytes.length === 0) {
-      throw new NakamaApiError("Audio data is empty.", 400);
+      throw new AirinApiError("Audio data is empty.", 400);
     }
 
     const selection = resolveTranscriptionProviderSelection(this.userConfig);
 
     if (!selection) {
-      throw new NakamaApiError(TRANSCRIPTION_MODEL_REQUIRED_MESSAGE, 400);
+      throw new AirinApiError(TRANSCRIPTION_MODEL_REQUIRED_MESSAGE, 400);
     }
 
     const text = await transcribeAudio({
@@ -1183,13 +1201,13 @@ export class AgentService {
     const prompt = input.prompt?.trim();
 
     if (!prompt) {
-      throw new NakamaApiError("Image prompt is required.", 400);
+      throw new AirinApiError("Image prompt is required.", 400);
     }
 
     const selection = resolveImageGenerationSelection(this.userConfig);
 
     if (!selection) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         imageGenerationUnavailableMessage(this.userConfig),
         400
       );
@@ -1709,7 +1727,7 @@ export class AgentService {
     input: UpdateComposioSettingsRequest
   ): Promise<ComposioSettingsResponse> {
     if (input.apiKey?.trim()) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Save the Composio key through the secret settings API.",
         400
       );
@@ -1730,7 +1748,7 @@ export class AgentService {
         ])
       ).source === "environment"
     ) {
-      throw new NakamaApiError("This key is managed by the environment.", 409);
+      throw new AirinApiError("This key is managed by the environment.", 409);
     }
 
     await this.composioService?.validateConfiguration(apiKey);
@@ -1750,7 +1768,7 @@ export class AgentService {
     const dsn = input.dsn?.trim() ?? "";
 
     if (dsn && !parseSentryDsn(dsn)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "That does not look like a Sentry-compatible DSN.",
         400
       );
@@ -1772,11 +1790,11 @@ export class AgentService {
     const { configured } = await loadErrorTrackingSettingsPublic();
 
     if (!configured) {
-      throw new NakamaApiError("Save a DSN first.", 400);
+      throw new AirinApiError("Save a DSN first.", 400);
     }
 
     const delivered = await createErrorTrackingSink()(
-      buildErrorReport(new Error("Test event from nakama"), {
+      buildErrorReport(new Error("Test event from airin"), {
         kind: "test",
         source: "settings",
       })
@@ -1791,7 +1809,7 @@ export class AgentService {
     const settings = await loadEmailSettingsPublic();
 
     const status = await this.managedSecrets?.status("global", "email", [
-      "NAKAMA_EMAIL_PASSWORD",
+      "AIRIN_EMAIL_PASSWORD",
     ]);
 
     return {
@@ -1818,11 +1836,11 @@ export class AgentService {
     if (
       (
         await this.managedSecrets.resolve("global", "email", [
-          "NAKAMA_EMAIL_PASSWORD",
+          "AIRIN_EMAIL_PASSWORD",
         ])
       ).source === "environment"
     ) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "This password is managed by the environment.",
         409
       );
@@ -1881,7 +1899,7 @@ export class AgentService {
     apiKey: string
   ): Promise<WebSearchSettingsResponse> {
     if (!(this.managedSecrets && isWebSearchProvider(provider))) {
-      throw new NakamaApiError("Invalid web search provider.", 400);
+      throw new AirinApiError("Invalid web search provider.", 400);
     }
 
     const envName = WEB_SEARCH_PROVIDER_ENV_NAMES[provider];
@@ -1893,7 +1911,7 @@ export class AgentService {
         ])
       ).source === "environment"
     ) {
-      throw new NakamaApiError("This key is managed by the environment.", 409);
+      throw new AirinApiError("This key is managed by the environment.", 409);
     }
 
     await this.managedSecrets.save("global", `web-search:${provider}`, apiKey);
@@ -1918,14 +1936,14 @@ export class AgentService {
         : null;
 
     if (kind === "web-search" && !provider) {
-      throw new NakamaApiError("Select a web search provider.", 400);
+      throw new AirinApiError("Select a web search provider.", 400);
     }
 
     const name = kind === "web-search" ? `web-search:${provider}` : kind;
 
     const envNames =
       kind === "email"
-        ? ["NAKAMA_EMAIL_PASSWORD"]
+        ? ["AIRIN_EMAIL_PASSWORD"]
         : kind === "composio"
           ? ["COMPOSIO_API_KEY"]
           : provider
@@ -1969,8 +1987,8 @@ export class AgentService {
     const sender = createSmtpSender(toMailboxConfig(config));
 
     const result = await sender.send({
-      subject: "Nakama test email",
-      text: "This is a test email from your Nakama deployment.",
+      subject: "Airin test email",
+      text: "This is a test email from your Airin deployment.",
       to,
     });
 
@@ -2211,7 +2229,7 @@ export class AgentService {
 
     // An ACP agent runs its own tools, past the read-only gate.
     if (policy.tools?.readOnly && profile.acpAgent) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "An ACP agent profile cannot be rerun read-only.",
         409
       );
@@ -2235,6 +2253,7 @@ export class AgentService {
     );
 
     const userTimezone = await this.getUserTimezone();
+    const userLanguage = await this.getUserLanguage();
     const userContext = await this.loadUserContextForUser(orgId, userId);
 
     const toolContext = buildToolExecutionContext({
@@ -2274,6 +2293,7 @@ export class AgentService {
         toolContext,
         tools,
         userContext,
+        userLanguage,
         userTimezone,
       });
 
@@ -2523,7 +2543,7 @@ export class AgentService {
 
     if (!this._providerConfigured) {
       close();
-      throw new NakamaApiError("Provider is not configured.", 409);
+      throw new AirinApiError("Provider is not configured.", 409);
     }
 
     try {
@@ -2547,6 +2567,11 @@ export class AgentService {
   }
 
   runSubAgentPrompt(input: SubAgentRunInput): Promise<SubAgentRunResult> {
+    return this.runOneShotTurn(input, "sub_agent", () => []);
+  }
+
+  /** Cross-profile A2A hop; uses the same one-shot path as sub_agent. */
+  runSendToBotPrompt(input: SubAgentRunInput): Promise<SubAgentRunResult> {
     return this.runOneShotTurn(input, "sub_agent", () => []);
   }
 
@@ -2826,17 +2851,17 @@ export class AgentService {
     access: Pick<CreateSessionOptions, "isPlatformAdmin" | "orgRole">
   ): Promise<string> {
     if (this.sessions.isCognito(parentSessionId)) {
-      throw new NakamaApiError("A cognito chat cannot start other chats.", 400);
+      throw new AirinApiError("A cognito chat cannot start other chats.", 400);
     }
 
     const parent = await this.getSessionRecordForOrg(parentSessionId, orgId);
 
     if (!parent) {
-      throw new NakamaApiError("Session not found.", 404);
+      throw new AirinApiError("Session not found.", 404);
     }
 
     if (sessionKind(parent) === "child") {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "A chat started from another chat cannot start more chats.",
         400
       );
@@ -2874,7 +2899,7 @@ export class AgentService {
     ).filter((child) => sessionKind(child) === "child" && !child.closedAt);
 
     if (openChildren.length >= MAX_CHILD_SESSIONS) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `This chat already has ${MAX_CHILD_SESSIONS} open chats.`,
         400
       );
@@ -2904,7 +2929,7 @@ export class AgentService {
       return;
     }
 
-    throw new NakamaApiError("Session not found", 404);
+    throw new AirinApiError("Session not found", 404);
   }
 
   /** The caller already scoped `record` to the org; its parent is in it too. */
@@ -2937,7 +2962,7 @@ export class AgentService {
 
       // Only the local CLI can set this folder, so only it can run tools there.
       if (options.localClient === false && record.codingWorkspaceRoot) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "This chat runs in a local folder. Continue it from the CLI.",
           403
         );
@@ -3008,7 +3033,7 @@ export class AgentService {
         isLegacyDocFile(record.filename ?? "", record.mediaType));
 
     if (options.preview && !renderWord && record.sizeBytes > 8 * 1024 * 1024) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "This file exceeds the 8 MB preview limit. Download it instead.",
         413
       );
@@ -3027,7 +3052,7 @@ export class AgentService {
       const bytes = Buffer.from(markdown, "utf8");
 
       if (bytes.byteLength > 8 * 1024 * 1024) {
-        throw new NakamaApiError("Preview exceeds the byte limit.", 413);
+        throw new AirinApiError("Preview exceeds the byte limit.", 413);
       }
 
       return { ...attachment, bytes, mediaType: "text/markdown" };
@@ -3042,12 +3067,9 @@ export class AgentService {
   ): void {
     if (
       profile.isSuper &&
-      (access.excludeSuperNakama || !canAccessSuperNakamaProfile(access))
+      (access.excludeSuperAirin || !canAccessSuperAirinProfile(access))
     ) {
-      throw new NakamaApiError(
-        "Super Nakama is only available to org admins.",
-        403
-      );
+      throw new AirinApiError("Airin is only available to org admins.", 403);
     }
 
     if (
@@ -3055,7 +3077,7 @@ export class AgentService {
       !access.isPlatformAdmin &&
       profile.ownerUserId !== access.user?.id
     ) {
-      throw new NakamaApiError("This agent is private.", 403);
+      throw new AirinApiError("This agent is private.", 403);
     }
   }
 
@@ -3068,7 +3090,7 @@ export class AgentService {
     entry: EphemeralSession
   ): Promise<void> {
     entry.session.clear();
-    this.superNakamaSessionState.clearSession(entry.record.id);
+    this.superAirinSessionState.clearSession(entry.record.id);
     this.agentTodoState.clearSession(entry.record.id);
     this.agentQuestionnaireState.clearSession(entry.record.id);
 
@@ -3234,7 +3256,7 @@ export class AgentService {
     }
 
     if (!Number.isInteger(messageIndex) || messageIndex < 0) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "messageIndex must be a non-negative integer.",
         400
       );
@@ -3243,7 +3265,7 @@ export class AgentService {
     const sourceMessages = await this.db.listMessagesForSession(sessionId);
 
     if (messageIndex >= sourceMessages.length) {
-      throw new NakamaApiError("messageIndex is out of bounds.", 400);
+      throw new AirinApiError("messageIndex is out of bounds.", 400);
     }
 
     const nextSessionId = nanoid();
@@ -3408,7 +3430,7 @@ export class AgentService {
 
     discardInFlightSessionWrites(sessionId);
     await this.sessions.end(sessionId);
-    this.superNakamaSessionState.clearSession(sessionId);
+    this.superAirinSessionState.clearSession(sessionId);
     this.agentTodoState.clearSession(sessionId);
     this.agentQuestionnaireState.clearSession(sessionId);
     await deleteSessionHistoryArchive(orgId, sessionId);
@@ -3446,7 +3468,7 @@ export class AgentService {
     const turn = sessionTurnRegistry.beginTurn(sessionId);
 
     if (!turn.started) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Wait for the current response before changing chat settings.",
         409
       );
@@ -3515,7 +3537,7 @@ export class AgentService {
     access: ChatProfileAccess
   ): Promise<boolean> {
     if (this.sessions.isCognito(sessionId)) {
-      throw new NakamaApiError("An incognito chat cannot be closed.", 400);
+      throw new AirinApiError("An incognito chat cannot be closed.", 400);
     }
 
     const record = await this.getSessionRecordForOrg(sessionId, orgId);
@@ -3541,7 +3563,7 @@ export class AgentService {
         (await this.isChildOfSharedChat(record))
       )
     ) {
-      throw new NakamaApiError("Session not found", 404);
+      throw new AirinApiError("Session not found", 404);
     }
 
     const closedAt = new Date().toISOString();
@@ -3605,7 +3627,7 @@ export class AgentService {
 
     // Its parent is what shares it; without one, members lose it.
     if (await this.isChildOfSharedChat(record)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "A chat started from a shared chat cannot leave it.",
         400
       );
@@ -3623,7 +3645,7 @@ export class AgentService {
     const userId = access.user?.id;
 
     if (!userId || new Set(sessionIds).size !== sessionIds.length) {
-      throw new NakamaApiError("Invalid session order.", 400);
+      throw new AirinApiError("Invalid session order.", 400);
     }
 
     const { sessions } = await this.listSessions(
@@ -3636,7 +3658,7 @@ export class AgentService {
     const visibleIds = new Set(sessions.map((session) => session.id));
 
     if (sessionIds.some((id) => !visibleIds.has(id))) {
-      throw new NakamaApiError("Invalid session order.", 400);
+      throw new AirinApiError("Invalid session order.", 400);
     }
 
     await this.db.setSessionOrder(userId, sessionIds);
@@ -3803,7 +3825,7 @@ export class AgentService {
     const profile = await this.requireProfile(orgId, profileId);
 
     if (await this.db.getSharedAgentInstance(orgId, profileId)) {
-      throw new NakamaApiError("Shared agent configuration is read-only.", 403);
+      throw new AirinApiError("Shared agent configuration is read-only.", 403);
     }
 
     await this.registerAcpDraftTools(orgId, profile);
@@ -3877,7 +3899,7 @@ export class AgentService {
       const apiKey = request.apiKey?.trim() ?? "";
 
       if (!apiKey) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "API key is required to discover Fireworks models.",
           400
         );
@@ -3922,7 +3944,7 @@ export class AgentService {
       const baseUrl = resolveCloudflareAccountInput(request.baseUrl ?? "");
 
       if (!(apiKey && baseUrl)) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "An API key and account ID are required to discover Cloudflare models.",
           400
         );
@@ -3961,14 +3983,14 @@ export class AgentService {
     const apiKey = request.apiKey?.trim() ?? "";
 
     if (isNetra && !apiKey) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "API key is required to discover Netra models.",
         400
       );
     }
 
     if (!baseUrl) {
-      throw new NakamaApiError("baseUrl or providerId is required.", 400);
+      throw new AirinApiError("baseUrl or providerId is required.", 400);
     }
 
     const entries = isNetra
@@ -4026,7 +4048,7 @@ export class AgentService {
     );
 
     if (!instance) {
-      throw new NakamaApiError("Provider not found.", 404);
+      throw new AirinApiError("Provider not found.", 404);
     }
 
     if (instance.type === "ollama" || isDiscoveryModelProvider(instance.type)) {
@@ -4050,7 +4072,7 @@ export class AgentService {
         ollamaRequiresApiKey(hostMode!) &&
         !apiKey.trim()
       ) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Add an API key before discovering Ollama Cloud models.",
           400
         );
@@ -4065,7 +4087,7 @@ export class AgentService {
           : (defaultDiscoveryBaseUrl(instance.type) ?? ""));
 
       if (!baseUrl) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "A base URL is required to discover models.",
           400
         );
@@ -4118,7 +4140,7 @@ export class AgentService {
         "";
 
       if (!apiKey.trim()) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Add an API key before discovering Fireworks models.",
           400
         );
@@ -4157,7 +4179,7 @@ export class AgentService {
         (accountId ? cloudflareBaseUrlFromAccountId(accountId) : "");
 
       if (!(apiKey && baseUrl)) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Add an API key and account ID before discovering Cloudflare models.",
           400
         );
@@ -4205,7 +4227,7 @@ export class AgentService {
       let oauth = readChatgptOAuthFromInstance(instance);
 
       if (!oauth) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Sign in with ChatGPT before discovering models.",
           400
         );
@@ -4234,17 +4256,14 @@ export class AgentService {
     }
 
     if (instance.type !== "openai") {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Remote model discovery is not supported for ${instance.type}.`,
         400
       );
     }
 
     if (!instance.apiKey.trim()) {
-      throw new NakamaApiError(
-        "Add an API key before discovering models.",
-        400
-      );
+      throw new AirinApiError("Add an API key before discovering models.", 400);
     }
 
     const baseUrl = instance.baseUrl?.trim() || "https://api.openai.com/v1";
@@ -4295,7 +4314,7 @@ export class AgentService {
     const instance = findProviderInstance(this.userConfig, providerId);
 
     if (!instance) {
-      throw new NakamaApiError("Provider not found.", 404);
+      throw new AirinApiError("Provider not found.", 404);
     }
 
     return { status: await checkApiKey(instance) };
@@ -4340,7 +4359,7 @@ export class AgentService {
     request: CreateProviderRequest
   ): Promise<CreateProviderResponse> {
     if (request.apiKey?.trim()) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Save the API key through the secret settings API.",
         400
       );
@@ -4392,7 +4411,7 @@ export class AgentService {
     request: UpdateProviderRequest
   ): Promise<UpdateProviderResponse> {
     if (request.apiKey?.trim()) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Save the API key through the secret settings API.",
         400
       );
@@ -4437,7 +4456,7 @@ export class AgentService {
   ): Promise<DeleteProviderResponse> {
     return providerPublicationLock.withLock("providers", async () => {
       if (!findProviderInstance(this.userConfig, providerId)) {
-        throw new NakamaApiError("Provider not found.", 404);
+        throw new AirinApiError("Provider not found.", 404);
       }
 
       const config = { ...this.userConfig!, defaultProviderId: providerId };
@@ -4803,13 +4822,13 @@ export class AgentService {
     apiKey: string
   ): Promise<UpdateProviderResponse> {
     if (!apiKey?.trim()) {
-      throw new NakamaApiError("Enter an API key.", 400);
+      throw new AirinApiError("Enter an API key.", 400);
     }
 
     const current = findProviderInstance(this.userConfig, providerId);
 
     if (!(current && this.managedSecrets)) {
-      throw new NakamaApiError("Provider not found.", 404);
+      throw new AirinApiError("Provider not found.", 404);
     }
 
     const envNames = providerSecretEnvNames(providerId, current.type);
@@ -4823,7 +4842,7 @@ export class AgentService {
         )
       ).source === "environment"
     ) {
-      throw new NakamaApiError("This key is managed by the environment.", 409);
+      throw new AirinApiError("This key is managed by the environment.", 409);
     }
 
     const updated = applyProviderInstanceUpdate(current, { apiKey });
@@ -4841,14 +4860,14 @@ export class AgentService {
           updated.apiKey
         );
       } catch (error) {
-        if (error instanceof NakamaApiError && error.status === 400) {
+        if (error instanceof AirinApiError && error.status === 400) {
           throw error;
         }
 
         const provider = createProviderForInstance(updated, model);
 
         if (!provider) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "Netra provider could not be initialized.",
             400
           );
@@ -4861,7 +4880,7 @@ export class AgentService {
       }
 
       if (discovered && !discovered.some((entry) => entry.id === model)) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "The selected Netra model is not available to this API key.",
           400
         );
@@ -4912,7 +4931,7 @@ export class AgentService {
     const current = findProviderInstance(this.userConfig, providerId);
 
     if (!(current && this.managedSecrets)) {
-      throw new NakamaApiError("Provider not found.", 404);
+      throw new AirinApiError("Provider not found.", 404);
     }
 
     const envNames = providerSecretEnvNames(providerId, current.type);
@@ -4990,16 +5009,16 @@ export class AgentService {
     return this.profileService.createProfile(orgId, request, owner);
   }
 
-  async createProfileWithSuperNakama(
+  async createProfileWithSuperAirin(
     orgId: string,
-    request: CreateProfileWithSuperNakamaRequest
+    request: CreateProfileWithSuperAirinRequest
   ): Promise<ProfileResponse> {
-    const superNakama = (await this.db.listProfilesForOrg(orgId)).find(
+    const superAirin = (await this.db.listProfilesForOrg(orgId)).find(
       (profile) => profile.isSuper
     );
 
-    if (!superNakama) {
-      throw new Error("Super Nakama is not available in this organization.");
+    if (!superAirin) {
+      throw new Error("Airin is not available in this organization.");
     }
 
     const nameLine = request.name
@@ -5010,7 +5029,7 @@ export class AgentService {
 
     await this.runAutomationPrompt(
       orgId,
-      superNakama.id,
+      superAirin.id,
       [
         "Create one new agent for the request below. Do not ask for confirmation. Call create_profile exactly once with name and soulFiles (SOUL.md and INSTRUCTIONS.md), then stop.",
         nameLine,
@@ -5039,7 +5058,7 @@ export class AgentService {
     );
 
     if (!createdProfileId) {
-      throw new Error("Super Nakama did not create an agent.");
+      throw new Error("Airin did not create an agent.");
     }
 
     return this.profileService.getProfile(orgId, createdProfileId);
@@ -5135,7 +5154,7 @@ export class AgentService {
     const record = await this.db.getTool(toolId);
 
     if (!record) {
-      throw new NakamaApiError("Tool not found.", 404);
+      throw new AirinApiError("Tool not found.", 404);
     }
 
     const profileId = await this.resolvePlaygroundProfileId(
@@ -5660,7 +5679,7 @@ export class AgentService {
       key !== "memory" &&
       (await this.db.getSharedAgentInstance(orgId, profileId))
     ) {
-      throw new NakamaApiError("Shared agent configuration is read-only.", 403);
+      throw new AirinApiError("Shared agent configuration is read-only.", 403);
     }
 
     const field = soulFieldFromKey(key);
@@ -5853,7 +5872,7 @@ export class AgentService {
       : null;
 
     if (record?.userId !== createdByUserId) {
-      throw new NakamaApiError("Forbidden", 403);
+      throw new AirinApiError("Forbidden", 403);
     }
   }
 
@@ -6049,7 +6068,7 @@ export class AgentService {
     }
 
     if (await this.db.getSharedAgentInstance(orgId, profileId)) {
-      throw new NakamaApiError("Shared agent is unavailable.", 503);
+      throw new AirinApiError("Shared agent is unavailable.", 503);
     }
 
     return null;
@@ -6102,7 +6121,7 @@ export class AgentService {
     }
 
     if (new Set(records.map((record) => record.name)).size !== records.length) {
-      throw new NakamaApiError("Conflicting tool names are assigned.", 409);
+      throw new AirinApiError("Conflicting tool names are assigned.", 409);
     }
 
     const team = await this.db.getOrganizationById(orgId);
@@ -6118,7 +6137,7 @@ export class AgentService {
       parent.parentOrgId ||
       foreign.some((record) => record.orgId !== parent.id)
     ) {
-      throw new NakamaApiError("Tool is unavailable.", 404);
+      throw new AirinApiError("Tool is unavailable.", 404);
     }
 
     const catalog = await this.db.listOrgSharedResources(parent.id);
@@ -6130,7 +6149,7 @@ export class AgentService {
       );
 
       if (!detail) {
-        throw new NakamaApiError("Tool is unavailable.", 404);
+        throw new AirinApiError("Tool is unavailable.", 404);
       }
 
       return detail.id;
@@ -6146,7 +6165,7 @@ export class AgentService {
     const profile = await this.db.getProfileForOrg(profileId, orgId);
 
     if (!profile) {
-      throw new NakamaApiError("Profile not found.", 404);
+      throw new AirinApiError("Profile not found.", 404);
     }
 
     return profile;
@@ -6274,7 +6293,7 @@ export class AgentService {
               context.orgId !== profile.orgId ||
               context.profileId !== profile.id
             ) {
-              throw new NakamaApiError("Tool is unavailable.", 404);
+              throw new AirinApiError("Tool is unavailable.", 404);
             }
 
             const current = await this.resolveSharedAgentProfile(
@@ -6283,7 +6302,7 @@ export class AgentService {
             );
 
             if (shared && !current) {
-              throw new NakamaApiError("Tool is unavailable.", 404);
+              throw new AirinApiError("Tool is unavailable.", 404);
             }
 
             const currentRecords =
@@ -6301,7 +6320,7 @@ export class AgentService {
 
             // A new handler needs a new approval policy before execution.
             if (!assigned || assigned.handlerType !== record.handlerType) {
-              throw new NakamaApiError("Tool is unavailable.", 404);
+              throw new AirinApiError("Tool is unavailable.", 404);
             }
 
             const [definition] = await resolveProfileStoredTools(
@@ -6324,7 +6343,7 @@ export class AgentService {
             );
 
             if (!definition) {
-              throw new NakamaApiError("Tool is unavailable.", 404);
+              throw new AirinApiError("Tool is unavailable.", 404);
             }
 
             return definition.run(
@@ -6368,7 +6387,7 @@ export class AgentService {
 
       const discoveryAccess =
         policy.mcpDiscovery &&
-        process.env.NAKAMA_MCP_TOOL_DISCOVERY === "1" &&
+        process.env.AIRIN_MCP_TOOL_DISCOVERY === "1" &&
         !profile.acpAgent
           ? async (
               serverId: string,
@@ -6418,7 +6437,7 @@ export class AgentService {
                   context.orgId !== orgId ||
                   context.profileId !== profile.id
                 ) {
-                  throw new NakamaApiError("Tool is unavailable.", 404);
+                  throw new AirinApiError("Tool is unavailable.", 404);
                 }
 
                 const current = await this.resolveSharedAgentProfile(
@@ -6442,7 +6461,7 @@ export class AgentService {
                   ).find((item) => item.name === tool.name);
 
                 if (!definition) {
-                  throw new NakamaApiError("Tool is unavailable.", 404);
+                  throw new AirinApiError("Tool is unavailable.", 404);
                 }
 
                 return definition.run(
@@ -6596,12 +6615,12 @@ export class AgentService {
       }
     }
 
-    // Super Nakama and org memory tools are not in the picker, so a limit
+    // Airin and org memory tools are not in the picker, so a limit
     // leaves them out too.
     if (!limit && profile.isSuper) {
       resolved = [
         ...resolved,
-        ...this.superNakamaTools.filter(
+        ...this.superAirinTools.filter(
           (tool) =>
             tool.name !== "create_group" || profile.groupsEnabled !== false
         ),
@@ -6616,7 +6635,7 @@ export class AgentService {
       // Any agent given create-plugin hands its draft to the same admin review.
       resolved = [
         ...resolved,
-        ...this.superNakamaTools.filter(
+        ...this.superAirinTools.filter(
           (tool) => tool.name === "submit_plugin_draft"
         ),
       ];
@@ -6643,11 +6662,22 @@ export class AgentService {
       resolved = resolved.filter((tool) => tool.name !== SUB_AGENT_TOOL_NAME);
     }
 
+    // Cross-profile A2A: inject on any non-limited, non-read-only turn. The
+    // tool itself caps nesting with MAX_SEND_TO_BOT_DEPTH.
+    if (limit || policy.readOnly) {
+      resolved = resolved.filter((tool) => tool.name !== SEND_TO_BOT_TOOL_NAME);
+    } else if (
+      this.serverTools.sendToBot &&
+      !resolved.some((tool) => tool.name === SEND_TO_BOT_TOOL_NAME)
+    ) {
+      resolved = [...resolved, this.serverTools.sendToBot];
+    }
+
     if (
       guarded &&
       new Set(resolved.map((tool) => tool.name)).size !== resolved.length
     ) {
-      throw new NakamaApiError("Conflicting tool names are assigned.", 409);
+      throw new AirinApiError("Conflicting tool names are assigned.", 409);
     }
 
     return policy.readOnly
@@ -6743,7 +6773,7 @@ export class AgentService {
     );
 
     const basePrompt = profile.isSuper
-      ? `${systemPrompt.trim()}\n\n${SUPER_NAKAMA_TOOL_AUTHORING_RULES}\n\n${SUPER_NAKAMA_TEAM_RULES}`
+      ? `${systemPrompt.trim()}\n\n${SUPER_AIRIN_TOOL_AUTHORING_RULES}\n\n${SUPER_AIRIN_TEAM_RULES}`
       : systemPrompt;
 
     const resolvedSystemPrompt = withTurnInstructions(
@@ -6759,6 +6789,7 @@ export class AgentService {
       : await loadSessionHistory(this.db, sessionId);
 
     const userTimezone = await this.getUserTimezone();
+    const userLanguage = await this.getUserLanguage();
     const userContext = await this.loadUserContextForUser(orgId, userId);
 
     const compaction = await compactionLookup;
@@ -6894,7 +6925,7 @@ export class AgentService {
         const visionSelection = resolveVisionProviderSelection(this.userConfig);
 
         if (!visionSelection) {
-          throw new NakamaApiError(VISION_MODEL_REQUIRED_MESSAGE, 400);
+          throw new AirinApiError(VISION_MODEL_REQUIRED_MESSAGE, 400);
         }
 
         let visionProvider = createProviderForInstance(
@@ -6912,7 +6943,7 @@ export class AgentService {
         );
 
         if (!visionProvider) {
-          throw new NakamaApiError(VISION_MODEL_REQUIRED_MESSAGE, 400);
+          throw new AirinApiError(VISION_MODEL_REQUIRED_MESSAGE, 400);
         }
 
         if (this.llmUsageTracker) {
@@ -7065,6 +7096,7 @@ export class AgentService {
       toolContext,
       tools,
       userContext,
+      userLanguage,
       userTimezone,
     });
 
@@ -7076,7 +7108,7 @@ export class AgentService {
 
     const persistedSession = wrapPersistedSession(sessionId, session, this.db, {
       onBeginTurn: (id) => {
-        this.superNakamaSessionState.beginTurn(id);
+        this.superAirinSessionState.beginTurn(id);
         void this.agentQuestionnaireState.clear(id);
       },
     });
@@ -7420,7 +7452,7 @@ export class AgentService {
     if (
       !(resolved && modelExistsOnInstance(resolved.instance, resolved.modelId))
     ) {
-      throw new NakamaApiError("Select a configured model.", 400);
+      throw new AirinApiError("Select a configured model.", 400);
     }
 
     return `${resolved.instance.id}::${resolved.modelId}`;
@@ -7525,18 +7557,18 @@ function acpOptionsForProfile(
   sessionKey: string
 ): AcpProviderOptions {
   if (!profile.acpAgent) {
-    throw new NakamaApiError("This profile does not use an ACP agent.", 400);
+    throw new AirinApiError("This profile does not use an ACP agent.", 400);
   }
 
   if (!profile.orgId) {
-    throw new NakamaApiError("Profile has no organization.", 400);
+    throw new AirinApiError("Profile has no organization.", 400);
   }
 
   return {
     agent: profile.acpAgent,
     cwd: getProfileSoulDir(profile.orgId, profile.id),
     initialSettings: profile.acpSettings ?? {},
-    // Every ACP session gets the Nakama tools, including ones created by a settings call.
+    // Every ACP session gets the Airin tools, including ones created by a settings call.
     mcpServers: [acpMcpServerFor(sessionKey)],
     sessionKey,
   };
@@ -7575,7 +7607,7 @@ const REGRESSION_RERUN_TIMEOUT_MS = 10 * 60_000;
 /**
  * What a member sees when a started rerun fails. Provider and tool errors can
  * hold keys, hosts or paths, so no error message passes through. A provider's
- * HTTP error is a NakamaApiError too, with the provider's raw body as its text.
+ * HTTP error is a AirinApiError too, with the provider's raw body as its text.
  */
 function regressionRerunError<ErrorValue>(
   error: ErrorValue,
@@ -7594,7 +7626,7 @@ function regressionRerunError<ErrorValue>(
   }
 
   // Providers map their own 429 to 502, so a 429 is the org's LLM quota.
-  if (error instanceof NakamaApiError && error.status === 429) {
+  if (error instanceof AirinApiError && error.status === 429) {
     return "The monthly LLM quota is reached.";
   }
 
@@ -7676,5 +7708,5 @@ function decodeSessionCursor(cursor: string): SessionCursor {
     // Not base64url JSON, so it is not one of ours either.
   }
 
-  throw new NakamaApiError("Invalid cursor.", 400);
+  throw new AirinApiError("Invalid cursor.", 400);
 }

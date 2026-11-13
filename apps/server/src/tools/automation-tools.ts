@@ -4,7 +4,7 @@ import {
   requireToolOrgMember,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 import type { AutomationRunner } from "../services/automation-runner";
 import type { AutomationService } from "../services/automation-service";
@@ -68,7 +68,7 @@ export function createAutomationTools(
           },
           profileId: {
             description:
-              "Optional org profile id to run as. Omit to use the current chat profile. Super Nakama requires org admin or platform admin.",
+              "Optional org profile id to run as. Omit to use the current chat profile. Airin requires org admin or platform admin.",
             type: "string",
           },
           prompt: {

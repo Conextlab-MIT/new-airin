@@ -182,7 +182,7 @@ export function checkManifest(manifest, packageJson, draftId) {
     problems.push("description: replace the template text");
   }
 
-  for (const field of ["version", "minNakamaVersion"]) {
+  for (const field of ["version", "minAirinVersion"]) {
     if (!(isText(m[field]) && SEMVER.test(m[field]))) {
       problems.push(`${field}: must be a version such as 1.0.0`);
     }
@@ -389,21 +389,21 @@ const JSX_RULES = [
     "use the ctx.ui component, not a plain HTML control",
   ],
   [
-    /from\s+["'](react|react-dom|@nakama\/[^"']*)["']/g,
-    "do not import React or Nakama packages; use ctx.React and ctx.ui",
+    /from\s+["'](react|react-dom|@airin\/[^"']*)["']/g,
+    "do not import React or Airin packages; use ctx.React and ctx.ui",
   ],
   [
     /\b(const|let|var)\s+React\s*=/g,
     "do not shadow React; keep the template's module-level `let React` set in apply",
   ],
-  [/\b(toast|cn)\(/g, "not available in plugins; see src/nakama-plugin.d.ts"],
+  [/\b(toast|cn)\(/g, "not available in plugins; see src/airin-plugin.d.ts"],
   [
     /className="(?:[^"]*\s)?(?:flex|grid|gap|p[xytblr]?|m[xytblr]?|w|h|text|bg|border|rounded)-[a-z0-9]/g,
     "Tailwind classes do not work in plugins; use src/ui.css",
   ],
 ];
 
-/** Page code that breaks the Nakama style rules in SKILL.md. */
+/** Page code that breaks the Airin style rules in SKILL.md. */
 function lintPage(file, source) {
   const problems = [];
 
@@ -450,7 +450,7 @@ function lintCss(file, source, pluginId) {
     ],
     [/\b(rgba?|hsla?)\(/g, "use a host color variable, not a raw color"],
     [/gradient\(/g, "no gradients"],
-    [/box-shadow\s*:(?!\s*none)/g, "no shadows; Nakama pages use borders"],
+    [/box-shadow\s*:(?!\s*none)/g, "no shadows; Airin pages use borders"],
     [/\b9{3,}px/g, "no pill shapes; use var(--n-radius) or var(--n-radius-sm)"],
     [/text-transform\s*:\s*uppercase/g, "no all-caps labels"],
     [/letter-spacing\s*:/g, "no letter-spaced labels"],
@@ -529,7 +529,7 @@ export async function buildDraft(draft) {
   let failed = false;
 
   const manifest = await readJson(
-    path.join(draft, "nakama.plugin.json"),
+    path.join(draft, "airin.plugin.json"),
     problems
   );
 

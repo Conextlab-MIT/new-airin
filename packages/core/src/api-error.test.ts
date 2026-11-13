@@ -24,7 +24,7 @@ describe("readApiErrorMessage", () => {
     const response = new Response("", { status: 500 });
 
     await expect(readApiErrorMessage(response)).resolves.toBe(
-      "The server encountered an error. Try again or restart the Nakama server."
+      "The server encountered an error. Try again or restart the Airin server."
     );
   });
 
@@ -35,7 +35,7 @@ describe("readApiErrorMessage", () => {
     });
 
     await expect(readApiErrorMessage(response)).resolves.toBe(
-      "The Nakama server is unavailable. Make sure it is running."
+      "The Airin server is unavailable. Make sure it is running."
     );
   });
 });
@@ -54,7 +54,7 @@ describe("formatAutomationRunError", () => {
 describe("formatServerError", () => {
   test("never leaks a plain Error's message", () => {
     const error = new Error(
-      "SQLITE_CONSTRAINT: UNIQUE constraint failed at /home/nakama/.config/nakama/nakama.db"
+      "SQLITE_CONSTRAINT: UNIQUE constraint failed at /home/airin/.config/airin/airin.db"
     );
 
     expect(formatServerError(error)).toBe(

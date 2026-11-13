@@ -5,7 +5,7 @@ import type {
   StoredAutomation,
   TelegramOutboundAdapter,
   WhatsAppOutboundAdapter,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   createDiscordOutboundAdapter,
   createEmailOutboundAdapter,
@@ -14,8 +14,8 @@ import {
   formatAutomationDeliveryMessage,
   shouldDeliverForRun,
   truncateForChannel,
-} from "@nakama/core";
-import { escapeTelegramMarkdown } from "@nakama/core/telegram-rich-text";
+} from "@airin/core";
+import { escapeTelegramMarkdown } from "@airin/core/telegram-rich-text";
 import type { AutomationService } from "./automation-service";
 
 export interface AutomationDeliveryServiceOptions {

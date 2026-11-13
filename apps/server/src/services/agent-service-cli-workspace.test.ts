@@ -2,8 +2,8 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import * as core from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import * as core from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "./agent-service";
 import { createDefaultProfile } from "./agent-service-test-fixtures";
 
@@ -14,7 +14,7 @@ describe("AgentService CLI coding workspace", () => {
     const db = createInMemoryDatabaseAdapter();
     await db.upsertProfile(createDefaultProfile());
     const service = new AgentService(null, null, db);
-    const repo = mkdtempSync(path.join(tmpdir(), "nakama-cli-repo-"));
+    const repo = mkdtempSync(path.join(tmpdir(), "airin-cli-repo-"));
 
     using buildContext = spyOn(core, "buildToolExecutionContext");
 
@@ -71,7 +71,7 @@ describe("AgentService CLI coding workspace", () => {
     const db = createInMemoryDatabaseAdapter();
     await db.upsertProfile(createDefaultProfile());
     const service = new AgentService(null, null, db);
-    const repo = mkdtempSync(path.join(tmpdir(), "nakama-cli-repo-"));
+    const repo = mkdtempSync(path.join(tmpdir(), "airin-cli-repo-"));
 
     const sessionId = await service.createSession(
       ORG_ID,

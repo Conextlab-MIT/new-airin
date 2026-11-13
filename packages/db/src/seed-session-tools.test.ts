@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   LIST_PROFILE_SESSIONS_TOOL_ID,
   READ_PROFILE_SESSION_TOOL_ID,
-} from "@nakama/core/tools/protected";
+} from "@airin/core/tools/protected";
 import { createInMemoryDatabaseAdapter } from "./index";
 import { ensureSessionToolDefinitions } from "./org-profiles";
 import { removeUnsupportedTools, seedDatabase } from "./seed";
@@ -85,7 +85,7 @@ describe("session tool definitions", () => {
     expect(names).not.toContain("read_profile_session");
   });
 
-  test("assigns both to the Super Nakama profile", async () => {
+  test("assigns both to the Airin profile", async () => {
     const db = createInMemoryDatabaseAdapter();
     const now = new Date().toISOString();
     await db.upsertOrganization({
@@ -112,7 +112,7 @@ describe("session tool definitions", () => {
     expect(names).toContain("read_profile_session");
   });
 
-  test("re-assigns both to Super Nakama on the next boot after an unassign", async () => {
+  test("re-assigns both to Airin on the next boot after an unassign", async () => {
     const db = createInMemoryDatabaseAdapter();
     const now = new Date().toISOString();
     await db.upsertOrganization({
@@ -140,7 +140,7 @@ describe("session tool definitions", () => {
 
     expect(afterUnassign).not.toContain("list_profile_sessions");
 
-    // Second boot: seedOrgSuperNakamaProfile takes the existing-profile branch.
+    // Second boot: seedOrgSuperAirinProfile takes the existing-profile branch.
     await seedDatabase(db);
 
     const afterReboot = (await db.listToolsForProfile(profileId)).map(

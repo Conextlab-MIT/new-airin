@@ -1,5 +1,5 @@
-import type { ProviderInstanceSummary } from "@nakama/core/contract";
-import { toast } from "@nakama/ui/toast";
+import type { ProviderInstanceSummary } from "@airin/core/contract";
+import { toast } from "@airin/ui/toast";
 import { useEffect, useMemo, useState } from "react";
 import {
   type SettingsModelOption,

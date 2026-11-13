@@ -2,13 +2,13 @@ import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { getOrgConfigDir } from "@nakama/core";
+import { getOrgConfigDir } from "@airin/core";
 import type {
   AgentGroup,
   AgentGroupMemoryChange,
   AgentGroupMessage,
   AgentGroupSession,
-} from "@nakama/core/agent-groups";
+} from "@airin/core/agent-groups";
 import { migrateGroupDatabase } from "./agent-group-store-migrations";
 
 const SCHEMA = `PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;

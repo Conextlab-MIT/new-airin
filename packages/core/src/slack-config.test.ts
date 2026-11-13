@@ -24,7 +24,7 @@ describe("slack config", () => {
   });
 
   test("one Slack app serves one agent connection", async () => {
-    await withTempHome("nakama-slack-claims-", async () => {
+    await withTempHome("airin-slack-claims-", async () => {
       const alpha = { orgId: "org_a", profileId: "alpha" };
       const beta = { orgId: "org_b", profileId: "beta" };
       await saveSlackConfig(alpha, {
@@ -57,7 +57,7 @@ describe("slack config", () => {
   });
 
   test("only a real true turns the workspace gate on", async () => {
-    await withTempHome("nakama-slack-truthy-", async () => {
+    await withTempHome("airin-slack-truthy-", async () => {
       await saveSlackConfig(OWNER_AGENT, {
         appToken: "xapp-1-A0APPONE-1-secret",
         botToken: "xoxb-one",
@@ -136,7 +136,7 @@ describe("slack config", () => {
   });
 
   test("first save needs both tokens and issues a pairing code", async () => {
-    await withTempHome("nakama-slack-config-", async () => {
+    await withTempHome("airin-slack-config-", async () => {
       await expect(
         saveSlackConfig(OWNER_AGENT, { botToken: "xoxb-1" })
       ).rejects.toThrow();

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AutomationRunRecord } from "@nakama/core/contract";
+import type { AutomationRunRecord } from "@airin/core/contract";
 import {
   automationRunMessages,
   describeTrigger,

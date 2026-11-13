@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
+  AirinApiError,
   attachSharedKnowledgeBaseDocument,
   type EmailOutboundAdapter,
   type GenerateChatInput,
@@ -24,7 +25,6 @@ import {
   getUserConfigPath,
   listOrganizationKnowledgeBaseDocuments,
   loadUserConfig,
-  NakamaApiError,
   resolveProfileSkillDirectory,
   saveUserConfig,
   type ToolSetupPlan,
@@ -32,19 +32,19 @@ import {
   uploadKnowledgeBaseDocument,
   uploadOrganizationKnowledgeBaseDocument,
   writeParsedConfigIni,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   LOCAL_CLIENT_USER_ID,
   resolveLocalAuthToken,
-} from "@nakama/core/local-auth";
+} from "@airin/core/local-auth";
 import {
   createDatabase,
   createInMemoryDatabaseAdapter,
   type DatabaseAdapter,
   mergeWorkspaceSettings,
   type StoredProfileRecord,
-} from "@nakama/db";
-import { NakamaClient } from "../../../../packages/client/src/client";
+} from "@airin/db";
+import { AirinClient } from "../../../../packages/client/src/client";
 import { createMinimalHonoApp } from "../http/test-app-helpers";
 import { loginUserSession } from "../http/test-session-helpers";
 import { setupTestConfigDir } from "../test-config-dir";
@@ -64,8 +64,8 @@ import {
   setToolSecrets,
 } from "./custom-tool-shared";
 import {
-  createNakamaDataExport,
-  restoreNakamaDataImport,
+  createAirinDataExport,
+  restoreAirinDataImport,
 } from "./data-portability";
 import { ManagedSecrets } from "./managed-secrets";
 import { McpClientManager } from "./mcp-client-manager";
@@ -78,7 +78,7 @@ import { modelExistsOnInstance } from "./provider-instance-helpers";
 import { sessionTurnRegistry } from "./session-turn-registry";
 import { isSkillWriteApprovalRequired } from "./skill-write-approval";
 
-setupTestConfigDir("nakama-org-service-test-");
+setupTestConfigDir("airin-org-service-test-");
 
 function createOrgService(
   email?: EmailOutboundAdapter,
@@ -369,9 +369,7 @@ describe("OrgService", () => {
     );
 
     expect(
-      profiles.some(
-        (profile) => profile.isSuper && profile.name === "Super Nakama"
-      )
+      profiles.some((profile) => profile.isSuper && profile.name === "Airin")
     ).toBe(true);
   });
 
@@ -1091,7 +1089,7 @@ describe("OrgService", () => {
           return { ok: true };
         },
       },
-      () => "https://nakama.example.com"
+      () => "https://airin.example.com"
     );
 
     const created = await orgService.createOrganization({
@@ -1112,7 +1110,7 @@ describe("OrgService", () => {
     expect(sent[0]?.to).toBe("guest@acme.com");
     expect(sent[0]?.subject).toBe("You're invited to Acme");
     expect(sent[0]?.text).toContain(
-      "https://nakama.example.com/accept-invite?token="
+      "https://airin.example.com/accept-invite?token="
     );
     expect(sent[0]?.text).toContain("join Acme as member");
   });
@@ -1149,7 +1147,7 @@ describe("OrgService", () => {
           return { ok: true };
         },
       },
-      () => "https://nakama.example.com"
+      () => "https://airin.example.com"
     );
 
     await orgService.bootstrapInitialSetup({
@@ -1167,9 +1165,9 @@ describe("OrgService", () => {
     expect(requested).toEqual({ delivered: true, token: null });
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe("admin@acme.com");
-    expect(sent[0]?.subject).toBe("Reset your Nakama password");
+    expect(sent[0]?.subject).toBe("Reset your Airin password");
     expect(sent[0]?.text).toContain(
-      "https://nakama.example.com/reset-password?token=tc_reset_"
+      "https://airin.example.com/reset-password?token=tc_reset_"
     );
   });
 
@@ -1385,7 +1383,7 @@ describe("OrgService", () => {
 
     await expect(
       orgService.createOrganization({ name: "   ", slug: "acme" })
-    ).rejects.toBeInstanceOf(NakamaApiError);
+    ).rejects.toBeInstanceOf(AirinApiError);
   });
 
   test("lists, updates, and removes members", async () => {
@@ -2750,7 +2748,7 @@ describe("OrgService shared agent selection", () => {
         orgService,
       });
 
-      const client = new NakamaClient({
+      const client = new AirinClient({
         authToken: await resolveLocalAuthToken(),
         baseUrl: "http://localhost:4310",
         fetch: (input, init) =>
@@ -2871,7 +2869,7 @@ describe("OrgService shared agent selection", () => {
       const first = (await agent.sessions.get(id, "org_team_a"))!;
       await first.send("Saved turn");
       const savedHistory = [...first.getHistory()];
-      const backup = await createNakamaDataExport({ databasePath, rootDir });
+      const backup = await createAirinDataExport({ databasePath, rootDir });
       const source = (await db.getProfile("profile_template"))!;
       await db.upsertProfile({
         ...source,
@@ -2884,7 +2882,7 @@ describe("OrgService shared agent selection", () => {
       await later.send("Later turn");
       expect(later.getHistory()).toHaveLength(savedHistory.length + 2);
       expect(builds.at(-1)?.name).toBe("Later source");
-      await restoreNakamaDataImport(backup.data, {
+      await restoreAirinDataImport(backup.data, {
         beforeReplace: () => database.release(),
         confirm: true,
         databasePath,
@@ -3478,7 +3476,7 @@ describe("OrgService shared agent selection", () => {
           ? `import {writeFile} from "node:fs/promises";
 export async function run(input, context) {
   await writeFile("tool.marker", "team");
-  return {keyIsTeam: process.env.NAKAMA_TOOL_API_KEY === "team-key", config: process.env.NAKAMA_CONFIG_DIR ?? null, cwd: process.cwd(), workspace: context.workspaceRoot, version: "first"};
+  return {keyIsTeam: process.env.AIRIN_TOOL_API_KEY === "team-key", config: process.env.AIRIN_CONFIG_DIR ?? null, cwd: process.cwd(), workspace: context.workspaceRoot, version: "first"};
 }`
           : `import json
 import os
@@ -3487,7 +3485,7 @@ import sys
 def run(input, context):
     with open("tool.marker", "w") as handle:
         handle.write("team")
-    return {"keyIsTeam": os.environ.get("NAKAMA_TOOL_API_KEY") == "team-key", "config": os.environ.get("NAKAMA_CONFIG_DIR"), "cwd": os.getcwd(), "workspace": os.environ.get("NAKAMA_WORKSPACE_ROOT"), "version": "first"}
+    return {"keyIsTeam": os.environ.get("AIRIN_TOOL_API_KEY") == "team-key", "config": os.environ.get("AIRIN_CONFIG_DIR"), "cwd": os.getcwd(), "workspace": os.environ.get("AIRIN_WORKSPACE_ROOT"), "version": "first"}
 
 if __name__ == "__main__":
     print(json.dumps(run(json.loads(sys.stdin.read() or "{}"), {})))

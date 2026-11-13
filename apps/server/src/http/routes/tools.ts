@@ -1,14 +1,14 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   formatServerError,
   type ListToolsResponse,
-  NakamaApiError,
   type ProfileResponse,
   type RunToolResponse,
   type SuggestToolParamsResponse,
   type ToolResponse,
   type ToolSourceResponse,
-} from "@nakama/core";
+} from "@airin/core";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   approveToolSetup,
   getToolApiKeyStatus,
@@ -540,11 +540,11 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
     const tool = tools.find((entry) => entry.id === toolId);
 
     if (!tool) {
-      throw new NakamaApiError("Tool not found.", 404);
+      throw new AirinApiError("Tool not found.", 404);
     }
 
     if (!(tool.handlerType === "javascript" || tool.handlerType === "python")) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Only custom JavaScript or Python tools take an API key.",
         400
       );
@@ -595,7 +595,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
     );
 
     if (!body.success) {
-      throw new NakamaApiError("Enter a valid value.", 400);
+      throw new AirinApiError("Enter a valid value.", 400);
     }
 
     if ("env" in body.data) {
@@ -647,7 +647,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
     const existing = await agent.getTool(toolId);
 
     if (existing.tool.pluginId) {
-      throw new NakamaApiError("Plugin-owned tools cannot be deleted.", 409);
+      throw new AirinApiError("Plugin-owned tools cannot be deleted.", 409);
     }
 
     await agent.deleteTool(toolId);
@@ -669,7 +669,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
         })
       );
     } catch (error) {
-      const status = error instanceof NakamaApiError ? error.status : 400;
+      const status = error instanceof AirinApiError ? error.status : 400;
 
       return json({ error: formatServerError(error) }, status);
     }
@@ -690,7 +690,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
         )
       );
     } catch (error) {
-      const status = error instanceof NakamaApiError ? error.status : 400;
+      const status = error instanceof AirinApiError ? error.status : 400;
 
       return json({ error: formatServerError(error) }, status);
     }
@@ -721,7 +721,7 @@ export function registerToolRoutes(app: HonoApp, options: ServerOptions): void {
       const tool = await options.databaseAdapter?.getTool(body.toolId);
 
       if (tool?.handlerType === "bash") {
-        throw new NakamaApiError("Forbidden", 403);
+        throw new AirinApiError("Forbidden", 403);
       }
     }
 

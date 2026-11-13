@@ -43,7 +43,7 @@ export function remoteBashDescription(
 }
 
 /**
- * NAKAMA_BASH_BACKEND=remote: POST the command to an operator-run sandbox
+ * AIRIN_BASH_BACKEND=remote: POST the command to an operator-run sandbox
  * service. Fails closed; nothing here ever falls back to host bash.
  */
 export async function runRemoteBash(
@@ -54,7 +54,7 @@ export async function runRemoteBash(
 
   if (request.codingAgent) {
     throw new Error(
-      "codingAgent is unsupported when NAKAMA_BASH_BACKEND=remote. Use NAKAMA_BASH_BACKEND=host for coding-agent harness runs."
+      "codingAgent is unsupported when AIRIN_BASH_BACKEND=remote. Use AIRIN_BASH_BACKEND=host for coding-agent harness runs."
     );
   }
 
@@ -73,7 +73,7 @@ export async function runRemoteBash(
       Object.entries(request.env ?? {}).filter(([key]) => !isSecretEnvKey(key))
     ),
     network: resolveBashSandboxNetwork(env),
-    sandboxId: `nakama-${request.orgId}-${request.profileId}`,
+    sandboxId: `airin-${request.orgId}-${request.profileId}`,
     timeoutMs: request.timeoutMs,
   });
 
@@ -109,7 +109,7 @@ export async function runRemoteBash(
   }
 
   if (response.status === 401 || response.status === 403) {
-    throw new Error("Remote bash service rejected NAKAMA_BASH_REMOTE_TOKEN.");
+    throw new Error("Remote bash service rejected AIRIN_BASH_REMOTE_TOKEN.");
   }
 
   if (!response.ok) {
@@ -129,19 +129,19 @@ export async function runRemoteBash(
 }
 
 function readRemoteConfig(env: NodeJS.ProcessEnv) {
-  const rawUrl = env.NAKAMA_BASH_REMOTE_URL?.trim();
-  const token = env.NAKAMA_BASH_REMOTE_TOKEN?.trim();
+  const rawUrl = env.AIRIN_BASH_REMOTE_URL?.trim();
+  const token = env.AIRIN_BASH_REMOTE_TOKEN?.trim();
 
   if (!(rawUrl && token)) {
     throw new Error(
-      "NAKAMA_BASH_BACKEND=remote needs NAKAMA_BASH_REMOTE_URL and NAKAMA_BASH_REMOTE_TOKEN."
+      "AIRIN_BASH_BACKEND=remote needs AIRIN_BASH_REMOTE_URL and AIRIN_BASH_REMOTE_TOKEN."
     );
   }
 
   const url = URL.canParse(rawUrl) ? new URL(rawUrl) : null;
 
   if (!(url && (url.protocol === "https:" || url.protocol === "http:"))) {
-    throw new Error("NAKAMA_BASH_REMOTE_URL must be an http(s) URL.");
+    throw new Error("AIRIN_BASH_REMOTE_URL must be an http(s) URL.");
   }
 
   return { token, url: url.href };

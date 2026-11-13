@@ -1,14 +1,22 @@
-import { Button } from "@nakama/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
-import { ArrowLeft01Icon, ArrowRight01Icon } from "hugeicons-react";
+import { Button } from "@airin/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  Home01Icon,
+  Settings01Icon,
+} from "hugeicons-react";
 import type { ElementType } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { GroupRecents } from "@/components/agent-groups/group-recents";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
 import { SidebarNotifications } from "@/components/SidebarNotifications";
 import { RecentChats } from "@/components/SidebarRecentChats";
+import { SidebarUserMenu } from "@/components/SidebarUserMenu";
 import { useAuth } from "@/context/use-auth";
+import { useLocale } from "@/context/use-locale";
+import { useUiMode } from "@/context/use-ui-mode";
 import { usePrefetchAppData } from "@/hooks/use-app-queries";
 import { useAutomationUnreadTotal } from "@/hooks/use-automations";
 import { useOrgPlugins } from "@/hooks/use-plugins";
@@ -25,6 +33,7 @@ import {
   navHrefForPage,
   PAGE_PATHS,
   pageIdFromPath,
+  pathForPage,
   pluginIcon,
   pluginIdFromPath,
   SIDEBAR_PAGE_IDS,
@@ -43,6 +52,8 @@ export function AppSidebar({
   const page = sidebarPageId(pageIdFromPath(location.pathname) ?? "chat");
   const groupRoute = groupRouteFromPath(location.pathname);
   const { user, activeOrg } = useAuth();
+  const { setUiMode } = useUiMode();
+  const { t } = useLocale();
   const prefetchAppData = usePrefetchAppData();
   const { data: automationUnreadTotal = 0 } = useAutomationUnreadTotal();
 
@@ -148,6 +159,85 @@ export function AppSidebar({
         )}
       </nav>
       <SidebarNotifications collapsed={collapsed} />
+      <div
+        className={cn(
+          "shrink-0 border-border/50 border-t",
+          collapsed
+            ? "flex flex-col items-center gap-1 px-1 py-2"
+            : "px-2 pt-2 pb-3"
+        )}
+      >
+        {collapsed ? (
+          <>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Link
+                    aria-label="Settings"
+                    className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground"
+                    to={pathForPage("settings")}
+                  />
+                }
+              >
+                <Settings01Icon aria-hidden="true" className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {t("owner.settings")}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    aria-label={t("mode.owner")}
+                    className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground"
+                    onClick={() => setUiMode("owner")}
+                    type="button"
+                  />
+                }
+              >
+                <Home01Icon aria-hidden="true" className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent side="right">{t("mode.owner")}</TooltipContent>
+            </Tooltip>
+            <SidebarUserMenu />
+          </>
+        ) : (
+          <>
+            <Link
+              aria-current={
+                location.pathname.startsWith(PAGE_PATHS.settings)
+                  ? "page"
+                  : undefined
+              }
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                location.pathname.startsWith("/settings")
+                  ? "bg-background font-medium text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
+              )}
+              to={pathForPage("settings")}
+            >
+              <Settings01Icon aria-hidden="true" className="size-4 shrink-0" />
+              {t("owner.settings")}
+            </Link>
+            <button
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-muted-foreground text-sm transition-colors hover:bg-background/70 hover:text-foreground"
+              onClick={() => setUiMode("owner")}
+              type="button"
+            >
+              <Home01Icon aria-hidden="true" className="size-4 shrink-0" />
+              {t("mode.owner")}
+            </button>
+            <div className="mt-2 flex items-center justify-between gap-2 px-2">
+              <p className="truncate text-muted-foreground text-xs">
+                {activeOrg?.name ?? "Organization"}
+              </p>
+              <SidebarUserMenu />
+            </div>
+          </>
+        )}
+      </div>
     </aside>
   );
 }
@@ -181,13 +271,11 @@ function SidebarHeader({
 
 function CollapsedOrgExpandControl({ onExpand }: { onExpand: () => void }) {
   return (
-    <div className="group relative flex size-9 shrink-0 items-center justify-center self-center">
-      <div className="transition-opacity duration-150 group-focus-within:pointer-events-none group-focus-within:opacity-0 group-hover:pointer-events-none group-hover:opacity-0">
-        <OrgSwitcher collapsed />
-      </div>
+    <div className="flex flex-col items-center gap-1 self-center">
+      <OrgSwitcher collapsed />
       <Button
         aria-label="Expand sidebar"
-        className="absolute inset-0 size-9 rounded-md p-0 text-muted-foreground opacity-0 transition-opacity duration-150 hover:bg-sidebar-accent/55 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+        className="size-9 shrink-0 rounded-md p-0 text-muted-foreground hover:bg-sidebar-accent/55 hover:text-foreground"
         onClick={onExpand}
         title="Expand sidebar"
         type="button"

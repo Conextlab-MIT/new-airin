@@ -207,7 +207,7 @@ export async function rehydrateMessagesForProvider(
 ): Promise<ChatMessage[]> {
   // Only the turn being answered still needs its documents in full. Anything
   // earlier has already been answered, so repeating it bills the same tokens
-  // once per provider call for the rest of the session (nakama#1454).
+  // once per provider call for the rest of the session (airin#1454).
   const turnStartIndex =
     options.turnStartIndex ??
     messages.reduce(

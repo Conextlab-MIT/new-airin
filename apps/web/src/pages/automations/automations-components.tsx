@@ -1,4 +1,3 @@
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import type {
   AutomationDelivery,
   AutomationRunRecord,
@@ -7,30 +6,31 @@ import type {
   AutomationTrigger,
   ProfileSummary,
   StoredAutomation,
-} from "@nakama/core/contract";
-import { MAX_SESSION_SEARCH_LENGTH } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Checkbox } from "@nakama/ui/checkbox";
-import { Command, CommandItem, CommandList } from "@nakama/ui/command";
-import { DialogOverlay, DialogTitle } from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
+} from "@airin/core/contract";
+import { MAX_SESSION_SEARCH_LENGTH } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Checkbox } from "@airin/ui/checkbox";
+import { Command, CommandItem, CommandList } from "@airin/ui/command";
+import { DialogOverlay, DialogTitle } from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTrigger,
-} from "@nakama/ui/popover";
+} from "@airin/ui/popover";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { Textarea } from "@nakama/ui/textarea";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/select";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { Textarea } from "@airin/ui/textarea";
+import { cn } from "@airin/ui/utils";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import {
   ArrowDown01Icon,
   Cancel01Icon,

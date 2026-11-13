@@ -1863,8 +1863,8 @@ function skipReason(step) {
 function failedStep(run) {
   return run.steps?.find((step) => step.status === "failed");
 }
-var WORKFLOW_DOCS = "https://ahmadrosid.github.io/nakama/workflows";
-var DISMISSED_KEY = "nakama:workflows:dismissed-runs";
+var WORKFLOW_DOCS = "https://ahmadrosid.github.io/airin/workflows";
+var DISMISSED_KEY = "airin:workflows:dismissed-runs";
 function loadDismissed() {
   try {
     const saved = parseWorkflowValue(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]"));

@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { ToolContext } from "@nakama/core";
-import type { DatabaseAdapter, StoredProfileRecord } from "@nakama/db";
-import {
-  createInMemoryDatabaseAdapter,
-  createSqliteDatabase,
-} from "@nakama/db";
+import type { ToolContext } from "@airin/core";
+import type { DatabaseAdapter, StoredProfileRecord } from "@airin/db";
+import { createInMemoryDatabaseAdapter, createSqliteDatabase } from "@airin/db";
 import { AgentService } from "../services/agent-service";
 import { createSessionTools } from "./session-tools";
 

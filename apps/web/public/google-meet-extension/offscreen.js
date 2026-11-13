@@ -101,7 +101,7 @@ async function start({ captureUrl, meetingId, streamId, ticket }) {
     throw new Error("Capture stopped while starting");
   }
 
-  processor = new AudioWorkletNode(context, "nakama-pcm", {
+  processor = new AudioWorkletNode(context, "airin-pcm", {
     channelCount: 1,
     channelCountMode: "explicit",
   });
@@ -114,7 +114,7 @@ async function start({ captureUrl, meetingId, streamId, ticket }) {
   // the server's "ready", which it sends only after it accepts the ticket.
   await new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error("Nakama capture connection timed out")),
+      () => reject(new Error("Airin capture connection timed out")),
       10_000
     );
 
@@ -131,7 +131,7 @@ async function start({ captureUrl, meetingId, streamId, ticket }) {
 
     socket.onerror = socket.onclose = () => {
       clearTimeout(timer);
-      reject(new Error("Nakama capture connection failed"));
+      reject(new Error("Airin capture connection failed"));
     };
   });
 
@@ -161,7 +161,7 @@ async function start({ captureUrl, meetingId, streamId, ticket }) {
     }
   };
 
-  socket.onerror = () => fail(new Error("Nakama capture connection failed"));
+  socket.onerror = () => fail(new Error("Airin capture connection failed"));
   processor.port.onmessage = (event) => {
     if (event.data === "flushed") {
       flushed?.();

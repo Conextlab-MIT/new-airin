@@ -15,7 +15,7 @@ Write text to a file in the profile workspace.
 
 **Returns:** `{ path, bytesWritten }`
 
-**Scope:** `~/.nakama/orgs/{orgId}/profiles/{profileId}/` and `~/.nakama/tools/` (custom JS modules)
+**Scope:** `~/.airin/orgs/{orgId}/profiles/{profileId}/` and `~/.airin/tools/` (custom JS modules)
 
 **Restrictions:** Rejects `.docx` and `.doc` paths — a `.docx` is a ZIP archive, not UTF-8 text. Use `write_docx` instead. When the profile has `save_artifact`, rejects paths under `artifacts/`.
 
@@ -46,9 +46,9 @@ Create a real Microsoft Word (`.docx`) document from Markdown content. Headings,
 
 **Returns:** `{ path, bytesWritten }`
 
-**Scope:** Profile workspace only. Under `artifacts/`, existing files are not silently overwritten — Nakama picks a unique filename instead.
+**Scope:** Profile workspace only. Under `artifacts/`, existing files are not silently overwritten — Airin picks a unique filename instead.
 
-**Availability:** When assigned to the profile. Assigned to system profiles (`default`, `super_nakama`) by default; assign manually to custom profiles when needed.
+**Availability:** When assigned to the profile. Assigned to system profiles (`default`, `super_airin`) by default; assign manually to custom profiles when needed.
 
 ## `delete_file`
 
@@ -75,7 +75,7 @@ Edit an existing text file in the profile workspace using exact replacements.
 | `edits` | array | Yes | One or more `{ oldText, newText }` replacements |
 | `cwd` | string | No | Base directory within workspace |
 
-Each `oldText` must be present once and edits must not overlap. Nakama applies all edits against the original file, then writes the result atomically after validation.
+Each `oldText` must be present once and edits must not overlap. Airin applies all edits against the original file, then writes the result atomically after validation.
 
 **Returns:** `{ path, replacements, bytesWritten, fuzzyMatches }`
 
@@ -114,13 +114,13 @@ Search text in files under the profile workspace.
 
 **Returns:** `{ query, root, matches, matchCount, truncated }`
 
-**Scope:** `~/.nakama/orgs/{orgId}/profiles/{profileId}/` only. Requires `rg` (ripgrep) on PATH.
+**Scope:** `~/.airin/orgs/{orgId}/profiles/{profileId}/` only. Requires `rg` (ripgrep) on PATH.
 
 **Availability:** When assigned to the profile.
 
 ## `knowledge_base_search`
 
-Search uploaded knowledge base documents for relevant facts. **Browse Files → Knowledge** can also show inherited URL sources, such as the Nakama documentation index at `llms.txt`; use `web_fetch` on that index and on specific `.md` pages, not `knowledge_base_search`.
+Search uploaded knowledge base documents for relevant facts. **Browse Files → Knowledge** can also show inherited URL sources, such as the Airin documentation index at `llms.txt`; use `web_fetch` on that index and on specific `.md` pages, not `knowledge_base_search`.
 
 | Parameter | Type | Required | Notes |
 |-----------|------|----------|-------|
@@ -131,7 +131,7 @@ Search uploaded knowledge base documents for relevant facts. **Browse Files → 
 
 **Returns:** `{ query, root, matches, matchCount, truncated }` — empty matches when no ready document matches the filter.
 
-**Scope:** Extracted text files stored under `~/.nakama/orgs/{orgId}/profiles/{profileId}/knowledge-base/`, plus the `wiki/*.md` pages the `knowledge-base-wiki` skill writes there.
+**Scope:** Extracted text files stored under `~/.airin/orgs/{orgId}/profiles/{profileId}/knowledge-base/`, plus the `wiki/*.md` pages the `knowledge-base-wiki` skill writes there.
 
 **Availability:** When assigned **and** at least one uploaded document has `status: "ready"`. Inherited URL sources do not require `knowledge_base_search`; they require `web_fetch` or `web_search`.
 
@@ -145,7 +145,7 @@ Search the web for current information.
 
 **Availability:** When assigned **and** the configured provider is OpenAI or Anthropic with a valid API key. Not available on OpenRouter. On Gemini, web search is disabled when other local tools are present on the same turn.
 
-**Custom search back-end:** Set a provider under **Settings → Agent tools → AI Providers → Web search** (Exa, Firecrawl, Serply, or any endpoint that answers with JSON search results) to run the search on Nakama instead of the model provider. This removes the provider restriction above and returns `{ provider, query, results: [{ title, url, snippet }] }`. Leave it on **Built-in** to keep the provider-hosted search.
+**Custom search back-end:** Set a provider under **Settings → Agent tools → AI Providers → Web search** (Exa, Firecrawl, Serply, or any endpoint that answers with JSON search results) to run the search on Airin instead of the model provider. This removes the provider restriction above and returns `{ provider, query, results: [{ title, url, snippet }] }`. Leave it on **Built-in** to keep the provider-hosted search.
 
 ## `web_fetch`
 
@@ -182,9 +182,9 @@ List, read, search, and send email through the deployment mailbox configured in 
 
 **Returns:** Structured JSON with `messages`, `message`, or `sent` — or `{ error: "..." }` on failure. Send body max 256 KB.
 
-**Availability:** When assigned **and** the `[email]` section in `~/.nakama/config.ini` is complete. Omitted at runtime when incomplete (`omitUnavailableBuiltinTools`).
+**Availability:** When assigned **and** the `[email]` section in `~/.airin/config.ini` is complete. Omitted at runtime when incomplete (`omitUnavailableBuiltinTools`).
 
-The mailbox is shared by the whole install, so only org admins can use it in chat. A member gets a refusal. Telegram, Discord and WhatsApp chats carry no Nakama user, so the tool refuses there too. Automations can use it, and on an agent that has `email` only an org admin can create, change, run or read the runs of an automation.
+The mailbox is shared by the whole install, so only org admins can use it in chat. A member gets a refusal. Telegram, Discord and WhatsApp chats carry no Airin user, so the tool refuses there too. Automations can use it, and on an agent that has `email` only an org admin can create, change, run or read the runs of an automation.
 
 ## `extract_document_text`
 
@@ -224,25 +224,25 @@ Run a one-off shell command starting in the profile workspace and return stdout,
 | `cwd` | string | No | Working directory within the profile workspace |
 | `timeoutMs` | number | No | Default 30000, max 1800000 (30 minutes) |
 | `env` | object | No | Extra env vars merged at spawn time (string values) |
-| `codingAgent` | boolean | No | When true, Nakama merges coding-agent spawn env for a command that starts with a known harness binary |
+| `codingAgent` | boolean | No | When true, Airin merges coding-agent spawn env for a command that starts with a known harness binary |
 
 **Returns:** `{ exitCode, stdout, stderr, timedOut }`
 
-**Turning bash off:** bash is on by default, and Super Nakama gets it. When the people who are org admins are not the operator, set `NAKAMA_TENANT_BASH=0`. On the next start Super Nakama loses `bash`, assigning it to a profile returns 403, and any profile that still holds it gets a refusal instead of a shell. The CLI is not affected.
+**Turning bash off:** bash is on by default, and Airin gets it. When the people who are org admins are not the operator, set `AIRIN_TENANT_BASH=0`. On the next start Airin loses `bash`, assigning it to a profile returns 403, and any profile that still holds it gets a refusal instead of a shell. The CLI is not affected.
 
-**Coding-agent spawn env:** When the command starts with a known harness binary (`codex`, `claude`, `opencode`, `pi`, or `agent`), or when `codingAgent: true` is set with such a command, Nakama merges provider passthrough env vars on the server before spawn. `codingAgent: true` without a known binary fails closed. See [Coding agent — Provider passthrough](/coding-agent#provider-passthrough). Optional `env` keys are merged on top (credential keys cannot override passthrough).
+**Coding-agent spawn env:** When the command starts with a known harness binary (`codex`, `claude`, `opencode`, `pi`, or `agent`), or when `codingAgent: true` is set with such a command, Airin merges provider passthrough env vars on the server before spawn. `codingAgent: true` without a known binary fails closed. See [Coding agent — Provider passthrough](/coding-agent#provider-passthrough). Optional `env` keys are merged on top (credential keys cannot override passthrough).
 
-**Host access:** Host Bash is unrestricted by Nakama and runs with the server process's OS permissions. The profile workspace is only the starting directory; commands can access files outside it, including other profiles' files when OS permissions allow. Checking `cwd` does not isolate commands. Assign host Bash only to trusted profiles.
+**Host access:** Host Bash is unrestricted by Airin and runs with the server process's OS permissions. The profile workspace is only the starting directory; commands can access files outside it, including other profiles' files when OS permissions allow. Checking `cwd` does not isolate commands. Assign host Bash only to trusted profiles.
 
-**Remote backend:** With `NAKAMA_BASH_BACKEND=remote`, commands run in a sandbox service you operate instead of on the server. The sandbox `/workspace` starts empty and does not share files with `read_file`, `write_file`, or `edit_file`, network is off by default, and `codingAgent` runs are refused. Custom tools and skill code that would run on the server are refused too, except for global skills. Skills that run through `bash` (such as `agent-browser`) need their CLIs in the sandbox, and files they write stay there. Local CLI sessions still use host bash. See [Docker: Remote bash backend](/docker#remote-bash-backend) for setup and the service contract.
+**Remote backend:** With `AIRIN_BASH_BACKEND=remote`, commands run in a sandbox service you operate instead of on the server. The sandbox `/workspace` starts empty and does not share files with `read_file`, `write_file`, or `edit_file`, network is off by default, and `codingAgent` runs are refused. Custom tools and skill code that would run on the server are refused too, except for global skills. Skills that run through `bash` (such as `agent-browser`) need their CLIs in the sandbox, and files they write stay there. Local CLI sessions still use host bash. See [Docker: Remote bash backend](/docker#remote-bash-backend) for setup and the service contract.
 
-Do not use `bash` to create persistent tools or `.sh` wrappers — register JavaScript tools under `~/.nakama/tools/` instead.
+Do not use `bash` to create persistent tools or `.sh` wrappers — register JavaScript tools under `~/.airin/tools/` instead.
 
-**Availability:** When assigned to the profile. Super Nakama receives `bash` by default. Required for the [coding agent](/coding-agent) workflow and the opt-in [agent-browser](/agent-browser) skill. Interactive browser runs inherit host `AGENT_BROWSER_EXECUTABLE_PATH` / `AGENT_BROWSER_ARGS` when you opt into Cloak.
+**Availability:** When assigned to the profile. Airin receives `bash` by default. Required for the [coding agent](/coding-agent) workflow and the opt-in [agent-browser](/agent-browser) skill. Interactive browser runs inherit host `AGENT_BROWSER_EXECUTABLE_PATH` / `AGENT_BROWSER_ARGS` when you opt into Cloak.
 
 ## `sub_agent`
 
-Run a focused **same-profile** sub-agent for delegated work (research, review, planning, debugging). The parent receives a structured result to summarize for the user. This is a Nakama-native in-process agent loop — **not** the external coding-agent path (`bash` + `coding-agent`).
+Run a focused **same-profile** sub-agent for delegated work (research, review, planning, debugging). The parent receives a structured result to summarize for the user. This is an Airin-native in-process agent loop — **not** the external coding-agent path (`bash` + `coding-agent`).
 
 While a sub-agent runs, the chat UI shows a dedicated row with the task title and a **live status label** (for example "Reading SOUL.md", "Searching web · …", "Writing answer…"). When the run completes, the row shows the summary with an expandable full output.
 
@@ -287,7 +287,7 @@ List the chat sessions of **another agent profile in the same organization**, ne
 - Sessions with no messages are not listed
 - One channel per call; there is no merged view
 
-**Availability:** When assigned to the profile. Super Nakama receives it at seed time.
+**Availability:** When assigned to the profile. Airin receives it at seed time.
 
 ## `read_profile_session`
 
@@ -307,7 +307,7 @@ Read the stored transcript of a session belonging to **another agent profile in 
 - Read-only. It cannot compact, branch, or delete another profile's session
 - Persisted messages only. A session with a turn still running is returned as of its last completed turn
 
-**Availability:** When assigned to the profile. Super Nakama receives it at seed time.
+**Availability:** When assigned to the profile. Airin receives it at seed time.
 
 ## `close_session`
 

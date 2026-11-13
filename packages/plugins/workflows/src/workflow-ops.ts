@@ -1,4 +1,4 @@
-import type { WorkflowCompareOp, WorkflowStep } from "@nakama/core/contract";
+import type { WorkflowCompareOp, WorkflowStep } from "@airin/core/contract";
 
 const TEMPLATE_PATTERN = /\{\{([^}]+)\}\}/g;
 

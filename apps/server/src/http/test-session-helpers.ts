@@ -1,6 +1,6 @@
 import { expect } from "bun:test";
-import type { OrgRole } from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+import type { OrgRole } from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import { AuthService } from "../services/auth-service";
 import {
   buildSetupAuthBody,
@@ -37,8 +37,8 @@ export function cookieValue(setCookies: string[], name: string): string {
 
 export function cookieHeaderFromSetCookies(setCookies: string[]): string {
   return [
-    `nakama_session=${cookieValue(setCookies, "nakama_session")}`,
-    `nakama_csrf=${cookieValue(setCookies, "nakama_csrf")}`,
+    `airin_session=${cookieValue(setCookies, "airin_session")}`,
+    `airin_csrf=${cookieValue(setCookies, "airin_csrf")}`,
   ].join("; ");
 }
 
@@ -68,7 +68,7 @@ export function browserSessionFromResponse(
 ): TestBrowserSession {
   const setCookies = extractSetCookies(response);
   const cookieHeader = cookieHeaderFromSetCookies(setCookies);
-  const csrfToken = cookieValue(setCookies, "nakama_csrf");
+  const csrfToken = cookieValue(setCookies, "airin_csrf");
 
   return {
     cookieHeader,

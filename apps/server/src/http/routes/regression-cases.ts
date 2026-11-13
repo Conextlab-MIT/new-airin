@@ -1,14 +1,14 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import { createId, getUserMessageText } from "@nakama/core";
-import { findAgentQuestionnaireAnswers } from "@nakama/core/agent-questionnaire";
+import { createId, getUserMessageText } from "@airin/core";
+import { findAgentQuestionnaireAnswers } from "@airin/core/agent-questionnaire";
 import {
   type ListRegressionCasesResponse,
   MAX_REGRESSION_EXPECTED_RESULT_LENGTH,
   type RegressionCase,
   type RegressionCaseResponse,
-} from "@nakama/core/contract";
-import type { StoredRegressionCaseRecord } from "@nakama/db";
-import { DatabaseAutomationStore } from "@nakama/db";
+} from "@airin/core/contract";
+import type { StoredRegressionCaseRecord } from "@airin/db";
+import { DatabaseAutomationStore } from "@airin/db";
+import { createRoute, z } from "@hono/zod-openapi";
 import { sessionTurnRegistry } from "../../services/session-turn-registry";
 import type { ServerOptions } from "../context";
 import {

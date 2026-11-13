@@ -1,21 +1,21 @@
-import { Tabs } from "@base-ui/react/tabs";
-import type { ProfileSummary } from "@nakama/core";
-import { Button } from "@nakama/ui/button";
+import type { ProfileSummary } from "@airin/core";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/ui/select";
+import { toast } from "@airin/ui/toast";
+import { Tabs } from "@base-ui/react/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight01Icon,

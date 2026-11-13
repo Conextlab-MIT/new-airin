@@ -5,7 +5,7 @@ import type {
   SetupAuthRequest,
   UpdateOrganizationRequest,
   UserOrgSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   type ReactNode,
   useCallback,

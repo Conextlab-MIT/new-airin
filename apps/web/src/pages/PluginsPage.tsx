@@ -1,11 +1,11 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Input } from "@nakama/ui/input";
+} from "@airin/ui/dropdown-menu";
+import { Input } from "@airin/ui/input";
 import { Add01Icon, ArrowDown01Icon, Search01Icon } from "hugeicons-react";
 import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";

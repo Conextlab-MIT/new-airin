@@ -1,16 +1,16 @@
-import type { ProviderInstance, ProviderName } from "@nakama/core";
+import type { ProviderInstance, ProviderName } from "@airin/core";
 import {
+  AirinApiError,
   type CustomModelEntry,
   findCustomModel,
-  NakamaApiError,
   normalizeBaseUrl,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   defaultDiscoveryBaseUrl,
   isDiscoveryModelProvider,
   NETRA_AGENT_MODEL_ID,
   resolveNetraModelId,
-} from "@nakama/core/discovery-providers";
+} from "@airin/core/discovery-providers";
 import OpenAI from "openai";
 import { z } from "zod";
 import { AVAILABLE_MODELS, type ProviderModelOption } from "./model-catalog";
@@ -803,7 +803,7 @@ async function fetchRemoteOpenAIModelsRaw(
       signal: AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS),
     });
   } catch {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Cannot reach ${endpointHost(baseUrl)}. Check the base URL and that the server is running.`,
       502
     );
@@ -817,13 +817,13 @@ async function fetchRemoteOpenAIModelsRaw(
     );
 
     if (response.status === 401 || response.status === 403) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "The model endpoint rejected this API key. Check the key and try again.",
         400
       );
     }
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Could not load models from this endpoint (${response.status}). Try again.`,
       502
     );

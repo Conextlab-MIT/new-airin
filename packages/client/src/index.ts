@@ -1,6 +1,6 @@
-export { NakamaApiError, NakamaAuthExpiredError } from "@nakama/core/api-error";
+export { AirinApiError, AirinAuthExpiredError } from "@airin/core/api-error";
 
-export { NakamaClient } from "./client";
+export { AirinClient } from "./client";
 
 export type {
   RemoteChatSession,
@@ -9,7 +9,7 @@ export type {
   TransferProgress,
 } from "./types";
 
-import type { ProfileSummary } from "@nakama/core/contract";
+import type { ProfileSummary } from "@airin/core/contract";
 
 export function getProfileAvatarUrl(
   profile: Pick<ProfileSummary, "id" | "hasAvatar" | "updatedAt">,

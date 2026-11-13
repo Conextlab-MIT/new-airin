@@ -1,7 +1,7 @@
-import type { CustomModelEntry } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { InputGroup, InputGroupInput } from "@nakama/ui/input-group";
-import { Switch } from "@nakama/ui/switch";
+import type { CustomModelEntry } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { InputGroup, InputGroupInput } from "@airin/ui/input-group";
+import { Switch } from "@airin/ui/switch";
 import { Add01Icon, Delete02Icon } from "hugeicons-react";
 import { useContext, useId, useRef, useState } from "react";
 import {

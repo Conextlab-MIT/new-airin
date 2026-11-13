@@ -1,5 +1,5 @@
 /** Must match `basePath` in next.config.mjs */
-const BASE_PATH = "/nakama";
+const BASE_PATH = "/airin";
 
 export function withBasePath(path: string): string {
   if (!path.startsWith("/")) {

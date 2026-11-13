@@ -1,4 +1,4 @@
-import { Button } from "@nakama/ui/button";
+import { Button } from "@airin/ui/button";
 import { Notification01Icon } from "hugeicons-react";
 import { useEffect, useState } from "react";
 import {
@@ -8,7 +8,7 @@ import {
   webPushSupported,
 } from "@/hooks/use-web-push";
 
-const DISMISSED_KEY = "nakama.webPushPrompt.dismissed";
+const DISMISSED_KEY = "airin.webPushPrompt.dismissed";
 
 function readDismissed(): boolean {
   try {

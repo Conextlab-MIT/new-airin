@@ -1,5 +1,5 @@
-import type { AgentQuestionnaire } from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+import type { AgentQuestionnaire } from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 
 const MAX_QUESTIONS = 5;
 

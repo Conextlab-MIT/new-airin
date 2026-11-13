@@ -1,7 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
-import { isSecretEnvKey } from "@nakama/core";
+import { isSecretEnvKey } from "@airin/core";
 
 export interface AcpAgentLaunch {
   args: string[];
@@ -26,19 +26,19 @@ const STDERR_TAIL_CHARS = 2000;
 const STOP_TIMEOUT_MS = 2000;
 
 // The agent logs in with its own keys (ANTHROPIC_API_KEY, OPENAI_API_KEY), so only
-// Nakama's own secrets are cut, not every key-shaped variable.
+// Airin's own secrets are cut, not every key-shaped variable.
 function agentEnv(): NodeJS.ProcessEnv {
   return Object.fromEntries(
     Object.entries(process.env).filter(
-      ([key]) => !(key.startsWith("NAKAMA_") && isSecretEnvKey(key))
+      ([key]) => !(key.startsWith("AIRIN_") && isSecretEnvKey(key))
     )
   );
 }
 
 /**
  * Starts an ACP agent as a child process that speaks JSON-RPC over stdio, then
- * runs `initialize`. Nakama never gives the agent file or terminal access:
- * the agent works in its own cwd, and Nakama tools arrive over MCP.
+ * runs `initialize`. Airin never gives the agent file or terminal access:
+ * the agent works in its own cwd, and Airin tools arrive over MCP.
  */
 export async function startAcpAgentProcess(
   launch: AcpAgentLaunch,

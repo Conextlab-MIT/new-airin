@@ -2,13 +2,13 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import { z } from "zod";
 
 const PDF_TIMEOUT_MS = 60_000;
 
 /** The page is served from this origin, so relative assets resolve to it. */
-const ARTIFACT_ORIGIN = "https://artifact.nakama.invalid";
+const ARTIFACT_ORIGIN = "https://artifact.airin.invalid";
 
 /** The same remote hosts the web preview CSP allows (`ARTIFACT_FRAME_CSP`). */
 const SCRIPT_HOSTS = [
@@ -54,10 +54,10 @@ const MAC_CHROME =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 const CHROME_MISSING_MESSAGE =
-  "PDF export needs headless Chrome on the Nakama server. Ask the server admin to install Chrome or Chromium, or to set NAKAMA_CHROME_PATH to the Chrome binary.";
+  "PDF export needs headless Chrome on the Airin server. Ask the server admin to install Chrome or Chromium, or to set AIRIN_CHROME_PATH to the Chrome binary.";
 
 export function resolveChromeBin(): string | null {
-  const configured = process.env.NAKAMA_CHROME_PATH?.trim();
+  const configured = process.env.AIRIN_CHROME_PATH?.trim();
 
   if (configured) {
     return configured;
@@ -118,11 +118,11 @@ export async function convertHtmlToPdf(
   chromeBin: string | null = resolveChromeBin()
 ): Promise<Buffer> {
   if (!chromeBin) {
-    throw new NakamaApiError(CHROME_MISSING_MESSAGE, 501);
+    throw new AirinApiError(CHROME_MISSING_MESSAGE, 501);
   }
 
   const root = await realpath(artifactsDir);
-  const profileDir = await mkdtemp(path.join(os.tmpdir(), "nakama-chrome-"));
+  const profileDir = await mkdtemp(path.join(os.tmpdir(), "airin-chrome-"));
   const pageUrl = `${ARTIFACT_ORIGIN}/${htmlPath.split("/").map(encodeURIComponent).join("/")}`;
 
   let chrome: ReturnType<typeof startChrome>;
@@ -131,7 +131,7 @@ export async function convertHtmlToPdf(
     chrome = startChrome(chromeBin, profileDir);
   } catch {
     await rm(profileDir, { force: true, recursive: true });
-    throw new NakamaApiError(CHROME_MISSING_MESSAGE, 501);
+    throw new AirinApiError(CHROME_MISSING_MESSAGE, 501);
   }
 
   const timeout = setTimeout(() => chrome.kill(), PDF_TIMEOUT_MS);
@@ -197,11 +197,11 @@ export async function convertHtmlToPdf(
       cdp.close();
     }
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       throw error;
     }
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Could not convert the artifact to PDF: ${error instanceof Error ? error.message : String(error)}`,
       500
     );
@@ -228,7 +228,7 @@ function startChrome(chromeBin: string, profileDir: string) {
       // Chrome cannot start its sandbox as root, or on hosts that block user
       // namespaces (Ubuntu 24.04 AppArmor). The CSP and request filter still apply.
       ...(process.getuid?.() === 0 ||
-      process.env.NAKAMA_CHROME_NO_SANDBOX === "true"
+      process.env.AIRIN_CHROME_NO_SANDBOX === "true"
         ? ["--no-sandbox"]
         : []),
       "about:blank",
@@ -318,7 +318,7 @@ async function readDevToolsEndpoint(
     }
   }
 
-  throw new NakamaApiError(
+  throw new AirinApiError(
     `${CHROME_MISSING_MESSAGE} Chrome did not start: ${chromeStartError(output)}`,
     501
   );

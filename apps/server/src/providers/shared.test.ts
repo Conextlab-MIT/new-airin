@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { ChatMessage, ToolCall } from "@nakama/core";
-import { NakamaApiError, ProviderStreamInterruptedError } from "@nakama/core";
+import type { ChatMessage, ToolCall } from "@airin/core";
+import { AirinApiError, ProviderStreamInterruptedError } from "@airin/core";
 import {
   buildProviderHttpError,
   extractOpenAITokenUsage,
@@ -256,7 +256,7 @@ describe("buildProviderHttpError", () => {
 
     const error = buildProviderHttpError("OpenAI", 401, body);
 
-    expect(error).toBeInstanceOf(NakamaApiError);
+    expect(error).toBeInstanceOf(AirinApiError);
     expect(error.status).toBe(400);
     expect(error.message).toBe(formatHttpErrorBody("OpenAI", 401, body));
   });

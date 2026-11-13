@@ -1,8 +1,8 @@
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type {
   McpRegistrySearchResponse,
   McpRegistryServer,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { z } from "zod";
 
 const MCP_REGISTRY_SEARCH_URL =
@@ -70,7 +70,7 @@ export async function searchMcpRegistry(
 
     body = await response.json();
   } catch {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "MCP registry is unavailable. Enter configuration manually instead.",
       502
     );

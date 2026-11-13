@@ -7,21 +7,21 @@ import type {
   CreateAutomationRequest,
   StoredAutomation,
   UpdateAutomationRequest,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   computeAutomationNextRunAt,
   createId,
   DEFAULT_TIMEZONE,
   isWorkerSchedulable,
-  NakamaApiError,
   normalizeAutomationDelivery,
   resolveScheduleTimezone,
   resolveWebPublicUrl,
   summarizeAutomationUnreadCounts,
   validateAutomationDelivery,
   validateAutomationInput,
-} from "@nakama/core";
-import { type DatabaseAdapter, DatabaseAutomationStore } from "@nakama/db";
+} from "@airin/core";
+import { type DatabaseAdapter, DatabaseAutomationStore } from "@airin/db";
 import {
   assertCanAutomateMailbox,
   type ProfileAccess,
@@ -343,16 +343,16 @@ export class AutomationService {
     const automation = await this.get(id, orgId);
 
     if (!automation) {
-      throw new NakamaApiError("Automation not found.", 404);
+      throw new AirinApiError("Automation not found.", 404);
     }
 
     if (automation.trigger.type !== "webhook") {
-      throw new NakamaApiError("Set the trigger to webhook first.", 400);
+      throw new AirinApiError("Set the trigger to webhook first.", 400);
     }
 
     if (!this.secrets) {
-      throw new NakamaApiError(
-        "Set NAKAMA_SECRETS_KEY before saving secrets.",
+      throw new AirinApiError(
+        "Set AIRIN_SECRETS_KEY before saving secrets.",
         400
       );
     }
@@ -366,9 +366,9 @@ export class AutomationService {
       // ManagedSecrets throws this exact copy when the key is unset.
       if (
         error instanceof Error &&
-        error.message.includes("NAKAMA_SECRETS_KEY")
+        error.message.includes("AIRIN_SECRETS_KEY")
       ) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           `${error.message} Create a key with \`openssl rand -base64 32\`.`,
           400
         );

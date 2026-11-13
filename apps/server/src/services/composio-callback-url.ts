@@ -1,12 +1,12 @@
 import {
+  AirinApiError,
   isValidBaseUrl,
   loadUserWebPublicUrl,
-  NakamaApiError,
   normalizeBaseUrl,
   resolveWebPublicUrl,
   saveUserWebPublicUrl,
   type WebPublicUrlSettingsResponse,
-} from "@nakama/core";
+} from "@airin/core";
 
 /**
  * The origin the caller claims. `clientOrigin` in the body, `Origin` and
@@ -31,7 +31,7 @@ export function resolveRequestClientOrigin(
   }
 
   if (!isValidBaseUrl(candidate)) {
-    throw new NakamaApiError("Origin must be an http or https URL.", 400);
+    throw new AirinApiError("Origin must be an http or https URL.", 400);
   }
 
   if (!isAllowedClientOrigin(candidate, request)) {
@@ -45,7 +45,7 @@ export function resolveRequestClientOrigin(
       return;
     }
 
-    throw new NakamaApiError("Origin is not allowed.", 400);
+    throw new AirinApiError("Origin is not allowed.", 400);
   }
 
   return candidate;
@@ -148,7 +148,7 @@ function sameHost(a: string, b?: string): boolean {
  * `request.url`) just as much as the forwarded headers (issue #477).
  */
 function trustForwardedHeaders(): boolean {
-  return process.env.NAKAMA_TRUST_PROXY === "true";
+  return process.env.AIRIN_TRUST_PROXY === "true";
 }
 
 /**
@@ -198,12 +198,12 @@ export function resolveRequestSelfOrigin(
  * request landed on, or a loopback origin. The saved value is deliberately
  * absent: it is the thing being checked, and a poisoned one would vouch for
  * itself. Deployments that serve the web app from another host than the API
- * set `NAKAMA_WEB_PUBLIC_URL`, which is what that override is for.
+ * set `AIRIN_WEB_PUBLIC_URL`, which is what that override is for.
  */
 function isDeploymentOrigin(candidate: string, request?: Request): boolean {
   const envOverride =
-    process.env.NAKAMA_WEB_PUBLIC_URL?.trim() ||
-    process.env.NAKAMA_PUBLIC_URL?.trim();
+    process.env.AIRIN_WEB_PUBLIC_URL?.trim() ||
+    process.env.AIRIN_PUBLIC_URL?.trim();
 
   if (envOverride && sameHost(candidate, envOverride)) {
     return true;
@@ -245,15 +245,15 @@ export async function persistWebPublicUrl(
   const trimmed = input.trim();
 
   if (!(trimmed && isValidBaseUrl(trimmed))) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Public web URL must be a valid http or https URL.",
       400
     );
   }
 
   if (!isDeploymentOrigin(trimmed, request)) {
-    throw new NakamaApiError(
-      "Public web URL must use this deployment's own origin. Set NAKAMA_WEB_PUBLIC_URL to serve the web app from another host.",
+    throw new AirinApiError(
+      "Public web URL must use this deployment's own origin. Set AIRIN_WEB_PUBLIC_URL to serve the web app from another host.",
       400
     );
   }
@@ -263,8 +263,8 @@ export async function persistWebPublicUrl(
 
 export async function getWebPublicUrlSettings(): Promise<WebPublicUrlSettingsResponse> {
   const envOverride =
-    process.env.NAKAMA_WEB_PUBLIC_URL?.trim() ||
-    process.env.NAKAMA_PUBLIC_URL?.trim();
+    process.env.AIRIN_WEB_PUBLIC_URL?.trim() ||
+    process.env.AIRIN_PUBLIC_URL?.trim();
 
   return {
     envOverride: envOverride ? normalizeBaseUrl(envOverride) : null,
@@ -278,7 +278,7 @@ export async function getWebPublicUrlSettings(): Promise<WebPublicUrlSettingsRes
  * base ends up in the redirect_uri an OAuth code is delivered to. They still
  * decide when nothing is configured, which is how a dev install on localhost
  * works — vouched for by loopback, or by the proxy-named origin when the
- * operator declared a trusted proxy (`NAKAMA_TRUST_PROXY`, issue #477).
+ * operator declared a trusted proxy (`AIRIN_TRUST_PROXY`, issue #477).
  */
 export function resolveComposioCallbackBaseUrl(
   options: { clientOrigin?: string; request?: Request } = {}
@@ -331,7 +331,7 @@ function fallbackCallbackBaseUrl(request?: Request): string {
     return self;
   }
 
-  const webPort = process.env.NAKAMA_WEB_PORT?.trim() || "3003";
+  const webPort = process.env.AIRIN_WEB_PORT?.trim() || "3003";
 
   return `http://127.0.0.1:${webPort}`;
 }

@@ -55,7 +55,7 @@ export type ManagedSecretWriter = {
 
 let managedSecretWriter: ManagedSecretWriter | null = null;
 
-/** Set by the server when NAKAMA_SECRETS_KEY is configured; unset means plaintext. */
+/** Set by the server when AIRIN_SECRETS_KEY is configured; unset means plaintext. */
 export function setManagedSecretWriter(
   writer: ManagedSecretWriter | null
 ): void {
@@ -74,6 +74,6 @@ export function loadConfig(
   env: Record<string, string | undefined> = process.env
 ): AppConfig {
   return {
-    databaseUrl: env.DATABASE_URL ?? "file:data/sqlite/nakama.sqlite",
+    databaseUrl: env.DATABASE_URL ?? "file:data/sqlite/airin.sqlite",
   };
 }

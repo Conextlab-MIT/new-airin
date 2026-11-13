@@ -1,7 +1,7 @@
 import type {
   AgentBrowserStatusResponse,
   UpdateAgentBrowserSettingsRequest,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   queryOptions,
   useMutation,

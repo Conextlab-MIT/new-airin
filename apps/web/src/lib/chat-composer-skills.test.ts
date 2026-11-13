@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SkillSummary } from "@nakama/core/contract";
+import type { SkillSummary } from "@airin/core/contract";
 import {
   type ComposerSlashSuggestion,
   filterComposerMentionSuggestions,

@@ -1,4 +1,4 @@
-import type { StreamEvent } from "@nakama/core";
+import type { StreamEvent } from "@airin/core";
 
 const MAX_BUFFER_EVENTS = 10_000;
 

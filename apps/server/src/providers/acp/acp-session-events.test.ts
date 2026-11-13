@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type * as acp from "@agentclientprotocol/sdk";
-import type { StreamChatHandlers } from "@nakama/core";
+import type { StreamChatHandlers } from "@airin/core";
 import { createAcpUpdateMapper } from "./acp-session-events";
 
 function recorder() {
@@ -27,20 +27,20 @@ function notify(update: acp.SessionUpdate): acp.SessionNotification {
 }
 
 describe("ACP tool steps", () => {
-  test("a Nakama MCP tool shows under its Nakama name, with its input and result", () => {
+  test("an Airin MCP tool shows under its Airin name, with its input and result", () => {
     const { ends, handlers, starts } = recorder();
     const mapper = createAcpUpdateMapper(handlers);
 
     mapper.handle(
       notify({
         _meta: {
-          claudeCode: { toolName: "mcp__nakama__knowledge_base_search" },
+          claudeCode: { toolName: "mcp__airin__knowledge_base_search" },
         },
         kind: "other",
         rawInput: {},
         sessionUpdate: "tool_call",
         status: "pending",
-        title: "mcp__nakama__knowledge_base_search",
+        title: "mcp__airin__knowledge_base_search",
         toolCallId: "t1",
       })
     );
@@ -49,7 +49,7 @@ describe("ACP tool steps", () => {
     mapper.handle(
       notify({
         _meta: {
-          claudeCode: { toolName: "mcp__nakama__knowledge_base_search" },
+          claudeCode: { toolName: "mcp__airin__knowledge_base_search" },
         },
         rawInput: { query: "ACP" },
         sessionUpdate: "tool_call_update",
@@ -59,7 +59,7 @@ describe("ACP tool steps", () => {
     mapper.handle(
       notify({
         _meta: {
-          claudeCode: { toolName: "mcp__nakama__knowledge_base_search" },
+          claudeCode: { toolName: "mcp__airin__knowledge_base_search" },
         },
         rawOutput: [{ text: '{"matchCount":0}', type: "text" }],
         sessionUpdate: "tool_call_update",
@@ -94,12 +94,12 @@ describe("ACP tool steps", () => {
         kind: "other",
         rawInput: {
           arguments: { content: "<html></html>", path: "artifacts/q3.html" },
-          server: "nakama",
+          server: "airin",
           tool: "save_artifact",
         },
         sessionUpdate: "tool_call",
         status: "in_progress",
-        title: "mcp.nakama.save_artifact",
+        title: "mcp.airin.save_artifact",
         toolCallId: "c1",
       })
     );
@@ -120,7 +120,7 @@ describe("ACP tool steps", () => {
         },
         sessionUpdate: "tool_call_update",
         status: "completed",
-        title: "mcp.nakama.save_artifact",
+        title: "mcp.airin.save_artifact",
         toolCallId: "c1",
       })
     );
@@ -151,7 +151,7 @@ describe("ACP tool steps", () => {
         rawOutput: { error: { message: "denied" }, result: null },
         sessionUpdate: "tool_call_update",
         status: "failed",
-        title: "mcp.nakama.save_artifact",
+        title: "mcp.airin.save_artifact",
         toolCallId: "c2",
       })
     );
@@ -191,13 +191,13 @@ describe("ACP tool steps", () => {
     ]);
   });
 
-  test("a Nakama read keeps the path under the key Nakama reads", () => {
+  test("an Airin read keeps the path under the key Airin reads", () => {
     const { starts, handlers } = recorder();
     const mapper = createAcpUpdateMapper(handlers);
 
     mapper.handle(
       notify({
-        _meta: { claudeCode: { toolName: "mcp__nakama__read_file" } },
+        _meta: { claudeCode: { toolName: "mcp__airin__read_file" } },
         rawInput: { path: "acp-edit-check.md" },
         sessionUpdate: "tool_call_update",
         toolCallId: "r1",
@@ -219,7 +219,7 @@ describe("ACP tool steps", () => {
 
     mapper.handle(
       notify({
-        _meta: { claudeCode: { toolName: "mcp__nakama__web_fetch" } },
+        _meta: { claudeCode: { toolName: "mcp__airin__web_fetch" } },
         rawOutput: "ok",
         sessionUpdate: "tool_call_update",
         status: "completed",

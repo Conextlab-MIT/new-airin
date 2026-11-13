@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import * as childProcess from "node:child_process";
 import { existsSync } from "node:fs";
 import { zipSync } from "fflate";
-import { NakamaApiError } from "../api-error";
+import { AirinApiError } from "../api-error";
 import { asTestFetch } from "../channel-test-helpers";
 import {
   fetchGitHubSkillBundle,
@@ -34,9 +34,9 @@ describe("fetchGitHubSkillMarkdown size limits", () => {
       );
       throw new Error("expected fetchGitHubSkillMarkdown to reject");
     } catch (error) {
-      expect(error).toBeInstanceOf(NakamaApiError);
+      expect(error).toBeInstanceOf(AirinApiError);
 
-      if (!(error instanceof NakamaApiError)) {
+      if (!(error instanceof AirinApiError)) {
         throw error;
       }
 

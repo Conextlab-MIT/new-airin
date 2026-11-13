@@ -10,7 +10,7 @@ import {
   saveProfileAvatar,
 } from "./profile-avatar";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 const ORG_ID = "org_test";
 
@@ -22,9 +22,9 @@ describe("profile avatar", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (tempConfigDir) {
@@ -34,8 +34,8 @@ describe("profile avatar", () => {
   });
 
   test("saves, reads, and deletes avatar files", async () => {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-avatar-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-avatar-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const profileId = "profile_test";
 
@@ -62,8 +62,8 @@ describe("profile avatar", () => {
   });
 
   test("replaces an existing avatar on upload", async () => {
-    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "nakama-avatar-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(os.tmpdir(), "airin-avatar-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
 
     const profileId = "profile_test";
 

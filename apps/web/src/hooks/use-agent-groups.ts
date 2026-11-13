@@ -4,12 +4,9 @@ import type {
   AgentGroupRun,
   AgentGroupSessionDetail,
   AgentGroupThreadDetail,
-} from "@nakama/core/agent-groups";
-import type {
-  DocumentAttachment,
-  ImageAttachment,
-} from "@nakama/core/contract";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/core/agent-groups";
+import type { DocumentAttachment, ImageAttachment } from "@airin/core/contract";
+import { toast } from "@airin/ui/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { client, formatError } from "@/lib/client";

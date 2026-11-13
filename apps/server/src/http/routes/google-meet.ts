@@ -1,6 +1,6 @@
+import { AirinApiError } from "@airin/core";
+import type { MeetAction, MeetActionResults } from "@airin/core/google-meet";
 import { createRoute, z } from "@hono/zod-openapi";
-import { NakamaApiError } from "@nakama/core";
-import type { MeetAction, MeetActionResults } from "@nakama/core/google-meet";
 import type { Context } from "hono";
 import { resolveRequestSelfOrigin } from "../../services/composio-callback-url";
 import {
@@ -136,7 +136,7 @@ const extensionRoutes = [
 
 function requireMeet(options: ServerOptions): GoogleMeetService {
   if (!options.googleMeetService) {
-    throw new NakamaApiError("Google Meet is unavailable", 503);
+    throw new AirinApiError("Google Meet is unavailable", 503);
   }
 
   return options.googleMeetService;
@@ -162,11 +162,11 @@ async function invokeMeet<Action extends MeetAction>(
       captureSocketUrl
     );
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       throw error;
     }
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       error instanceof Error ? error.message : "Meeting action failed",
       400
     );
@@ -186,7 +186,7 @@ async function requireExtensionKey(c: Context<AppEnv>, options: ServerOptions) {
     : null;
 
   if (!auth) {
-    throw new NakamaApiError("Authentication required", 401);
+    throw new AirinApiError("Authentication required", 401);
   }
 
   return {
@@ -219,7 +219,7 @@ async function readMeetInput<Action extends keyof typeof meetingActionSchemas>(
   );
 
   if (!parsed.success) {
-    throw new NakamaApiError("Invalid meeting input", 400);
+    throw new AirinApiError("Invalid meeting input", 400);
   }
 
   return parsed.data;
@@ -281,14 +281,14 @@ export function registerGoogleMeetRoutes(app: HonoApp, options: ServerOptions) {
     if (!Object.hasOwn(sessionActionSchemas, action)) {
       // Pages and scripts made for extension v0.2 still call this action.
       throw action === "start-capture"
-        ? new NakamaApiError("Update the Nakama Meet extension to v0.3.", 410)
-        : new NakamaApiError("Unknown meeting action", 404);
+        ? new AirinApiError("Update the Airin Meet extension to v0.3.", 410)
+        : new AirinApiError("Unknown meeting action", 404);
     }
 
     const input = await readMeetInput(c.req.raw, action);
 
     if (action === "configure" && auth.orgRole !== "admin") {
-      throw new NakamaApiError("Forbidden", 403);
+      throw new AirinApiError("Forbidden", 403);
     }
 
     return json(
@@ -398,7 +398,7 @@ export function registerGoogleMeetRoutes(app: HonoApp, options: ServerOptions) {
     const parsed = meetingActionSchemas.transcript.safeParse(query);
 
     if (!parsed.success) {
-      throw new NakamaApiError("Invalid meeting input", 400);
+      throw new AirinApiError("Invalid meeting input", 400);
     }
 
     return json(

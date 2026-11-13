@@ -1,12 +1,12 @@
-import type { OrgMemberSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { OrgMemberSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/dropdown-menu";
+import { Spinner } from "@airin/ui/spinner";
 import {
   Delete02Icon,
   Edit03Icon,

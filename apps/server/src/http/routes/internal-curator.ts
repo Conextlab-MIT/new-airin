@@ -1,8 +1,8 @@
-import { z } from "@hono/zod-openapi";
 import type {
   ListSkillCuratorOrgsResponse,
   SkillCuratorRunResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
+import { z } from "@hono/zod-openapi";
 import type { ServerOptions } from "../context";
 import { errorResponse, json, readJson } from "../shared";
 import type { HonoApp } from "../types";

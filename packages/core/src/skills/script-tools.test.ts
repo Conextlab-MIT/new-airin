@@ -342,8 +342,8 @@ test("a script that prints its result is accepted, not read as missing a harness
 });
 
 test("a package installed in the skill's own environment is not reported, a missing one names requirements.txt", async () => {
-  const previous = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
+  const previous = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = await mkdtemp(
     path.join(os.tmpdir(), "skill-env-")
   );
   const source = `"""Draw a chart."""\nimport matplotlib.pyplot as plt\nfrom reportlab.lib import colors\n${BODY}${HARNESS}`;
@@ -387,12 +387,12 @@ test("a package installed in the skill's own environment is not reported, a miss
     expect(reason).not.toContain("matplotlib");
     await rm(directory, { force: true, recursive: true });
   } finally {
-    await rm(process.env.NAKAMA_CONFIG_DIR, { force: true, recursive: true });
+    await rm(process.env.AIRIN_CONFIG_DIR, { force: true, recursive: true });
 
     if (previous === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous;
+      process.env.AIRIN_CONFIG_DIR = previous;
     }
   }
 });

@@ -16,7 +16,7 @@ import {
   resolveProfileSkillDirectory,
   saveUserConfig,
   uploadOrganizationKnowledgeBaseDocument,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   CreateOrganizationResponse,
   CreateTeamRequest,
@@ -26,9 +26,9 @@ import type {
   OrgSharedResourceResponse,
   ProfileResponse,
   PublishOrgSharedResourceRequest,
-} from "@nakama/core/contract";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core/contract";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { ProfileService } from "../services/profile-service";
 import { setupTestConfigDir } from "../test-config-dir";
 import { createMinimalHonoApp } from "./test-app-helpers";
@@ -38,7 +38,7 @@ import {
   setupFreshInstallSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-org-members-test-");
+setupTestConfigDir("airin-org-members-test-");
 
 test("shared agent selection returns stable team profiles and enforces invocation access", async () => {
   const db = createInMemoryDatabaseAdapter();

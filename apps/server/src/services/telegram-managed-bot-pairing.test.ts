@@ -17,7 +17,7 @@ function fakeTelegramFetch(getUsername: () => string) {
     if (method === "getMe") {
       return Response.json({
         ok: true,
-        result: { username: "NakamaManagerBot" },
+        result: { username: "AirinManagerBot" },
       });
     }
 
@@ -202,7 +202,7 @@ describe("TelegramManagedBotPairingService", () => {
             expiresAt: new Date(Date.now() + 60_000).toISOString(),
             pairingId,
             secret,
-            suggestedUsername: "nakama_test_bot",
+            suggestedUsername: "airin_test_bot",
           });
         }
 
@@ -216,7 +216,7 @@ describe("TelegramManagedBotPairingService", () => {
         }
 
         const result: TelegramPairingResult = {
-          botUsername: "nakama_test_bot",
+          botUsername: "airin_test_bot",
           ownerUserId: 77,
           status: "ready",
         };

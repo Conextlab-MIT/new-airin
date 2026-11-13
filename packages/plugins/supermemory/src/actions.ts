@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { PluginExecutionContext } from "@nakama/core";
+import type { PluginExecutionContext } from "@airin/core";
 import {
   type Connection,
   normalizeUrl,
@@ -298,7 +298,7 @@ export async function run(input: Input, context: Context): Promise<JsonValue> {
     if (action === "check_connection") {
       await client.request("POST", "/v3/documents/list", {
         containerTags: [
-          `nakama_${hash([namespace, context.orgId, "connection-check"])}`,
+          `airin_${hash([namespace, context.orgId, "connection-check"])}`,
         ],
         limit: 1,
       });
@@ -335,7 +335,7 @@ export async function run(input: Input, context: Context): Promise<JsonValue> {
       ? "memory"
       : "knowledge";
 
-    const tag = `nakama_${hash([namespace, context.orgId, profileId, kind])}`;
+    const tag = `airin_${hash([namespace, context.orgId, profileId, kind])}`;
 
     function rowById(id: string): Receipt {
       const row = db
@@ -366,13 +366,13 @@ export async function run(input: Input, context: Context): Promise<JsonValue> {
 
     const ownsMemory = (entry: JsonRecord, row: Receipt) =>
       entry.id === row.upstream_id &&
-      metadata(entry.metadata).nakamaContainer === tag &&
-      metadata(entry.metadata).nakamaOperation === row.custom_id;
+      metadata(entry.metadata).airinContainer === tag &&
+      metadata(entry.metadata).airinOperation === row.custom_id;
 
     async function memoryPage(row: Receipt) {
       const response = await client.request("POST", "/v4/memories/list", {
         containerTags: [tag],
-        filters: { AND: [{ key: "nakamaOperation", value: row.custom_id }] },
+        filters: { AND: [{ key: "airinOperation", value: row.custom_id }] },
         limit: 20,
       });
 
@@ -385,7 +385,7 @@ export async function run(input: Input, context: Context): Promise<JsonValue> {
       if (!upstreamId) {
         const listed = await client.request("POST", "/v3/documents/list", {
           containerTags: [tag],
-          filters: { AND: [{ key: "nakamaOperation", value: row.custom_id }] },
+          filters: { AND: [{ key: "airinOperation", value: row.custom_id }] },
           limit: 2,
         });
 
@@ -460,8 +460,8 @@ export async function run(input: Input, context: Context): Promise<JsonValue> {
 
       const matches = (await memoryPage(row)).filter(
         (entry) =>
-          metadata(entry.metadata).nakamaContainer === tag &&
-          metadata(entry.metadata).nakamaOperation === row.custom_id
+          metadata(entry.metadata).airinContainer === tag &&
+          metadata(entry.metadata).airinOperation === row.custom_id
       );
 
       if (matches.length !== 1) {
@@ -543,8 +543,8 @@ export async function run(input: Input, context: Context): Promise<JsonValue> {
       const row = reserved.row;
 
       const meta = {
-        nakamaContainer: tag,
-        nakamaOperation: row.custom_id,
+        airinContainer: tag,
+        airinOperation: row.custom_id,
         source,
         title,
       };
@@ -693,8 +693,8 @@ export async function run(input: Input, context: Context): Promise<JsonValue> {
         } else {
           // The search hit must carry the metadata written with this owned receipt.
           if (
-            metadata(entry.metadata).nakamaContainer !== tag ||
-            metadata(entry.metadata).nakamaOperation !== row.custom_id
+            metadata(entry.metadata).airinContainer !== tag ||
+            metadata(entry.metadata).airinOperation !== row.custom_id
           ) {
             continue;
           }

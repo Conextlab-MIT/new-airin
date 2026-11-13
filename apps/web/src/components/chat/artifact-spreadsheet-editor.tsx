@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { useState } from "react";
 import * as artifactSpreadsheet from "@/lib/artifact-spreadsheet";
 import {

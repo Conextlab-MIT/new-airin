@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { CreateProviderRequest } from "@nakama/core/contract";
+import type { CreateProviderRequest } from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";

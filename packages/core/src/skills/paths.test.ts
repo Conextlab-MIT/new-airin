@@ -11,13 +11,13 @@ describe("skill paths", () => {
   let configDir: string | undefined;
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     configDir = undefined;
   });
 
   test("resolveSkillDiscoveryDirs includes profile skills dir", async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-paths-test-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-paths-test-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     await expect(
       resolveSkillDiscoveryDirs({ orgId: ORG_ID, profileId: "profile_default" })
@@ -35,8 +35,8 @@ describe("skill paths", () => {
   });
 
   test("resolveSkillDiscoveryDirs does not scan every profile when profileId is omitted", async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-paths-test-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-paths-test-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     await mkdir(
       path.join(configDir, "orgs", ORG_ID, "profiles", "profile_a", "skills"),
       {
@@ -60,12 +60,12 @@ describe("discoverSkills", () => {
   let configDir: string;
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("deduplicates by skill name and prefers the global copy", async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-skill-discover-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-skill-discover-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const skillMarkdown = `---
 name: coding-backend-claude-code

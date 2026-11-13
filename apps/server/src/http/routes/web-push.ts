@@ -1,6 +1,6 @@
+import type { StreamEvent } from "@airin/core";
+import { AirinApiError } from "@airin/core";
 import { z } from "@hono/zod-openapi";
-import type { StreamEvent } from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
 import { TURN_CANCELLED_ERROR } from "../../services/turn-runner";
 import { isPushServiceEndpoint } from "../../services/web-push";
 import { webPushService } from "../../services/web-push-service";
@@ -36,7 +36,7 @@ export function registerWebPushRoutes(app: HonoApp): void {
     const subscription = await readJson(c.req.raw, subscriptionSchema);
 
     if (!isPushServiceEndpoint(subscription.endpoint)) {
-      throw new NakamaApiError("Unsupported push service.", 400);
+      throw new AirinApiError("Unsupported push service.", 400);
     }
 
     await webPushService.subscribe(user.id, subscription);
@@ -114,6 +114,7 @@ async function sendTurnEndedPush(
   // The whole payload must fit one 4 KB push record, so every text is capped.
   await webPushService.notify(target.userId, {
     body: clip(text.replace(/\s+/g, " ").trim(), 180) || "Reply ready",
+    profileId: summary.profileId,
     tag: `session-${target.sessionId}`,
     title: clip(title, 100),
     // The org rides along: the device may have another org active by the tap.

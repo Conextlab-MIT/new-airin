@@ -3,7 +3,7 @@ import { setupTestConfigDir } from "../../test-config-dir";
 import { createMinimalHonoApp } from "../test-app-helpers";
 import { setupFreshInstallSession } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-tools-catalog-auth-test-");
+setupTestConfigDir("airin-tools-catalog-auth-test-");
 
 // packages/core/src/ensure-server.ts reads these off /health before the CLI has
 // credentials. If any of them stops being served there, the CLI decides the

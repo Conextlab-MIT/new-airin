@@ -24,7 +24,7 @@ function readPositiveEnvMs(name: string): number | undefined {
 /** How long a timed-out CLI child gets to honour SIGTERM before SIGKILL. */
 export function resolveCliSigtermGraceMs(): number {
   return (
-    readPositiveEnvMs("NAKAMA_CLI_SIGTERM_GRACE_MS") ?? CLI_SIGTERM_GRACE_MS
+    readPositiveEnvMs("AIRIN_CLI_SIGTERM_GRACE_MS") ?? CLI_SIGTERM_GRACE_MS
   );
 }
 
@@ -300,7 +300,7 @@ export async function downloadPinnedPackageTarball(
     `Verified ${pkg.name}@${pkg.version} against ${dist.integrity}.`
   );
 
-  const dir = await mkdtemp(join(tmpdir(), "nakama-pinned-pkg-"));
+  const dir = await mkdtemp(join(tmpdir(), "airin-pinned-pkg-"));
 
   const file = join(
     dir,
@@ -429,7 +429,7 @@ export async function probeCliVersion(command: string): Promise<{
   missing: boolean;
 }> {
   const { spawn } = await import("node:child_process");
-  const timeoutMs = readPositiveEnvMs("NAKAMA_CLI_PROBE_TIMEOUT_MS") ?? 5000;
+  const timeoutMs = readPositiveEnvMs("AIRIN_CLI_PROBE_TIMEOUT_MS") ?? 5000;
 
   const sigtermGraceMs = resolveCliSigtermGraceMs();
 

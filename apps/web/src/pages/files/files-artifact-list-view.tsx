@@ -1,5 +1,5 @@
-import type { ArtifactFile } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ArtifactFile } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import { Folder01Icon, PinIcon, PinOffIcon } from "hugeicons-react";
 import { type ReactNode, useContext } from "react";
 import { useArtifactAttachmentPreviewPanel } from "@/components/chat/use-artifact-attachment-preview-panel";

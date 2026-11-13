@@ -1,5 +1,5 @@
-import { MAX_SESSION_SEARCH_LENGTH } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import { MAX_SESSION_SEARCH_LENGTH } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   ConfirmDialog,
   Dialog,
@@ -8,15 +8,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Input } from "@nakama/ui/input";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { Input } from "@airin/ui/input";
+import { cn } from "@airin/ui/utils";
 import {
   ArrowDown01Icon,
   Cancel01Icon,

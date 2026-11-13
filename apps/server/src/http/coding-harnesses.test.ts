@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../services/agent-service";
 import { AuthService } from "../services/auth-service";
 import { OrgService } from "../services/org-service";
@@ -43,12 +43,12 @@ describe("coding harness settings routes", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
-  test("defaults to Nakama provider passthrough and can switch to harness login", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-coding-harness-route-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+  test("defaults to Airin provider passthrough and can switch to harness login", async () => {
+    configDir = await mkdtemp(join(tmpdir(), "airin-coding-harness-route-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const { app, databaseAdapter } = createHarnessApp();
 
@@ -111,8 +111,8 @@ describe("coding harness settings routes", () => {
   });
 
   test("org members can read coding harness settings but cannot write them", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-coding-harness-member-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-coding-harness-member-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const { app, databaseAdapter } = createHarnessApp();
     const adminSession = await setupFreshInstallSession(app, databaseAdapter);
@@ -190,10 +190,8 @@ describe("coding harness settings routes", () => {
   });
 
   test("a platform admin who is only an org member can write the setting", async () => {
-    configDir = await mkdtemp(
-      join(tmpdir(), "nakama-coding-harness-platform-")
-    );
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-coding-harness-platform-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const { app, authService, databaseAdapter } = createHarnessApp();
     const adminSession = await setupFreshInstallSession(app, databaseAdapter);

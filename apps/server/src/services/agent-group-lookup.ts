@@ -1,5 +1,5 @@
-import { NakamaApiError } from "@nakama/core";
-import type { AgentGroup, AgentGroupMessage } from "@nakama/core/agent-groups";
+import { AirinApiError } from "@airin/core";
+import type { AgentGroup, AgentGroupMessage } from "@airin/core/agent-groups";
 import {
   getAgentGroup,
   getAgentGroupMessage,
@@ -16,7 +16,7 @@ export function requireThreadRoot(
   const root = getAgentGroupMessage(orgId, sessionId, rootId);
 
   if (!root?.authorProfileId) {
-    throw new NakamaApiError("Message not found", 404);
+    throw new AirinApiError("Message not found", 404);
   }
 
   return root;
@@ -30,7 +30,7 @@ export function requireGroup(
   const group = getAgentGroup(orgId, userId, groupId);
 
   if (!group) {
-    throw new NakamaApiError("Group not found", 404);
+    throw new AirinApiError("Group not found", 404);
   }
 
   return group;
@@ -45,7 +45,7 @@ export function requireSession(
   const session = getGroupSession(orgId, userId, groupId, sessionId);
 
   if (!session) {
-    throw new NakamaApiError("Session not found", 404);
+    throw new AirinApiError("Session not found", 404);
   }
 
   return session;

@@ -1,12 +1,12 @@
 import type {
   SkillCuratorRunResult,
   UpdateOrganizationRequest,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Card } from "@nakama/ui/card";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Card } from "@airin/ui/card";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { toast } from "@airin/ui/toast";
 import {
   type Dispatch,
   type SetStateAction,

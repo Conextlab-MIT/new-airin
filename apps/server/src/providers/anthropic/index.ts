@@ -1,4 +1,3 @@
-import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import {
   fetchWithoutIdleTimeout,
   type GenerateChatInput,
@@ -7,7 +6,8 @@ import {
   type ProviderClient,
   type ProviderName,
   type StreamChatHandlers,
-} from "@nakama/core";
+} from "@airin/core";
+import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import {
   buildProviderHttpError,
   buildProviderResponseError,

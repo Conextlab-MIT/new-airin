@@ -1,6 +1,6 @@
-import type { AgentQuestionnaire } from "@nakama/core/contract";
-import { Input } from "@nakama/ui/input";
-import { cn } from "@nakama/ui/utils";
+import type { AgentQuestionnaire } from "@airin/core/contract";
+import { Input } from "@airin/ui/input";
+import { cn } from "@airin/ui/utils";
 import { PencilEdit02Icon, Tick02Icon } from "hugeicons-react";
 import {
   type DraftAnswerState,

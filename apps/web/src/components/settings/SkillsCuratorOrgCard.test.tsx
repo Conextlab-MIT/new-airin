@@ -3,7 +3,7 @@ import type {
   SkillCuratorLatestResponse,
   SkillCuratorRunResult,
   UserOrgSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import {

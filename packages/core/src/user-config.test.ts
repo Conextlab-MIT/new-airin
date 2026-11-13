@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 import { pathExists } from "./fs";
 import {
   applyChatgptOAuthToInstance,
@@ -20,10 +20,53 @@ import {
   readChatgptOAuthFromInstance,
   readXaiOAuthFromInstance,
   saveUserConfig,
+  saveUserLanguage,
   saveUserTimezone,
   saveUserWebPublicUrl,
   validateProviderApiKeyFormat,
 } from "./user-config";
+
+describe("saveUserLanguage", () => {
+  test("rejects missing or unknown language with 400", async () => {
+    const cases = [
+      [undefined, "Language is required."],
+      ["  ", "Language is required."],
+      ["fr", "Invalid language: fr"],
+    ] as const;
+
+    for (const [value, message] of cases) {
+      try {
+        await saveUserLanguage(value);
+        throw new Error("expected a rejection");
+      } catch (error) {
+        if (!(error instanceof AirinApiError)) {
+          throw error;
+        }
+
+        expect(error.message).toBe(message);
+        expect(error.status).toBe(400);
+      }
+    }
+  });
+
+  test("persists id and en", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "airin-language-"));
+    process.env.AIRIN_CONFIG_DIR = dir;
+
+    try {
+      expect(await saveUserLanguage("en")).toBe("en");
+      const raw = await readFile(join(dir, "config.ini"), "utf8");
+      expect(raw).toContain("language=en");
+
+      expect(await saveUserLanguage("id")).toBe("id");
+      const again = await readFile(join(dir, "config.ini"), "utf8");
+      expect(again).toContain("language=id");
+    } finally {
+      delete process.env.AIRIN_CONFIG_DIR;
+      await rm(dir, { force: true, recursive: true });
+    }
+  });
+});
 
 describe("saveUserTimezone", () => {
   // readJson casts the body without validating it, so timezone can arrive
@@ -40,7 +83,7 @@ describe("saveUserTimezone", () => {
         await saveUserTimezone(value);
         throw new Error("expected a rejection");
       } catch (error) {
-        if (!(error instanceof NakamaApiError)) {
+        if (!(error instanceof AirinApiError)) {
           throw error;
         }
 
@@ -88,12 +131,12 @@ describe("ensureUserConfigDir", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("creates the config directory when missing", async () => {
-    configDir = join(tmpdir(), `nakama-config-${Date.now()}`);
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = join(tmpdir(), `airin-config-${Date.now()}`);
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     expect(await pathExists(configDir)).toBe(false);
     await expect(ensureUserConfigDir()).resolves.toBe(configDir);
@@ -105,8 +148,8 @@ describe("user config multi-provider", () => {
   let configDir = "";
 
   test("round-trips Grok OAuth tokens without using the API key field", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-xai-oauth-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-xai-oauth-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const oauth = {
       accessToken: "access",
@@ -140,12 +183,12 @@ describe("user config multi-provider", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("round-trips multiple provider instances", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const openaiId = createProviderInstanceId();
     const compatibleId = createProviderInstanceId();
@@ -205,8 +248,8 @@ describe("user config multi-provider", () => {
     // The writer persists customModels for every provider type, so the reader
     // must parse them back for discovery providers too — otherwise a fetched
     // catalog is written to disk and dropped on the next load.
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const moonshotId = createProviderInstanceId();
     const zhipuId = createProviderInstanceId();
@@ -252,8 +295,8 @@ describe("user config multi-provider", () => {
   });
 
   test("repairs literal undefined label on load", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const id = createProviderInstanceId();
 
@@ -279,8 +322,8 @@ created_at=2026-06-15T00:00:00.000Z
   });
 
   test("saveUserWebPublicUrl preserves path segments", async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     await expect(
       saveUserWebPublicUrl("https://gateway.devscale.id/v1/")

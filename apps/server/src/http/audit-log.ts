@@ -1,5 +1,5 @@
-import { log } from "@nakama/core";
-import type { DatabaseAdapter, StoredAuditEvent } from "@nakama/db";
+import { log } from "@airin/core";
+import type { DatabaseAdapter, StoredAuditEvent } from "@airin/db";
 import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "./types";

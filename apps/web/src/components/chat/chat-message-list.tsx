@@ -1,20 +1,20 @@
-import { hasActiveAgentQuestionnaire } from "@nakama/core/agent-questionnaire";
-import { NakamaApiError } from "@nakama/core/api-error";
+import { hasActiveAgentQuestionnaire } from "@airin/core/agent-questionnaire";
+import { AirinApiError } from "@airin/core/api-error";
 import type {
   AgentQuestionAnswer,
   AgentQuestionnaire,
   ChatUsage,
   ListComposioToolkitsResponse,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Textarea } from "@nakama/ui/textarea";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { Textarea } from "@airin/ui/textarea";
+import { cn } from "@airin/ui/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckmarkCircle01Icon,
@@ -929,7 +929,7 @@ function describeComposioApp(
 
   // A member on a shared agent cannot read it (403); they cannot manage it.
   const agentForbidden =
-    agent.error instanceof NakamaApiError && agent.error.status === 403;
+    agent.error instanceof AirinApiError && agent.error.status === 403;
 
   const ready = Boolean(toolkits && (agent.loaded || agentForbidden));
 

@@ -1,10 +1,10 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type {
   ArchiveOrgMemoryResponse,
   OrgMemoryResponse,
   OrgMemorySearchResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { ServerOptions } from "../context";
 import {
   requireOrgAdminFromContext,
@@ -78,7 +78,7 @@ export function registerOrgMemoryRoutes(
     const orgId = decodeURIComponent(c.req.param("orgId"));
 
     if (authOrgId !== orgId) {
-      throw new NakamaApiError("Not found", 404);
+      throw new AirinApiError("Not found", 404);
     }
 
     return orgId;
@@ -86,7 +86,7 @@ export function registerOrgMemoryRoutes(
 
   function requireService() {
     if (!orgMemoryService) {
-      throw new NakamaApiError("Org memory service not configured", 500);
+      throw new AirinApiError("Org memory service not configured", 500);
     }
 
     return orgMemoryService;

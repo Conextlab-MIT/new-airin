@@ -15,17 +15,17 @@ import {
   getCustomToolsDir,
   pathExists,
   slugifyProfileName,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   type DatabaseAdapter,
   type StoredProfileRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { unzipSync, zipSync } from "fflate";
 import { AuthService } from "./auth-service";
 import {
-  createNakamaDataExport,
-  previewNakamaDataImport,
+  createAirinDataExport,
+  previewAirinDataImport,
 } from "./data-portability";
 import { OrgService } from "./org-service";
 import {
@@ -37,7 +37,7 @@ import {
 import { ProfileService } from "./profile-service";
 import { SkillsService } from "./skills-service";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 const ORG = "org_test";
 
@@ -92,9 +92,9 @@ describe("profile portability", () => {
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (root) {
@@ -104,8 +104,8 @@ describe("profile portability", () => {
   });
 
   async function setup() {
-    root = await mkdtemp(path.join(os.tmpdir(), "nakama-profile-pack-"));
-    process.env.NAKAMA_CONFIG_DIR = root;
+    root = await mkdtemp(path.join(os.tmpdir(), "airin-profile-pack-"));
+    process.env.AIRIN_CONFIG_DIR = root;
     const db = createInMemoryDatabaseAdapter();
 
     return { db, service: new ProfileService(db) };
@@ -230,7 +230,7 @@ describe("profile portability", () => {
     });
 
     const crafted = repack(exported.data, {
-      "nakama-profile-export.json": JSON.stringify({
+      "airin-profile-export.json": JSON.stringify({
         ...exported.manifest,
         meta: {
           ...exported.manifest.meta,
@@ -357,7 +357,7 @@ describe("profile portability", () => {
       },
     ]) {
       const crafted = repack(exported.data, {
-        "nakama-profile-export.json": JSON.stringify({
+        "airin-profile-export.json": JSON.stringify({
           ...exported.manifest,
           meta: { ...exported.manifest.meta, sharedAgent },
         }),
@@ -443,7 +443,7 @@ describe("profile portability", () => {
       }
 
       const crafted = repack(exported.data, {
-        "nakama-profile-export.json": JSON.stringify({
+        "airin-profile-export.json": JSON.stringify({
           ...exported.manifest,
           meta: {
             ...exported.manifest.meta,
@@ -1295,20 +1295,20 @@ describe("profile portability", () => {
     ).toEqual(["mcp_prod"]);
   });
 
-  test("guards: Super Nakama, confirm, preview-only, and kind mismatch", async () => {
+  test("guards: Airin, confirm, preview-only, and kind mismatch", async () => {
     const { db, service } = await setup();
     const normal = await service.createProfile(ORG, { name: "Bot" });
 
-    const superNakama = await service.createProfile(ORG, {
+    const superAirin = await service.createProfile(ORG, {
       isSuper: true,
-      name: "Super Nakama",
+      name: "Airin",
     });
 
     const exported = await createProfilePackExport(db, ORG, normal.profile.id);
 
     await expect(
-      createProfilePackExport(db, ORG, superNakama.profile.id)
-    ).rejects.toThrow(/super nakama cannot be exported/i);
+      createProfilePackExport(db, ORG, superAirin.profile.id)
+    ).rejects.toThrow(/super airin cannot be exported/i);
     await expect(
       importProfilePack(db, DEST, exported.data, { confirm: false })
     ).rejects.toThrow(/confirmation is required/i);
@@ -1319,7 +1319,7 @@ describe("profile portability", () => {
 
     for (const handlerType of [null, 123, [], {}]) {
       const invalid = repack(exported.data, {
-        "nakama-profile-export.json": JSON.stringify({
+        "airin-profile-export.json": JSON.stringify({
           ...exported.manifest,
           meta: {
             ...exported.manifest.meta,
@@ -1343,11 +1343,11 @@ describe("profile portability", () => {
     expect(await db.listProfilesForOrg(DEST)).toHaveLength(before);
 
     await expect(
-      previewNakamaDataImport(exported.data, { rootDir: root })
-    ).rejects.toThrow(/missing nakama export manifest/i);
-    const full = await createNakamaDataExport({ rootDir: root });
+      previewAirinDataImport(exported.data, { rootDir: root })
+    ).rejects.toThrow(/missing airin export manifest/i);
+    const full = await createAirinDataExport({ rootDir: root });
     await expect(previewProfilePackImport(db, DEST, full.data)).rejects.toThrow(
-      /missing the nakama profile pack manifest/i
+      /missing the airin profile pack manifest/i
     );
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { ProviderName } from "@nakama/core";
-import { USER_PROVIDER_NAMES } from "@nakama/core/provider-resolution";
+import type { ProviderName } from "@airin/core";
+import { USER_PROVIDER_NAMES } from "@airin/core/provider-resolution";
 import {
   buildCreateProviderRequest,
   effectiveProfileModelSelection,

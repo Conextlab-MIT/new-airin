@@ -1,9 +1,9 @@
 ---
 title: "How Agent Prompts Work"
-description: "Understand how Nakama builds the final system prompt from soul files, tools, bundled system skills, and runtime context."
+description: "Understand how Airin builds the final system prompt from soul files, tools, bundled system skills, and runtime context."
 ---
 
-When a user starts chatting with a profile, Nakama builds one system prompt from several sources.
+When a user starts chatting with a profile, Airin builds one system prompt from several sources.
 
 The short version:
 
@@ -12,7 +12,7 @@ Profile soul/system prompt
 + skills catalog
 + knowledge base catalog
 + org memory summary
-+ super nakama rules, when enabled
++ super airin rules, when enabled
 + USER.md context
 + timezone
 + tool instructions
@@ -23,9 +23,9 @@ Profile soul/system prompt
 
 ## Main profile prompt
 
-Nakama first resolves the profile's main prompt.
+Airin first resolves the profile's main prompt.
 
-If the profile has soul files, Nakama uses them:
+If the profile has soul files, Airin uses them:
 
 | File | Injected as |
 |------|-------------|
@@ -34,18 +34,18 @@ If the profile has soul files, Nakama uses them:
 | `INSTRUCTIONS.md` | Operating instructions |
 | `MEMORY.md` | Continuity |
 
-If there are no soul files, Nakama uses the profile's stored `systemPrompt`.
+If there are no soul files, Airin uses the profile's stored `systemPrompt`.
 
 If both exist and they are different, the stored `systemPrompt` is appended as extra profile instructions.
 
 ## Extra profile context
 
-After the main profile prompt, Nakama may append:
+After the main profile prompt, Airin may append:
 
 - Assigned skills catalog
 - Knowledge base catalog
 - Org memory summary for organization members — pinned bullets under `## Org Memory`, capped at **2048 bytes** with an overflow hint to use `org_memory_search` when truncated (see [Org memory](/org-memory))
-- Super Nakama tool-authoring rules, only for super profiles
+- Airin tool-authoring rules, only for super profiles
 
 ## Chat wrapper
 
@@ -66,11 +66,11 @@ An API-key session with an `appUserId` is separate from the authenticated
 organization user's session. It does not load that user's `USER.md`; its private
 workspace and artifacts are scoped to the stable app-user id, so keep each app
 user's session and files separate.
-When soul is active, Nakama tells the agent to use tools while staying in character.
+When soul is active, Airin tells the agent to use tools while staying in character.
 
 ## Per-turn context
 
-On each user message, Nakama can add fresh context for that turn:
+On each user message, Airin can add fresh context for that turn:
 
 - Active todo/task state
 - The skill the user names with `/skill <name>`
@@ -79,7 +79,7 @@ This context is not permanent. It is attached only when relevant for the current
 
 ## Current date
 
-Right before sending the request to the LLM, Nakama appends the current date:
+Right before sending the request to the LLM, Airin appends the current date:
 
 ```text
 Today is <current date>.

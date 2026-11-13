@@ -3,8 +3,8 @@ import type {
   LlmUsageGroupStats,
   LlmUsageModelStats,
   LlmUsageStats,
-} from "@nakama/core";
-import type { DatabaseAdapter, LlmUsageActor } from "@nakama/db";
+} from "@airin/core";
+import type { DatabaseAdapter, LlmUsageActor } from "@airin/db";
 import {
   estimateUsageCostUsd,
   getExplicitModelPricing,

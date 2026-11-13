@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getUserConfigDir } from "@nakama/core";
+import { getUserConfigDir } from "@airin/core";
 import { unzipSync, zipSync } from "fflate";
 import {
   closeAgentGroupDatabases,
@@ -10,11 +10,11 @@ import {
 } from "../../services/agent-group-store";
 import * as dataPortability from "../../services/data-portability";
 import {
-  createNakamaDataExport,
+  createAirinDataExport,
   decodeArchiveRequestBytes,
   MAX_IMPORT_ARCHIVE_BYTES,
   MAX_IMPORT_ENTRIES,
-  previewNakamaDataImport,
+  previewAirinDataImport,
 } from "../../services/data-portability";
 import { sessionTurnRegistry } from "../../services/session-turn-registry";
 import { setupTestConfigDir } from "../../test-config-dir";
@@ -25,7 +25,7 @@ import { loginPlatformAdminSession } from "../test-session-helpers";
 // Before the config dir cleanup, which Windows refuses while a file is open.
 afterEach(closeAgentGroupDatabases);
 
-setupTestConfigDir("nakama-setup-import-routes-test-");
+setupTestConfigDir("airin-setup-import-routes-test-");
 
 function createApp() {
   return createMinimalHonoApp({
@@ -37,9 +37,8 @@ function createApp() {
 }
 
 async function createArchiveOverEntryLimit(): Promise<Buffer> {
-  const archive = (
-    await createNakamaDataExport({ rootDir: getUserConfigDir() })
-  ).data;
+  const archive = (await createAirinDataExport({ rootDir: getUserConfigDir() }))
+    .data;
 
   const entries = unzipSync(archive);
 
@@ -57,7 +56,7 @@ describe("setup import routes", () => {
     await writeFile(configPath, "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(configPath, "changed");
@@ -92,7 +91,7 @@ describe("setup import routes", () => {
     await writeFile(configPath, "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(configPath, "changed");
@@ -129,7 +128,7 @@ describe("setup import routes", () => {
     });
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     sessionTurnRegistry.beginTurn("restore-drain-test");
@@ -177,7 +176,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(join(getUserConfigDir(), "config.ini"), "changed");
@@ -237,7 +236,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(join(getUserConfigDir(), "config.ini"), "changed");
@@ -269,7 +268,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     // Opens and keeps the org's group file, which the archive does not have.
@@ -304,7 +303,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     const restoreResponse = await app.fetch(
@@ -354,7 +353,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(join(getUserConfigDir(), "config.ini"), "changed");
@@ -393,7 +392,7 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "original");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     await writeFile(join(getUserConfigDir(), "config.ini"), "changed");
@@ -421,7 +420,7 @@ describe("setup import routes", () => {
     await loginPlatformAdminSession(app, authService, databaseAdapter);
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     const previewResponse = await app.fetch(
@@ -560,15 +559,15 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "keep");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
     const previewSpy = spyOn(
       dataPortability,
-      "previewNakamaDataImportFile"
+      "previewAirinDataImportFile"
     ).mockImplementation(async () => {
       throw new Error(
-        "ENOENT: no such file or directory, open '/home/nakama/.config/nakama/nakama.db'"
+        "ENOENT: no such file or directory, open '/home/airin/.config/airin/airin.db'"
       );
     });
 
@@ -595,10 +594,10 @@ describe("setup import routes", () => {
     await writeFile(join(getUserConfigDir(), "config.ini"), "provider=openai");
 
     const archive = (
-      await createNakamaDataExport({ rootDir: getUserConfigDir() })
+      await createAirinDataExport({ rootDir: getUserConfigDir() })
     ).data;
 
-    const preview = await previewNakamaDataImport(archive, {
+    const preview = await previewAirinDataImport(archive, {
       rootDir: getUserConfigDir(),
     });
 

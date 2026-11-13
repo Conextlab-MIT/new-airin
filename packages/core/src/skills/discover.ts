@@ -31,9 +31,7 @@ function warnAboutUnrunnableScripts(
   warnedSkillDirectories.add(directory);
 
   for (const issue of issues) {
-    console.warn(
-      `[nakama:skills] ${directory}: ${issue.path} ${issue.reason}.`
-    );
+    console.warn(`[airin:skills] ${directory}: ${issue.path} ${issue.reason}.`);
   }
 }
 
@@ -129,7 +127,7 @@ export async function discoverSkillDirectory(
     };
   } catch (error) {
     console.warn(
-      `[nakama:skills] Skipping ${skillFilePath}:`,
+      `[airin:skills] Skipping ${skillFilePath}:`,
       error instanceof Error ? error.message : error
     );
 

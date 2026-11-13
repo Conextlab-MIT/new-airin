@@ -72,7 +72,7 @@ export function appendPendingErrorReport(report: ErrorReport): void {
   } catch (error) {
     // A full or read-only config dir must not turn one crash into two, but swallowing it
     // outright leaves an operator with tracking on and no reports and no reason why.
-    console.error("[nakama:error-tracking] cannot queue report", error);
+    console.error("[airin:error-tracking] cannot queue report", error);
   }
 }
 

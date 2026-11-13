@@ -63,8 +63,8 @@ export function resolveErrorTrackingDsn(
   }
 
   // Set but empty means off. Falling through to the stored value would make
-  // NAKAMA_ERROR_TRACKING_DSN="" keep delivering, the opposite of what it asks for.
-  const fromEnv = env.NAKAMA_ERROR_TRACKING_DSN;
+  // AIRIN_ERROR_TRACKING_DSN="" keep delivering, the opposite of what it asks for.
+  const fromEnv = env.AIRIN_ERROR_TRACKING_DSN;
 
   if (fromEnv !== undefined) {
     return fromEnv.trim() || null;
@@ -77,7 +77,7 @@ async function writeErrorTrackingConfig(
   config: ErrorTrackingConfig
 ): Promise<void> {
   const lines = [
-    "# Nakama error tracking",
+    "# Airin error tracking",
     "# dsn = a Sentry-compatible DSN (Sentry, GlitchTip, Bugsink, Rustrak, self-hosted).",
     "# Empty or missing sends nothing. DO_NOT_TRACK=1 overrides this file.",
     ...(config.dsn ? [`dsn=${config.dsn}`] : []),

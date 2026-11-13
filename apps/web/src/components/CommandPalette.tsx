@@ -1,6 +1,5 @@
-import uFuzzy from "@leeoniya/ufuzzy";
-import type { AgentGroup } from "@nakama/core/agent-groups";
-import type { ProfileSummary } from "@nakama/core/contract";
+import type { AgentGroup } from "@airin/core/agent-groups";
+import type { ProfileSummary } from "@airin/core/contract";
 import {
   Command,
   CommandDialog,
@@ -9,7 +8,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@nakama/ui/command";
+} from "@airin/ui/command";
+import uFuzzy from "@leeoniya/ufuzzy";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";

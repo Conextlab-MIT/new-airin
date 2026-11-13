@@ -1,15 +1,15 @@
-import { z } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   getTeamsWorkerStatus,
   loadTeamsConfigFile,
   loadTeamsSettingsPublic,
-  NakamaApiError,
   regenerateTeamsHandshake,
   saveTeamsConfig,
   type TeamsSettingsResponse,
   type UpdateTeamsSettingsRequest,
-} from "@nakama/core";
-import { ChannelConfigBusyError } from "@nakama/core/channel-config-shared";
+} from "@airin/core";
+import { ChannelConfigBusyError } from "@airin/core/channel-config-shared";
+import { z } from "@hono/zod-openapi";
 import { resolveChannelOwner } from "../channel-owner";
 import type { ServerOptions } from "../context";
 import {
@@ -94,7 +94,7 @@ export function registerTeamsRoutes(app: HonoApp, options: ServerOptions) {
         return errorResponse("Teams settings are busy. Try again.", 503);
       }
 
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 

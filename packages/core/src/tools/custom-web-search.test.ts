@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { NakamaApiError } from "../api-error";
+import { AirinApiError } from "../api-error";
 import { asTestFetch } from "../channel-test-helpers";
 import type { WebSearchConfigFile } from "../web-search-config";
 import {
@@ -185,7 +185,7 @@ describe("createCustomWebSearchTool", () => {
     const tool = createCustomWebSearchTool(config({}));
 
     await expect(tool?.run({ query: "anything" }, {})).rejects.toThrow(
-      NakamaApiError
+      AirinApiError
     );
     expect(pulled).toBeLessThan(totalChunks);
   });
@@ -213,7 +213,7 @@ describe("createCustomWebSearchTool", () => {
     expect(url.searchParams.get("q")).toBe("bun release notes");
     expect(url.searchParams.get("num")).toBe("5");
     expect(captured[0]?.headers["x-api-key"]).toBe("serply-key");
-    expect(captured[0]?.headers["user-agent"]).toBe("nakama");
+    expect(captured[0]?.headers["user-agent"]).toBe("airin");
   });
 
   test("reads Serply's link and description fields", async () => {

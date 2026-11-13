@@ -16,7 +16,7 @@ if (
 }
 
 const web = Bun.spawn(
-  [process.execPath, "run", "--filter", "@nakama/web", "build"],
+  [process.execPath, "run", "--filter", "@airin/web", "build"],
   { cwd: root, stderr: "inherit", stdout: "inherit" }
 );
 
@@ -59,7 +59,7 @@ const tracked = Bun.spawnSync(
 );
 
 if (tracked.exitCode !== 0) {
-  throw new Error("Build from a Git checkout of Nakama");
+  throw new Error("Build from a Git checkout of Airin");
 }
 
 for (const file of tracked.stdout.toString().split("\0").filter(Boolean)) {
@@ -102,7 +102,7 @@ const install = Bun.spawn(
       "discord",
       "slack",
       "teams",
-    ].flatMap((name) => ["--filter", `@nakama/${name}`]),
+    ].flatMap((name) => ["--filter", `@airin/${name}`]),
   ],
   { cwd: output, stderr: "inherit", stdout: "inherit" }
 );
@@ -114,7 +114,7 @@ if ((await install.exited) !== 0) {
 if (process.platform === "win32") {
   // Hoisting removes dependency links, but workspace packages remain junctions.
   // Replace those with real directories before electron-builder walks the files.
-  const scope = join(output, "node_modules/@nakama");
+  const scope = join(output, "node_modules/@airin");
 
   for (const entry of await readdir(scope, { withFileTypes: true })) {
     if (!entry.isSymbolicLink()) {

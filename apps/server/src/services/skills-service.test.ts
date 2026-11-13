@@ -18,8 +18,8 @@ import {
   getProfileSoulDir,
   runReadFile,
   uploadOrganizationKnowledgeBaseDocument,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { createMinimalHonoApp } from "../http/test-app-helpers";
 import {
   loginPlatformAdminSession,
@@ -55,8 +55,8 @@ describe("SkillsService", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skills-test-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skills-test-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     const weatherDir = join(configDir, "agent", "skills", "weather");
     await mkdir(weatherDir, { recursive: true });
@@ -65,7 +65,7 @@ describe("SkillsService", () => {
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   async function setupPublishedSkill() {
@@ -372,17 +372,17 @@ export async function run(input, context) {
       const modulePath = join(skill.sourcePath, file);
 
       const source = `import { writeFile } from "node:fs/promises";
-process.env.NAKAMA_SHARED_JS_CHILD = "child";
+process.env.AIRIN_SHARED_JS_CHILD = "child";
 export const name = "shared-notes";
 export const description = "Probe team context";
 export const parameters = {type: "object", properties: {message: {type: "string"}}};
 export async function run(input, context) {
   await writeFile("executed.marker", "team");
-  return { cwd: process.cwd(), workspace: context.workspaceRoot, orgId: context.orgId, profileId: context.profileId, config: process.env.NAKAMA_CONFIG_DIR ?? null, value: "original", message: input.message };
+  return { cwd: process.cwd(), workspace: context.workspaceRoot, orgId: context.orgId, profileId: context.profileId, config: process.env.AIRIN_CONFIG_DIR ?? null, value: "original", message: input.message };
 }
 `;
 
-      const originalChild = process.env.NAKAMA_SHARED_JS_CHILD;
+      const originalChild = process.env.AIRIN_SHARED_JS_CHILD;
       await writeFile(modulePath, source);
       await db.assignSkillToProfile("profile_team_a", skill.id);
       const agent = new AgentService(null, null, db);
@@ -402,7 +402,7 @@ export async function run(input, context) {
       )[0]!;
 
       expect(await blocked.run({}, context)).toHaveProperty("error");
-      expect(process.env.NAKAMA_SHARED_JS_CHILD).toBe(originalChild);
+      expect(process.env.AIRIN_SHARED_JS_CHILD).toBe(originalChild);
       await expect(readFile(join(root, "executed.marker"))).rejects.toThrow();
       await db.upsertOrganization({
         ...(await db.getOrganizationById("parent"))!,
@@ -432,7 +432,7 @@ export async function run(input, context) {
         properties: { message: { type: "string" } },
         type: "object",
       });
-      expect(process.env.NAKAMA_SHARED_JS_CHILD).toBe(originalChild);
+      expect(process.env.AIRIN_SHARED_JS_CHILD).toBe(originalChild);
       await expect(readFile(join(root, "executed.marker"))).rejects.toThrow();
 
       const result = await tool.run(
@@ -452,7 +452,7 @@ export async function run(input, context) {
       expect(await realpath((result as { cwd: string }).cwd)).toBe(
         await realpath(root)
       );
-      expect(process.env.NAKAMA_SHARED_JS_CHILD).toBe(originalChild);
+      expect(process.env.AIRIN_SHARED_JS_CHILD).toBe(originalChild);
       expect(await readFile(join(root, "executed.marker"), "utf8")).toBe(
         "team"
       );
@@ -515,7 +515,7 @@ import sys
 def run(payload, context):
     with open("executed.marker", "w") as handle:
         handle.write("team")
-    return {"cwd": os.getcwd(), "workspace": os.environ.get("NAKAMA_WORKSPACE_ROOT"), "config": os.environ.get("NAKAMA_CONFIG_DIR"), "value": "original"}
+    return {"cwd": os.getcwd(), "workspace": os.environ.get("AIRIN_WORKSPACE_ROOT"), "config": os.environ.get("AIRIN_CONFIG_DIR"), "value": "original"}
 
 if __name__ == "__main__":
     print(json.dumps(run(json.loads(sys.stdin.read() or "{}"), {})))

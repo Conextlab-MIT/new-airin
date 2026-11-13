@@ -29,6 +29,8 @@ export const queryKeys = {
         messageId,
       ] as const,
   },
+  airinUpgrade: ["system", "upgrade"] as const,
+  airinVersion: ["system", "version"] as const,
   artifacts: {
     profile: (profileId: string) => ["artifacts", profileId] as const,
     shareStatus: (profileId: string, path: string) =>
@@ -69,14 +71,15 @@ export const queryKeys = {
     published: (orgId: string, publicationId: string) =>
       ["knowledgeBase", "published", orgId, publicationId] as const,
   },
+  language: {
+    settings: ["language", "settings"] as const,
+  },
   mcp: {
     all: ["mcp", "servers"] as const,
     detail: (serverId: string) => ["mcp", "servers", serverId] as const,
     registry: (query: string) => ["mcp", "registry", query] as const,
   },
   models: ["models"] as const,
-  nakamaUpgrade: ["system", "upgrade"] as const,
-  nakamaVersion: ["system", "version"] as const,
   notificationDestinations: (orgId: string) =>
     ["notificationDestinations", orgId] as const,
   openRouterModels: ["openRouterModels"] as const,

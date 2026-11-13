@@ -2,7 +2,7 @@ import { expect, mock, spyOn, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { MeetImportProgress } from "@nakama/core/google-meet";
+import type { MeetImportProgress } from "@airin/core/google-meet";
 import * as recordingImport from "../meet-recording-import";
 import type { MeetExecutionContext } from "./actions";
 import { openaiProviderKey, run } from "./actions";
@@ -126,7 +126,7 @@ test("settings are admin-only, credentials never returned, meetings are scoped t
   }
 });
 
-test("uploads preserve Markdown and use Nakama's host for audio without plugin credentials", async () => {
+test("uploads preserve Markdown and use Airin's host for audio without plugin credentials", async () => {
   const dir = mkdtempSync(join(tmpdir(), "meet-upload-"));
   const host = mock(async () => ({ text: "Audio transcript" }));
 

@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import styles from "./ThinkingState.module.css";
 
 interface ThinkingStateProps {

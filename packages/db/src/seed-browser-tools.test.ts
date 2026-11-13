@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BROWSER_TOOL_IDS } from "@nakama/core/tools/protected";
+import { BROWSER_TOOL_IDS } from "@airin/core/tools/protected";
 import { createInMemoryDatabaseAdapter } from "./index";
 import { ensureBrowserToolDefinitions } from "./org-profiles";
 

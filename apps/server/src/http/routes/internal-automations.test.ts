@@ -3,8 +3,8 @@ import {
   loadLocalAuthToken,
   readEnvValue,
   setManagedSecretResolver,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AuthService } from "../../services/auth-service";
 import { AutomationService } from "../../services/automation-service";
 import { OrgService } from "../../services/org-service";
@@ -14,7 +14,7 @@ import type { ServerOptions } from "../context";
 import { seedLocalClientUser } from "../test-org-helpers";
 import { setupFreshInstallSession } from "../test-session-helpers";
 
-setupTestConfigDir("nakama-internal-automations-test-");
+setupTestConfigDir("airin-internal-automations-test-");
 
 afterEach(() => {
   setManagedSecretResolver(

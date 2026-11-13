@@ -4,7 +4,7 @@ import type {
   WorkflowRunStepRecord,
   WorkflowRunStepStatus,
   WorkflowStep,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { formatSessionRelativeTime } from "@/lib/chat-history";
 import { countWords } from "@/lib/pasted-text";
 

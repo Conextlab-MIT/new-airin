@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to nakama are documented here.
+All notable changes to airin are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -11,7 +11,7 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 
 ### Removed
 
-- The built-in token optimiser and its Context savings panel. Tool results reach the model unshortened, the image no longer ships the `omni` binary, and `NAKAMA_OMNI` and `NAKAMA_OMNI_AUTO_INSTALL` are ignored. Upgrading drops the `tool_output_savings` table and the `token_optimizer_enabled` setting ([#1888]) *(in review)*
+- The built-in token optimiser and its Context savings panel. Tool results reach the model unshortened, the image no longer ships the `omni` binary, and `AIRIN_OMNI` and `AIRIN_OMNI_AUTO_INSTALL` are ignored. Upgrading drops the `tool_output_savings` table and the `token_optimizer_enabled` setting ([#1888]) *(in review)*
 - Organization backend API keys and app-user integration. External apps using these keys must stop using this API. Private session rows remain retired; files are retained in `retired-app-users` for operators. Back up the full database and config directory before upgrading; do not run old and new servers against the same data. Rollback requires restoring that full backup.
 
 ### Changed
@@ -66,7 +66,7 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 
 ### Changed
 
-- The token optimiser is on by default; `NAKAMA_OMNI=0` or the Integrations
+- The token optimiser is on by default; `AIRIN_OMNI=0` or the Integrations
   toggle turns it off ([#881])
 - Pinned tool-output optimiser bumped to 0.7.9: a fold always leaves part of the
   result readable, and non-ASCII output no longer panics the cut ([#875])
@@ -83,7 +83,7 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 - Last-picked chat model and turn stamps stay consistent ([#839], [#867])
 - Artifact share origins are validated; revoked links recover ([#857], [#864])
 - Notification webhook secrets stay masked; channel worker logs stay quiet
-  unless `NAKAMA_CH_DEBUG` ([#865], [#866])
+  unless `AIRIN_CH_DEBUG` ([#865], [#866])
 - CLI pending chat messages are bounded ([#847])
 
 ## [0.4.8] - 2026-09-06
@@ -92,7 +92,7 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 
 - User-triggered workflow recipes with receipt-bound summarize ([#826])
 - Workspace worker polling interval is configurable ([#788])
-- Settings and the sidebar show the installed Nakama version
+- Settings and the sidebar show the installed Airin version
 - `web_search` can run through Exa or Firecrawl instead of the hosted provider
 
 ### Changed
@@ -197,7 +197,7 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 
 ### Changed
 
-- Super Nakama deletes files with `bash`; `delete_file` is no longer assigned ([#650])
+- Airin deletes files with `bash`; `delete_file` is no longer assigned ([#650])
 - Dashboard uses Inter Variable
 
 ### Fixed
@@ -215,7 +215,7 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 - Batch-add provider models from setup ([#465])
 - Optional error delivery to a Sentry-compatible DSN ([#442], [#443])
 - Custom tool failures retry at most twice with backoff ([#454])
-- Super Nakama `update_profile` can edit soul files
+- Airin `update_profile` can edit soul files
 
 ### Changed
 
@@ -242,7 +242,7 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 ### Added
 
 - WhatsApp group chats, extra allowed numbers, and quoted group context in the agent turn ([#450])
-- Super Nakama confirm-first `update_profile` for stored system prompts ([#450])
+- Airin confirm-first `update_profile` for stored system prompts ([#450])
 - Optional LLM skill curator consolidate ([#437])
 
 ### Changed
@@ -270,7 +270,7 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 
 - Optional CloakBrowser stealth Chromium behind the agent-browser skill ([#314])
 - Direct MiniMax, xAI Grok, and Zhipu GLM providers with dynamic model discovery ([#392], [#408], [#394])
-- Custom Python tools, including Super Nakama authoring ([#352], [#403])
+- Custom Python tools, including Airin authoring ([#352], [#403])
 - Read another profile's sessions from within the same org ([#351])
 - Platform admins can archive an organization ([#393])
 - Composio: connect, auto-assign, and a shorter app list on Integrations ([#337])
@@ -556,14 +556,14 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 
 ### Changed
 
-- Super Nakama capabilities and documentation updated
+- Airin capabilities and documentation updated
 - Chat message queue panel reworked
 
 ## [0.3.1] - 2026-08-03
 
 ### Fixed
 
-- Missing `./skills/write` export added to `@nakama/core`, which 0.3.0 needed
+- Missing `./skills/write` export added to `@airin/core`, which 0.3.0 needed
 
 ## [0.3.0] - 2026-08-03
 
@@ -739,7 +739,7 @@ Entries marked *(in review)* come from a pull request that is open but not merge
 - Sub-agent capability
 - Discord integration
 - Composio integration
-- Launch a coding agent from the nakama CLI
+- Launch a coding agent from the airin CLI
 - HTML artifact rendering and a full artifact preview
 
 ### Changed
@@ -764,322 +764,322 @@ First tagged release. The baseline it established:
 - Export and import for data portability
 - Docker image published from GitHub Actions, and a VitePress documentation site
 
-[Unreleased]: https://github.com/ahmadrosid/nakama/compare/v0.4.10...main
-[0.4.10]: https://github.com/ahmadrosid/nakama/compare/v0.4.9...v0.4.10
-[0.4.9]: https://github.com/ahmadrosid/nakama/compare/v0.4.8...v0.4.9
-[0.4.8]: https://github.com/ahmadrosid/nakama/compare/v0.4.7...v0.4.8
-[0.4.7]: https://github.com/ahmadrosid/nakama/compare/v0.4.6...v0.4.7
-[0.4.6]: https://github.com/ahmadrosid/nakama/compare/v0.4.5...v0.4.6
-[0.4.5]: https://github.com/ahmadrosid/nakama/compare/v0.4.4...v0.4.5
-[0.4.4]: https://github.com/ahmadrosid/nakama/compare/v0.4.3...v0.4.4
-[0.4.3]: https://github.com/ahmadrosid/nakama/compare/v0.4.2...v0.4.3
-[0.4.2]: https://github.com/ahmadrosid/nakama/compare/v0.4.1...v0.4.2
-[0.4.1]: https://github.com/ahmadrosid/nakama/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/ahmadrosid/nakama/compare/v0.3.15...v0.4.0
-[0.3.15]: https://github.com/ahmadrosid/nakama/compare/v0.3.14...v0.3.15
-[0.3.14]: https://github.com/ahmadrosid/nakama/compare/v0.3.13...v0.3.14
-[0.3.13]: https://github.com/ahmadrosid/nakama/compare/v0.3.12...v0.3.13
-[0.3.12]: https://github.com/ahmadrosid/nakama/compare/v0.3.11...v0.3.12
-[0.3.11]: https://github.com/ahmadrosid/nakama/compare/v0.3.10...v0.3.11
-[0.3.10]: https://github.com/ahmadrosid/nakama/compare/v0.3.9...v0.3.10
-[0.3.9]: https://github.com/ahmadrosid/nakama/compare/v0.3.8...v0.3.9
-[0.3.8]: https://github.com/ahmadrosid/nakama/compare/v0.3.7...v0.3.8
-[0.3.7]: https://github.com/ahmadrosid/nakama/compare/v0.3.6...v0.3.7
-[0.3.6]: https://github.com/ahmadrosid/nakama/compare/v0.3.5...v0.3.6
-[0.3.5]: https://github.com/ahmadrosid/nakama/compare/v0.3.4...v0.3.5
-[0.3.4]: https://github.com/ahmadrosid/nakama/compare/v0.3.3...v0.3.4
-[0.3.3]: https://github.com/ahmadrosid/nakama/compare/v0.3.2...v0.3.3
-[0.3.2]: https://github.com/ahmadrosid/nakama/compare/v0.3.1...v0.3.2
-[0.3.1]: https://github.com/ahmadrosid/nakama/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/ahmadrosid/nakama/compare/v0.2.2...v0.3.0
-[0.2.2]: https://github.com/ahmadrosid/nakama/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/ahmadrosid/nakama/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/ahmadrosid/nakama/compare/v0.1.9...v0.2.0
-[0.1.9]: https://github.com/ahmadrosid/nakama/compare/v0.1.8...v0.1.9
-[0.1.8]: https://github.com/ahmadrosid/nakama/compare/v0.1.7...v0.1.8
-[0.1.7]: https://github.com/ahmadrosid/nakama/compare/v0.1.6...v0.1.7
-[0.1.6]: https://github.com/ahmadrosid/nakama/compare/v0.1.5...v0.1.6
-[0.1.5]: https://github.com/ahmadrosid/nakama/compare/v0.1.4...v0.1.5
-[0.1.4]: https://github.com/ahmadrosid/nakama/compare/v0.1.3...v0.1.4
-[0.1.3]: https://github.com/ahmadrosid/nakama/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/ahmadrosid/nakama/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/ahmadrosid/nakama/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/ahmadrosid/nakama/releases/tag/v0.1.0
+[Unreleased]: https://github.com/ahmadrosid/airin/compare/v0.4.10...main
+[0.4.10]: https://github.com/ahmadrosid/airin/compare/v0.4.9...v0.4.10
+[0.4.9]: https://github.com/ahmadrosid/airin/compare/v0.4.8...v0.4.9
+[0.4.8]: https://github.com/ahmadrosid/airin/compare/v0.4.7...v0.4.8
+[0.4.7]: https://github.com/ahmadrosid/airin/compare/v0.4.6...v0.4.7
+[0.4.6]: https://github.com/ahmadrosid/airin/compare/v0.4.5...v0.4.6
+[0.4.5]: https://github.com/ahmadrosid/airin/compare/v0.4.4...v0.4.5
+[0.4.4]: https://github.com/ahmadrosid/airin/compare/v0.4.3...v0.4.4
+[0.4.3]: https://github.com/ahmadrosid/airin/compare/v0.4.2...v0.4.3
+[0.4.2]: https://github.com/ahmadrosid/airin/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/ahmadrosid/airin/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/ahmadrosid/airin/compare/v0.3.15...v0.4.0
+[0.3.15]: https://github.com/ahmadrosid/airin/compare/v0.3.14...v0.3.15
+[0.3.14]: https://github.com/ahmadrosid/airin/compare/v0.3.13...v0.3.14
+[0.3.13]: https://github.com/ahmadrosid/airin/compare/v0.3.12...v0.3.13
+[0.3.12]: https://github.com/ahmadrosid/airin/compare/v0.3.11...v0.3.12
+[0.3.11]: https://github.com/ahmadrosid/airin/compare/v0.3.10...v0.3.11
+[0.3.10]: https://github.com/ahmadrosid/airin/compare/v0.3.9...v0.3.10
+[0.3.9]: https://github.com/ahmadrosid/airin/compare/v0.3.8...v0.3.9
+[0.3.8]: https://github.com/ahmadrosid/airin/compare/v0.3.7...v0.3.8
+[0.3.7]: https://github.com/ahmadrosid/airin/compare/v0.3.6...v0.3.7
+[0.3.6]: https://github.com/ahmadrosid/airin/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/ahmadrosid/airin/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/ahmadrosid/airin/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/ahmadrosid/airin/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/ahmadrosid/airin/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/ahmadrosid/airin/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/ahmadrosid/airin/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/ahmadrosid/airin/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/ahmadrosid/airin/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/ahmadrosid/airin/compare/v0.1.9...v0.2.0
+[0.1.9]: https://github.com/ahmadrosid/airin/compare/v0.1.8...v0.1.9
+[0.1.8]: https://github.com/ahmadrosid/airin/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/ahmadrosid/airin/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/ahmadrosid/airin/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/ahmadrosid/airin/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/ahmadrosid/airin/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/ahmadrosid/airin/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/ahmadrosid/airin/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/ahmadrosid/airin/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/ahmadrosid/airin/releases/tag/v0.1.0
 
-[#107]: https://github.com/ahmadrosid/nakama/pull/107
-[#109]: https://github.com/ahmadrosid/nakama/pull/109
-[#121]: https://github.com/ahmadrosid/nakama/issues/121
-[#176]: https://github.com/ahmadrosid/nakama/pull/176
-[#177]: https://github.com/ahmadrosid/nakama/pull/177
-[#178]: https://github.com/ahmadrosid/nakama/pull/178
-[#179]: https://github.com/ahmadrosid/nakama/pull/179
-[#181]: https://github.com/ahmadrosid/nakama/pull/181
-[#182]: https://github.com/ahmadrosid/nakama/pull/182
-[#183]: https://github.com/ahmadrosid/nakama/pull/183
-[#184]: https://github.com/ahmadrosid/nakama/pull/184
-[#185]: https://github.com/ahmadrosid/nakama/pull/185
-[#212]: https://github.com/ahmadrosid/nakama/pull/212
-[#218]: https://github.com/ahmadrosid/nakama/pull/218
-[#220]: https://github.com/ahmadrosid/nakama/issues/220
-[#224]: https://github.com/ahmadrosid/nakama/pull/224
-[#225]: https://github.com/ahmadrosid/nakama/pull/225
-[#229]: https://github.com/ahmadrosid/nakama/pull/229
-[#230]: https://github.com/ahmadrosid/nakama/pull/230
-[#232]: https://github.com/ahmadrosid/nakama/pull/232
-[#235]: https://github.com/ahmadrosid/nakama/pull/235
-[#236]: https://github.com/ahmadrosid/nakama/pull/236
-[#238]: https://github.com/ahmadrosid/nakama/pull/238
-[#239]: https://github.com/ahmadrosid/nakama/pull/239
-[#240]: https://github.com/ahmadrosid/nakama/pull/240
-[#241]: https://github.com/ahmadrosid/nakama/pull/241
-[#242]: https://github.com/ahmadrosid/nakama/pull/242
-[#244]: https://github.com/ahmadrosid/nakama/pull/244
-[#245]: https://github.com/ahmadrosid/nakama/pull/245
-[#248]: https://github.com/ahmadrosid/nakama/pull/248
-[#250]: https://github.com/ahmadrosid/nakama/pull/250
-[#251]: https://github.com/ahmadrosid/nakama/pull/251
-[#252]: https://github.com/ahmadrosid/nakama/pull/252
-[#256]: https://github.com/ahmadrosid/nakama/pull/256
-[#257]: https://github.com/ahmadrosid/nakama/pull/257
-[#258]: https://github.com/ahmadrosid/nakama/pull/258
-[#260]: https://github.com/ahmadrosid/nakama/pull/260
-[#263]: https://github.com/ahmadrosid/nakama/pull/263
-[#265]: https://github.com/ahmadrosid/nakama/pull/265
-[#266]: https://github.com/ahmadrosid/nakama/pull/266
-[#267]: https://github.com/ahmadrosid/nakama/pull/267
-[#268]: https://github.com/ahmadrosid/nakama/pull/268
-[#269]: https://github.com/ahmadrosid/nakama/pull/269
-[#270]: https://github.com/ahmadrosid/nakama/pull/270
-[#272]: https://github.com/ahmadrosid/nakama/pull/272
-[#273]: https://github.com/ahmadrosid/nakama/pull/273
-[#274]: https://github.com/ahmadrosid/nakama/pull/274
-[#275]: https://github.com/ahmadrosid/nakama/pull/275
-[#276]: https://github.com/ahmadrosid/nakama/pull/276
-[#279]: https://github.com/ahmadrosid/nakama/pull/279
-[#280]: https://github.com/ahmadrosid/nakama/pull/280
-[#281]: https://github.com/ahmadrosid/nakama/pull/281
-[#282]: https://github.com/ahmadrosid/nakama/pull/282
-[#283]: https://github.com/ahmadrosid/nakama/pull/283
-[#284]: https://github.com/ahmadrosid/nakama/pull/284
-[#285]: https://github.com/ahmadrosid/nakama/pull/285
-[#286]: https://github.com/ahmadrosid/nakama/pull/286
-[#288]: https://github.com/ahmadrosid/nakama/pull/288
-[#290]: https://github.com/ahmadrosid/nakama/pull/290
-[#291]: https://github.com/ahmadrosid/nakama/pull/291
-[#293]: https://github.com/ahmadrosid/nakama/pull/293
-[#295]: https://github.com/ahmadrosid/nakama/pull/295
-[#298]: https://github.com/ahmadrosid/nakama/pull/298
-[#299]: https://github.com/ahmadrosid/nakama/pull/299
-[#301]: https://github.com/ahmadrosid/nakama/pull/301
-[#303]: https://github.com/ahmadrosid/nakama/pull/303
-[#305]: https://github.com/ahmadrosid/nakama/pull/305
-[#306]: https://github.com/ahmadrosid/nakama/pull/306
-[#310]: https://github.com/ahmadrosid/nakama/pull/310
-[#311]: https://github.com/ahmadrosid/nakama/pull/311
-[#312]: https://github.com/ahmadrosid/nakama/pull/312
-[#313]: https://github.com/ahmadrosid/nakama/pull/313
-[#317]: https://github.com/ahmadrosid/nakama/pull/317
-[#318]: https://github.com/ahmadrosid/nakama/pull/318
-[#319]: https://github.com/ahmadrosid/nakama/pull/319
-[#320]: https://github.com/ahmadrosid/nakama/pull/320
-[#321]: https://github.com/ahmadrosid/nakama/pull/321
-[#314]: https://github.com/ahmadrosid/nakama/pull/314
-[#323]: https://github.com/ahmadrosid/nakama/pull/323
-[#325]: https://github.com/ahmadrosid/nakama/pull/325
-[#328]: https://github.com/ahmadrosid/nakama/pull/328
-[#330]: https://github.com/ahmadrosid/nakama/pull/330
-[#334]: https://github.com/ahmadrosid/nakama/pull/334
-[#335]: https://github.com/ahmadrosid/nakama/pull/335
-[#336]: https://github.com/ahmadrosid/nakama/pull/336
-[#337]: https://github.com/ahmadrosid/nakama/pull/337
-[#339]: https://github.com/ahmadrosid/nakama/pull/339
-[#343]: https://github.com/ahmadrosid/nakama/pull/343
-[#344]: https://github.com/ahmadrosid/nakama/pull/344
-[#345]: https://github.com/ahmadrosid/nakama/pull/345
-[#347]: https://github.com/ahmadrosid/nakama/pull/347
-[#348]: https://github.com/ahmadrosid/nakama/pull/348
-[#349]: https://github.com/ahmadrosid/nakama/pull/349
-[#350]: https://github.com/ahmadrosid/nakama/pull/350
-[#351]: https://github.com/ahmadrosid/nakama/pull/351
-[#352]: https://github.com/ahmadrosid/nakama/pull/352
-[#392]: https://github.com/ahmadrosid/nakama/pull/392
-[#393]: https://github.com/ahmadrosid/nakama/pull/393
-[#394]: https://github.com/ahmadrosid/nakama/pull/394
-[#395]: https://github.com/ahmadrosid/nakama/pull/395
-[#400]: https://github.com/ahmadrosid/nakama/pull/400
-[#401]: https://github.com/ahmadrosid/nakama/pull/401
-[#402]: https://github.com/ahmadrosid/nakama/pull/402
-[#403]: https://github.com/ahmadrosid/nakama/pull/403
-[#404]: https://github.com/ahmadrosid/nakama/pull/404
-[#408]: https://github.com/ahmadrosid/nakama/pull/408
-[#409]: https://github.com/ahmadrosid/nakama/pull/409
-[#411]: https://github.com/ahmadrosid/nakama/pull/411
-[#416]: https://github.com/ahmadrosid/nakama/pull/416
-[#417]: https://github.com/ahmadrosid/nakama/pull/417
-[#418]: https://github.com/ahmadrosid/nakama/pull/418
-[#419]: https://github.com/ahmadrosid/nakama/pull/419
-[#424]: https://github.com/ahmadrosid/nakama/pull/424
-[#426]: https://github.com/ahmadrosid/nakama/pull/426
-[#431]: https://github.com/ahmadrosid/nakama/pull/431
-[#432]: https://github.com/ahmadrosid/nakama/pull/432
-[#436]: https://github.com/ahmadrosid/nakama/pull/436
-[#437]: https://github.com/ahmadrosid/nakama/pull/437
-[#438]: https://github.com/ahmadrosid/nakama/pull/438
-[#442]: https://github.com/ahmadrosid/nakama/pull/442
-[#443]: https://github.com/ahmadrosid/nakama/pull/443
-[#446]: https://github.com/ahmadrosid/nakama/pull/446
-[#450]: https://github.com/ahmadrosid/nakama/pull/450
-[#451]: https://github.com/ahmadrosid/nakama/pull/451
-[#452]: https://github.com/ahmadrosid/nakama/pull/452
-[#454]: https://github.com/ahmadrosid/nakama/pull/454
-[#455]: https://github.com/ahmadrosid/nakama/pull/455
-[#457]: https://github.com/ahmadrosid/nakama/pull/457
-[#458]: https://github.com/ahmadrosid/nakama/pull/458
-[#459]: https://github.com/ahmadrosid/nakama/pull/459
-[#460]: https://github.com/ahmadrosid/nakama/pull/460
-[#462]: https://github.com/ahmadrosid/nakama/pull/462
-[#463]: https://github.com/ahmadrosid/nakama/pull/463
-[#465]: https://github.com/ahmadrosid/nakama/pull/465
-[#466]: https://github.com/ahmadrosid/nakama/pull/466
-[#467]: https://github.com/ahmadrosid/nakama/pull/467
-[#468]: https://github.com/ahmadrosid/nakama/pull/468
-[#471]: https://github.com/ahmadrosid/nakama/pull/471
-[#473]: https://github.com/ahmadrosid/nakama/pull/473
-[#475]: https://github.com/ahmadrosid/nakama/pull/475
-[#476]: https://github.com/ahmadrosid/nakama/pull/476
-[#633]: https://github.com/ahmadrosid/nakama/pull/633
-[#636]: https://github.com/ahmadrosid/nakama/pull/636
-[#637]: https://github.com/ahmadrosid/nakama/pull/637
-[#638]: https://github.com/ahmadrosid/nakama/pull/638
-[#444]: https://github.com/ahmadrosid/nakama/pull/444
-[#632]: https://github.com/ahmadrosid/nakama/pull/632
-[#639]: https://github.com/ahmadrosid/nakama/pull/639
-[#642]: https://github.com/ahmadrosid/nakama/pull/642
-[#648]: https://github.com/ahmadrosid/nakama/pull/648
-[#649]: https://github.com/ahmadrosid/nakama/pull/649
-[#650]: https://github.com/ahmadrosid/nakama/pull/650
-[#653]: https://github.com/ahmadrosid/nakama/pull/653
-[#654]: https://github.com/ahmadrosid/nakama/pull/654
-[#659]: https://github.com/ahmadrosid/nakama/pull/659
-[#661]: https://github.com/ahmadrosid/nakama/pull/661
-[#668]: https://github.com/ahmadrosid/nakama/pull/668
-[#674]: https://github.com/ahmadrosid/nakama/pull/674
-[#676]: https://github.com/ahmadrosid/nakama/pull/676
-[#677]: https://github.com/ahmadrosid/nakama/pull/677
-[#700]: https://github.com/ahmadrosid/nakama/pull/700
-[#708]: https://github.com/ahmadrosid/nakama/pull/708
-[#709]: https://github.com/ahmadrosid/nakama/pull/709
-[#710]: https://github.com/ahmadrosid/nakama/pull/710
-[#711]: https://github.com/ahmadrosid/nakama/pull/711
-[#712]: https://github.com/ahmadrosid/nakama/pull/712
-[#715]: https://github.com/ahmadrosid/nakama/pull/715
-[#675]: https://github.com/ahmadrosid/nakama/pull/675
-[#713]: https://github.com/ahmadrosid/nakama/pull/713
-[#716]: https://github.com/ahmadrosid/nakama/pull/716
-[#720]: https://github.com/ahmadrosid/nakama/pull/720
-[#721]: https://github.com/ahmadrosid/nakama/pull/721
-[#723]: https://github.com/ahmadrosid/nakama/pull/723
-[#724]: https://github.com/ahmadrosid/nakama/pull/724
-[#727]: https://github.com/ahmadrosid/nakama/pull/727
-[#728]: https://github.com/ahmadrosid/nakama/pull/728
-[#729]: https://github.com/ahmadrosid/nakama/pull/729
-[#730]: https://github.com/ahmadrosid/nakama/pull/730
-[#732]: https://github.com/ahmadrosid/nakama/pull/732
-[#734]: https://github.com/ahmadrosid/nakama/pull/734
-[#735]: https://github.com/ahmadrosid/nakama/pull/735
-[#736]: https://github.com/ahmadrosid/nakama/pull/736
-[#737]: https://github.com/ahmadrosid/nakama/pull/737
-[#738]: https://github.com/ahmadrosid/nakama/pull/738
-[#739]: https://github.com/ahmadrosid/nakama/pull/739
-[#740]: https://github.com/ahmadrosid/nakama/pull/740
-[#741]: https://github.com/ahmadrosid/nakama/pull/741
-[#743]: https://github.com/ahmadrosid/nakama/pull/743
-[#744]: https://github.com/ahmadrosid/nakama/pull/744
-[#746]: https://github.com/ahmadrosid/nakama/pull/746
-[#747]: https://github.com/ahmadrosid/nakama/pull/747
-[#748]: https://github.com/ahmadrosid/nakama/pull/748
-[#749]: https://github.com/ahmadrosid/nakama/pull/749
-[#750]: https://github.com/ahmadrosid/nakama/pull/750
-[#751]: https://github.com/ahmadrosid/nakama/pull/751
-[#752]: https://github.com/ahmadrosid/nakama/pull/752
-[#753]: https://github.com/ahmadrosid/nakama/pull/753
-[#754]: https://github.com/ahmadrosid/nakama/pull/754
-[#755]: https://github.com/ahmadrosid/nakama/pull/755
-[#756]: https://github.com/ahmadrosid/nakama/pull/756
-[#757]: https://github.com/ahmadrosid/nakama/pull/757
-[#758]: https://github.com/ahmadrosid/nakama/pull/758
-[#759]: https://github.com/ahmadrosid/nakama/pull/759
-[#760]: https://github.com/ahmadrosid/nakama/pull/760
-[#761]: https://github.com/ahmadrosid/nakama/pull/761
-[#762]: https://github.com/ahmadrosid/nakama/pull/762
-[#763]: https://github.com/ahmadrosid/nakama/pull/763
-[#764]: https://github.com/ahmadrosid/nakama/pull/764
-[#765]: https://github.com/ahmadrosid/nakama/pull/765
-[#772]: https://github.com/ahmadrosid/nakama/pull/772
-[#773]: https://github.com/ahmadrosid/nakama/pull/773
-[#774]: https://github.com/ahmadrosid/nakama/pull/774
-[#775]: https://github.com/ahmadrosid/nakama/pull/775
-[#777]: https://github.com/ahmadrosid/nakama/pull/777
-[#778]: https://github.com/ahmadrosid/nakama/pull/778
-[#779]: https://github.com/ahmadrosid/nakama/pull/779
-[#782]: https://github.com/ahmadrosid/nakama/pull/782
-[#784]: https://github.com/ahmadrosid/nakama/pull/784
-[#785]: https://github.com/ahmadrosid/nakama/pull/785
-[#788]: https://github.com/ahmadrosid/nakama/pull/788
-[#804]: https://github.com/ahmadrosid/nakama/pull/804
-[#806]: https://github.com/ahmadrosid/nakama/pull/806
-[#808]: https://github.com/ahmadrosid/nakama/pull/808
-[#809]: https://github.com/ahmadrosid/nakama/pull/809
-[#811]: https://github.com/ahmadrosid/nakama/pull/811
-[#813]: https://github.com/ahmadrosid/nakama/pull/813
-[#814]: https://github.com/ahmadrosid/nakama/pull/814
-[#815]: https://github.com/ahmadrosid/nakama/pull/815
-[#816]: https://github.com/ahmadrosid/nakama/pull/816
-[#819]: https://github.com/ahmadrosid/nakama/pull/819
-[#820]: https://github.com/ahmadrosid/nakama/pull/820
-[#821]: https://github.com/ahmadrosid/nakama/pull/821
-[#822]: https://github.com/ahmadrosid/nakama/pull/822
-[#824]: https://github.com/ahmadrosid/nakama/pull/824
-[#826]: https://github.com/ahmadrosid/nakama/pull/826
-[#845]: https://github.com/ahmadrosid/nakama/pull/845
-[#846]: https://github.com/ahmadrosid/nakama/pull/846
-[#848]: https://github.com/ahmadrosid/nakama/pull/848
-[#849]: https://github.com/ahmadrosid/nakama/pull/849
-[#850]: https://github.com/ahmadrosid/nakama/pull/850
-[#851]: https://github.com/ahmadrosid/nakama/pull/851
-[#852]: https://github.com/ahmadrosid/nakama/pull/852
-[#853]: https://github.com/ahmadrosid/nakama/pull/853
-[#854]: https://github.com/ahmadrosid/nakama/pull/854
-[#855]: https://github.com/ahmadrosid/nakama/pull/855
-[#856]: https://github.com/ahmadrosid/nakama/pull/856
-[#858]: https://github.com/ahmadrosid/nakama/pull/858
-[#859]: https://github.com/ahmadrosid/nakama/pull/859
-[#860]: https://github.com/ahmadrosid/nakama/pull/860
-[#875]: https://github.com/ahmadrosid/nakama/pull/875
-[#881]: https://github.com/ahmadrosid/nakama/pull/881
-[#886]: https://github.com/ahmadrosid/nakama/pull/886
-[#887]: https://github.com/ahmadrosid/nakama/pull/887
-[#895]: https://github.com/ahmadrosid/nakama/pull/895
-[#896]: https://github.com/ahmadrosid/nakama/pull/896
-[#897]: https://github.com/ahmadrosid/nakama/pull/897
-[#898]: https://github.com/ahmadrosid/nakama/pull/898
-[#899]: https://github.com/ahmadrosid/nakama/pull/899
-[#900]: https://github.com/ahmadrosid/nakama/pull/900
-[#905]: https://github.com/ahmadrosid/nakama/pull/905
-[#906]: https://github.com/ahmadrosid/nakama/pull/906
-[#908]: https://github.com/ahmadrosid/nakama/pull/908
-[#909]: https://github.com/ahmadrosid/nakama/pull/909
-[#911]: https://github.com/ahmadrosid/nakama/pull/911
-[#912]: https://github.com/ahmadrosid/nakama/pull/912
-[#913]: https://github.com/ahmadrosid/nakama/pull/913
-[#914]: https://github.com/ahmadrosid/nakama/pull/914
-[#916]: https://github.com/ahmadrosid/nakama/pull/916
-[#917]: https://github.com/ahmadrosid/nakama/pull/917
-[#918]: https://github.com/ahmadrosid/nakama/pull/918
-[#919]: https://github.com/ahmadrosid/nakama/pull/919
-[#920]: https://github.com/ahmadrosid/nakama/pull/920
-[#921]: https://github.com/ahmadrosid/nakama/pull/921
-[#926]: https://github.com/ahmadrosid/nakama/pull/926
-[#1270]: https://github.com/ahmadrosid/nakama/issues/1270
-[#1888]: https://github.com/ahmadrosid/nakama/issues/1888
-[#2300]: https://github.com/ahmadrosid/nakama/issues/2300
+[#107]: https://github.com/ahmadrosid/airin/pull/107
+[#109]: https://github.com/ahmadrosid/airin/pull/109
+[#121]: https://github.com/ahmadrosid/airin/issues/121
+[#176]: https://github.com/ahmadrosid/airin/pull/176
+[#177]: https://github.com/ahmadrosid/airin/pull/177
+[#178]: https://github.com/ahmadrosid/airin/pull/178
+[#179]: https://github.com/ahmadrosid/airin/pull/179
+[#181]: https://github.com/ahmadrosid/airin/pull/181
+[#182]: https://github.com/ahmadrosid/airin/pull/182
+[#183]: https://github.com/ahmadrosid/airin/pull/183
+[#184]: https://github.com/ahmadrosid/airin/pull/184
+[#185]: https://github.com/ahmadrosid/airin/pull/185
+[#212]: https://github.com/ahmadrosid/airin/pull/212
+[#218]: https://github.com/ahmadrosid/airin/pull/218
+[#220]: https://github.com/ahmadrosid/airin/issues/220
+[#224]: https://github.com/ahmadrosid/airin/pull/224
+[#225]: https://github.com/ahmadrosid/airin/pull/225
+[#229]: https://github.com/ahmadrosid/airin/pull/229
+[#230]: https://github.com/ahmadrosid/airin/pull/230
+[#232]: https://github.com/ahmadrosid/airin/pull/232
+[#235]: https://github.com/ahmadrosid/airin/pull/235
+[#236]: https://github.com/ahmadrosid/airin/pull/236
+[#238]: https://github.com/ahmadrosid/airin/pull/238
+[#239]: https://github.com/ahmadrosid/airin/pull/239
+[#240]: https://github.com/ahmadrosid/airin/pull/240
+[#241]: https://github.com/ahmadrosid/airin/pull/241
+[#242]: https://github.com/ahmadrosid/airin/pull/242
+[#244]: https://github.com/ahmadrosid/airin/pull/244
+[#245]: https://github.com/ahmadrosid/airin/pull/245
+[#248]: https://github.com/ahmadrosid/airin/pull/248
+[#250]: https://github.com/ahmadrosid/airin/pull/250
+[#251]: https://github.com/ahmadrosid/airin/pull/251
+[#252]: https://github.com/ahmadrosid/airin/pull/252
+[#256]: https://github.com/ahmadrosid/airin/pull/256
+[#257]: https://github.com/ahmadrosid/airin/pull/257
+[#258]: https://github.com/ahmadrosid/airin/pull/258
+[#260]: https://github.com/ahmadrosid/airin/pull/260
+[#263]: https://github.com/ahmadrosid/airin/pull/263
+[#265]: https://github.com/ahmadrosid/airin/pull/265
+[#266]: https://github.com/ahmadrosid/airin/pull/266
+[#267]: https://github.com/ahmadrosid/airin/pull/267
+[#268]: https://github.com/ahmadrosid/airin/pull/268
+[#269]: https://github.com/ahmadrosid/airin/pull/269
+[#270]: https://github.com/ahmadrosid/airin/pull/270
+[#272]: https://github.com/ahmadrosid/airin/pull/272
+[#273]: https://github.com/ahmadrosid/airin/pull/273
+[#274]: https://github.com/ahmadrosid/airin/pull/274
+[#275]: https://github.com/ahmadrosid/airin/pull/275
+[#276]: https://github.com/ahmadrosid/airin/pull/276
+[#279]: https://github.com/ahmadrosid/airin/pull/279
+[#280]: https://github.com/ahmadrosid/airin/pull/280
+[#281]: https://github.com/ahmadrosid/airin/pull/281
+[#282]: https://github.com/ahmadrosid/airin/pull/282
+[#283]: https://github.com/ahmadrosid/airin/pull/283
+[#284]: https://github.com/ahmadrosid/airin/pull/284
+[#285]: https://github.com/ahmadrosid/airin/pull/285
+[#286]: https://github.com/ahmadrosid/airin/pull/286
+[#288]: https://github.com/ahmadrosid/airin/pull/288
+[#290]: https://github.com/ahmadrosid/airin/pull/290
+[#291]: https://github.com/ahmadrosid/airin/pull/291
+[#293]: https://github.com/ahmadrosid/airin/pull/293
+[#295]: https://github.com/ahmadrosid/airin/pull/295
+[#298]: https://github.com/ahmadrosid/airin/pull/298
+[#299]: https://github.com/ahmadrosid/airin/pull/299
+[#301]: https://github.com/ahmadrosid/airin/pull/301
+[#303]: https://github.com/ahmadrosid/airin/pull/303
+[#305]: https://github.com/ahmadrosid/airin/pull/305
+[#306]: https://github.com/ahmadrosid/airin/pull/306
+[#310]: https://github.com/ahmadrosid/airin/pull/310
+[#311]: https://github.com/ahmadrosid/airin/pull/311
+[#312]: https://github.com/ahmadrosid/airin/pull/312
+[#313]: https://github.com/ahmadrosid/airin/pull/313
+[#317]: https://github.com/ahmadrosid/airin/pull/317
+[#318]: https://github.com/ahmadrosid/airin/pull/318
+[#319]: https://github.com/ahmadrosid/airin/pull/319
+[#320]: https://github.com/ahmadrosid/airin/pull/320
+[#321]: https://github.com/ahmadrosid/airin/pull/321
+[#314]: https://github.com/ahmadrosid/airin/pull/314
+[#323]: https://github.com/ahmadrosid/airin/pull/323
+[#325]: https://github.com/ahmadrosid/airin/pull/325
+[#328]: https://github.com/ahmadrosid/airin/pull/328
+[#330]: https://github.com/ahmadrosid/airin/pull/330
+[#334]: https://github.com/ahmadrosid/airin/pull/334
+[#335]: https://github.com/ahmadrosid/airin/pull/335
+[#336]: https://github.com/ahmadrosid/airin/pull/336
+[#337]: https://github.com/ahmadrosid/airin/pull/337
+[#339]: https://github.com/ahmadrosid/airin/pull/339
+[#343]: https://github.com/ahmadrosid/airin/pull/343
+[#344]: https://github.com/ahmadrosid/airin/pull/344
+[#345]: https://github.com/ahmadrosid/airin/pull/345
+[#347]: https://github.com/ahmadrosid/airin/pull/347
+[#348]: https://github.com/ahmadrosid/airin/pull/348
+[#349]: https://github.com/ahmadrosid/airin/pull/349
+[#350]: https://github.com/ahmadrosid/airin/pull/350
+[#351]: https://github.com/ahmadrosid/airin/pull/351
+[#352]: https://github.com/ahmadrosid/airin/pull/352
+[#392]: https://github.com/ahmadrosid/airin/pull/392
+[#393]: https://github.com/ahmadrosid/airin/pull/393
+[#394]: https://github.com/ahmadrosid/airin/pull/394
+[#395]: https://github.com/ahmadrosid/airin/pull/395
+[#400]: https://github.com/ahmadrosid/airin/pull/400
+[#401]: https://github.com/ahmadrosid/airin/pull/401
+[#402]: https://github.com/ahmadrosid/airin/pull/402
+[#403]: https://github.com/ahmadrosid/airin/pull/403
+[#404]: https://github.com/ahmadrosid/airin/pull/404
+[#408]: https://github.com/ahmadrosid/airin/pull/408
+[#409]: https://github.com/ahmadrosid/airin/pull/409
+[#411]: https://github.com/ahmadrosid/airin/pull/411
+[#416]: https://github.com/ahmadrosid/airin/pull/416
+[#417]: https://github.com/ahmadrosid/airin/pull/417
+[#418]: https://github.com/ahmadrosid/airin/pull/418
+[#419]: https://github.com/ahmadrosid/airin/pull/419
+[#424]: https://github.com/ahmadrosid/airin/pull/424
+[#426]: https://github.com/ahmadrosid/airin/pull/426
+[#431]: https://github.com/ahmadrosid/airin/pull/431
+[#432]: https://github.com/ahmadrosid/airin/pull/432
+[#436]: https://github.com/ahmadrosid/airin/pull/436
+[#437]: https://github.com/ahmadrosid/airin/pull/437
+[#438]: https://github.com/ahmadrosid/airin/pull/438
+[#442]: https://github.com/ahmadrosid/airin/pull/442
+[#443]: https://github.com/ahmadrosid/airin/pull/443
+[#446]: https://github.com/ahmadrosid/airin/pull/446
+[#450]: https://github.com/ahmadrosid/airin/pull/450
+[#451]: https://github.com/ahmadrosid/airin/pull/451
+[#452]: https://github.com/ahmadrosid/airin/pull/452
+[#454]: https://github.com/ahmadrosid/airin/pull/454
+[#455]: https://github.com/ahmadrosid/airin/pull/455
+[#457]: https://github.com/ahmadrosid/airin/pull/457
+[#458]: https://github.com/ahmadrosid/airin/pull/458
+[#459]: https://github.com/ahmadrosid/airin/pull/459
+[#460]: https://github.com/ahmadrosid/airin/pull/460
+[#462]: https://github.com/ahmadrosid/airin/pull/462
+[#463]: https://github.com/ahmadrosid/airin/pull/463
+[#465]: https://github.com/ahmadrosid/airin/pull/465
+[#466]: https://github.com/ahmadrosid/airin/pull/466
+[#467]: https://github.com/ahmadrosid/airin/pull/467
+[#468]: https://github.com/ahmadrosid/airin/pull/468
+[#471]: https://github.com/ahmadrosid/airin/pull/471
+[#473]: https://github.com/ahmadrosid/airin/pull/473
+[#475]: https://github.com/ahmadrosid/airin/pull/475
+[#476]: https://github.com/ahmadrosid/airin/pull/476
+[#633]: https://github.com/ahmadrosid/airin/pull/633
+[#636]: https://github.com/ahmadrosid/airin/pull/636
+[#637]: https://github.com/ahmadrosid/airin/pull/637
+[#638]: https://github.com/ahmadrosid/airin/pull/638
+[#444]: https://github.com/ahmadrosid/airin/pull/444
+[#632]: https://github.com/ahmadrosid/airin/pull/632
+[#639]: https://github.com/ahmadrosid/airin/pull/639
+[#642]: https://github.com/ahmadrosid/airin/pull/642
+[#648]: https://github.com/ahmadrosid/airin/pull/648
+[#649]: https://github.com/ahmadrosid/airin/pull/649
+[#650]: https://github.com/ahmadrosid/airin/pull/650
+[#653]: https://github.com/ahmadrosid/airin/pull/653
+[#654]: https://github.com/ahmadrosid/airin/pull/654
+[#659]: https://github.com/ahmadrosid/airin/pull/659
+[#661]: https://github.com/ahmadrosid/airin/pull/661
+[#668]: https://github.com/ahmadrosid/airin/pull/668
+[#674]: https://github.com/ahmadrosid/airin/pull/674
+[#676]: https://github.com/ahmadrosid/airin/pull/676
+[#677]: https://github.com/ahmadrosid/airin/pull/677
+[#700]: https://github.com/ahmadrosid/airin/pull/700
+[#708]: https://github.com/ahmadrosid/airin/pull/708
+[#709]: https://github.com/ahmadrosid/airin/pull/709
+[#710]: https://github.com/ahmadrosid/airin/pull/710
+[#711]: https://github.com/ahmadrosid/airin/pull/711
+[#712]: https://github.com/ahmadrosid/airin/pull/712
+[#715]: https://github.com/ahmadrosid/airin/pull/715
+[#675]: https://github.com/ahmadrosid/airin/pull/675
+[#713]: https://github.com/ahmadrosid/airin/pull/713
+[#716]: https://github.com/ahmadrosid/airin/pull/716
+[#720]: https://github.com/ahmadrosid/airin/pull/720
+[#721]: https://github.com/ahmadrosid/airin/pull/721
+[#723]: https://github.com/ahmadrosid/airin/pull/723
+[#724]: https://github.com/ahmadrosid/airin/pull/724
+[#727]: https://github.com/ahmadrosid/airin/pull/727
+[#728]: https://github.com/ahmadrosid/airin/pull/728
+[#729]: https://github.com/ahmadrosid/airin/pull/729
+[#730]: https://github.com/ahmadrosid/airin/pull/730
+[#732]: https://github.com/ahmadrosid/airin/pull/732
+[#734]: https://github.com/ahmadrosid/airin/pull/734
+[#735]: https://github.com/ahmadrosid/airin/pull/735
+[#736]: https://github.com/ahmadrosid/airin/pull/736
+[#737]: https://github.com/ahmadrosid/airin/pull/737
+[#738]: https://github.com/ahmadrosid/airin/pull/738
+[#739]: https://github.com/ahmadrosid/airin/pull/739
+[#740]: https://github.com/ahmadrosid/airin/pull/740
+[#741]: https://github.com/ahmadrosid/airin/pull/741
+[#743]: https://github.com/ahmadrosid/airin/pull/743
+[#744]: https://github.com/ahmadrosid/airin/pull/744
+[#746]: https://github.com/ahmadrosid/airin/pull/746
+[#747]: https://github.com/ahmadrosid/airin/pull/747
+[#748]: https://github.com/ahmadrosid/airin/pull/748
+[#749]: https://github.com/ahmadrosid/airin/pull/749
+[#750]: https://github.com/ahmadrosid/airin/pull/750
+[#751]: https://github.com/ahmadrosid/airin/pull/751
+[#752]: https://github.com/ahmadrosid/airin/pull/752
+[#753]: https://github.com/ahmadrosid/airin/pull/753
+[#754]: https://github.com/ahmadrosid/airin/pull/754
+[#755]: https://github.com/ahmadrosid/airin/pull/755
+[#756]: https://github.com/ahmadrosid/airin/pull/756
+[#757]: https://github.com/ahmadrosid/airin/pull/757
+[#758]: https://github.com/ahmadrosid/airin/pull/758
+[#759]: https://github.com/ahmadrosid/airin/pull/759
+[#760]: https://github.com/ahmadrosid/airin/pull/760
+[#761]: https://github.com/ahmadrosid/airin/pull/761
+[#762]: https://github.com/ahmadrosid/airin/pull/762
+[#763]: https://github.com/ahmadrosid/airin/pull/763
+[#764]: https://github.com/ahmadrosid/airin/pull/764
+[#765]: https://github.com/ahmadrosid/airin/pull/765
+[#772]: https://github.com/ahmadrosid/airin/pull/772
+[#773]: https://github.com/ahmadrosid/airin/pull/773
+[#774]: https://github.com/ahmadrosid/airin/pull/774
+[#775]: https://github.com/ahmadrosid/airin/pull/775
+[#777]: https://github.com/ahmadrosid/airin/pull/777
+[#778]: https://github.com/ahmadrosid/airin/pull/778
+[#779]: https://github.com/ahmadrosid/airin/pull/779
+[#782]: https://github.com/ahmadrosid/airin/pull/782
+[#784]: https://github.com/ahmadrosid/airin/pull/784
+[#785]: https://github.com/ahmadrosid/airin/pull/785
+[#788]: https://github.com/ahmadrosid/airin/pull/788
+[#804]: https://github.com/ahmadrosid/airin/pull/804
+[#806]: https://github.com/ahmadrosid/airin/pull/806
+[#808]: https://github.com/ahmadrosid/airin/pull/808
+[#809]: https://github.com/ahmadrosid/airin/pull/809
+[#811]: https://github.com/ahmadrosid/airin/pull/811
+[#813]: https://github.com/ahmadrosid/airin/pull/813
+[#814]: https://github.com/ahmadrosid/airin/pull/814
+[#815]: https://github.com/ahmadrosid/airin/pull/815
+[#816]: https://github.com/ahmadrosid/airin/pull/816
+[#819]: https://github.com/ahmadrosid/airin/pull/819
+[#820]: https://github.com/ahmadrosid/airin/pull/820
+[#821]: https://github.com/ahmadrosid/airin/pull/821
+[#822]: https://github.com/ahmadrosid/airin/pull/822
+[#824]: https://github.com/ahmadrosid/airin/pull/824
+[#826]: https://github.com/ahmadrosid/airin/pull/826
+[#845]: https://github.com/ahmadrosid/airin/pull/845
+[#846]: https://github.com/ahmadrosid/airin/pull/846
+[#848]: https://github.com/ahmadrosid/airin/pull/848
+[#849]: https://github.com/ahmadrosid/airin/pull/849
+[#850]: https://github.com/ahmadrosid/airin/pull/850
+[#851]: https://github.com/ahmadrosid/airin/pull/851
+[#852]: https://github.com/ahmadrosid/airin/pull/852
+[#853]: https://github.com/ahmadrosid/airin/pull/853
+[#854]: https://github.com/ahmadrosid/airin/pull/854
+[#855]: https://github.com/ahmadrosid/airin/pull/855
+[#856]: https://github.com/ahmadrosid/airin/pull/856
+[#858]: https://github.com/ahmadrosid/airin/pull/858
+[#859]: https://github.com/ahmadrosid/airin/pull/859
+[#860]: https://github.com/ahmadrosid/airin/pull/860
+[#875]: https://github.com/ahmadrosid/airin/pull/875
+[#881]: https://github.com/ahmadrosid/airin/pull/881
+[#886]: https://github.com/ahmadrosid/airin/pull/886
+[#887]: https://github.com/ahmadrosid/airin/pull/887
+[#895]: https://github.com/ahmadrosid/airin/pull/895
+[#896]: https://github.com/ahmadrosid/airin/pull/896
+[#897]: https://github.com/ahmadrosid/airin/pull/897
+[#898]: https://github.com/ahmadrosid/airin/pull/898
+[#899]: https://github.com/ahmadrosid/airin/pull/899
+[#900]: https://github.com/ahmadrosid/airin/pull/900
+[#905]: https://github.com/ahmadrosid/airin/pull/905
+[#906]: https://github.com/ahmadrosid/airin/pull/906
+[#908]: https://github.com/ahmadrosid/airin/pull/908
+[#909]: https://github.com/ahmadrosid/airin/pull/909
+[#911]: https://github.com/ahmadrosid/airin/pull/911
+[#912]: https://github.com/ahmadrosid/airin/pull/912
+[#913]: https://github.com/ahmadrosid/airin/pull/913
+[#914]: https://github.com/ahmadrosid/airin/pull/914
+[#916]: https://github.com/ahmadrosid/airin/pull/916
+[#917]: https://github.com/ahmadrosid/airin/pull/917
+[#918]: https://github.com/ahmadrosid/airin/pull/918
+[#919]: https://github.com/ahmadrosid/airin/pull/919
+[#920]: https://github.com/ahmadrosid/airin/pull/920
+[#921]: https://github.com/ahmadrosid/airin/pull/921
+[#926]: https://github.com/ahmadrosid/airin/pull/926
+[#1270]: https://github.com/ahmadrosid/airin/issues/1270
+[#1888]: https://github.com/ahmadrosid/airin/issues/1888
+[#2300]: https://github.com/ahmadrosid/airin/issues/2300

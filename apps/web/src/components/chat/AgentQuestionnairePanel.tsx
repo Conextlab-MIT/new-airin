@@ -1,9 +1,9 @@
-import { hasActiveAgentQuestionnaire } from "@nakama/core/agent-questionnaire";
+import { hasActiveAgentQuestionnaire } from "@airin/core/agent-questionnaire";
 import type {
   AgentQuestionAnswer,
   AgentQuestionnaire,
-} from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import type { KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {

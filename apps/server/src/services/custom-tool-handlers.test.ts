@@ -7,11 +7,11 @@ import {
   refreshErrorTrackingEnabled,
   setErrorSink,
   type ToolContext,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   createInMemoryDatabaseAdapter,
   type StoredToolRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { waitForExit, waitForPidFile } from "./coding-agent-test-fixtures";
 import {
   getCustomToolHandler,
@@ -28,7 +28,7 @@ function ctx(signal?: AbortSignal): ToolContext {
   return { signal };
 }
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 function makeRecord(
   overrides: Partial<StoredToolRecord> = {}
@@ -62,11 +62,11 @@ beforeEach(async () => {
     )
   );
   // reportError queues before it sends, and that queue is a read-modify-write on
-  // one file under NAKAMA_CONFIG_DIR. Without a temp dir here the suite trims
+  // one file under AIRIN_CONFIG_DIR. Without a temp dir here the suite trims
   // the real queue on whatever machine runs it.
-  queueDir = await mkdtemp(path.join(os.tmpdir(), "nakama-tool-report-"));
-  process.env.NAKAMA_CONFIG_DIR = queueDir;
-  process.env.NAKAMA_ERROR_TRACKING_DSN = "https://key@errors.example.test/7";
+  queueDir = await mkdtemp(path.join(os.tmpdir(), "airin-tool-report-"));
+  process.env.AIRIN_CONFIG_DIR = queueDir;
+  process.env.AIRIN_ERROR_TRACKING_DSN = "https://key@errors.example.test/7";
   await refreshErrorTrackingEnabled();
   reportedErrors = [];
   let resolveFirst: (report: ErrorReport) => void = () => undefined;
@@ -84,12 +84,12 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  delete process.env.NAKAMA_ERROR_TRACKING_DSN;
+  delete process.env.AIRIN_ERROR_TRACKING_DSN;
 
   if (originalConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+    process.env.AIRIN_CONFIG_DIR = originalConfigDir;
   }
 
   await refreshErrorTrackingEnabled();
@@ -247,7 +247,7 @@ describe("getCustomToolHandler seam", () => {
       handlerType: "python",
       source: `import json, os, sys
 def run(input, context):
-    open(os.path.join(os.environ["NAKAMA_WORKSPACE_ROOT"], "ran.txt"), "w").write("ran")
+    open(os.path.join(os.environ["AIRIN_WORKSPACE_ROOT"], "ran.txt"), "w").write("ran")
     return {}
 if __name__ == "__main__":
     sys.stdout.write(json.dumps(run(json.loads(sys.stdin.read() or "{}"), {})))
@@ -260,7 +260,7 @@ if __name__ == "__main__":
 import path from "node:path";
 
 export async function run() {
-  writeFileSync(path.join(process.env.NAKAMA_WORKSPACE_ROOT, "ran.txt"), "ran");
+  writeFileSync(path.join(process.env.AIRIN_WORKSPACE_ROOT, "ran.txt"), "ran");
   return {};
 }
 `,
@@ -268,14 +268,14 @@ export async function run() {
   ])(
     "$handlerType tools do not run on the host under the remote bash backend",
     async ({ file, handlerType, source }) => {
-      const configDir = await mkdtemp(path.join(os.tmpdir(), "nakama-config-"));
-      process.env.NAKAMA_CONFIG_DIR = configDir;
+      const configDir = await mkdtemp(path.join(os.tmpdir(), "airin-config-"));
+      process.env.AIRIN_CONFIG_DIR = configDir;
       const toolsDir = path.join(configDir, "orgs", "org_test", "tools");
       const wsDir = path.join(configDir, "ws");
       await mkdir(toolsDir, { recursive: true });
       await mkdir(wsDir, { recursive: true });
       await writeFile(path.join(toolsDir, file), source, "utf8");
-      process.env.NAKAMA_BASH_BACKEND = "remote";
+      process.env.AIRIN_BASH_BACKEND = "remote";
 
       try {
         const tool = await getCustomToolHandler(handlerType)!.load(
@@ -289,12 +289,12 @@ export async function run() {
           false
         );
       } finally {
-        delete process.env.NAKAMA_BASH_BACKEND;
+        delete process.env.AIRIN_BASH_BACKEND;
 
         if (originalConfigDir === undefined) {
-          delete process.env.NAKAMA_CONFIG_DIR;
+          delete process.env.AIRIN_CONFIG_DIR;
         } else {
-          process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+          process.env.AIRIN_CONFIG_DIR = originalConfigDir;
         }
 
         await rm(configDir, { force: true, recursive: true });
@@ -303,8 +303,8 @@ export async function run() {
   );
 
   test("does not retry post-side-effect failures", async () => {
-    const configDir = await mkdtemp(path.join(os.tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(path.join(os.tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const toolsDir = path.join(configDir, "orgs", "org_test", "tools");
     const wsDir = path.join(configDir, "ws");
     await mkdir(toolsDir, { recursive: true });
@@ -318,7 +318,7 @@ export async function run() {
 import path from "node:path";
 
 export async function run() {
-  const root = process.env.NAKAMA_WORKSPACE_ROOT ?? "/tmp";
+  const root = process.env.AIRIN_WORKSPACE_ROOT ?? "/tmp";
   const counter = path.join(root, "side-effects.txt");
   let n = existsSync(counter) ? Number(readFileSync(counter, "utf8").trim() || "0") : 0;
   n += 1;
@@ -351,9 +351,9 @@ export async function run() {
       expect((await firstReport).source).toBe("tool:side_effect");
     } finally {
       if (originalConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+        process.env.AIRIN_CONFIG_DIR = originalConfigDir;
       }
 
       await rm(configDir, { force: true, recursive: true });
@@ -361,8 +361,8 @@ export async function run() {
   });
 
   test("python handler failures are actually retried through the seam", async () => {
-    const configDir = await mkdtemp(path.join(os.tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(path.join(os.tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const toolsDir = path.join(configDir, "orgs", "org_test", "tools");
     const wsDir = path.join(configDir, "ws");
     await mkdir(toolsDir, { recursive: true });
@@ -375,7 +375,7 @@ export async function run() {
       `import json, os, sys
 
 def run(input, context):
-    root = os.environ.get("NAKAMA_WORKSPACE_ROOT", "/tmp")
+    root = os.environ.get("AIRIN_WORKSPACE_ROOT", "/tmp")
     counter = os.path.join(root, "attempts.txt")
     n = 0
     if os.path.exists(counter):
@@ -415,9 +415,9 @@ if __name__ == "__main__":
       expect(result.attempts).toBe(3);
     } finally {
       if (originalConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+        process.env.AIRIN_CONFIG_DIR = originalConfigDir;
       }
 
       await rm(configDir, { force: true, recursive: true });
@@ -425,8 +425,8 @@ if __name__ == "__main__":
   });
 
   test("an exhausted tool reports under the record's own name", async () => {
-    const configDir = await mkdtemp(path.join(os.tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(path.join(os.tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const toolsDir = path.join(configDir, "orgs", "org_test", "tools");
     const wsDir = path.join(configDir, "ws");
     await mkdir(toolsDir, { recursive: true });
@@ -459,9 +459,9 @@ if __name__ == "__main__":
       expect((await firstReport).source).toBe("tool:doomed_tool");
     } finally {
       if (originalConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+        process.env.AIRIN_CONFIG_DIR = originalConfigDir;
       }
 
       await rm(configDir, { force: true, recursive: true });
@@ -469,8 +469,8 @@ if __name__ == "__main__":
   });
 
   test("javascript handler failures are actually retried through the seam", async () => {
-    const configDir = await mkdtemp(path.join(os.tmpdir(), "nakama-config-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(path.join(os.tmpdir(), "airin-config-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     const toolsDir = path.join(configDir, "orgs", "org_test", "tools");
     const wsDir = path.join(configDir, "ws");
     await mkdir(toolsDir, { recursive: true });
@@ -486,7 +486,7 @@ if __name__ == "__main__":
 import path from "node:path";
 
 export async function run(input, context) {
-  const root = process.env.NAKAMA_WORKSPACE_ROOT ?? "/tmp";
+  const root = process.env.AIRIN_WORKSPACE_ROOT ?? "/tmp";
   const counter = path.join(root, "attempts.txt");
   let n = existsSync(counter) ? Number(readFileSync(counter, "utf8").trim() || "0") : 0;
   n += 1;
@@ -529,9 +529,9 @@ export async function run(input, context) {
       expect(result.attempts).toBe(3);
     } finally {
       if (originalConfigDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+        process.env.AIRIN_CONFIG_DIR = originalConfigDir;
       }
 
       await rm(configDir, { force: true, recursive: true });
@@ -545,7 +545,7 @@ describe("custom-tool process cleanup", () => {
     test.skipIf(process.platform === "win32")(
       `${mode} stops a descendant that ignores SIGTERM`,
       async () => {
-        const dir = await mkdtemp(path.join(os.tmpdir(), "nakama-tool-tree-"));
+        const dir = await mkdtemp(path.join(os.tmpdir(), "airin-tool-tree-"));
         const modulePath = path.join(dir, "spawn-child.js");
         const pidFile = path.join(dir, "descendant.pid");
 

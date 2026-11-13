@@ -1,5 +1,5 @@
+import type { ComposioCachedToolSummary } from "@airin/core";
 import { Composio } from "@composio/core";
-import type { ComposioCachedToolSummary } from "@nakama/core";
 import { z } from "zod";
 
 const CatalogToolkitItemSchema = z.object({
@@ -245,14 +245,15 @@ export function findRejectedConnectedAccountIds(
 const DEFAULT_AUTH_CONFIG_NOT_FOUND_SLUG =
   "Auth_Config_DefaultAuthConfigNotFound";
 
-/** Composio has no managed OAuth app for the toolkit, so it needs a custom auth config. */
-export function isComposioDefaultAuthConfigMissing(error: Error): boolean {
+const NO_AUTH_APP_SLUG = "Auth_Config_NoAuthApp";
+
+function composioErrorHasSlug(error: Error, slug: string): boolean {
   for (
     let current: Error | null = error;
     current;
     current = current.cause instanceof Error ? current.cause : null
   ) {
-    if (current.message.includes(DEFAULT_AUTH_CONFIG_NOT_FOUND_SLUG)) {
+    if (current.message.includes(slug)) {
       return true;
     }
 
@@ -261,7 +262,7 @@ export function isComposioDefaultAuthConfigMissing(error: Error): boolean {
     if (
       apiError.success &&
       [apiError.data.details, apiError.data.error?.error].some(
-        (details) => details?.slug === DEFAULT_AUTH_CONFIG_NOT_FOUND_SLUG
+        (details) => details?.slug === slug
       )
     ) {
       return true;
@@ -269,6 +270,16 @@ export function isComposioDefaultAuthConfigMissing(error: Error): boolean {
   }
 
   return false;
+}
+
+/** Composio has no managed OAuth app for the toolkit, so it needs a custom auth config. */
+export function isComposioDefaultAuthConfigMissing(error: Error): boolean {
+  return composioErrorHasSlug(error, DEFAULT_AUTH_CONFIG_NOT_FOUND_SLUG);
+}
+
+/** Toolkit works without auth; tools can run without a connected account. */
+export function isComposioNoAuthApp(error: Error): boolean {
+  return composioErrorHasSlug(error, NO_AUTH_APP_SLUG);
 }
 
 type ComposioAuthConfigClient = {

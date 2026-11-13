@@ -1,4 +1,4 @@
-import type { CustomModelEntry } from "@nakama/core/contract";
+import type { CustomModelEntry } from "@airin/core/contract";
 import { useQuery } from "@tanstack/react-query";
 import { CatalogModelsBrowseList } from "@/components/CatalogModelsBrowseList";
 import type { CapabilityBrowseRow } from "@/components/model-browse-utils";

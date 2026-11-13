@@ -2,7 +2,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { asTestFetch } from "../providers/test-helpers";
 import { AgentService } from "./agent-service";
 import { ManagedSecrets } from "./managed-secrets";
@@ -17,8 +17,8 @@ describe("API key check on save", () => {
       type: "deepseek",
     }
   ) {
-    const configDir = await mkdtemp(path.join(tmpdir(), "nakama-key-check-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    const configDir = await mkdtemp(path.join(tmpdir(), "airin-key-check-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
 
     using _fetchMock = spyOn(globalThis, "fetch").mockImplementation(
       asTestFetch(respond)
@@ -38,7 +38,7 @@ describe("API key check on save", () => {
       const created = await service.createProvider(request);
       await run(service, created.provider.id);
     } finally {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
       await rm(configDir, { force: true, recursive: true });
     }
   }

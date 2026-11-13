@@ -1,6 +1,6 @@
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
-import { ConfirmDialog } from "@nakama/ui/dialog";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
+import { ConfirmDialog } from "@airin/ui/dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy01Icon, RefreshIcon } from "hugeicons-react";
 import { useState } from "react";

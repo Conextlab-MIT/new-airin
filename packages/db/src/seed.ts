@@ -2,21 +2,21 @@ import {
   builtinTools,
   type McpHttpConfig,
   type McpStdioConfig,
-} from "@nakama/core";
-import { preinstalledMcpServers } from "@nakama/core/mcp/preinstalled";
+} from "@airin/core";
+import { preinstalledMcpServers } from "@airin/core/mcp/preinstalled";
 import {
   BUILTIN_TOOL_IDS,
   SUB_AGENT_TOOL_ID,
-} from "@nakama/core/tools/protected";
+} from "@airin/core/tools/protected";
 import { ensureLocalClientAccess } from "./local-client";
 import {
   ensureBashToolDefinition,
   ensureBrowserToolDefinitions,
   ensureGenerateImageToolDefinition,
-  ensureOrgSuperNakamaProfiles,
+  ensureOrgSuperAirinProfiles,
   ensureSaveArtifactToolDefinition,
   ensureSessionToolDefinitions,
-  type SuperNakamaSeedOptions,
+  type SuperAirinSeedOptions,
 } from "./org-profiles";
 import type { DatabaseAdapter } from "./types";
 
@@ -51,7 +51,7 @@ const SUPPORTED_TOOL_HANDLER_TYPES = new Set([
 
 export async function seedDatabase(
   db: DatabaseAdapter,
-  options: SuperNakamaSeedOptions = {}
+  options: SuperAirinSeedOptions = {}
 ): Promise<void> {
   await removeLegacyBuiltinTools(db);
   await removeDeprecatedBuiltinTools(db);
@@ -66,7 +66,7 @@ export async function seedDatabase(
   await ensureSaveArtifactToolDefinition(db);
   await ensurePreinstalledMcpServers(db);
   await ensureLocalClientAccess(db);
-  await ensureOrgSuperNakamaProfiles(db, options);
+  await ensureOrgSuperAirinProfiles(db, options);
 }
 
 async function removeToolsMatching(

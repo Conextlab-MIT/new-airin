@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
 import {
@@ -39,7 +39,7 @@ async function seedFirstMessage(
 }
 
 describe("listSessions reports the live turn", () => {
-  setupTestConfigDir("nakama-session-list-");
+  setupTestConfigDir("airin-session-list-");
 
   test("a closed chat stops, leaves the list, stays searchable, and comes back on its next turn", async () => {
     const { db, service } = await createService();
@@ -304,7 +304,7 @@ describe("listSessions reports the live turn", () => {
 });
 
 describe("listSessions pages the merged history", () => {
-  setupTestConfigDir("nakama-session-page-");
+  setupTestConfigDir("airin-session-page-");
   const ACCESS = { isPlatformAdmin: true, user: USER };
   const CHANNELS = ["web", "telegram", "discord"] as const;
 
@@ -493,7 +493,7 @@ describe("listSessions pages the merged history", () => {
 });
 
 describe("listSessions searches titles and message text", () => {
-  setupTestConfigDir("nakama-session-search-");
+  setupTestConfigDir("airin-session-search-");
   const ACCESS = { isPlatformAdmin: true, user: USER };
   const CHANNELS = ["web", "telegram"] as const;
 

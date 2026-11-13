@@ -12,8 +12,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
-import { type BackupStatusResponse, NakamaApiError } from "@nakama/core";
-import { comparablePath, resolveWithRealpath } from "@nakama/core/tools/paths";
+import { AirinApiError, type BackupStatusResponse } from "@airin/core";
+import { comparablePath, resolveWithRealpath } from "@airin/core/tools/paths";
 import { z } from "zod";
 
 const MAGIC = Buffer.from("NKBK1\n");
@@ -24,7 +24,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const KEEP = 7;
 
-const NAME = /^nakama-.+\.zip\.enc$/;
+const NAME = /^airin-.+\.zip\.enc$/;
 
 // The last failed scheduled backup, for Settings. The next good backup removes it.
 const ERROR_FILE = "scheduled-backup-error.json";
@@ -70,9 +70,9 @@ export async function readBackupError(
   }
 
   // The fs detail can hold a path, so it stays in the log; the admin gets a fixed line
-  console.error(`Nakama cannot read ${ERROR_FILE}: ${detail}`);
+  console.error(`Airin cannot read ${ERROR_FILE}: ${detail}`);
 
-  throw new NakamaApiError(
+  throw new AirinApiError(
     `Cannot read ${ERROR_FILE}. The server log has the details.`,
     500
   );
@@ -226,7 +226,7 @@ export async function decryptBackupFile(
       headerBytes < HEADER_BYTES ||
       !header.subarray(0, MAGIC.length).equals(MAGIC)
     ) {
-      throw new Error("Not an encrypted Nakama backup.");
+      throw new Error("Not an encrypted Airin backup.");
     }
 
     const nonce = header.subarray(MAGIC.length, MAGIC.length + 12);
@@ -280,7 +280,7 @@ export function assertBackupDirOutsideRoot(dir: string, rootDir: string): void {
     !(inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside))
   ) {
     throw new Error(
-      `NAKAMA_BACKUP_DIR must be outside the Nakama data root (${rootDir}).`
+      `AIRIN_BACKUP_DIR must be outside the Airin data root (${rootDir}).`
     );
   }
 }
@@ -306,7 +306,7 @@ export async function writeBackup(options: {
     .replaceAll(":", "")
     .replace(/\.\d+Z$/, "Z");
 
-  const path = join(options.dir, `nakama-${stamp}.zip.enc`);
+  const path = join(options.dir, `airin-${stamp}.zip.enc`);
   const tempPath = `${path}.tmp`;
   const exported = await options.exportFile();
 
@@ -330,7 +330,7 @@ export async function writeBackup(options: {
       await unlink(join(options.dir, old));
     }
   } catch (error) {
-    console.error(`Nakama cannot remove old backups: ${describe(error)}`);
+    console.error(`Airin cannot remove old backups: ${describe(error)}`);
   }
 
   return path;
@@ -358,7 +358,7 @@ export async function startScheduledBackups(options: {
 
     try {
       const path = await writeBackup(options);
-      console.log(`Nakama backup written to ${path}`);
+      console.log(`Airin backup written to ${path}`);
       unrecordedErrors.delete(options.dir);
 
       // Its own catch: the backup is written, a failed cleanup must not report it as failed
@@ -366,16 +366,16 @@ export async function startScheduledBackups(options: {
         await rm(errorPath, { force: true });
       } catch (clearError) {
         console.error(
-          `Nakama cannot clear ${ERROR_FILE}: ${describe(clearError)}`
+          `Airin cannot clear ${ERROR_FILE}: ${describe(clearError)}`
         );
       }
     } catch (error) {
-      console.error(`Nakama backup failed: ${describe(error)}`);
+      console.error(`Airin backup failed: ${describe(error)}`);
 
       // Every failure replaces the record, so Settings always shows the last run.
-      // Only a NakamaApiError is written for an admin; other details stay in the log.
+      // Only a AirinApiError is written for an admin; other details stay in the log.
       const message =
-        error instanceof NakamaApiError
+        error instanceof AirinApiError
           ? error.message
           : "The scheduled backup failed. The server log has the details.";
 
@@ -388,7 +388,7 @@ export async function startScheduledBackups(options: {
         // Keep it in memory, so Settings does not show an older record or no failure
         unrecordedErrors.set(options.dir, record);
         console.error(
-          `Nakama cannot record the backup error: ${describe(recordError)}`
+          `Airin cannot record the backup error: ${describe(recordError)}`
         );
       }
     }
@@ -399,7 +399,7 @@ export async function startScheduledBackups(options: {
       // A run that throws must not stop the daily schedule
       running = run()
         .catch((error) => {
-          console.error("Nakama backup run failed:", error);
+          console.error("Airin backup run failed:", error);
         })
         .then(() => {
           if (!stopped) {

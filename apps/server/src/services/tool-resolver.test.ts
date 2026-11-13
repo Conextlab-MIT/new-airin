@@ -2,19 +2,19 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ToolDefinition } from "@nakama/core";
-import { emailTool } from "@nakama/core/tools/email";
+import type { ToolDefinition } from "@airin/core";
+import { emailTool } from "@airin/core/tools/email";
 import {
   BROWSER_TOOL_IDS,
   LIST_PROFILE_SESSIONS_TOOL_ID,
   READ_PROFILE_SESSION_TOOL_ID,
   SUB_AGENT_TOOL_ID,
-} from "@nakama/core/tools/protected";
-import { saveWebSearchConfig } from "@nakama/core/web-search-config";
+} from "@airin/core/tools/protected";
+import { saveWebSearchConfig } from "@airin/core/web-search-config";
 import {
   createInMemoryDatabaseAdapter,
   type StoredToolRecord,
-} from "@nakama/db";
+} from "@airin/db";
 import { createBrowserTools } from "../tools/browser-tools";
 import { createSessionTools } from "../tools/session-tools";
 import { createSubAgentTool } from "../tools/sub-agent-tool";
@@ -113,9 +113,9 @@ describe("resolveToolsFromStorage sub_agent", () => {
 
 describe("omitUnavailableToolDetails", () => {
   const original = {
-    configDir: process.env.NAKAMA_CONFIG_DIR,
+    configDir: process.env.AIRIN_CONFIG_DIR,
     key: process.env.KERNEL_API_KEY,
-    provider: process.env.NAKAMA_BROWSER_PROVIDER,
+    provider: process.env.AIRIN_BROWSER_PROVIDER,
   };
 
   let configDir = "";
@@ -124,9 +124,9 @@ describe("omitUnavailableToolDetails", () => {
     await rm(configDir, { force: true, recursive: true });
 
     for (const [name, value] of [
-      ["NAKAMA_CONFIG_DIR", original.configDir],
+      ["AIRIN_CONFIG_DIR", original.configDir],
       ["KERNEL_API_KEY", original.key],
-      ["NAKAMA_BROWSER_PROVIDER", original.provider],
+      ["AIRIN_BROWSER_PROVIDER", original.provider],
     ] as const) {
       if (value === undefined) {
         delete process.env[name];
@@ -151,14 +151,14 @@ describe("omitUnavailableToolDetails", () => {
       tools: [detail("bash", "bash"), detail("browser_read", "browser")],
     };
 
-    configDir = await mkdtemp(join(tmpdir(), "nakama-tool-details-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
-    delete process.env.NAKAMA_BROWSER_PROVIDER;
+    configDir = await mkdtemp(join(tmpdir(), "airin-tool-details-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
+    delete process.env.AIRIN_BROWSER_PROVIDER;
     delete process.env.KERNEL_API_KEY;
 
     const hidden = await omitUnavailableToolDetails(response);
 
-    process.env.NAKAMA_BROWSER_PROVIDER = "kernel";
+    process.env.AIRIN_BROWSER_PROVIDER = "kernel";
     process.env.KERNEL_API_KEY = "kernel-key";
 
     const shown = await omitUnavailableToolDetails(response);
@@ -250,13 +250,13 @@ describe("resolveProfileStoredTools web_search", () => {
       configDir = "";
     }
 
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     delete process.env.EXA_API_KEY;
   });
 
   async function useTempConfigDir(): Promise<void> {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-web-search-resolver-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-web-search-resolver-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   }
 
   test("keeps the provider-hosted stub when no back-end is configured", async () => {

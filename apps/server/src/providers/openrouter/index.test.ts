@@ -6,7 +6,7 @@ import {
   loadUserConfig,
   type OpenRouterRoutingSettings,
   saveUserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -229,9 +229,9 @@ describe("createOpenRouterProvider", () => {
   });
 
   test("create, persist, update and clear routing through the instance factory", async () => {
-    const previousDir = process.env.NAKAMA_CONFIG_DIR;
+    const previousDir = process.env.AIRIN_CONFIG_DIR;
     const previousKey = process.env.OPENROUTER_API_KEY;
-    const directory = await mkdtemp(join(tmpdir(), "nakama-routing-"));
+    const directory = await mkdtemp(join(tmpdir(), "airin-routing-"));
     const bodies: ProviderJsonRecord[] = [];
 
     const server = setupServer(
@@ -254,7 +254,7 @@ describe("createOpenRouterProvider", () => {
     );
 
     server.listen({ onUnhandledRequest: "error" });
-    process.env.NAKAMA_CONFIG_DIR = directory;
+    process.env.AIRIN_CONFIG_DIR = directory;
     process.env.OPENROUTER_API_KEY = `sk-or-${"x".repeat(24)}`;
 
     try {
@@ -360,9 +360,9 @@ describe("createOpenRouterProvider", () => {
       server.close();
 
       if (previousDir === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previousDir;
+        process.env.AIRIN_CONFIG_DIR = previousDir;
       }
 
       if (previousKey === undefined) {
@@ -385,9 +385,9 @@ describe("createOpenRouterProvider", () => {
         const headers = request.headers;
         expect(headers.get("Authorization")).toBe("Bearer sk-or-v1-test");
         expect(headers.get("HTTP-Referer")).toBe(
-          "https://github.com/ahmadrosid/nakama"
+          "https://github.com/ahmadrosid/airin"
         );
-        expect(headers.get("X-OpenRouter-Title")).toBe("Nakama");
+        expect(headers.get("X-OpenRouter-Title")).toBe("Airin");
 
         return new Response(chatCompletionResponse("Hello from OpenRouter"), {
           headers: { "Content-Type": "application/json" },

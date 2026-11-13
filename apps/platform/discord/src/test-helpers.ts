@@ -1,22 +1,22 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { NakamaClient, StreamHandlers } from "@nakama/client";
+import type { AirinClient, StreamHandlers } from "@airin/client";
 import {
   assertBridgeClientMethods,
   parseListProfilesResponse,
   parseListUserOrgsResponse,
-} from "@nakama/core/bridge-api";
-import type { ChannelOrgStore } from "@nakama/core/channel-org";
+} from "@airin/core/bridge-api";
+import type { ChannelOrgStore } from "@airin/core/channel-org";
 import {
   createDefaultTestOrgs,
   createTestOrgStore as createSharedTestOrgStore,
   withTempHome as withSharedTempHome,
-} from "@nakama/core/channel-test-helpers";
+} from "@airin/core/channel-test-helpers";
 import type {
   AgentQuestionnaire,
   ChatMessage,
   UserOrgSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import type { Message } from "discord.js";
 import { z } from "zod";
 
@@ -35,9 +35,9 @@ export function createMultiTestOrgs(): UserOrgSummary[] {
     {
       createdAt: now,
       id: "org_b",
-      name: "Nakama",
+      name: "Airin",
       role: "member",
-      slug: "nakama",
+      slug: "airin",
       updatedAt: now,
     },
   ];
@@ -79,7 +79,7 @@ export function createMockClient(
       handlers?: StreamHandlers
     ) => Promise<string>;
     artifactContentBytes?: Uint8Array;
-    sessions?: import("@nakama/core/contract").SessionSummary[];
+    sessions?: import("@airin/core/contract").SessionSummary[];
   } = {}
 ) {
   const calls = {
@@ -224,7 +224,7 @@ export function createMockClient(
     setOrgId: (orgId: string | null) => {
       activeOrgId = orgId?.trim() || null;
     },
-  } as NakamaClient;
+  } as AirinClient;
 
   assertBridgeClientMethods(client);
 
@@ -317,7 +317,7 @@ export function createDmMessage(options: {
     attachments: buildMockAttachments(options.attachments),
     author: { bot: false, id: options.userId ?? "424242424242424242" },
     channel,
-    client: { user: { id: "bot_id", username: "nakamabot" } },
+    client: { user: { id: "bot_id", username: "airinbot" } },
     content: options.content ?? "",
     stickers: { size: 0 },
   } as Message;
@@ -499,7 +499,7 @@ export function createGuildChatMessage(options: {
     channel,
     client: {
       channels: clientChannels,
-      user: { id: botId, username: "nakamabot" },
+      user: { id: botId, username: "airinbot" },
     },
     content: options.content ?? "",
     guild: {
@@ -664,11 +664,11 @@ export async function writeDiscordConfigIni(
     handshakeExpiresAt?: string | null;
   }
 ): Promise<void> {
-  const dir = path.join(homeDir, ".nakama", "discord");
+  const dir = path.join(homeDir, ".airin", "discord");
   await mkdir(dir, { recursive: true });
 
   const lines = [
-    "# Nakama Discord bridge",
+    "# Airin Discord bridge",
     `bot_token=${config.botToken}`,
     `profile_id=${config.profileId ?? "default"}`,
   ];
@@ -700,5 +700,5 @@ export function createTestOrgStore(homeDir: string): ChannelOrgStore {
 export async function withTempHome<T>(
   run: (homeDir: string) => Promise<T>
 ): Promise<T> {
-  return withSharedTempHome("nakama-discord-home-", run);
+  return withSharedTempHome("airin-discord-home-", run);
 }

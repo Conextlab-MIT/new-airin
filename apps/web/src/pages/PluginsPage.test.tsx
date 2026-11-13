@@ -2,7 +2,7 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import type {
   LocalPluginPreviewResponse,
   OrgPluginDetail,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -88,7 +88,7 @@ function preview(): LocalPluginPreviewResponse {
       description: "Notes",
       id: "notes",
       license: "MIT",
-      minNakamaVersion: "0.1.0",
+      minAirinVersion: "0.1.0",
       name: "Notes",
       skills: [],
       version: "1.0.0+dev.abcdef",
@@ -105,9 +105,9 @@ async function mount() {
     defaultOptions: { queries: { retry: false } },
   });
 
-  // SAFETY: This component reads only ID, name, and Super Nakama status from profile fixtures.
+  // SAFETY: This component reads only ID, name, and Airin status from profile fixtures.
   const profiles = spyOn(client, "listProfiles").mockResolvedValue({
-    profiles: [{ id: "super", isSuper: true, name: "Super Nakama" }],
+    profiles: [{ id: "super", isSuper: true, name: "Airin" }],
   } as Awaited<ReturnType<typeof client.listProfiles>>);
 
   cleanups.push(() => {
@@ -367,7 +367,7 @@ test("draft review lists code that runs before source and config", async () => {
   const previewCall = spyOn(client, "previewLocalPlugin").mockResolvedValue({
     ...preview(),
     files: [
-      { path: "nakama.plugin.json", size: 700 },
+      { path: "airin.plugin.json", size: 700 },
       { path: "src/list.js", size: 90 },
       { path: "actions/list.js", size: 40 },
     ],
@@ -400,7 +400,7 @@ test("draft review lists code that runs before source and config", async () => {
   expect(order.map((text) => text.split(/\s/)[0])).toEqual([
     "actions/list.js40",
     "src/list.js90",
-    "nakama.plugin.json700",
+    "airin.plugin.json700",
   ]);
   expect(document.body.textContent).toContain("0 of 3 read");
 

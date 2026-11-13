@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ChatMessage, GenerateChatInput } from "@nakama/core";
+import type { ChatMessage, GenerateChatInput } from "@airin/core";
 import { asTestFetch } from "../test-helpers";
 import { createAnthropicProvider, parseAnthropicContent } from "./index";
 
@@ -45,7 +45,7 @@ test.each([false, true])(
       apiKey: "test-key",
       fetch: asTestFetch(
         async (_input: RequestInfo | URL, init?: RequestInit) => {
-          expect(String(init?.body)).not.toContain("_nakamaPrefixHash");
+          expect(String(init?.body)).not.toContain("_airinPrefixHash");
           requests.push(JSON.parse(String(init?.body)));
 
           if (stream) {
@@ -246,7 +246,7 @@ test("Sonnet 5.5 adaptive effort and mode switches", async () => {
       apiKey: "test-key",
       fetch: asTestFetch(
         async (_input: RequestInfo | URL, init?: RequestInit) => {
-          expect(String(init?.body)).not.toContain("_nakamaPrefixHash");
+          expect(String(init?.body)).not.toContain("_airinPrefixHash");
           requests.push(JSON.parse(String(init?.body)));
 
           return Response.json({

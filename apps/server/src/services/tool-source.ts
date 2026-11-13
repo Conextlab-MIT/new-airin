@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ToolSourceResponse } from "@nakama/core";
-import { NakamaApiError, pathExists } from "@nakama/core";
-import type { StoredToolRecord } from "@nakama/db";
+import type { ToolSourceResponse } from "@airin/core";
+import { AirinApiError, pathExists } from "@airin/core";
+import type { StoredToolRecord } from "@airin/db";
 import { getCustomToolHandler } from "./custom-tool-handlers";
 import { readHandlerModulePath } from "./custom-tool-shared";
 
@@ -129,7 +129,7 @@ export async function readToolSource(
     const source = BUILTIN_SOURCE_BY_NAME.get(record.name);
 
     if (!source) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `No source mapping for built-in tool "${record.name}".`,
         404
       );
@@ -138,7 +138,7 @@ export async function readToolSource(
     return readFixedToolSource(source, "typescript");
   }
 
-  throw new NakamaApiError(
+  throw new AirinApiError(
     `Unsupported tool handler type: ${record.handlerType}.`,
     404
   );
@@ -150,7 +150,7 @@ async function readCustomToolSource(
   const handler = getCustomToolHandler(record.handlerType);
 
   if (!handler) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Unsupported tool handler type: ${record.handlerType}.`,
       404
     );
@@ -159,7 +159,7 @@ async function readCustomToolSource(
   const modulePath = readHandlerModulePath(record.handlerConfig);
 
   if (!modulePath) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Tool "${record.name}" is missing handlerConfig.modulePath.`,
       404
     );
@@ -170,14 +170,14 @@ async function readCustomToolSource(
   try {
     resolvedPath = handler.resolveModulePath(modulePath, record.orgId);
   } catch (error) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       error instanceof Error ? error.message : String(error),
       404
     );
   }
 
   if (!(await pathExists(resolvedPath))) {
-    throw new NakamaApiError(`Tool module not found: ${modulePath}`, 404);
+    throw new AirinApiError(`Tool module not found: ${modulePath}`, 404);
   }
 
   const content = await readFile(resolvedPath, "utf8");
@@ -194,7 +194,7 @@ async function readFixedToolSource(
   language: ToolSourceResponse["language"]
 ): Promise<ToolSourceResponse> {
   if (!(await pathExists(source.filePath))) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Tool source file not found: ${source.displayPath}`,
       404
     );

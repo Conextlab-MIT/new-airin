@@ -1,7 +1,7 @@
-import { executeToolCall } from "@nakama/agent";
-import type { PluginExecutionContext } from "@nakama/core";
-import { inspectWorkflowSqlite } from "@nakama/core";
-import { type DatabaseAdapter, DatabaseWorkflowStore } from "@nakama/db";
+import { executeToolCall } from "@airin/agent";
+import type { PluginExecutionContext } from "@airin/core";
+import { inspectWorkflowSqlite } from "@airin/core";
+import { type DatabaseAdapter, DatabaseWorkflowStore } from "@airin/db";
 import { z } from "zod";
 import type { AgentService } from "./agent-service";
 import type { ComposioService } from "./composio-service";

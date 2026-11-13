@@ -7,8 +7,8 @@ import { writeCodexConfigToml } from "./coding-agent-harness-config-files";
 
 const CodexConfigSchema = z.object({
   model_provider: z.string(),
-  model_providers: z.object({ nakama: z.object({ base_url: z.string() }) }),
-  profiles: z.object({ nakama: z.object({ model: z.string() }) }),
+  model_providers: z.object({ airin: z.object({ base_url: z.string() }) }),
+  profiles: z.object({ airin: z.object({ model: z.string() }) }),
 });
 
 let configDir = "";
@@ -19,7 +19,7 @@ afterEach(async () => {
 
 describe("writeCodexConfigToml", () => {
   test("a backslash or quote in the model cannot add TOML keys", async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-codex-toml-"));
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-codex-toml-"));
 
     const model = 'x\\"\nmodel_provider = "evil"\n#';
 
@@ -44,9 +44,9 @@ describe("writeCodexConfigToml", () => {
       Bun.TOML.parse(await readFile(configPath, "utf8"))
     );
 
-    expect(parsed.model_provider).toBe("nakama");
-    expect(parsed.profiles.nakama.model).toBe(model.trim());
-    expect(parsed.model_providers.nakama.base_url).toBe(
+    expect(parsed.model_provider).toBe("airin");
+    expect(parsed.profiles.airin.model).toBe(model.trim());
+    expect(parsed.model_providers.airin.base_url).toBe(
       'https://example.test/v1"'
     );
   });

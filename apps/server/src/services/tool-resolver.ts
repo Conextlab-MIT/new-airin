@@ -1,23 +1,23 @@
 import {
+  AirinApiError,
   builtinTools,
   type JsonSchema,
   type ListToolsResponse,
-  NakamaApiError,
   type PluginActorRole,
   type PluginExecutionActor,
   type ToolContext,
   type ToolDefinition,
   type UserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   isEmailConfigComplete,
   loadEmailConfig,
-} from "@nakama/core/email-config";
-import { createCustomWebSearchTool } from "@nakama/core/tools/custom-web-search";
-import { emailTool } from "@nakama/core/tools/email";
-import { BROWSER_TOOL_IDS } from "@nakama/core/tools/protected";
-import { loadWebSearchConfig } from "@nakama/core/web-search-config";
-import type { DatabaseAdapter, StoredToolRecord } from "@nakama/db";
+} from "@airin/core/email-config";
+import { createCustomWebSearchTool } from "@airin/core/tools/custom-web-search";
+import { emailTool } from "@airin/core/tools/email";
+import { BROWSER_TOOL_IDS } from "@airin/core/tools/protected";
+import { loadWebSearchConfig } from "@airin/core/web-search-config";
+import type { DatabaseAdapter, StoredToolRecord } from "@airin/db";
 import { type BashInput, bashTool, runBash } from "../tools/bash";
 import { createBrowserTools } from "../tools/browser-tools";
 import { isCloudBrowserRuntime } from "./agent-browser-service";
@@ -35,6 +35,7 @@ export type ServerToolOverrides = {
   generateImage?: ToolDefinition | null;
   saveArtifact?: ToolDefinition | null;
   session?: ToolDefinition[];
+  sendToBot?: ToolDefinition | null;
   subAgent?: ToolDefinition | null;
 };
 
@@ -192,6 +193,10 @@ function buildServerTools(
     map.set(overrides.subAgent.name, overrides.subAgent);
   }
 
+  if (overrides.sendToBot) {
+    map.set(overrides.sendToBot.name, overrides.sendToBot);
+  }
+
   if (overrides.generateImage) {
     map.set(overrides.generateImage.name, overrides.generateImage);
   }
@@ -315,7 +320,7 @@ function pluginActorRoleFromOrgRole(
     return role;
   }
 
-  throw new NakamaApiError("Forbidden", 403);
+  throw new AirinApiError("Forbidden", 403);
 }
 
 function isJsonSchema<T>(value: T): value is T & JsonSchema {

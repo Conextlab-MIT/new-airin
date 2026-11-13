@@ -1,4 +1,3 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   AcpSessionSettingsResponse,
   BranchSessionResponse,
@@ -13,14 +12,15 @@ import type {
   SessionStatusResponse,
   SessionSummary,
   UpdateSessionRequest,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   AGENT_CHANNELS,
+  AirinApiError,
   fetchRemoteImage,
   MAX_SESSION_SEARCH_LENGTH,
-  NakamaApiError,
-} from "@nakama/core";
-import { THINKING_EFFORTS } from "@nakama/core/thinking-effort";
+} from "@airin/core";
+import { THINKING_EFFORTS } from "@airin/core/thinking-effort";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   getUserBrowser,
   stopUserBrowser,
@@ -54,7 +54,7 @@ export function registerSessionRoutes(
 ): void {
   const { agent } = options;
 
-  // createSession refuses Super Nakama to non-admins. Every route that names an
+  // createSession refuses Airin to non-admins. Every route that names an
   // existing session repeats the check, or holding the ID would be enough.
   const requireSessionAccess = async (
     c: Parameters<typeof requireActiveOrgIdFromContext>[0],
@@ -744,7 +744,7 @@ export function registerSessionRoutes(
       {
         cognito: body.cognito,
         codingWorkspaceRoot: body.codingWorkspaceRoot,
-        excludeSuperNakama: auth.mode === "local-token" && channel !== "cli",
+        excludeSuperAirin: auth.mode === "local-token" && channel !== "cli",
         isPlatformAdmin: auth.isPlatformAdmin,
         model: body.model,
         orgRole: auth.orgRole,
@@ -965,7 +965,7 @@ export function registerSessionRoutes(
     try {
       await stopUserBrowser(orgId, auth.user.id);
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -1106,7 +1106,7 @@ export function registerSessionRoutes(
     if (
       body.whatsappMessage &&
       !(await options.workerManager.verifyWhatsAppContextToken(
-        c.req.header("X-Nakama-WhatsApp-Context-Token") ?? null
+        c.req.header("X-Airin-WhatsApp-Context-Token") ?? null
       ))
     ) {
       return errorResponse(

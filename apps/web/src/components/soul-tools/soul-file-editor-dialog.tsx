@@ -1,5 +1,5 @@
-import type { SoulFileStatus, SoulStackFiles } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { SoulFileStatus, SoulStackFiles } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogDescription,
@@ -7,9 +7,9 @@ import {
   DialogHeader,
   DialogSheetContent,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { EditorStatus, EditorTextarea } from "@nakama/ui/textarea";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { EditorStatus, EditorTextarea } from "@airin/ui/textarea";
 import { File01Icon, Folder01Icon } from "hugeicons-react";
 
 function SoulFileEditorHeader({

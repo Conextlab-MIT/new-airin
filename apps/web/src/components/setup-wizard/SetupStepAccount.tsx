@@ -1,12 +1,12 @@
-import { Button } from "@nakama/ui/button";
-import { Card } from "@nakama/ui/card";
-import { Input } from "@nakama/ui/input";
+import { Button } from "@airin/ui/button";
+import { Card } from "@airin/ui/card";
+import { Input } from "@airin/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
+} from "@airin/ui/input-group";
 import { Upload04Icon, ViewIcon, ViewOffIcon } from "hugeicons-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";

@@ -3,7 +3,7 @@ import type {
   ChatCompletionResult,
   ChatMessage,
   ProviderClient,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   type CompactionConfig,
   compactHistory,

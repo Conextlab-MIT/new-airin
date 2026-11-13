@@ -1,9 +1,9 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import path from "node:path";
-import type { ToolContext } from "@nakama/core";
+import type { ToolContext } from "@airin/core";
 
 // Shared subprocess machinery for custom tool loaders (javascript, python).
-// A registered tool can be written by any org's Super Nakama profile, so both
+// A registered tool can be written by any org's Airin profile, so both
 // handler types run as a child process with an explicit env allowlist
 // instead of inheriting the server's full environment.
 
@@ -83,7 +83,7 @@ export function killProcessTree(
 }
 
 function resolveCustomToolTimeoutMs(): number {
-  const configured = Number(process.env.NAKAMA_CUSTOM_TOOL_TIMEOUT_MS);
+  const configured = Number(process.env.AIRIN_CUSTOM_TOOL_TIMEOUT_MS);
 
   return Number.isFinite(configured) && configured > 0
     ? configured
@@ -100,12 +100,12 @@ function buildAllowlistedSubprocessEnv(
     env.PATH = process.env.PATH;
   }
 
-  if (includeConfigDir && process.env.NAKAMA_CONFIG_DIR) {
-    env.NAKAMA_CONFIG_DIR = process.env.NAKAMA_CONFIG_DIR;
+  if (includeConfigDir && process.env.AIRIN_CONFIG_DIR) {
+    env.AIRIN_CONFIG_DIR = process.env.AIRIN_CONFIG_DIR;
   }
 
   if (workspaceRoot) {
-    env.NAKAMA_WORKSPACE_ROOT = workspaceRoot;
+    env.AIRIN_WORKSPACE_ROOT = workspaceRoot;
   }
 
   return env;
@@ -189,7 +189,7 @@ export async function spawnJsonTool(
         const request = message as Record<string, unknown>;
 
         if (
-          request.type !== "nakama-host-request" ||
+          request.type !== "airin-host-request" ||
           // oxlint-disable-next-line anti-slop/no-runtime-typeof -- The protocol id must be a string before it is echoed.
           typeof request.id !== "string"
         ) {
@@ -199,7 +199,7 @@ export async function spawnJsonTool(
         const reply = (payload: { error?: string; result?: unknown }) => {
           if (child.connected) {
             child.send(
-              { id: request.id, type: "nakama-host-result", ...payload },
+              { id: request.id, type: "airin-host-result", ...payload },
               () => {}
             );
           }

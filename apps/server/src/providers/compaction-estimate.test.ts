@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-// estimateHistoryTokens is not exported from @nakama/agent, hence the deep path.
+// estimateHistoryTokens is not exported from @airin/agent, hence the deep path.
 import { estimateHistoryTokens } from "../../../../packages/agent/src/history-compaction";
 import { createAnthropicProvider, toAnthropicMessages } from "./anthropic";
 import { asTestFetch, streamFromChunks } from "./test-helpers";

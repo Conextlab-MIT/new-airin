@@ -16,13 +16,13 @@ import type {
   ToolCall,
   ToolContext,
   ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import {
+  AirinApiError,
   createId,
   MODEL_CONNECTION_CLOSED_MESSAGE,
-  NakamaApiError,
   ProviderStreamInterruptedError,
-} from "@nakama/core";
+} from "@airin/core";
 import { z } from "zod";
 
 export interface AgentRequest {
@@ -45,7 +45,7 @@ import {
   normalizeUserContent,
   partitionTools,
   toLlmToolDefinitions,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   buildChatSystemPrompt,
   buildWebSearchUnavailableGuidance,
@@ -229,6 +229,7 @@ export interface AgentChatSessionOptions {
   toolContext?: ToolContext;
   tools?: ToolDefinition[];
   userContext?: string;
+  userLanguage?: "id" | "en";
   userTimezone?: string;
 }
 
@@ -274,6 +275,7 @@ export function createAgentChatSession(
     ),
     soul: options.soul,
     userContext: options.userContext,
+    userLanguage: options.userLanguage,
     userTimezone: options.userTimezone,
   });
 
@@ -912,7 +914,7 @@ async function runConversation(
       // after a chunk or a tool call go through the interrupted path instead,
       // and permanent failures still fail the turn.
       if (
-        ((error instanceof NakamaApiError &&
+        ((error instanceof AirinApiError &&
           error.status >= 500 &&
           !(error instanceof ProviderStreamInterruptedError)) ||
           isTransientConnectionError(error)) &&
@@ -1475,7 +1477,7 @@ async function generateReply(
       // pause_turn), so a later request can fail after output.
       const retryableFailure =
         isTransientConnectionError(error) ||
-        (error instanceof NakamaApiError && error.status >= 500);
+        (error instanceof AirinApiError && error.status >= 500);
 
       const streamError =
         (content || thinking || pendingToolInputs.size > 0) &&

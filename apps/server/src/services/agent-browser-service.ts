@@ -1,9 +1,9 @@
 import {
   type AgentBrowserProvider,
   type AgentBrowserStatusResponse,
+  AirinApiError,
   getUserConfigPath,
   maskTrailingSecret,
-  NakamaApiError,
   parseIniWithSections,
   REDACTED_SECRET_VALUE,
   readTextOrNull,
@@ -11,7 +11,7 @@ import {
   type SessionBrowserResponse,
   type UpdateAgentBrowserSettingsRequest,
   writeParsedConfigIni,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   ensureBunGlobalInstallDirs,
   ensureProcessPath,
@@ -114,7 +114,7 @@ async function loadAgentBrowserConfig(): Promise<AgentBrowserConfig | null> {
 
 /**
  * Host env wins over the saved settings, so Docker and Kubernetes deployments
- * can set Kernel up with `NAKAMA_BROWSER_PROVIDER=kernel` and `KERNEL_API_KEY`.
+ * can set Kernel up with `AIRIN_BROWSER_PROVIDER=kernel` and `KERNEL_API_KEY`.
  * Not `AGENT_BROWSER_PROVIDER`: agent-browser reads that name itself, and a
  * provider wins over the CDP URL that points it at the user's browser.
  */
@@ -122,7 +122,7 @@ export async function resolveAgentBrowserConfig(
   env: Record<string, string | undefined> = process.env
 ): Promise<AgentBrowserConfig | null> {
   const saved = await loadAgentBrowserConfig();
-  const envProvider = env.NAKAMA_BROWSER_PROVIDER?.trim().toLowerCase();
+  const envProvider = env.AIRIN_BROWSER_PROVIDER?.trim().toLowerCase();
 
   if (!(saved || envProvider === "kernel")) {
     return null;
@@ -157,7 +157,7 @@ export async function saveAgentBrowserConfig(
   }
 
   if (input.provider !== undefined && input.provider !== "kernel") {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Unsupported browser provider: ${String(input.provider)}.`,
       400
     );
@@ -173,7 +173,7 @@ export async function saveAgentBrowserConfig(
       (await resolveManagedSecret("global", KERNEL_BROWSER_SECRET))
     )
   ) {
-    throw new NakamaApiError("A Kernel API key is required.", 400);
+    throw new AirinApiError("A Kernel API key is required.", 400);
   }
 
   if (newKey) {
@@ -217,7 +217,7 @@ async function requireKernelApiKey(): Promise<string> {
   const config = await resolveAgentBrowserConfig();
 
   if (!config?.apiKey) {
-    throw new NakamaApiError("Kernel browser runtime is not configured.", 400);
+    throw new AirinApiError("Kernel browser runtime is not configured.", 400);
   }
 
   return config.apiKey;
@@ -301,14 +301,14 @@ export async function installAgentBrowser(
         .trim();
 
       if (cliResult.timedOut) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           "Install timed out while installing the agent-browser CLI.",
           502
         );
       }
 
       if (cliResult.exitCode !== 0) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           cliOutput
             ? `agent-browser CLI install failed: ${summarizeInstallOutput(cliOutput)}`
             : "agent-browser CLI install failed.",
@@ -319,11 +319,11 @@ export async function installAgentBrowser(
       await tarball.cleanup();
     }
   } catch (error) {
-    if (error instanceof NakamaApiError) {
+    if (error instanceof AirinApiError) {
       throw error;
     }
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `agent-browser CLI install refused: ${
         error instanceof Error ? error.message : String(error)
       }`,
@@ -335,7 +335,7 @@ export async function installAgentBrowser(
   // gone is the case this guards. The abort is checked between the two commands
   // as well as inside each one.
   if (options.signal?.aborted) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Install cancelled before the agent-browser download started.",
       502
     );
@@ -360,14 +360,14 @@ export async function installAgentBrowser(
     .trim();
 
   if (browserResult.timedOut) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Install timed out while downloading Chrome for agent-browser.",
       502
     );
   }
 
   if (browserResult.exitCode !== 0) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       browserOutput
         ? `agent-browser browser install failed: ${summarizeInstallOutput(browserOutput)}`
         : "agent-browser browser install failed.",

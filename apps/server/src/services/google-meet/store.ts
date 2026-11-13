@@ -12,15 +12,15 @@ import { join } from "node:path";
 import {
   formatTranscript,
   type TranscriptSegment,
-} from "@nakama/core/google-meet";
+} from "@airin/core/google-meet";
 
-export type { Meeting } from "@nakama/core/google-meet";
+export type { Meeting } from "@airin/core/google-meet";
 
 import type {
   MeetExtensionKey,
   Meeting,
   MeetingState,
-} from "@nakama/core/google-meet";
+} from "@airin/core/google-meet";
 
 /** A paired browser stops working after this long without use. */
 const EXTENSION_KEY_TTL_MS = 90 * 24 * 60 * 60_000;

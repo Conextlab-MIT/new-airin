@@ -2,7 +2,7 @@ export type Theme = "light" | "dark" | "system";
 
 export type ResolvedTheme = "light" | "dark";
 
-export const THEME_STORAGE_KEY = "nakama-theme";
+export const THEME_STORAGE_KEY = "airin-theme";
 
 function isTheme(value: string | null | undefined): value is Theme {
   return value === "light" || value === "dark" || value === "system";
@@ -20,7 +20,8 @@ function getStoredTheme(): Theme | null {
 
 function getSystemTheme(): ResolvedTheme {
   if (typeof window === "undefined") {
-    return "dark";
+    // Business-owner default when there is no window yet.
+    return "light";
   }
 
   return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -36,8 +37,9 @@ export function resolveTheme(theme: Theme): ResolvedTheme {
   return theme;
 }
 
+/** Fresh installs open light for business owners. */
 export function getInitialTheme(): Theme {
-  return getStoredTheme() ?? "system";
+  return getStoredTheme() ?? "light";
 }
 
 export function applyTheme(theme: Theme): void {
@@ -50,8 +52,8 @@ export function applyTheme(theme: Theme): void {
 
 export function markLogoSrc(resolvedTheme: ResolvedTheme): string {
   return resolvedTheme === "light"
-    ? "/nakama-mark.svg"
-    : "/nakama-mark-white.svg";
+    ? "/airin-mark.svg"
+    : "/airin-mark-white.svg";
 }
 
 function applyFavicon(resolved: ResolvedTheme): void {

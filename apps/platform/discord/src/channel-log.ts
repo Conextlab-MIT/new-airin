@@ -1,6 +1,6 @@
 /** Optional verbose channel worker logging (user/channel ids and per-message structure). */
 export function isChannelDebugEnabled(): boolean {
-  return process.env.NAKAMA_CH_DEBUG === "1";
+  return process.env.AIRIN_CH_DEBUG === "1";
 }
 
 /** Discord inbound log line — caller gates with `isChannelDebugEnabled`. */

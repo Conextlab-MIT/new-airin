@@ -18,7 +18,7 @@ import {
   resolveWithRealpath,
   type ToolContext,
   type ToolDefinition,
-} from "@nakama/core";
+} from "@airin/core";
 import { getToolExecutionEnv } from "../lib/ensure-process-path";
 import { mergeCodingAgentSpawnEnv } from "../services/coding-agent-spawn-env";
 import { killProcessTree } from "../services/custom-tool-subprocess";
@@ -80,7 +80,7 @@ function bashToolDescription(): string {
     return `${BASH_TOOL_DESCRIPTION_BASE} ${remoteBashDescription()}`;
   }
 
-  return `${BASH_TOOL_DESCRIPTION_BASE} Host execution is unrestricted by Nakama and uses the server process's OS permissions. Commands can access files outside the profile workspace, including other profiles' files when OS permissions allow. Assign host bash only to trusted profiles.`;
+  return `${BASH_TOOL_DESCRIPTION_BASE} Host execution is unrestricted by Airin and uses the server process's OS permissions. Commands can access files outside the profile workspace, including other profiles' files when OS permissions allow. Assign host bash only to trusted profiles.`;
 }
 
 export const bashTool: ToolDefinition<BashInput, BashOutput> = {
@@ -91,7 +91,7 @@ export const bashTool: ToolDefinition<BashInput, BashOutput> = {
     properties: {
       codingAgent: {
         description:
-          "When true, Nakama merges coding-agent spawn env (provider passthrough) for this command.",
+          "When true, Airin merges coding-agent spawn env (provider passthrough) for this command.",
         type: "boolean",
       },
       command: { description: "Shell command to run.", type: "string" },
@@ -189,7 +189,7 @@ export async function runBash(
       ).resolved
     : workspaceRoot;
 
-  refuseNakamaStateAccess(command, cwd, [
+  refuseAirinStateAccess(command, cwd, [
     workspaceRoot,
     getProfileSoulDir(orgId, profileId),
   ]);
@@ -204,28 +204,28 @@ export async function runBash(
   });
 }
 
-/** Names that only Nakama's own secret state uses, refused wherever they appear. */
-const NAKAMA_SECRET_FILE_PATTERN =
-  /(?:^|[\s/=:<>(`])(?:config\.ini|local-auth-token|tool-credentials\.key|whatsapp-context-token|nakama\.(?:sqlite|db))(?=$|[\s;|&)<>`])/i;
+/** Names that only Airin's own secret state uses, refused wherever they appear. */
+const AIRIN_SECRET_FILE_PATTERN =
+  /(?:^|[\s/=:<>(`])(?:config\.ini|local-auth-token|tool-credentials\.key|whatsapp-context-token|airin\.(?:sqlite|db))(?=$|[\s;|&)<>`])/i;
 
 /** Credential or database shapes, refused when the command also reaches the config dir. */
-const NAKAMA_STATE_PATTERN =
+const AIRIN_STATE_PATTERN =
   /\.(?:sqlite3?|db|ini|key)\b|\bsqlite3\b|token|\/auth\b/i;
 
 const SHELL_WORD_DELIMITER = /[\s;|&<>()`]+/;
 
 const OTHER_WORKSPACE_REFUSAL =
-  "Refused: this command reaches into Nakama's org data outside this profile's workspace. Bash can only read this profile's own files. Use the Nakama tools assigned to this profile for anything else.";
+  "Refused: this command reaches into Airin's org data outside this profile's workspace. Bash can only read this profile's own files. Use the Airin tools assigned to this profile for anything else.";
 
-const NAKAMA_STATE_REFUSAL =
-  "Refused: this command reads Nakama's internal state (local auth token, config.ini, credential keys, or server SQLite databases). The bash tool cannot call the Nakama API or read its databases. Use the Nakama tools assigned to this profile; if no tool fits, tell the user what is missing.";
+const AIRIN_STATE_REFUSAL =
+  "Refused: this command reads Airin's internal state (local auth token, config.ini, credential keys, or server SQLite databases). The bash tool cannot call the Airin API or read its databases. Use the Airin tools assigned to this profile; if no tool fits, tell the user what is missing.";
 
 /**
- * Defense in depth, not a sandbox: refuse commands that name Nakama's secret
+ * Defense in depth, not a sandbox: refuse commands that name Airin's secret
  * files or reach into the config dir for credentials and databases. Profile
  * workspaces under the config dir stay usable.
  */
-function refuseNakamaStateAccess(
+function refuseAirinStateAccess(
   command: string,
   cwd: string,
   workspaceDirs: string[]
@@ -236,26 +236,26 @@ function refuseNakamaStateAccess(
     .replace(/["']/g, "")
     .replace(/\$\{(\w+)\}/g, "$$$1");
 
-  if (NAKAMA_SECRET_FILE_PATTERN.test(normalized)) {
-    throw new Error(NAKAMA_STATE_REFUSAL);
+  if (AIRIN_SECRET_FILE_PATTERN.test(normalized)) {
+    throw new Error(AIRIN_STATE_REFUSAL);
   }
 
   if (
-    NAKAMA_STATE_PATTERN.test(normalized) &&
-    reachesNakamaConfigDir(normalized, cwd, workspaceDirs)
+    AIRIN_STATE_PATTERN.test(normalized) &&
+    reachesAirinConfigDir(normalized, cwd, workspaceDirs)
   ) {
-    throw new Error(NAKAMA_STATE_REFUSAL);
+    throw new Error(AIRIN_STATE_REFUSAL);
   }
 
   // Other orgs' and profiles' files hold no secret-shaped name, so the
   // pattern gate above never sees them. Anything under orgs/ outside this
   // profile's workspace is refused.
-  if (reachesNakamaConfigDir(normalized, cwd, workspaceDirs, "orgs")) {
+  if (reachesAirinConfigDir(normalized, cwd, workspaceDirs, "orgs")) {
     throw new Error(OTHER_WORKSPACE_REFUSAL);
   }
 }
 
-function reachesNakamaConfigDir(
+function reachesAirinConfigDir(
   command: string,
   cwd: string,
   workspaceDirs: string[],
@@ -272,7 +272,7 @@ function reachesNakamaConfigDir(
     );
 
   // With a subdir, a parent of it inside the config dir counts too:
-  // `grep -r x ~/.nakama` reads orgs/.
+  // `grep -r x ~/.airin` reads orgs/.
   const reachesState = (target: string) =>
     configRoots.some((root) => isInsideDir(target, root)) &&
     scopes.some(
@@ -286,7 +286,7 @@ function reachesNakamaConfigDir(
     .relative(homedir(), configDir)
     .replaceAll("\\", "/");
 
-  const prefixes = new Map<string, string>([["$NAKAMA_CONFIG_DIR", configDir]]);
+  const prefixes = new Map<string, string>([["$AIRIN_CONFIG_DIR", configDir]]);
 
   for (const root of configRoots) {
     prefixes.set(root.replaceAll("\\", "/"), root);
@@ -550,7 +550,7 @@ function substituteShellVars(
         return homedir();
       }
 
-      if (name === "NAKAMA_CONFIG_DIR") {
+      if (name === "AIRIN_CONFIG_DIR") {
         return configDir;
       }
 
@@ -571,8 +571,8 @@ function expandHomePrefix(word: string, configDir: string): string {
     return `${homedir()}${word.slice("$HOME".length)}`;
   }
 
-  if (word.startsWith("$NAKAMA_CONFIG_DIR")) {
-    return `${configDir}${word.slice("$NAKAMA_CONFIG_DIR".length)}`;
+  if (word.startsWith("$AIRIN_CONFIG_DIR")) {
+    return `${configDir}${word.slice("$AIRIN_CONFIG_DIR".length)}`;
   }
 
   return word;
@@ -601,7 +601,7 @@ function expandNumericSequence(
   const count = Math.floor(Math.abs(end - start) / step) + 1;
 
   if (count > MAX_BRACE_ALTERNATIVES) {
-    throw new Error(NAKAMA_STATE_REFUSAL);
+    throw new Error(AIRIN_STATE_REFUSAL);
   }
 
   const result: string[] = [];
@@ -637,7 +637,7 @@ function expandCharSequence(
   const count = Math.floor(Math.abs(end - start) / step) + 1;
 
   if (count > MAX_BRACE_ALTERNATIVES) {
-    throw new Error(NAKAMA_STATE_REFUSAL);
+    throw new Error(AIRIN_STATE_REFUSAL);
   }
 
   const result: string[] = [];
@@ -713,7 +713,7 @@ function expandBraces(word: string): string[] {
         next.push(`${prefix}${alt}${suffix}`);
 
         if (next.length > MAX_BRACE_ALTERNATIVES) {
-          throw new Error(NAKAMA_STATE_REFUSAL);
+          throw new Error(AIRIN_STATE_REFUSAL);
         }
       }
     }
@@ -832,13 +832,13 @@ function runShellCommand(
     // profile's own so nothing that resolved before changes.
     const restorePath =
       process.platform !== "win32" && env.PATH
-        ? 'PATH="$PATH:$NAKAMA_TOOL_PATH"; unset NAKAMA_TOOL_PATH; '
+        ? 'PATH="$PATH:$AIRIN_TOOL_PATH"; unset AIRIN_TOOL_PATH; '
         : "";
 
     const child = spawn(resolveHostBash(), ["-lc", restorePath + command], {
       cwd,
       detached: process.platform !== "win32",
-      env: restorePath ? { ...env, NAKAMA_TOOL_PATH: env.PATH } : env,
+      env: restorePath ? { ...env, AIRIN_TOOL_PATH: env.PATH } : env,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });

@@ -1,13 +1,13 @@
-import { hasActiveAgentTodos } from "@nakama/core/agent-todo";
+import { hasActiveAgentTodos } from "@airin/core/agent-todo";
 import type {
   AgentTodo,
   ChatUsage,
   CheckProviderResponse,
   ProviderModelOption,
   SkillSummary,
-} from "@nakama/core/contract";
-import { MAX_IMAGE_BYTES } from "@nakama/core/message-content";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { MAX_IMAGE_BYTES } from "@airin/core/message-content";
+import { Button } from "@airin/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -15,7 +15,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@nakama/ui/command";
+} from "@airin/ui/command";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -26,15 +26,16 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@nakama/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@nakama/ui/popover";
-import { Spinner } from "@nakama/ui/spinner";
-import { toast } from "@nakama/ui/toast";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@nakama/ui/tooltip";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@airin/ui/popover";
+import { Spinner } from "@airin/ui/spinner";
+import { toast } from "@airin/ui/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@airin/ui/tooltip";
+import { cn } from "@airin/ui/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
   Add01Icon,
+  AiChat02Icon,
   Alert02Icon,
   ArrowExpand01Icon,
   ArrowShrink02Icon,
@@ -82,6 +83,7 @@ import { ChatContextUsageRing } from "@/components/chat/chat-context-usage";
 import { ChatSkillPicker } from "@/components/chat/chat-skill-picker";
 import { ChatSkillTokenOverlay } from "@/components/chat/chat-skill-token-overlay";
 import { ImageAttachmentPreview } from "@/components/chat/image-attachment-preview";
+import { OwnerEffortPicker } from "@/components/chat/owner-effort-picker";
 import { TextAttachmentPreview } from "@/components/chat/text-attachment-preview";
 import { useAuth } from "@/context/use-auth";
 import { useOptionalChatAttachmentPanel } from "@/context/use-chat-attachment-panel";
@@ -96,6 +98,7 @@ import {
   useAssignMcpServerMutation,
   useUnassignMcpServerMutation,
 } from "@/hooks/use-resource-mutations";
+import { useSelectProfile } from "@/hooks/use-select-profile";
 import type { ChatStatus, FileUIPart } from "@/lib/ai-ui-types";
 import {
   type ComposerAddCommandAction,
@@ -171,6 +174,8 @@ interface ChatComposerBaseProps {
 }
 
 interface ChatComposerMinimalProps extends ChatComposerBaseProps {
+  /** Lets the + menu toggle MCP for this agent in Owner chat. */
+  profileId?: string | null;
   variant: "minimal";
 }
 
@@ -184,6 +189,8 @@ interface ChatComposerFullProps extends ChatComposerBaseProps {
   onConnectProvider?: () => void;
   onModelChange: (selection: string) => void;
   onThinkingEffortChange?: (effort: string) => void;
+  /** Owner chat: hide model names; show ChatGPT-style effort only. */
+  ownerEffortMode?: boolean;
   primarySupportsVision?: boolean;
   profileId?: string | null;
   profileModelId?: string | null;
@@ -259,7 +266,7 @@ function ChatComposerOfflineHint({
             One more step to start chatting
           </p>
           <p className="text-muted-foreground text-sm">
-            Connect an AI service so Nakama can respond to your messages.
+            Connect an AI service so Airin can respond to your messages.
           </p>
         </div>
       </div>
@@ -431,17 +438,13 @@ function ChatComposerBarePrompt({
         showTips={showTips}
       />
       <PromptInput
-        accept={isMinimal ? undefined : ALL_ATTACHMENT_ACCEPT}
+        accept={ALL_ATTACHMENT_ACCEPT}
         className={isMinimal ? composerShellCompactClass : composerShellClass}
         inputGroupClassName={composerInputGroupClass}
-        maxFileSize={isMinimal ? undefined : MAX_IMAGE_BYTES}
-        maxFiles={isMinimal ? undefined : MAX_FOLDER_FILES}
-        multiple={!isMinimal}
-        onError={
-          isMinimal
-            ? undefined
-            : (attachmentErr) => setAttachmentError(attachmentErr.message)
-        }
+        maxFileSize={MAX_IMAGE_BYTES}
+        maxFiles={MAX_FOLDER_FILES}
+        multiple
+        onError={(attachmentErr) => setAttachmentError(attachmentErr.message)}
         onSubmit={({ text, files }) => {
           if (dictationActive) {
             return;
@@ -450,13 +453,11 @@ function ChatComposerBarePrompt({
           setAttachmentError(null);
           onSubmit(text.trim(), files);
         }}
-        prepareFiles={isMinimal ? undefined : prepareChatUploadFiles}
+        prepareFiles={prepareChatUploadFiles}
         rimActive={busy}
       >
         <ChatComposerCommandBanner availableSkills={availableSkills} />
-        {isMinimal ? null : (
-          <ChatAttachmentHeader primarySupportsVision={primarySupportsVision} />
-        )}
+        <ChatAttachmentHeader primarySupportsVision={primarySupportsVision} />
         <PromptInputBody>
           <ChatComposerTextarea
             availableSkills={availableSkills}
@@ -472,30 +473,36 @@ function ChatComposerBarePrompt({
         </PromptInputBody>
         <PromptInputFooter
           className={cn(
-            "w-full border-0 px-0 py-0",
-            isMinimal
-              ? "justify-end pt-1.5"
-              : "flex-nowrap items-center gap-1.5 pt-1",
+            "w-full flex-nowrap items-center gap-1.5 border-0 px-0 py-0 pt-1",
             footerClassName
           )}
         >
           {isMinimal || !fullProps ? (
-            <div className="ml-auto flex shrink-0 items-center gap-1.5">
-              <ChatDictationButton
-                disabled={disabled}
-                onActiveChange={setDictationActive}
-              />
-
-              {dictationActive && !canStop ? null : (
-                <ChatComposerSubmitButton
-                  busy={busy}
-                  canStop={canStop}
-                  chatStatus={chatStatus}
+            <>
+              <div
+                aria-label="Composer options"
+                className={composerToolbarClass}
+                role="toolbar"
+              >
+                <ChatAttachmentButton disabled={disabled} />
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                <ChatDictationButton
                   disabled={disabled}
-                  onStop={onStop}
+                  onActiveChange={setDictationActive}
                 />
-              )}
-            </div>
+
+                {dictationActive && !canStop ? null : (
+                  <ChatComposerSubmitButton
+                    busy={busy}
+                    canStop={canStop}
+                    chatStatus={chatStatus}
+                    disabled={disabled}
+                    onStop={onStop}
+                  />
+                )}
+              </div>
+            </>
           ) : (
             <ChatComposerFullFooter
               busy={busy}
@@ -518,6 +525,10 @@ function isFullComposer(
   props: ChatComposerProps
 ): props is ChatComposerFullProps {
   return props.variant !== "minimal";
+}
+
+function composerProfileId(props: ChatComposerProps): string | null {
+  return props.profileId ?? null;
 }
 
 function resolveChatComposerLayout(
@@ -703,10 +714,9 @@ function runBtwCommand(
 
 /** Agent whose MCP servers the + menu can switch, and how to add one. Null hides Connectors. */
 const ConnectorsContext = createContext<{
-  onAdd: () => void;
+  onAdd: (() => void) | null;
   profileId: string;
 } | null>(null);
-
 /** True when `/btw` is offered: only the composer that can open a side chat. */
 const BtwCommandContext = createContext(false);
 
@@ -836,15 +846,14 @@ export function ChatComposer(props: ChatComposerProps) {
     setAddDialog(action);
   }, []);
 
-  const openPluginContext = useOpenPluginContext(
-    isFullComposer(props) ? (props.profileId ?? null) : null
-  );
+  const profileId = composerProfileId(props);
+
+  const openPluginContext = useOpenPluginContext(profileId);
 
   const onBtw = composerBtwHandler(props);
 
   const canAddCapabilities =
-    isFullComposer(props) &&
-    Boolean(props.profileId) &&
+    Boolean(profileId) &&
     !(props.disabled ?? false) &&
     user?.isPlatformAdmin === true;
 
@@ -918,27 +927,29 @@ export function ChatComposer(props: ChatComposerProps) {
     canAddCapabilities
   );
 
-  const addProfileId =
-    isFullComposer(composerProps) && layout.enableAddCommands
-      ? (composerProps.profileId ?? null)
-      : null;
+  const addProfileId = profileId;
 
   const connectorsContext = useMemo(
     () =>
       addProfileId
-        ? { onAdd: () => openAddCommand("add-mcp"), profileId: addProfileId }
+        ? {
+            onAdd: canAddCapabilities ? () => openAddCommand("add-mcp") : null,
+            profileId: addProfileId,
+          }
         : null,
-    [addProfileId, openAddCommand]
+    [addProfileId, canAddCapabilities, openAddCommand]
   );
 
   const pluginsMenuContext = useMemo(
     () => ({
       ...openPluginContext,
-      onAdd: addProfileId ? () => openAddCommand("add-plugin") : null,
+      onAdd:
+        addProfileId && canAddCapabilities
+          ? () => openAddCommand("add-plugin")
+          : null,
     }),
-    [addProfileId, openAddCommand, openPluginContext]
+    [addProfileId, canAddCapabilities, openAddCommand, openPluginContext]
   );
-
   return (
     <CommandPrefixContext.Provider value={commandContext}>
       <BtwCommandContext.Provider value={Boolean(onBtw)}>
@@ -1307,7 +1318,7 @@ function modelItemValue(
   return `${providerLabel} ${model.name} ${model.id}`;
 }
 
-const RECENT_MODELS_KEY = "nakama:recent-models";
+const RECENT_MODELS_KEY = "airin:recent-models";
 
 // The last three models picked here, kept in this browser only.
 // One selection per line, so reading back needs no parsing.
@@ -1723,7 +1734,19 @@ function ChatComposerFullFooter({
         <ChatAttachmentButton disabled={disabled} />
 
         {props.providerConfigured ? (
-          <ChatModelPicker busy={busy} disabled={disabled} props={props} />
+          props.ownerEffortMode ? (
+            <OwnerEffortPicker
+              busy={busy}
+              currentModelSelection={props.currentModelSelection}
+              disabled={disabled}
+              groups={props.providerModelGroups}
+              onModelChange={props.onModelChange}
+              onThinkingEffortChange={props.onThinkingEffortChange}
+              triggerRef={props.modelPickerTriggerRef}
+            />
+          ) : (
+            <ChatModelPicker busy={busy} disabled={disabled} props={props} />
+          )
         ) : (
           <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-amber-500/10 px-3 font-medium text-amber-800 text-sm dark:text-amber-200">
             <WifiOff01Icon aria-hidden className="size-3.5 shrink-0" />
@@ -2015,10 +2038,10 @@ function ChatAttachmentButton({ disabled }: { disabled: boolean }) {
             <DropdownMenuTrigger
               render={
                 <Button
-                  aria-label="Add attachment"
+                  aria-label="Add"
                   className={cn(
                     composerIconButtonClass,
-                    "size-8 bg-transparent text-foreground hover:bg-muted"
+                    "size-8 rounded-full bg-transparent text-foreground hover:bg-muted"
                   )}
                   disabled={disabled}
                   ref={triggerRef}
@@ -2032,11 +2055,11 @@ function ChatAttachmentButton({ disabled }: { disabled: boolean }) {
             />
           }
         />
-        <TooltipContent side="top">Add attachment</TooltipContent>
+        <TooltipContent side="top">Add</TooltipContent>
       </Tooltip>
       <DropdownMenuContent
         align="start"
-        className="min-w-56"
+        className="min-w-64 gap-0 overflow-hidden p-1.5"
         finalFocus={() => {
           const textarea = focusAfterCloseRef.current;
 
@@ -2045,33 +2068,104 @@ function ChatAttachmentButton({ disabled }: { disabled: boolean }) {
           return textarea ?? true;
         }}
       >
+        <p className="px-2 py-1.5 font-medium text-2xs text-muted-foreground uppercase tracking-wide">
+          Add
+        </p>
         <DropdownMenuItem
+          className="items-start gap-2.5 py-2"
           disabled={disabled}
           onClick={() =>
             openAttachmentPicker(attachments, ALL_ATTACHMENT_ACCEPT)
           }
         >
-          <Image01Icon aria-hidden className="size-4 text-muted-foreground" />
-          <span className="whitespace-nowrap">Add files or photos</span>
-          <kbd className="ml-auto whitespace-nowrap font-sans text-2xs text-muted-foreground">
+          <Image01Icon
+            aria-hidden
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium text-sm">Files and photos</span>
+            <span className="block text-muted-foreground text-xs">
+              Attach images or documents
+            </span>
+          </span>
+          <kbd className="mt-0.5 whitespace-nowrap font-sans text-2xs text-muted-foreground">
             {addFilesShortcutLabel()}
           </kbd>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={disabled} onClick={openFolderPicker}>
-          <Folder01Icon aria-hidden className="size-4 text-muted-foreground" />
-          Add folder
+        <DropdownMenuItem
+          className="items-start gap-2.5 py-2"
+          disabled={disabled}
+          onClick={openFolderPicker}
+        >
+          <Folder01Icon
+            aria-hidden
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium text-sm">Folder</span>
+            <span className="block text-muted-foreground text-xs">
+              Attach many files from one folder
+            </span>
+          </span>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={disabled} onClick={insertSlashCommand}>
+        <DropdownMenuItem
+          className="items-start gap-2.5 py-2"
+          disabled={disabled}
+          onClick={insertSlashCommand}
+        >
           <CommandLineIcon
             aria-hidden
-            className="size-4 text-muted-foreground"
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
           />
-          Slash commands
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium text-sm">Slash commands</span>
+            <span className="block text-muted-foreground text-xs">
+              Skills and shortcuts with /
+            </span>
+          </span>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <p className="px-2 py-1.5 font-medium text-2xs text-muted-foreground uppercase tracking-wide">
+          Connect
+        </p>
+        <ChatAgentsSubmenu disabled={disabled} />
         <ChatPluginsSubmenu disabled={disabled} />
         <ChatConnectorsSubmenu disabled={disabled} />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** Switch to another org agent from the + menu. */
+function ChatAgentsSubmenu({ disabled }: { disabled: boolean }) {
+  const { activeProfileId, profiles, selectProfile } = useSelectProfile();
+  const agents = profiles.filter((profile) => !profile.isSuper);
+
+  if (agents.length === 0) {
+    return null;
+  }
+
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger disabled={disabled}>
+        <AiChat02Icon aria-hidden className="size-4 text-muted-foreground" />
+        Agents
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="min-w-56">
+        {agents.map((profile) => (
+          <DropdownMenuItem
+            disabled={profile.id === activeProfileId}
+            key={profile.id}
+            onClick={() => selectProfile(profile.id)}
+          >
+            <span className="min-w-0 flex-1 truncate">{profile.name}</span>
+            {profile.id === activeProfileId ? (
+              <span className="text-muted-foreground text-xs">Current</span>
+            ) : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }
 
@@ -2126,7 +2220,7 @@ function ChatConnectorsSubmenuItems({
   profileId,
 }: {
   disabled: boolean;
-  onAdd: () => void;
+  onAdd: (() => void) | null;
   profileId: string;
 }) {
   const navigate = useNavigate();
@@ -2180,10 +2274,12 @@ function ChatConnectorsSubmenuItems({
             />
             Manage MCP servers
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={onAdd}>
-            <Add01Icon aria-hidden className="size-4 text-muted-foreground" />
-            Add MCP server
-          </DropdownMenuItem>
+          {onAdd ? (
+            <DropdownMenuItem onClick={onAdd}>
+              <Add01Icon aria-hidden className="size-4 text-muted-foreground" />
+              Add MCP server
+            </DropdownMenuItem>
+          ) : null}
           {servers.data && servers.data.length > 0 ? (
             <DropdownMenuSeparator />
           ) : null}

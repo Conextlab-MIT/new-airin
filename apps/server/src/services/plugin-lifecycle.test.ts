@@ -8,8 +8,8 @@ import {
   getOrgPluginDatabasePath,
   getOrgPluginDataDir,
   PLUGIN_MANIFEST_API_VERSION,
-} from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import {
   closePluginPackageRegistry,
   pluginPackage,
@@ -43,7 +43,7 @@ CREATE TABLE extra (
   id TEXT PRIMARY KEY NOT NULL
 );
 INSERT INTO extra (id) VALUES ('x');
-SELECT * FROM __nakama_missing_table;
+SELECT * FROM __airin_missing_table;
 `;
 
 const MIGRATION_COMMIT_THEN_FAIL = `
@@ -52,7 +52,7 @@ CREATE TABLE leaked (
 );
 INSERT INTO leaked (id) VALUES ('oops');
 COMMIT;
-SELECT * FROM __nakama_missing_table;
+SELECT * FROM __airin_missing_table;
 `;
 
 const writeJs = `
@@ -108,14 +108,14 @@ function baseManifest(
       },
     ],
     apiVersion: PLUGIN_MANIFEST_API_VERSION,
-    author: "Nakama",
+    author: "Airin",
     database: {
       migrations: [{ id: "001_items", path: "migrations/001_items.sql" }],
     },
     description: "Lifecycle fixture",
     id,
     license: "MIT",
-    minNakamaVersion: "0.1.0",
+    minAirinVersion: "0.1.0",
     name: id,
     skills: [{ directory: "skills/notes", key: "notes" }],
     version,
@@ -126,8 +126,8 @@ function baseManifest(
 function v1Bundle(id = "notes"): ReturnType<typeof pluginPackage> {
   return pluginPackage({
     "actions/write.js": writeJs,
+    "airin.plugin.json": JSON.stringify(baseManifest(id, "1.0.0")),
     "migrations/001_items.sql": MIGRATION_001,
-    "nakama.plugin.json": JSON.stringify(baseManifest(id, "1.0.0")),
     "skills/notes/SKILL.md": "# Notes\n",
   });
 }
@@ -169,11 +169,11 @@ function v2Bundle(options: {
   return pluginPackage({
     "actions/extra.js": extraJs,
     "actions/write.js": writeJs,
+    "airin.plugin.json": JSON.stringify(manifest),
     "migrations/001_items.sql": MIGRATION_001,
     "migrations/002_extra.sql": options.failSecondMigration
       ? MIGRATION_002_FAIL
       : MIGRATION_002,
-    "nakama.plugin.json": JSON.stringify(manifest),
     "skills/notes/SKILL.md": "# Notes\n",
   });
 }
@@ -181,8 +181,8 @@ function v2Bundle(options: {
 function codeOnlyBundle(id = "notes"): ReturnType<typeof pluginPackage> {
   return pluginPackage({
     "actions/write.js": `${writeJs}\n`,
+    "airin.plugin.json": JSON.stringify(baseManifest(id, "1.0.1")),
     "migrations/001_items.sql": MIGRATION_001,
-    "nakama.plugin.json": JSON.stringify(baseManifest(id, "1.0.1")),
     "skills/notes/SKILL.md": "# Notes v2\n",
   });
 }
@@ -199,9 +199,9 @@ function commitThenFailBundle(id = "notes"): ReturnType<typeof pluginPackage> {
 
   return pluginPackage({
     "actions/write.js": writeJs,
+    "airin.plugin.json": JSON.stringify(baseManifest(id, "1.2.0", extras)),
     "migrations/001_items.sql": MIGRATION_001,
     "migrations/002_leaked.sql": MIGRATION_COMMIT_THEN_FAIL,
-    "nakama.plugin.json": JSON.stringify(baseManifest(id, "1.2.0", extras)),
     "skills/notes/SKILL.md": "# Notes\n",
   });
 }
@@ -211,8 +211,8 @@ function hangActionBundle(id = "notes"): ReturnType<typeof pluginPackage> {
 
   return pluginPackage({
     "actions/write.js": hangActionJs,
+    "airin.plugin.json": JSON.stringify(manifest),
     "migrations/001_items.sql": MIGRATION_001,
-    "nakama.plugin.json": JSON.stringify(manifest),
     "skills/notes/SKILL.md": "# Notes\n",
   });
 }
@@ -233,7 +233,7 @@ describe("plugin lifecycle", () => {
 
   beforeEach(async () => {
     await resetPluginAdmissionForTests();
-    configDir = await mkdtemp(join(tmpdir(), "nakama-plugin-u4-"));
+    configDir = await mkdtemp(join(tmpdir(), "airin-plugin-u4-"));
   });
 
   afterEach(async () => {
@@ -986,7 +986,7 @@ describe("plugin lifecycle", () => {
     const service = new PluginService(db, configDir, { workerManager });
 
     const source = pluginPackage({
-      "nakama.plugin.json": JSON.stringify(
+      "airin.plugin.json": JSON.stringify(
         baseManifest("notes", "1.0.0", {
           actions: [],
           database: undefined,
@@ -995,7 +995,7 @@ describe("plugin lifecycle", () => {
         })
       ),
       // Write then rename: a kill mid-write must not leave an empty marker.
-      "worker.js": `const marker = process.env.NAKAMA_PLUGIN_DATA_DIR + "/started"; await Bun.write(marker + "." + process.pid, process.env.NAKAMA_ORG_ID); (await import("node:fs")).renameSync(marker + "." + process.pid, marker); setInterval(() => {}, 1000);`,
+      "worker.js": `const marker = process.env.AIRIN_PLUGIN_DATA_DIR + "/started"; await Bun.write(marker + "." + process.pid, process.env.AIRIN_ORG_ID); (await import("node:fs")).renameSync(marker + "." + process.pid, marker); setInterval(() => {}, 1000);`,
     });
 
     try {
@@ -1074,7 +1074,7 @@ describe("plugin lifecycle", () => {
     });
 
     const source = pluginPackage({
-      "nakama.plugin.json": JSON.stringify(
+      "airin.plugin.json": JSON.stringify(
         baseManifest("notes", "1.0.0", {
           actions: [],
           database: undefined,

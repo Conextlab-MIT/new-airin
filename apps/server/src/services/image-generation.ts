@@ -1,12 +1,12 @@
 import {
+  AirinApiError,
   type ChatgptOAuthCredentials,
   findProviderInstance,
-  NakamaApiError,
   normalizeBaseUrl,
   type ProviderInstance,
   readBoundedBody,
   type UserConfig,
-} from "@nakama/core";
+} from "@airin/core";
 import { isCompatibleModelId } from "../providers/compatible-models";
 import { readApiKeyForInstance } from "../providers/create";
 import {
@@ -172,7 +172,7 @@ export function normalizeImageGenerationSize(
     return allowedSize;
   }
 
-  throw new NakamaApiError(
+  throw new AirinApiError(
     `Unsupported image size "${trimmed}". Allowed: ${IMAGE_GENERATION_SIZES.join(", ")}.`,
     400
   );
@@ -229,14 +229,14 @@ export function resolveImageGenerationSelection(
   const instance = preferred ?? openaiInstances[0] ?? null;
 
   if (!instance) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Image generation requires an OpenAI provider. Add one in Settings → AI Providers (/settings/providers).",
       400
     );
   }
 
   if (!modelSupportsImageGeneration(IMAGE_GENERATION_MODEL_ID, instance.type)) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Configured image generation model "${IMAGE_GENERATION_MODEL_ID}" is not supported.`,
       400
     );
@@ -245,7 +245,7 @@ export function resolveImageGenerationSelection(
   const apiKey = readApiKeyForInstance(instance, env)?.trim();
 
   if (!apiKey) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "OpenAI API key is missing. Configure an OpenAI provider or set OPENAI_API_KEY.",
       400
     );
@@ -298,7 +298,7 @@ function resolveCompatibleImageGenerationSelection(
       isCompatibleModelId(decoded.modelId, instance.customModels)
     )
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Configured image generation model is invalid. Update it in Settings → AI Providers (/settings/providers#image-generation).",
       400
     );
@@ -307,7 +307,7 @@ function resolveCompatibleImageGenerationSelection(
   const apiKey = readApiKeyForInstance(instance, env)?.trim();
 
   if (!apiKey) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `API key is missing for provider "${instance.label}".`,
       400
     );
@@ -328,7 +328,7 @@ export function imageGenerationDeadline(signal: AbortSignal | undefined) {
   return {
     rethrowTimeout: (cause: unknown): never => {
       if (deadline.aborted && !signal?.aborted) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           `Image generation timed out after ${IMAGE_GENERATION_TIMEOUT_MS / 1000}s waiting for the provider.`,
           504
         );
@@ -346,7 +346,7 @@ export async function generateImageWithOpenAI(
   const prompt = input.prompt?.trim();
 
   if (!prompt) {
-    throw new NakamaApiError("Image prompt is required.", 400);
+    throw new AirinApiError("Image prompt is required.", 400);
   }
 
   if (input.chatgpt) {
@@ -358,7 +358,7 @@ export async function generateImageWithOpenAI(
   // api.openai.com serves only the allowlisted model; a custom base URL serves
   // whatever custom model the resolver picked for it.
   if (!input.baseUrl && model !== IMAGE_GENERATION_MODEL_ID) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Image generation model "${model}" is not supported.`,
       400
     );
@@ -368,7 +368,7 @@ export async function generateImageWithOpenAI(
   const apiKey = input.apiKey?.trim();
 
   if (!apiKey) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "OpenAI API key is missing. Configure an OpenAI provider or set OPENAI_API_KEY.",
       400
     );
@@ -401,7 +401,7 @@ export async function generateImageWithOpenAI(
       .then((bytes) => bytes.toString("utf8"))
       .catch(rethrowTimeout);
 
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Image generation failed (${response.status}): ${detail}`,
       502
     );
@@ -417,7 +417,7 @@ export async function generateImageWithOpenAI(
   const b64 = first?.b64_json?.trim();
 
   if (!b64) {
-    throw new NakamaApiError("Image generation returned no image data.", 502);
+    throw new AirinApiError("Image generation returned no image data.", 502);
   }
 
   const result: GenerateImageResult = {
@@ -443,17 +443,14 @@ export function decodeImageBase64(b64: string): Uint8Array {
   try {
     bytes = Uint8Array.from(Buffer.from(b64, "base64"));
   } catch {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Image generation returned invalid base64 data.",
       502
     );
   }
 
   if (bytes.length === 0) {
-    throw new NakamaApiError(
-      "Image generation returned empty image data.",
-      502
-    );
+    throw new AirinApiError("Image generation returned empty image data.", 502);
   }
 
   return bytes;

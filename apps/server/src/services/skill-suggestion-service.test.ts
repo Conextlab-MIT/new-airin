@@ -2,11 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NakamaApiError } from "@nakama/core";
-import {
-  createInMemoryDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@nakama/db";
+import { AirinApiError } from "@airin/core";
+import { createInMemoryDatabaseAdapter, type DatabaseAdapter } from "@airin/db";
 import { SkillProposalService } from "./skill-proposal-service";
 import { SkillSuggestionService } from "./skill-suggestion-service";
 import { SkillsService } from "./skills-service";
@@ -35,12 +32,12 @@ describe("SkillSuggestionService", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-suggestions-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-suggestions-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("createSuggestion inserts a pending row without writing to disk", async () => {
@@ -253,7 +250,7 @@ describe("SkillSuggestionService", () => {
         },
         profileId: profile.id,
       })
-    ).rejects.toMatchObject({ name: "NakamaApiError", status: 409 });
+    ).rejects.toMatchObject({ name: "AirinApiError", status: 409 });
     expect(await suggestions.listSuggestions(ORG_ID)).toEqual([]);
   });
 
@@ -274,7 +271,7 @@ describe("SkillSuggestionService", () => {
 
     await expect(
       suggestions.applySuggestion("org_other", created.id, "admin_user")
-    ).rejects.toBeInstanceOf(NakamaApiError);
+    ).rejects.toBeInstanceOf(AirinApiError);
     await expect(
       suggestions.applySuggestion("org_other", created.id, "admin_user")
     ).rejects.toMatchObject({ status: 404 });

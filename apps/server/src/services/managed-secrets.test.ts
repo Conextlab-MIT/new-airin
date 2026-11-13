@@ -3,8 +3,8 @@ import { createCipheriv, randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadUserConfig, saveUserConfig } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { loadUserConfig, saveUserConfig } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { ManagedSecrets } from "./managed-secrets";
 
 describe("ManagedSecrets", () => {
@@ -98,7 +98,7 @@ describe("ManagedSecrets", () => {
   });
 
   test("migrates legacy files before removing plaintext", async () => {
-    const root = await mkdtemp(join(tmpdir(), "nakama-secret-migration-"));
+    const root = await mkdtemp(join(tmpdir(), "airin-secret-migration-"));
 
     try {
       const toolSection = Buffer.from(
@@ -175,7 +175,7 @@ describe("ManagedSecrets", () => {
   });
 
   test("migrates encrypted tool keys from the previous config format", async () => {
-    const root = await mkdtemp(join(tmpdir(), "nakama-encrypted-tool-secret-"));
+    const root = await mkdtemp(join(tmpdir(), "airin-encrypted-tool-secret-"));
 
     try {
       const key = randomBytes(32);
@@ -224,7 +224,7 @@ describe("ManagedSecrets", () => {
   });
 
   test("leaves an unknown legacy key in place until its owner is identified", async () => {
-    const root = await mkdtemp(join(tmpdir(), "nakama-unknown-secret-"));
+    const root = await mkdtemp(join(tmpdir(), "airin-unknown-secret-"));
 
     try {
       await writeFile(
@@ -249,7 +249,7 @@ describe("ManagedSecrets", () => {
   });
 
   test("keeps the file value behind an environment override", async () => {
-    const root = await mkdtemp(join(tmpdir(), "nakama-env-migration-"));
+    const root = await mkdtemp(join(tmpdir(), "airin-env-migration-"));
     const previous = process.env.EXA_API_KEY;
     process.env.EXA_API_KEY = "active-env-key";
 
@@ -290,9 +290,9 @@ describe("ManagedSecrets", () => {
   });
 
   test("keeps legacy provider keys when the config is saved before migration", async () => {
-    const root = await mkdtemp(join(tmpdir(), "nakama-save-before-migration-"));
-    const previous = process.env.NAKAMA_CONFIG_DIR;
-    process.env.NAKAMA_CONFIG_DIR = root;
+    const root = await mkdtemp(join(tmpdir(), "airin-save-before-migration-"));
+    const previous = process.env.AIRIN_CONFIG_DIR;
+    process.env.AIRIN_CONFIG_DIR = root;
 
     try {
       await writeFile(
@@ -330,9 +330,9 @@ describe("ManagedSecrets", () => {
       );
     } finally {
       if (previous === undefined) {
-        delete process.env.NAKAMA_CONFIG_DIR;
+        delete process.env.AIRIN_CONFIG_DIR;
       } else {
-        process.env.NAKAMA_CONFIG_DIR = previous;
+        process.env.AIRIN_CONFIG_DIR = previous;
       }
 
       await rm(root, { force: true, recursive: true });

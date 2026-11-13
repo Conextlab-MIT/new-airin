@@ -3,20 +3,20 @@ import type {
   NotificationDestinationChannel,
   NotificationDestinationSummary,
   NotificationDestinationWithSecret,
-} from "@nakama/core/contract";
-import { normalizeCreateNotificationDestinationRequest } from "@nakama/core/notification-destinations";
-import { Button } from "@nakama/ui/button";
-import { ConfirmDialog } from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
+} from "@airin/core/contract";
+import { normalizeCreateNotificationDestinationRequest } from "@airin/core/notification-destinations";
+import { Button } from "@airin/ui/button";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/select";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import {
   CheckmarkCircle01Icon,
   Copy01Icon,
@@ -100,7 +100,7 @@ function LatestSecret({
     `  -H "Idempotency-Key: evt_$(date +%s)_$$" \\`,
     `  -d '{`,
     `    "title": "New notification",`,
-    `    "body": "Hello from Nakama",`,
+    `    "body": "Hello from Airin",`,
     `    "level": "info"`,
     `  }'`,
   ].join("\n");

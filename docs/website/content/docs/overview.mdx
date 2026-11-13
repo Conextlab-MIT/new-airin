@@ -1,26 +1,26 @@
 ---
 title: "Overview"
-description: "Understand the Nakama mental model: organizations, profiles, tools, channels, and deployment options including managed hosting."
+description: "Understand the Airin mental model: organizations, profiles, tools, channels, and deployment options including managed hosting."
 ---
 
-Nakama is an open-source platform for building teams of AI agents.
+Airin is an open-source platform for building teams of AI agents.
 
-Every agent has a role. Together, they're your nakama.
+Every agent has a role. Together, they're your airin.
 
 The easiest way to think about it:
 
-- One Nakama server can host many organizations
+- One Airin server can host many organizations
 - Each organization can have many members
 - Each organization can have many profiles
 - Each profile is a bot with its own behavior, memory, and tool access
 
 ## Core mental model
 
-If you are using Nakama, most of the product can be understood through these four ideas.
+If you are using Airin, most of the product can be understood through these four ideas.
 
 ### 1. Organization
 
-An organization is the main boundary in Nakama.
+An organization is the main boundary in Airin.
 
 It keeps one team's data separate from another team's data, including:
 
@@ -37,7 +37,7 @@ It keeps one team's data separate from another team's data, including:
 
 A profile is an agent on your team — the bot users talk to.
 
-Each new organization starts with a **Default Bot** and a **Super Nakama**.
+Each new organization starts with a **Default Bot** and a **Airin**.
 Additional profiles are created when you need another role or behavior.
 
 Each profile has a role. It defines:
@@ -73,7 +73,7 @@ This is how you keep one bot safe and narrow while another bot can be more capab
 
 ### 4. Channels
 
-The same Nakama profile can be used from different places:
+The same Airin profile can be used from different places:
 
 - Web dashboard
 - CLI
@@ -82,12 +82,12 @@ The same Nakama profile can be used from different places:
 - Discord
 - Slack
 
-## How to run Nakama
+## How to run Airin
 
-Nakama can run:
+Airin can run:
 
-- As a [live demo](https://demo.getnakama.cloud) — sign in with `demo@getnakama.cloud` / `demo1234` to explore without installing
-- On [managed hosting](https://getnakama.cloud/) — sign up, create an instance, and open your dedicated URL (for example `acme.getnakama.cloud`)
+- As a [live demo](https://demo.getairin.cloud) — sign in with `demo@getairin.cloud` / `demo1234` to explore without installing
+- On [managed hosting](https://getairin.cloud/) — sign up, create an instance, and open your dedicated URL (for example `acme.getairin.cloud`)
 - Locally with Bun for development
 - In Docker on your own infrastructure
 
@@ -104,17 +104,17 @@ Most deployments follow this pattern:
 5. Upload knowledge base documents if needed
 6. Let users chat with the right profile
 
-## Who Nakama is for
+## Who Airin is for
 
-Nakama is a good fit when you want:
+Airin is a good fit when you want:
 
 - A team of AI agents, not a single general-purpose assistant
 - Each agent with a distinct role, tools, and behavior
-- Your own open-source agent platform — self-hosted or on [managed hosting](https://getnakama.cloud/)
+- Your own open-source agent platform — self-hosted or on [managed hosting](https://getairin.cloud/)
 - Team or tenant separation across organizations
 - Web and messaging channels on top of one backend
 
-It is less about writing one prompt and more about assembling and operating your nakama.
+It is less about writing one prompt and more about assembling and operating your airin.
 
 ## Next steps
 

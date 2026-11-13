@@ -1,31 +1,31 @@
 ---
 title: "CLI"
-description: "Use Nakama from the terminal — interactive chat and slash commands."
+description: "Use Airin from the terminal — interactive chat and slash commands."
 ---
 
 ## Run the CLI
 
-Start the Nakama server first, in another terminal:
+Start the Airin server first, in another terminal:
 
 ```bash
 bun run dev:server
 ```
 
-Then run the CLI from the Nakama repository:
+Then run the CLI from the Airin repository:
 
 ```bash
 bun run cli
 ```
 
-The connection is chosen by `--server`, then `NAKAMA_SERVER_URL`, then a saved server URL, then the local server address. `bun run cli` only connects; it never starts the server. Remote server URLs must use HTTPS.
+The connection is chosen by `--server`, then `AIRIN_SERVER_URL`, then a saved server URL, then the local server address. `bun run cli` only connects; it never starts the server. Remote server URLs must use HTTPS.
 
 The CLI then:
 
 1. Resolves your saved or selected organization
-2. Selects the saved profile, Super Nakama, or prompts you when needed
+2. Selects the saved profile, Airin, or prompts you when needed
 3. Opens an interactive chat session
 
-Use `--profile` to choose a profile by ID, exact name, unique partial name, or number from the sorted picker. If you don't pass one, the CLI reuses the saved profile, then Super Nakama, then prompts you to pick from the sorted list, where an empty answer selects the organization default. Use `--org` to choose an organization by ID or slug.
+Use `--profile` to choose a profile by ID, exact name, unique partial name, or number from the sorted picker. If you don't pass one, the CLI reuses the saved profile, then Airin, then prompts you to pick from the sorted list, where an empty answer selects the organization default. Use `--org` to choose an organization by ID or slug.
 
 When the CLI connects to a local server, coding-agent and shell work use the directory where you launched the CLI. Run the command from the project directory when you want an agent to work in that checkout. Remote server sessions stay in the server's profile workspace.
 
@@ -37,9 +37,9 @@ If the local server has no provider configured yet, chat runs in offline mode un
 |---|---|
 | `--org`, `-o <id>` | Organization ID or slug |
 | `--profile`, `-p <id>` | Profile ID or name |
-| `--theme light\|dark` | Terminal theme (also `NAKAMA_THEME`) |
+| `--theme light\|dark` | Terminal theme (also `AIRIN_THEME`) |
 
-Set `NAKAMA_ORG_ID` to skip org selection when you belong to multiple organizations.
+Set `AIRIN_ORG_ID` to skip org selection when you belong to multiple organizations.
 
 Examples:
 
@@ -89,7 +89,7 @@ The CLI accepts PNG, JPEG, GIF, and WebP images up to 5 MB each, with at most te
 
 ## Rotate local auth token
 
-Platform workers and local bridges read the Nakama local auth token from disk. To rotate it:
+Platform workers and local bridges read the Airin local auth token from disk. To rotate it:
 
 ```bash
 bun run cli -- rotate-token

@@ -2,7 +2,7 @@ import {
   type ListSessionsResponse,
   MAX_SESSION_SEARCH_LENGTH,
   type SessionSummary,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import type { InfiniteData } from "@tanstack/react-query";
 
 const POLL_MS = 2000;

@@ -1,6 +1,6 @@
 ---
 name: create-skill
-description: Author or improve a reusable skill (SKILL.md) with skill_manage. Use when the user asks Super Nakama to write, draft, design, review, or improve a skill or workflow.
+description: Author or improve a reusable skill (SKILL.md) with skill_manage. Use when the user asks Airin to write, draft, design, review, or improve a skill or workflow.
 ---
 
 Draft the skill in chat first. Call `skill_manage` only after the user confirms the draft.

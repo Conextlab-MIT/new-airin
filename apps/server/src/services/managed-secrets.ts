@@ -19,13 +19,13 @@ import {
   type UserProviderName,
   WEB_SEARCH_PROVIDER_ENV_NAMES,
   writeParsedConfigIni,
-} from "@nakama/core";
-import { parseProviderName } from "@nakama/core/provider-resolution";
+} from "@airin/core";
+import { parseProviderName } from "@airin/core/provider-resolution";
 import type {
   DatabaseAdapter,
   StoredAutomationWebhookSecret,
   StoredManagedSecret,
-} from "@nakama/db";
+} from "@airin/db";
 import { z } from "zod";
 
 export type ManagedSecretSource = "environment" | "settings" | "missing";
@@ -52,7 +52,7 @@ export function providerSecretEnvNames(
   providerId: string,
   type: UserProviderName
 ): string[] {
-  const instanceName = `NAKAMA_PROVIDER_API_KEY_${providerId.replaceAll("-", "").toUpperCase()}`;
+  const instanceName = `AIRIN_PROVIDER_API_KEY_${providerId.replaceAll("-", "").toUpperCase()}`;
   const typeName = apiKeyEnvVarForProvider(type);
 
   return typeName ? [instanceName, typeName] : [instanceName];
@@ -66,14 +66,14 @@ export function toolSecretEnvName(orgId: string, toolId: string): string {
     .digest("hex")
     .toUpperCase();
 
-  return `NAKAMA_TOOL_API_KEY_${digest}`;
+  return `AIRIN_TOOL_API_KEY_${digest}`;
 }
 
 export function decodeSecretsKey(encodedKey: string): Buffer {
   const key = Buffer.from(encodedKey, "base64");
 
   if (key.length !== 32 || key.toString("base64") !== encodedKey) {
-    throw new Error("NAKAMA_SECRETS_KEY must be 32 random bytes in base64.");
+    throw new Error("AIRIN_SECRETS_KEY must be 32 random bytes in base64.");
   }
 
   return key;
@@ -84,7 +84,7 @@ export class ManagedSecrets {
 
   constructor(
     private readonly db: DatabaseAdapter,
-    encodedKey = process.env.NAKAMA_SECRETS_KEY
+    encodedKey = process.env.AIRIN_SECRETS_KEY
   ) {
     if (!encodedKey) {
       this.key = null;
@@ -294,7 +294,7 @@ export class ManagedSecrets {
     const next = new ManagedSecrets(this.db, nextEncodedKey);
 
     if (!next.key) {
-      throw new Error("Set the new NAKAMA_SECRETS_KEY before rotation.");
+      throw new Error("Set the new AIRIN_SECRETS_KEY before rotation.");
     }
 
     const replacements: Array<
@@ -461,7 +461,7 @@ export class ManagedSecrets {
 
         if (section === "email" && values.password?.trim()) {
           await this.migrate("global", "email", values.password.trim(), [
-            "NAKAMA_EMAIL_PASSWORD",
+            "AIRIN_EMAIL_PASSWORD",
           ]);
         }
 
@@ -502,7 +502,7 @@ export class ManagedSecrets {
 
   private encrypt(scope: string, name: string, value: string): string {
     if (!this.key) {
-      throw new Error("Set NAKAMA_SECRETS_KEY before saving secrets.");
+      throw new Error("Set AIRIN_SECRETS_KEY before saving secrets.");
     }
 
     const nonce = randomBytes(12);
@@ -524,7 +524,7 @@ export class ManagedSecrets {
 
   private decrypt(row: EncryptedSecret): string {
     if (!this.key) {
-      throw new Error("NAKAMA_SECRETS_KEY is required for saved secrets.");
+      throw new Error("AIRIN_SECRETS_KEY is required for saved secrets.");
     }
 
     const parts = row.encryptedValue?.split(":");
@@ -548,7 +548,7 @@ export class ManagedSecrets {
         decipher.final(),
       ]).toString("utf8");
     } catch {
-      throw new Error("Cannot decrypt saved secrets with NAKAMA_SECRETS_KEY.");
+      throw new Error("Cannot decrypt saved secrets with AIRIN_SECRETS_KEY.");
     }
   }
 }

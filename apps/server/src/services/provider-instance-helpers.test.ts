@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { ProviderInstance } from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
-import type { OpenRouterRoutingSettings } from "@nakama/core/contract";
+import type { ProviderInstance } from "@airin/core";
+import { AirinApiError } from "@airin/core";
+import type { OpenRouterRoutingSettings } from "@airin/core/contract";
 import { CHATGPT_JWT_CLAIM_PATH } from "../providers/chatgpt/oauth";
 import { getModelsForProviderInstance } from "../providers/compatible-models";
 import {
@@ -46,7 +46,7 @@ describe("OpenRouter routing validation", () => {
           },
           []
         )
-      ).toThrow(NakamaApiError);
+      ).toThrow(AirinApiError);
       expect(() =>
         applyProviderInstanceUpdate(
           createProviderInstance({
@@ -56,7 +56,7 @@ describe("OpenRouter routing validation", () => {
           }),
           { openRouterRouting }
         )
-      ).toThrow(NakamaApiError);
+      ).toThrow(AirinApiError);
     }
   });
 
@@ -552,11 +552,11 @@ describe("buildProviderInstanceFromCreateRequest", () => {
         buildProviderInstanceFromCreateRequest(request, []);
         throw new Error("expected a rejection");
       } catch (error) {
-        expect(error).toBeInstanceOf(NakamaApiError);
+        expect(error).toBeInstanceOf(AirinApiError);
         // SAFETY: The test fixture matches the contract used by this test.
-        expect((error as NakamaApiError).message).toBe(message);
+        expect((error as AirinApiError).message).toBe(message);
         // SAFETY: The test fixture matches the contract used by this test.
-        expect((error as NakamaApiError).status).toBe(400);
+        expect((error as AirinApiError).status).toBe(400);
       }
     }
   });

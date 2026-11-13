@@ -1,7 +1,7 @@
-import type { OrgPluginDetail } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import type { OrgPluginDetail } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { Tick02Icon } from "hugeicons-react";
 import { type ReactNode, useState } from "react";
 import { WIDE_ARTIFACT_PANEL_WIDTH } from "@/components/chat/artifact-attachment-panel-body.shared";

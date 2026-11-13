@@ -40,7 +40,7 @@ The model is deliberately **not** a parameter. It comes from **AI Providers**, s
 Each generated image is written under the profile workspace:
 
 ```
-~/.nakama/orgs/{orgId}/profiles/{profileId}/artifacts/
+~/.airin/orgs/{orgId}/profiles/{profileId}/artifacts/
 ```
 
 The image appears in **Browse Files → Artifacts** with its type, size, and timestamp detected automatically. When the call happens inside a chat session, the image is also saved as a session attachment, which makes it render inline in web chat. Web chat and channel bridges recognize `generate_image` output, so Telegram and Discord turns also get the picture. The tool refuses generated files over 5 MB.
@@ -51,7 +51,7 @@ See [Artifacts and files](/artifacts) for previewing, editing, and publishing wh
 
 ## Cost
 
-Every generation records usage through the same token pricing bridge as chat, so image spend shows up next to model spend rather than being invisible. When the API returns a usage breakdown, that is what gets recorded. When it does not, Nakama estimates: input tokens from the prompt length, output tokens from the requested size. Estimated figures are recorded as estimates, not passed off as measured.
+Every generation records usage through the same token pricing bridge as chat, so image spend shows up next to model spend rather than being invisible. When the API returns a usage breakdown, that is what gets recorded. When it does not, Airin estimates: input tokens from the prompt length, output tokens from the requested size. Estimated figures are recorded as estimates, not passed off as measured.
 
 ## Limits
 

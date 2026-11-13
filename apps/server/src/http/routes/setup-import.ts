@@ -1,17 +1,17 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import {
+  AirinApiError,
   type DataImportPreviewResponse,
   formatServerError,
-  NakamaApiError,
   type PreviewDataImportRequest,
   type RestoreDataImportRequest,
   type SetupRestoreDataImportResponse,
-} from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   MAX_IMPORT_ARCHIVE_BYTES,
-  previewNakamaDataImportFile,
-  restoreNakamaDataImportFile,
+  previewAirinDataImportFile,
+  restoreAirinDataImportFile,
   SETUP_IMPORT_LIMITS,
 } from "../../services/data-portability";
 import type { ServerOptions } from "../context";
@@ -31,7 +31,7 @@ import {
 } from "./data-portability";
 
 // The body limit in app.ts and the archive size check. Settings has the same cap
-// (#2257), so the way past it is outside Nakama.
+// (#2257), so the way past it is outside Airin.
 export const SETUP_BACKUP_TOO_LARGE = `This backup is over the ${MAX_IMPORT_ARCHIVE_BYTES / (1024 * 1024)} MB first-run restore limit. Sign in and restore it from Settings, or restore the data folder from a filesystem or volume backup instead.`;
 
 export function registerSetupImportRoutes(
@@ -103,7 +103,7 @@ export function registerSetupImportRoutes(
           description: "Error",
         },
       },
-      summary: "Preview Nakama data import during first-time setup",
+      summary: "Preview Airin data import during first-time setup",
       tags: ["Auth"],
     })
   );
@@ -145,7 +145,7 @@ export function registerSetupImportRoutes(
           description: "Error",
         },
       },
-      summary: "Restore Nakama data import during first-time setup",
+      summary: "Restore Airin data import during first-time setup",
       tags: ["Auth"],
     })
   );
@@ -173,7 +173,7 @@ export function registerSetupImportRoutes(
     );
 
     try {
-      const preview = await previewNakamaDataImportFile(archive.path, {
+      const preview = await previewAirinDataImportFile(archive.path, {
         limits: SETUP_IMPORT_LIMITS,
       });
 
@@ -210,7 +210,7 @@ export function registerSetupImportRoutes(
       let restore;
 
       try {
-        restore = await restoreNakamaDataImportFile(archive.path, {
+        restore = await restoreAirinDataImportFile(archive.path, {
           afterFailedReplace: options.onDataRestored,
           beforeReplace: options.onBeforeDataRestore,
           confirm: archive.confirm,
@@ -254,7 +254,7 @@ export async function assertSetupImportAllowed(
   const humanUserCount = await databaseAdapter.countHumanUsers();
 
   if (humanUserCount > 0) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       "Setup import is only available before the first admin account is created.",
       409
     );

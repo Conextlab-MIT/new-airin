@@ -177,7 +177,7 @@ export function resolveProvider(
   const env = options.env ?? process.env;
 
   const explicitEnvProvider = parseProviderName(
-    readEnvValue(env, "NAKAMA_PROVIDER")
+    readEnvValue(env, "AIRIN_PROVIDER")
   );
 
   if (explicitEnvProvider) {

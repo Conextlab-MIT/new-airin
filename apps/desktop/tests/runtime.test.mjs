@@ -24,7 +24,7 @@ const { startLocalServer } = await import("../main.mjs");
 
 process.argv.pop();
 
-const root = await mkdtemp(join(tmpdir(), "nakama-desktop-runtime-"));
+const root = await mkdtemp(join(tmpdir(), "airin-desktop-runtime-"));
 
 afterAll(() => rm(root, { force: true, recursive: true }));
 
@@ -43,10 +43,10 @@ test("stopping the local server disconnects IPC and waits for cleanup", async ()
     import { join } from 'node:path';
     process.on('disconnect', async () => {
       await Bun.sleep(50);
-      await Bun.write(join(process.env.NAKAMA_CONFIG_DIR, 'cleaned'), 'yes');
+      await Bun.write(join(process.env.AIRIN_CONFIG_DIR, 'cleaned'), 'yes');
       process.exit(0);
     });
-    process.send({ type: 'nakama-ready', url: 'http://127.0.0.1:12345' });
+    process.send({ type: 'airin-ready', url: 'http://127.0.0.1:12345' });
     setInterval(() => {}, 1000);
   `
   );

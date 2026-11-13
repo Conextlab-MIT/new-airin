@@ -1,6 +1,6 @@
-import { NakamaApiError, readApiErrorDetails } from "@nakama/core/api-error";
-import type { OrgPluginSummary } from "@nakama/core/contract";
-import type { NakamaClientOptions, TransferProgress } from "./types";
+import { AirinApiError, readApiErrorDetails } from "@airin/core/api-error";
+import type { OrgPluginSummary } from "@airin/core/contract";
+import type { AirinClientOptions, TransferProgress } from "./types";
 
 export type JsonValue =
   | boolean
@@ -15,10 +15,10 @@ export type OfficialPluginInstallResponse = { install: OrgPluginSummary };
 export async function createApiError(
   response: Response,
   path: string
-): Promise<NakamaApiError> {
+): Promise<AirinApiError> {
   const details = await readApiErrorDetails(response);
 
-  return new NakamaApiError(details.message, response.status, path, undefined, {
+  return new AirinApiError(details.message, response.status, path, undefined, {
     code: details.code,
     totpEnabled: details.totpEnabled,
   });
@@ -62,7 +62,7 @@ export async function encodeArchiveData(
 /** fetch() reports no upload progress, so a browser upload that wants it uses XHR. */
 export function createUploadFetch(
   onProgress: TransferProgress
-): NonNullable<NakamaClientOptions["fetch"]> {
+): NonNullable<AirinClientOptions["fetch"]> {
   return (input, init) =>
     new Promise<Response>((resolve, reject) => {
       const xhr = new XMLHttpRequest();

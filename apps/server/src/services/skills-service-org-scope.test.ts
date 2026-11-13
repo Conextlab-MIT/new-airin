@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureBundledSkillFiles } from "@nakama/core";
+import { ensureBundledSkillFiles } from "@airin/core";
 import {
   createSqliteDatabase,
   type DatabaseAdapter,
   ensureProfileDefaultBundledSkills,
   type SqliteDatabase,
-} from "@nakama/db";
+} from "@airin/db";
 import { SkillProposalService } from "./skill-proposal-service";
 import { SkillSuggestionService } from "./skill-suggestion-service";
 import { SkillsService } from "./skills-service";
@@ -66,13 +66,13 @@ describe("skills are scoped per org", () => {
   let database: SqliteDatabase;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-skill-org-scope-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-skill-org-scope-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(async () => {
     database?.close();
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     await rm(configDir, { force: true, recursive: true });
   });
 

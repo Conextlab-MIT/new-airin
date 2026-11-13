@@ -3,8 +3,8 @@ import { mkdtempSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readEnvValue, setManagedSecretResolver } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { readEnvValue, setManagedSecretResolver } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { ManagedSecrets } from "./services/managed-secrets";
 
 export async function withTestEnv<T>(
@@ -36,20 +36,20 @@ export async function withTestEnv<T>(
   }
 }
 
-export function setupTestConfigDir(prefix = "nakama-server-test-"): void {
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+export function setupTestConfigDir(prefix = "airin-server-test-"): void {
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
   let testConfigDir = "";
 
   beforeEach(() => {
     testConfigDir = mkdtempSync(join(tmpdir(), prefix));
-    process.env.NAKAMA_CONFIG_DIR = testConfigDir;
+    process.env.AIRIN_CONFIG_DIR = testConfigDir;
   });
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     if (testConfigDir) {

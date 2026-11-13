@@ -1,5 +1,5 @@
-import { DropdownMenuItem } from "@nakama/ui/dropdown-menu";
-import { toast } from "@nakama/ui/toast";
+import { DropdownMenuItem } from "@airin/ui/dropdown-menu";
+import { toast } from "@airin/ui/toast";
 import { Pdf01Icon } from "hugeicons-react";
 import { useEffect, useState } from "react";
 import { ArtifactAttachmentPanelActions } from "@/components/chat/artifact-attachment-panel-actions";

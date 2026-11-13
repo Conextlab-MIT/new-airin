@@ -1,10 +1,10 @@
-import type { ToolDetail } from "@nakama/core/contract";
+import type { ToolDetail } from "@airin/core/contract";
 import {
   BUILTIN_TOOL_IDS,
   isProtectedToolId,
-} from "@nakama/core/tools/protected";
-import { Button } from "@nakama/ui/button";
-import { Card, CardContent } from "@nakama/ui/card";
+} from "@airin/core/tools/protected";
+import { Button } from "@airin/ui/button";
+import { Card, CardContent } from "@airin/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -12,10 +12,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { Add01Icon, Delete02Icon, Search01Icon } from "hugeicons-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -32,7 +32,7 @@ import {
   pluginManagementPath,
   toolPlaygroundPath,
 } from "@/lib/navigation";
-import { findSuperNakamaProfile } from "@/lib/profiles";
+import { findSuperAirinProfile } from "@/lib/profiles";
 
 const toolSearchThreshold = 10;
 
@@ -56,7 +56,7 @@ export function ToolsTab({ embedded = false }: { embedded?: boolean } = {}) {
 
   const { data: tools = [], isLoading, error } = useToolsQuery();
   const { data: profiles = [] } = useProfilesQuery();
-  const superNakamaProfile = findSuperNakamaProfile(profiles);
+  const superAirinProfile = findSuperAirinProfile(profiles);
   const deleteToolMutation = useDeleteToolMutation();
   const [actionError, setActionError] = useState<string | null>(null);
   const [emailConfigOpen, setEmailConfigOpen] = useState(false);
@@ -73,13 +73,13 @@ export function ToolsTab({ embedded = false }: { embedded?: boolean } = {}) {
   const builtinTools = tools.filter((tool) => !isListedCustomTool(tool));
 
   function goToCreateTool() {
-    if (!superNakamaProfile) {
-      setActionError("No super nakama profile exists in this organization.");
+    if (!superAirinProfile) {
+      setActionError("No super airin profile exists in this organization.");
 
       return;
     }
 
-    navigateToNewChat(superNakamaProfile.id);
+    navigateToNewChat(superAirinProfile.id);
   }
 
   function requestDeleteTool(toolId: string, toolName: string) {
@@ -128,7 +128,7 @@ export function ToolsTab({ embedded = false }: { embedded?: boolean } = {}) {
 
       {tools.length === 0 ? (
         <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center text-muted-foreground text-sm">
-          <p>No tools yet. Ask Super Nakama to create one.</p>
+          <p>No tools yet. Ask Airin to create one.</p>
           <Button onClick={goToCreateTool} type="button">
             <Add01Icon
               aria-hidden

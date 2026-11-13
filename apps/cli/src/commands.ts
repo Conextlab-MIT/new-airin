@@ -1,12 +1,12 @@
-import uFuzzy from "@leeoniya/ufuzzy";
 import type {
   ListUserOrgsResponse,
   ModelsResponse,
   ProfileSummary,
   ProviderModelOption,
   ThinkingEffort,
-} from "@nakama/core";
-import { clampThinkingEffort } from "@nakama/core/thinking-effort";
+} from "@airin/core";
+import { clampThinkingEffort } from "@airin/core/thinking-effort";
+import uFuzzy from "@leeoniya/ufuzzy";
 
 export function parseModelCommandArg(raw: string) {
   const trimmed = raw.trim();

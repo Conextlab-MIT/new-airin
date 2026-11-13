@@ -7,15 +7,15 @@ import {
   runDeleteFile,
   runWriteFile,
   type ToolContext,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   BUILTIN_TOOL_IDS,
   SAVE_ARTIFACT_TOOL_ID,
-} from "@nakama/core/tools/protected";
+} from "@airin/core/tools/protected";
 import {
   createInMemoryDatabaseAdapter,
   ensureSaveArtifactToolDefinition,
-} from "@nakama/db";
+} from "@airin/db";
 import { AgentService } from "../services/agent-service";
 import { resolveChromeBin } from "../services/html-pdf";
 import {
@@ -89,22 +89,22 @@ const context: ToolContext = {
 };
 
 describe("save_artifact", () => {
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
   let configDir = "";
   let db: Db;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-save-artifact-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-save-artifact-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     db = createInMemoryDatabaseAdapter();
     await seedScope(db);
   });
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     await rm(configDir, { force: true, recursive: true });
@@ -132,8 +132,8 @@ describe("save_artifact", () => {
   });
 
   test("a .pdf path fails with 501 and writes nothing when Chrome is missing", async () => {
-    const original = process.env.NAKAMA_CHROME_PATH;
-    process.env.NAKAMA_CHROME_PATH = path.join(configDir, "no-chrome");
+    const original = process.env.AIRIN_CHROME_PATH;
+    process.env.AIRIN_CHROME_PATH = path.join(configDir, "no-chrome");
 
     try {
       await expect(
@@ -145,9 +145,9 @@ describe("save_artifact", () => {
       ).rejects.toMatchObject({ status: 501 });
     } finally {
       if (original === undefined) {
-        delete process.env.NAKAMA_CHROME_PATH;
+        delete process.env.AIRIN_CHROME_PATH;
       } else {
-        process.env.NAKAMA_CHROME_PATH = original;
+        process.env.AIRIN_CHROME_PATH = original;
       }
     }
 
@@ -266,22 +266,22 @@ describe("save_artifact", () => {
 });
 
 describe("member artifact scope (#1816)", () => {
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
   let configDir = "";
   let db: Db;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-member-artifact-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-member-artifact-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     db = createInMemoryDatabaseAdapter();
     await seedScope(db);
   });
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     await rm(configDir, { force: true, recursive: true });
@@ -374,19 +374,19 @@ describe("member artifact scope (#1816)", () => {
 });
 
 describe("write_file under artifacts/", () => {
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
   let configDir = "";
 
   beforeEach(async () => {
-    configDir = await mkdtemp(path.join(tmpdir(), "nakama-write-artifact-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(path.join(tmpdir(), "airin-write-artifact-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
   });
 
   afterEach(async () => {
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
 
     await rm(configDir, { force: true, recursive: true });

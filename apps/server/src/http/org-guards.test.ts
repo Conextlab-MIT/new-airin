@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import { requireOrgAdmin, requireOrgMember } from "./org-guards";
 import type { RequestAuthContext } from "./shared";
 
@@ -15,8 +15,8 @@ function auth(orgRole: RequestAuthContext["orgRole"]): RequestAuthContext {
 
 describe("org guards", () => {
   test("requireOrgAdmin rejects members and users without membership", () => {
-    expect(() => requireOrgAdmin(auth("member"))).toThrow(NakamaApiError);
-    expect(() => requireOrgAdmin(auth(undefined))).toThrow(NakamaApiError);
+    expect(() => requireOrgAdmin(auth("member"))).toThrow(AirinApiError);
+    expect(() => requireOrgAdmin(auth(undefined))).toThrow(AirinApiError);
 
     try {
       requireOrgAdmin(auth("member"));
@@ -26,6 +26,6 @@ describe("org guards", () => {
   });
 
   test("requireOrgMember rejects users without membership", () => {
-    expect(() => requireOrgMember(auth(undefined))).toThrow(NakamaApiError);
+    expect(() => requireOrgMember(auth(undefined))).toThrow(AirinApiError);
   });
 });

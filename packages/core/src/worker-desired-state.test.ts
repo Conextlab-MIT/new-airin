@@ -19,18 +19,18 @@ afterEach(async () => {
 });
 
 async function withConfigDir<T>(run: () => Promise<T>): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), "nakama-worker-desired-"));
+  const dir = await mkdtemp(join(tmpdir(), "airin-worker-desired-"));
   configDirs.push(dir);
-  const previous = process.env.NAKAMA_CONFIG_DIR;
-  process.env.NAKAMA_CONFIG_DIR = dir;
+  const previous = process.env.AIRIN_CONFIG_DIR;
+  process.env.AIRIN_CONFIG_DIR = dir;
 
   try {
     return await run();
   } finally {
     if (previous === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = previous;
+      process.env.AIRIN_CONFIG_DIR = previous;
     }
   }
 }

@@ -1,12 +1,12 @@
-import type { OpenRouterRoutingSettings } from "@nakama/core/contract";
-import { FormField } from "@nakama/ui/form-field";
+import type { OpenRouterRoutingSettings } from "@airin/core/contract";
+import { FormField } from "@airin/ui/form-field";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
+} from "@airin/ui/select";
 import { BrowsableModelFields } from "@/components/BrowsableModelFields";
 import type { ModelListRow } from "@/components/ModelListEditor";
 import { OpenRouterModelsBrowseList } from "@/components/OpenRouterModelsBrowseList";

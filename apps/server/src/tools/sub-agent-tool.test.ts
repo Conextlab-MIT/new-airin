@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { canRunToolCallsInParallel } from "@nakama/agent";
-import type { ChatCompletionResult, GenerateChatInput } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import { canRunToolCallsInParallel } from "@airin/agent";
+import type { ChatCompletionResult, GenerateChatInput } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../services/agent-service";
 import { createDefaultProfile } from "../services/agent-service-test-fixtures";
 import { sessionTurnRegistry } from "../services/session-turn-registry";
@@ -404,7 +404,7 @@ describe("sub_agent background", () => {
 });
 
 describe("sub_agent child chats", () => {
-  setupTestConfigDir("nakama-sub-agent-child-");
+  setupTestConfigDir("airin-sub-agent-child-");
 
   interface Captured {
     names: string[];

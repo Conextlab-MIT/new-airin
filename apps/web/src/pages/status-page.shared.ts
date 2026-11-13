@@ -1,4 +1,4 @@
-import type { SystemStatusResponse } from "@nakama/core/contract";
+import type { SystemStatusResponse } from "@airin/core/contract";
 import {
   Clock01Icon,
   HashtagIcon,

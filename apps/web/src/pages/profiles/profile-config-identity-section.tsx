@@ -1,23 +1,23 @@
-import type { AcpAgentPresetSummary } from "@nakama/core/contract";
+import type { AcpAgentPresetSummary } from "@airin/core/contract";
 import {
   Command,
   CommandEmpty,
   CommandInput,
   CommandItem,
   CommandList,
-} from "@nakama/ui/command";
-import { ExpandableTextarea } from "@nakama/ui/expandable-textarea";
-import { Input } from "@nakama/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@nakama/ui/popover";
+} from "@airin/ui/command";
+import { ExpandableTextarea } from "@airin/ui/expandable-textarea";
+import { Input } from "@airin/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@airin/ui/popover";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@nakama/ui/select";
-import { Switch } from "@nakama/ui/switch";
-import { toast } from "@nakama/ui/toast";
+} from "@airin/ui/select";
+import { Switch } from "@airin/ui/switch";
+import { toast } from "@airin/ui/toast";
 import { ArrowDown01Icon } from "hugeicons-react";
 import { useState } from "react";
 import { useAuth } from "@/context/use-auth";
@@ -425,13 +425,13 @@ function ProfileChatAgentField({
         className="h-full w-auto gap-1.5 rounded-full border-0 bg-transparent pr-1 pl-4 font-medium text-muted-foreground text-sm shadow-none hover:text-foreground dark:bg-transparent"
         id="profile-chat-agent"
       >
-        <SelectValue placeholder="Nakama">
+        <SelectValue placeholder="Airin">
           {presets.find((preset) => preset.id === selectedPresetId)?.label ??
-            (hasCustomAgent ? "Custom command" : "Nakama")}
+            (hasCustomAgent ? "Custom command" : "Airin")}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={builtInValue}>Nakama</SelectItem>
+        <SelectItem value={builtInValue}>Airin</SelectItem>
         {presets.map((preset) => (
           <SelectItem key={preset.id} value={preset.id}>
             {preset.label}

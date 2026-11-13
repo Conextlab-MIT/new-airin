@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
-import { fetchPublicHttps, transcribeAudio } from "@nakama/core";
-import type { MeetImportProgress } from "@nakama/core/google-meet";
+import { fetchPublicHttps, transcribeAudio } from "@airin/core";
+import type { MeetImportProgress } from "@airin/core/google-meet";
 import type { ComposioService } from "./composio-service";
 
 const exec = promisify(execFile);
@@ -17,7 +17,7 @@ const MAX_PART_BYTES = 24 * 1024 * 1024;
 
 export async function cleanupInterruptedMeetImports() {
   for (const name of await readdir(tmpdir())) {
-    const match = /^nakama-meet-(\d+)-/.exec(name);
+    const match = /^airin-meet-(\d+)-/.exec(name);
 
     if (!match) {
       continue;
@@ -181,9 +181,7 @@ export async function importMeetRecording(
     input.fileId
   );
 
-  const directory = await mkdtemp(
-    join(tmpdir(), `nakama-meet-${process.pid}-`)
-  );
+  const directory = await mkdtemp(join(tmpdir(), `airin-meet-${process.pid}-`));
 
   try {
     const video = join(directory, "recording");

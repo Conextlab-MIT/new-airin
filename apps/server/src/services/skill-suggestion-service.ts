@@ -1,20 +1,20 @@
 import {
+  AirinApiError,
   detectOrgMemoryInjectionWarnings,
   isGlobalSkillSourcePath,
   isPathWithinProfileSkillsDir,
-  NakamaApiError,
   parseRawProfileSkillContent,
-} from "@nakama/core";
+} from "@airin/core";
 import type {
   ApplySkillSuggestionOutcome,
   SkillSuggestion,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import {
   assertNotBundledSkillName,
   assertValidSkillName,
   prepareSkillPatch,
-} from "@nakama/core/skills/write";
-import type { DatabaseAdapter, StoredSkillSuggestion } from "@nakama/db";
+} from "@airin/core/skills/write";
+import type { DatabaseAdapter, StoredSkillSuggestion } from "@airin/db";
 import type { SkillProposalService } from "./skill-proposal-service";
 import { isSkillWriteApprovalRequired } from "./skill-write-approval";
 import type { SkillsService } from "./skills-service";
@@ -127,7 +127,7 @@ export class SkillSuggestionService {
     );
 
     if (!suggestion) {
-      throw new NakamaApiError("Skill suggestion not found.", 404);
+      throw new AirinApiError("Skill suggestion not found.", 404);
     }
 
     return suggestion;
@@ -189,7 +189,7 @@ export class SkillSuggestionService {
       const content = suggestion.content;
 
       if (!content?.trim()) {
-        throw new NakamaApiError("Suggestion is missing content.", 400);
+        throw new AirinApiError("Suggestion is missing content.", 400);
       }
 
       parseRawProfileSkillContent(content, orgId, suggestion.profileId);
@@ -203,7 +203,7 @@ export class SkillSuggestionService {
       const newString = suggestion.patchNewString;
 
       if (oldString === null || oldString === "" || newString === null) {
-        throw new NakamaApiError("Suggestion is missing patch fields.", 400);
+        throw new AirinApiError("Suggestion is missing patch fields.", 400);
       }
 
       await this.assertProfileOwnedSkill(
@@ -239,18 +239,18 @@ export class SkillSuggestionService {
     const record = await db.getSkillByName(skillName, orgId);
 
     if (!record) {
-      throw new NakamaApiError(`Skill "${skillName}" not found.`, 404);
+      throw new AirinApiError(`Skill "${skillName}" not found.`, 404);
     }
 
     if (isGlobalSkillSourcePath(record.sourcePath)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         "Global skills cannot be modified by agents.",
         403
       );
     }
 
     if (!isPathWithinProfileSkillsDir(orgId, profileId, record.sourcePath)) {
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Skill "${skillName}" is not owned by this profile.`,
         403
       );
@@ -279,7 +279,7 @@ export class SkillSuggestionService {
 
   private requireDatabase(): DatabaseAdapter {
     if (!this.database) {
-      throw new NakamaApiError("Database not configured.", 500);
+      throw new AirinApiError("Database not configured.", 500);
     }
 
     return this.database;
@@ -287,7 +287,7 @@ export class SkillSuggestionService {
 
   private requireSkillsService(): SkillsService {
     if (!this.skillsService) {
-      throw new NakamaApiError("Skills service not configured.", 500);
+      throw new AirinApiError("Skills service not configured.", 500);
     }
 
     return this.skillsService;
@@ -295,7 +295,7 @@ export class SkillSuggestionService {
 
   private requireProposalService(): SkillProposalService {
     if (!this.skillProposalService) {
-      throw new NakamaApiError("Skill proposal service not configured.", 500);
+      throw new AirinApiError("Skill proposal service not configured.", 500);
     }
 
     return this.skillProposalService;

@@ -2,9 +2,9 @@ import type {
   CreateMcpServerRequest,
   ProfileSummary,
   ToolSetupPlan,
-} from "@nakama/core/contract";
-import { BASH_TOOL_ID } from "@nakama/core/tools/protected";
-import { Button } from "@nakama/ui/button";
+} from "@airin/core/contract";
+import { BASH_TOOL_ID } from "@airin/core/tools/protected";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -12,14 +12,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@nakama/ui/dialog";
-import { Input } from "@nakama/ui/input";
+} from "@airin/ui/dialog";
+import { Input } from "@airin/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
+} from "@airin/ui/input-group";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Add01Icon,
@@ -586,7 +586,7 @@ function ToolCredentialDialogContent({
       </DialogHeader>
       {status?.source === "environment" ? (
         <p className="text-sm">
-          Managed by {status.envName}. Restart Nakama after you change it.
+          Managed by {status.envName}. Restart Airin after you change it.
         </p>
       ) : null}
       <form className="space-y-5" onSubmit={onSave}>

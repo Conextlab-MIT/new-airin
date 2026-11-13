@@ -1,5 +1,5 @@
-import type { OrgRole } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { OrgRole } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import { CheckmarkCircle01Icon, Copy01Icon } from "hugeicons-react";
 import { useState } from "react";
 import { OrgMemberInvitePopover } from "@/components/settings/org-member-dialogs";

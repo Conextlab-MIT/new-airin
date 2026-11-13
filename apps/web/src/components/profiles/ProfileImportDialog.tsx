@@ -1,5 +1,5 @@
-import type { ProfilePackPreviewResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ProfilePackPreviewResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -7,10 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
-import { Spinner } from "@nakama/ui/spinner";
-import { toast } from "@nakama/ui/toast";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/dialog";
+import { Spinner } from "@airin/ui/spinner";
+import { toast } from "@airin/ui/toast";
+import { cn } from "@airin/ui/utils";
 import { Alert02Icon, Archive01Icon, CloudUploadIcon } from "hugeicons-react";
 import { type RefObject, useRef, useState } from "react";
 import {
@@ -288,7 +288,7 @@ function ProfileImportDialogContent({
       <DialogHeader className="gap-2 pr-8 text-left">
         <DialogTitle className="text-balance">Import profile</DialogTitle>
         <DialogDescription className="text-pretty">
-          Upload a profile pack (.zip) exported from Nakama.
+          Upload a profile pack (.zip) exported from Airin.
         </DialogDescription>
       </DialogHeader>
 

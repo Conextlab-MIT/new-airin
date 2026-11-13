@@ -2,8 +2,8 @@ import type {
   AutomationRunRecord,
   AutomationToolLimit,
   StoredAutomation,
-} from "@nakama/core";
-import { isAutomationRunUnread } from "@nakama/core";
+} from "@airin/core";
+import { isAutomationRunUnread } from "@airin/core";
 import { z } from "zod";
 
 const DeliveryStatusSchema = z.enum(["sent", "failed", "skipped"]).nullish();

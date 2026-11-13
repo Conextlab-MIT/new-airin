@@ -1,8 +1,8 @@
 import { join } from "node:path";
-import type { NakamaClient } from "@nakama/client";
-import { ChannelSessionStore } from "@nakama/core/channel-session-store";
-import { createDefaultTestOrgs } from "@nakama/core/channel-test-helpers";
-import type { TeamsConfigFile } from "@nakama/core/teams-config";
+import type { AirinClient } from "@airin/client";
+import { ChannelSessionStore } from "@airin/core/channel-session-store";
+import { createDefaultTestOrgs } from "@airin/core/channel-test-helpers";
+import type { TeamsConfigFile } from "@airin/core/teams-config";
 import { createTeamsChatHandler, type TeamsActivity } from "./chat-handler";
 
 const ORG = "org_test";
@@ -110,12 +110,12 @@ export function createHarness(
     }),
     listUserOrgs: async () => ({ orgs: createDefaultTestOrgs() }),
     setOrgId: () => {},
-  } as NakamaClient;
+  } as AirinClient;
 
   const sessionStore = new ChannelSessionStore(
     join(
       homeDir,
-      ".nakama",
+      ".airin",
       "orgs",
       ORG,
       "channels",

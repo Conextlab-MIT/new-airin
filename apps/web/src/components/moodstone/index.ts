@@ -1,5 +1,9 @@
-import { getProfileAvatarUrl } from "@nakama/client";
-import type { ProfileSummary } from "@nakama/core/contract";
+import { getProfileAvatarUrl } from "@airin/client";
+import {
+  agentCharacterPublicPath,
+  resolveAgentCharacterId,
+} from "@airin/core/agent-marketplace";
+import type { ProfileSummary } from "@airin/core/contract";
 import {
   CUT_KEYS,
   DEFAULT_SEED,
@@ -71,7 +75,13 @@ export function resolveAvatarSrc(
     return SUPER_AGENT_DEFAULT_AVATAR;
   }
 
-  return null;
+  // Curated character portraits for agents without an uploaded avatar.
+  return agentCharacterPublicPath(
+    resolveAgentCharacterId({
+      name: profile.name,
+      profileId: profile.id,
+    })
+  );
 }
 
 /** The generated Moodstone look: no upload, and not an older dithered profile. */

@@ -20,7 +20,7 @@ export interface SetupWizardProps {
 
 export type StoredAccountDraft = Omit<SetupAccountDraft, "password">;
 
-const ACCOUNT_DRAFT_KEY = "nakama:setup-account-draft";
+const ACCOUNT_DRAFT_KEY = "airin:setup-account-draft";
 
 // The draft is best effort: storage errors must never block setup.
 export function saveStoredAccountDraft({

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { LOCAL_CLIENT_USER_ID } from "@nakama/core/local-auth";
+import { LOCAL_CLIENT_USER_ID } from "@airin/core/local-auth";
 import { setupTestConfigDir } from "../test-config-dir";
 import { createMinimalHonoApp } from "./test-app-helpers";
 import {
@@ -8,7 +8,7 @@ import {
   loginUserSession,
 } from "./test-session-helpers";
 
-setupTestConfigDir("nakama-platform-orgs-test-");
+setupTestConfigDir("airin-platform-orgs-test-");
 
 function createPlatformApp() {
   return createMinimalHonoApp();

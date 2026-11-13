@@ -1,5 +1,4 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import { listGroupFiles, NakamaApiError, readGroupFile } from "@nakama/core";
+import { AirinApiError, listGroupFiles, readGroupFile } from "@airin/core";
 import {
   type AgentGroup,
   type AgentGroupMemory,
@@ -10,7 +9,8 @@ import {
   type ListAgentGroupSessionsResponse,
   type ListAgentGroupsResponse,
   type ListRailPinsResponse,
-} from "@nakama/core/agent-groups";
+} from "@airin/core/agent-groups";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { listRailPins, setRailPin } from "../../services/agent-group-store";
 import { readGroupDocuments } from "../../services/agent-group-turn";
@@ -159,7 +159,7 @@ function route<
         const parsed = query.safeParse(c.req.query());
 
         if (!parsed.success) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             parsed.error.issues[0]?.message ?? "Invalid query.",
             400
           );
@@ -199,7 +199,7 @@ function messageIdOf(raw: string): number {
   const messageId = Number(raw);
 
   if (!Number.isSafeInteger(messageId)) {
-    throw new NakamaApiError("Invalid message id", 400);
+    throw new AirinApiError("Invalid message id", 400);
   }
 
   return messageId;
@@ -684,7 +684,7 @@ export function registerAgentGroupRoutes(
       { method, path: "/v1/rail-pins/{itemId}", status: 204, summary },
       (c, { params, orgId, status, userId }) => {
         if (params.itemId.length > 200) {
-          throw new NakamaApiError("Invalid item id", 400);
+          throw new AirinApiError("Invalid item id", 400);
         }
 
         setRailPin(orgId, userId, params.itemId, method === "put");

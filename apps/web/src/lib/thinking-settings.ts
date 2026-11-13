@@ -2,8 +2,8 @@ import type {
   ProviderModelOption,
   ThinkingEffort,
   ThinkingSettings,
-} from "@nakama/core/contract";
-import { extraThinkingEfforts } from "@nakama/core/thinking-effort";
+} from "@airin/core/contract";
+import { extraThinkingEfforts } from "@airin/core/thinking-effort";
 
 export const DEFAULT_THINKING_EFFORT: ThinkingEffort = "medium";
 

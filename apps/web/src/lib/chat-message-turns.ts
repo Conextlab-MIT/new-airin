@@ -1,4 +1,4 @@
-import type { AgentQuestionAnswer } from "@nakama/core/contract";
+import type { AgentQuestionAnswer } from "@airin/core/contract";
 import type { ChatListItem } from "@/lib/chat-history";
 
 export type IndexedMessage = { message: ChatListItem; index: number };

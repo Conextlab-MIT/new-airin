@@ -1,9 +1,9 @@
-import type { ProfileSummary } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { ConfirmDialog } from "@nakama/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@nakama/ui/popover";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import type { ProfileSummary } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { ConfirmDialog } from "@airin/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@airin/ui/popover";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import {
   Add01Icon,
   Camera01Icon,
@@ -360,14 +360,14 @@ export function ProfilesEmptyState({
   canImport = false,
   onCreate,
   onImport,
-  onAskSuperNakama,
+  onAskSuperAirin,
 }: {
   disabled?: boolean;
   canCreate?: boolean;
   canImport?: boolean;
   onCreate: () => void;
   onImport?: () => void;
-  onAskSuperNakama?: () => void;
+  onAskSuperAirin?: () => void;
 }) {
   const importIsPrimary = canImport && !canCreate;
 
@@ -411,15 +411,15 @@ export function ProfilesEmptyState({
             Import profile
           </Button>
         ) : null}
-        {onAskSuperNakama ? (
+        {onAskSuperAirin ? (
           <Button
             disabled={disabled}
-            onClick={onAskSuperNakama}
+            onClick={onAskSuperAirin}
             size="sm"
             type="button"
             variant="ghost"
           >
-            Ask Super Nakama
+            Ask Airin
           </Button>
         ) : null}
       </div>

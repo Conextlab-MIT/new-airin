@@ -252,7 +252,7 @@ describe("teams app channel mentions", () => {
     tenantId: "33333333-3333-4333-8333-333333333333",
   };
 
-  const mentionOf = (id: string, name = "Nakama") => ({
+  const mentionOf = (id: string, name = "Airin") => ({
     mentioned: { id, name },
     text: `<at>${name}</at>`,
     type: "mention" as const,
@@ -273,7 +273,7 @@ describe("teams app channel mentions", () => {
   test("a mention of the bot is flagged and every bot tag is cut", async () => {
     const activity = await deliver("act_mention", {
       entities: [mentionOf("bot"), mentionOf("bot")],
-      text: "<at>Nakama</at> <at>Nakama</at> !stop",
+      text: "<at>Airin</at> <at>Airin</at> !stop",
     });
 
     expect(activity?.mentionsBot).toBe(true);
@@ -282,8 +282,8 @@ describe("teams app channel mentions", () => {
 
   test("a mention without text is cut by the bot's name", async () => {
     const activity = await deliver("act_mention_no_text", {
-      entities: [{ mentioned: { id: "bot", name: "Nakama" }, type: "mention" }],
-      text: "<at>Nakama</at> summarise this thread",
+      entities: [{ mentioned: { id: "bot", name: "Airin" }, type: "mention" }],
+      text: "<at>Airin</at> summarise this thread",
     });
 
     expect(activity?.mentionsBot).toBe(true);
@@ -317,11 +317,11 @@ describe("teams app channel mentions", () => {
   test("a mention of someone else is not a mention of the bot", async () => {
     const activity = await deliver("act_mention_other", {
       entities: [mentionOf("someone-else")],
-      text: "<at>Nakama</at> summarise this thread",
+      text: "<at>Airin</at> summarise this thread",
     });
 
     expect(activity?.mentionsBot).toBe(false);
-    expect(activity?.text).toBe("<at>Nakama</at> summarise this thread");
+    expect(activity?.text).toBe("<at>Airin</at> summarise this thread");
   });
 });
 

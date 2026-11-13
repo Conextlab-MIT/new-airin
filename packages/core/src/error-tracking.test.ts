@@ -47,10 +47,10 @@ let consoleErrorCalls: unknown[][] = [];
 const realConsoleError = console.error;
 
 beforeEach(async () => {
-  previousConfigDir = process.env.NAKAMA_CONFIG_DIR;
-  configDir = await mkdtemp(join(tmpdir(), "nakama-error-tracking-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
-  delete process.env.NAKAMA_ERROR_TRACKING_DSN;
+  previousConfigDir = process.env.AIRIN_CONFIG_DIR;
+  configDir = await mkdtemp(join(tmpdir(), "airin-error-tracking-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
+  delete process.env.AIRIN_ERROR_TRACKING_DSN;
   delete process.env.DO_NOT_TRACK;
   await saveErrorTrackingDsn(DSN);
   await refreshErrorTrackingEnabled();
@@ -62,12 +62,12 @@ beforeEach(async () => {
 
 afterEach(async () => {
   if (previousConfigDir === undefined) {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   } else {
-    process.env.NAKAMA_CONFIG_DIR = previousConfigDir;
+    process.env.AIRIN_CONFIG_DIR = previousConfigDir;
   }
 
-  delete process.env.NAKAMA_ERROR_TRACKING_DSN;
+  delete process.env.AIRIN_ERROR_TRACKING_DSN;
   delete process.env.DO_NOT_TRACK;
   await refreshErrorTrackingEnabled();
   console.error = realConsoleError;
@@ -350,6 +350,6 @@ test("the local log always runs, configured or not", async () => {
 
   expect(consoleErrorCalls).toHaveLength(1);
   expect(consoleErrorCalls[0]?.[0]).toMatch(
-    /^\[nakama:crash\] cli [0-9a-f]{16}$/
+    /^\[airin:crash\] cli [0-9a-f]{16}$/
   );
 });

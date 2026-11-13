@@ -4,8 +4,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@nakama/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@nakama/ui/popover";
+} from "@airin/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@airin/ui/popover";
 import { ArrowDown01Icon } from "hugeicons-react";
 import { type ReactNode, useState } from "react";
 

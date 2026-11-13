@@ -27,12 +27,12 @@ import type {
   UpdateTelegramSettingsRequest,
   UpdateWhatsAppSettingsRequest,
   WhatsAppSettingsResponse,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import type {
   MeetActionInput,
   MeetActionResults,
   MeetSessionAction,
-} from "@nakama/core/google-meet";
+} from "@airin/core/google-meet";
 import { readBrowserOrigin } from "./browser";
 import { AutomationsClient } from "./client-automations";
 

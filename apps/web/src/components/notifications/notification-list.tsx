@@ -1,4 +1,4 @@
-import { cn } from "@nakama/ui/utils";
+import { cn } from "@airin/ui/utils";
 import { ArrowRight01Icon, BrainIcon, SharedWifiIcon } from "hugeicons-react";
 import { Link } from "react-router-dom";
 import { useActiveChatProfile } from "@/context/use-active-chat-profile";

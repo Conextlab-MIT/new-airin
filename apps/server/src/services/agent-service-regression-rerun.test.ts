@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { ToolContext, ToolDefinition } from "@nakama/core";
-import type { StoredProfileRecord } from "@nakama/db";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { ToolContext, ToolDefinition } from "@airin/core";
+import type { StoredProfileRecord } from "@airin/db";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { buildProviderHttpError } from "../providers/shared";
 import { setupTestConfigDir } from "../test-config-dir";
 import { createSessionTools } from "../tools/session-tools";
@@ -22,7 +22,7 @@ function privateServiceAccess<T>(service: AgentService): T {
 }
 
 describe("regression rerun tools", () => {
-  setupTestConfigDir("nakama-rerun-tools-");
+  setupTestConfigDir("airin-rerun-tools-");
 
   test("keeps mutating tools visible but refuses them without running", async () => {
     const db = createInMemoryDatabaseAdapter();
@@ -171,7 +171,7 @@ describe("regression rerun tools", () => {
               });
             }
 
-            // The real adapters wrap the provider's raw body in a NakamaApiError.
+            // The real adapters wrap the provider's raw body in a AirinApiError.
             return Promise.reject(
               buildProviderHttpError(
                 "OpenAI",

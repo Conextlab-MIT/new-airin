@@ -6,8 +6,8 @@ import {
   type ToolContext,
   type ToolDefinition,
   type WriteFileOutput,
-} from "@nakama/core";
-import type { DatabaseAdapter } from "@nakama/db";
+} from "@airin/core";
+import type { DatabaseAdapter } from "@airin/db";
 import { z } from "zod";
 import { convertHtmlToPdf } from "../services/html-pdf";
 

@@ -1,15 +1,15 @@
-import type { ErrorTrackingSettingsResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { buttonVariants } from "@nakama/ui/button-variants";
+import type { ErrorTrackingSettingsResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { buttonVariants } from "@airin/ui/button-variants";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
-import { Spinner } from "@nakama/ui/spinner";
-import { Switch } from "@nakama/ui/switch";
-import { cn } from "@nakama/ui/utils";
+} from "@airin/ui/input-group";
+import { Spinner } from "@airin/ui/spinner";
+import { Switch } from "@airin/ui/switch";
+import { cn } from "@airin/ui/utils";
 import {
   Alert02Icon,
   LinkSquare02Icon,

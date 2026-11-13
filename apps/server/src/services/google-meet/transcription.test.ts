@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   formatTranscript,
   type TranscriptSegment,
-} from "@nakama/core/google-meet";
+} from "@airin/core/google-meet";
 import { asTestFetch } from "../../providers/test-helpers";
 import { connectTranscription } from "./transcription";
 

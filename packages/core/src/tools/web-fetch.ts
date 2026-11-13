@@ -4,7 +4,7 @@ import { BlockList, isIP } from "node:net";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 import robotsParser from "robots-parser";
 import { z } from "zod";
-import { NakamaApiError } from "../api-error";
+import { AirinApiError } from "../api-error";
 import type { ImageAttachment, JsonSchema, ToolDefinition } from "../contract";
 import { type BunFetchInit, withDisabledFetchIdle } from "../fetch-idle";
 import { MAX_IMAGE_BYTES } from "../message-content";
@@ -79,8 +79,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
 
 const MAX_REDIRECTS = 5;
 
-const USER_AGENT =
-  "nakama-web_fetch/1.0 (+https://github.com/ahmadrosid/nakama)";
+const USER_AGENT = "airin-web_fetch/1.0 (+https://github.com/ahmadrosid/airin)";
 
 const NON_PUBLIC_IPV6_RANGES = new BlockList();
 
@@ -446,7 +445,7 @@ export async function readBoundedBody(
 
     if (Number.isFinite(declared) && declared > maxBytes) {
       await response.body?.cancel();
-      throw new NakamaApiError(
+      throw new AirinApiError(
         `Upstream response body exceeds ${maxBytes} bytes (Content-Length: ${declared}).`,
         502
       );
@@ -473,7 +472,7 @@ export async function readBoundedBody(
       received += value.byteLength;
 
       if (received > maxBytes) {
-        throw new NakamaApiError(
+        throw new AirinApiError(
           `Upstream response body exceeds ${maxBytes} bytes.`,
           502
         );

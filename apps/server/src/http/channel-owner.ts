@@ -1,4 +1,4 @@
-import { NakamaApiError } from "@nakama/core";
+import { AirinApiError } from "@airin/core";
 import type { Context } from "hono";
 import type { AgentService } from "../services/agent-service";
 import {
@@ -29,7 +29,7 @@ export async function resolveChannelOwner(
     // Without an agent there is nothing a member could own.
     requireOrgAdminOrPlatformAdminFromContext(c);
 
-    throw new NakamaApiError("Choose an agent to manage this connection.", 400);
+    throw new AirinApiError("Choose an agent to manage this connection.", 400);
   }
 
   // Admins manage any agent's connections. Members manage their own agent's.
@@ -41,10 +41,10 @@ export async function resolveChannelOwner(
   const { profile } = await agent.getProfile(orgId, profileId);
 
   // A channel worker talks to the server as the local client, and the server
-  // refuses that client for Super Nakama, so such a bridge can never answer.
+  // refuses that client for Airin, so such a bridge can never answer.
   if (profile.isSuper) {
-    throw new NakamaApiError(
-      "Super Nakama cannot be connected to a channel. Choose another agent.",
+    throw new AirinApiError(
+      "Airin cannot be connected to a channel. Choose another agent.",
       400
     );
   }

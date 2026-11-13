@@ -11,13 +11,13 @@ describe("ensureBundledSkillFiles", () => {
   let configDir: string;
 
   beforeEach(async () => {
-    configDir = await mkdtemp(join(tmpdir(), "nakama-bundled-skills-"));
-    process.env.NAKAMA_CONFIG_DIR = configDir;
+    configDir = await mkdtemp(join(tmpdir(), "airin-bundled-skills-"));
+    process.env.AIRIN_CONFIG_DIR = configDir;
     await mkdir(join(configDir, "agent", "skills"), { recursive: true });
   });
 
   afterEach(() => {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
   });
 
   test("installs the create-plugin scaffold that writes a built draft", async () => {
@@ -30,7 +30,7 @@ describe("ensureBundledSkillFiles", () => {
     expect(skill).not.toBeNull();
     expect(skill?.scriptIssues).toEqual([]);
     expect(skill?.hasTool).toBe(false);
-    const workspace = await mkdtemp(join(tmpdir(), "nakama-plugin-ws-"));
+    const workspace = await mkdtemp(join(tmpdir(), "airin-plugin-ws-"));
 
     const script = join(
       configDir,
@@ -51,7 +51,7 @@ describe("ensureBundledSkillFiles", () => {
     const draft = join(workspace, "plugin-drafts", "standup-digest");
 
     const manifest = JSON.parse(
-      await readFile(join(draft, "nakama.plugin.json"), "utf8")
+      await readFile(join(draft, "airin.plugin.json"), "utf8")
     );
 
     expect(manifest.id).toBe("standup-digest");
@@ -76,7 +76,7 @@ describe("ensureBundledSkillFiles", () => {
   test("the create-plugin charts scaffold adds charts that pass the page checks", async () => {
     await ensureBundledSkillFiles();
 
-    const workspace = await mkdtemp(join(tmpdir(), "nakama-plugin-ws-"));
+    const workspace = await mkdtemp(join(tmpdir(), "airin-plugin-ws-"));
 
     const scripts = join(
       configDir,
@@ -113,7 +113,7 @@ describe("ensureBundledSkillFiles", () => {
         )
     );
 
-    const manifestPath = join(draft, "nakama.plugin.json");
+    const manifestPath = join(draft, "airin.plugin.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     manifest.description = "Track prices.";
     manifest.actions[0].description = "Read prices.";
@@ -128,7 +128,7 @@ describe("ensureBundledSkillFiles", () => {
   test("the create-plugin data scaffold builds working list and save actions", async () => {
     await ensureBundledSkillFiles();
 
-    const workspace = await mkdtemp(join(tmpdir(), "nakama-plugin-ws-"));
+    const workspace = await mkdtemp(join(tmpdir(), "airin-plugin-ws-"));
 
     const script = join(
       configDir,
@@ -151,7 +151,7 @@ describe("ensureBundledSkillFiles", () => {
     const draft = join(workspace, "plugin-drafts", "book-log");
 
     const manifest = JSON.parse(
-      await readFile(join(draft, "nakama.plugin.json"), "utf8")
+      await readFile(join(draft, "airin.plugin.json"), "utf8")
     );
 
     expect(manifest.actions.map(({ key }: { key: string }) => key)).toEqual([
@@ -203,7 +203,7 @@ describe("ensureBundledSkillFiles", () => {
   test("build-plugin passes a finished draft and lists each problem in a broken one", async () => {
     await ensureBundledSkillFiles();
 
-    const workspace = await mkdtemp(join(tmpdir(), "nakama-plugin-ws-"));
+    const workspace = await mkdtemp(join(tmpdir(), "airin-plugin-ws-"));
 
     const scripts = join(
       configDir,
@@ -224,7 +224,7 @@ describe("ensureBundledSkillFiles", () => {
       run("new-plugin.mjs", "task-hub", "Task Hub", "list_tasks").exitCode
     ).toBe(0);
 
-    const manifestPath = join(draft, "nakama.plugin.json");
+    const manifestPath = join(draft, "airin.plugin.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     manifest.description = "List my open tasks.";
     manifest.actions[0].description = "List open tasks.";
@@ -278,7 +278,7 @@ describe("ensureBundledSkillFiles", () => {
   test("build-plugin reports bad lists, shared sources, and unscoped @media rules without crashing", async () => {
     await ensureBundledSkillFiles();
 
-    const workspace = await mkdtemp(join(tmpdir(), "nakama-plugin-ws-"));
+    const workspace = await mkdtemp(join(tmpdir(), "airin-plugin-ws-"));
 
     const scripts = join(
       configDir,
@@ -299,7 +299,7 @@ describe("ensureBundledSkillFiles", () => {
       run("new-plugin.mjs", "task-hub", "Task Hub", "list_tasks").exitCode
     ).toBe(0);
 
-    const manifestPath = join(draft, "nakama.plugin.json");
+    const manifestPath = join(draft, "airin.plugin.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     // A real description may end in "plugin."; only the template text fails.
     manifest.description = "Show tasks from the Jira plugin.";
@@ -371,7 +371,7 @@ describe("ensureBundledSkillFiles", () => {
       description: "Track tasks.",
       id: "task-hub",
       license: "MIT",
-      minNakamaVersion: "0.4.47",
+      minAirinVersion: "0.4.47",
       name: "Task Hub",
       version: "1.0.0",
     }));

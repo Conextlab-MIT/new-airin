@@ -1,10 +1,10 @@
-import type { ToolDetail } from "@nakama/core/contract";
+import type { ToolDetail } from "@airin/core/contract";
 import { useState } from "react";
 import { useAppNavigation } from "@/hooks/use-app-navigation";
 import { client, formatError } from "@/lib/client";
 import { buildExampleParametersJson } from "@/lib/tool-playground-params";
 
-function buildSuperNakamaFixDraft(input: {
+function buildSuperAirinFixDraft(input: {
   toolName: string;
   parameters: unknown;
   error: string;
@@ -39,7 +39,7 @@ type ToolPlaygroundRunState =
 export interface ToolPlaygroundRunControls {
   actionError: string | null;
   assistPrompt: string;
-  handleFixWithSuperNakama: () => void;
+  handleFixWithSuperAirin: () => void;
   handleRun: () => Promise<void>;
   handleSuggestParams: () => Promise<void>;
   jsonError: string | null;
@@ -99,7 +99,7 @@ function isJsonValue(value: unknown): value is JsonValue {
 
 export function useToolPlaygroundRun(
   tool: ToolDetail,
-  superNakamaProfileId: string | null
+  superAirinProfileId: string | null
 ): ToolPlaygroundRunControls {
   const { navigateToNewChat } = useAppNavigation();
 
@@ -175,18 +175,18 @@ export function useToolPlaygroundRun(
     }
   }
 
-  function handleFixWithSuperNakama() {
-    if (runState.status !== "error" || !superNakamaProfileId) {
+  function handleFixWithSuperAirin() {
+    if (runState.status !== "error" || !superAirinProfileId) {
       return;
     }
 
-    const draft = buildSuperNakamaFixDraft({
+    const draft = buildSuperAirinFixDraft({
       error: runState.error,
       parameters: runState.parameters,
       toolName: tool.name,
     });
 
-    navigateToNewChat(superNakamaProfileId, { draft });
+    navigateToNewChat(superAirinProfileId, { draft });
   }
 
   function setParametersJson(value: string) {
@@ -197,7 +197,7 @@ export function useToolPlaygroundRun(
   return {
     actionError,
     assistPrompt,
-    handleFixWithSuperNakama,
+    handleFixWithSuperAirin,
     handleRun,
     handleSuggestParams,
     jsonError,

@@ -1,7 +1,7 @@
-import type { ProfileDetail } from "@nakama/core/contract";
-import { BUILTIN_TOOL_IDS } from "@nakama/core/tools/protected";
-import { Button } from "@nakama/ui/button";
-import { cn } from "@nakama/ui/utils";
+import type { ProfileDetail } from "@airin/core/contract";
+import { BUILTIN_TOOL_IDS } from "@airin/core/tools/protected";
+import { Button } from "@airin/ui/button";
+import { cn } from "@airin/ui/utils";
 import { Delete02Icon } from "hugeicons-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";

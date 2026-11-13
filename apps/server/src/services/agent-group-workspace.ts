@@ -8,11 +8,11 @@ import {
 } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import {
+  AirinApiError,
   getGroupMemoryPath,
   getGroupSharedDir,
-  NakamaApiError,
-} from "@nakama/core";
-import type { AgentGroupMemoryChange } from "@nakama/core/agent-groups";
+} from "@airin/core";
+import type { AgentGroupMemoryChange } from "@airin/core/agent-groups";
 import type { GroupDocument } from "./agent-group-store";
 
 /**
@@ -157,7 +157,7 @@ export function groupWorkspace(sharedDir: string) {
        */
       replace(content: string, base: string): string {
         if (readMemory() !== base.trim()) {
-          throw new NakamaApiError(
+          throw new AirinApiError(
             "The group memory changed since you opened it. Reload it and try again.",
             409
           );

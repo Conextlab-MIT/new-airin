@@ -10,9 +10,9 @@ You connect your own account, and nobody else's. Your colleague connects theirs.
 ## What you need first
 
 - A **Composio account**. Sign up at [composio.dev](https://composio.dev), it is free to start.
-- The **org admin** role in Nakama for steps 1, 2, 3 and 5 below. Any member can do step 4 for their own account.
+- The **org admin** role in Airin for steps 1, 2, 3 and 5 below. Any member can do step 4 for their own account.
 
-You do not need to set anything up inside Composio beyond creating the account. Nakama does the rest for you.
+You do not need to set anything up inside Composio beyond creating the account. Airin does the rest for you.
 
 ## Setup
 
@@ -24,15 +24,15 @@ You do not need to set anything up inside Composio beyond creating the account. 
 4. Open **API Keys**.
 5. Copy the key.
 
-Take the **project API key**. Composio also has an *MCP consumer key* that starts with `ck_`, found under AI Clients. That one looks like a key and does not work here, so if Nakama rejects what you pasted, this is usually why.
+Take the **project API key**. Composio also has an *MCP consumer key* that starts with `ck_`, found under AI Clients. That one looks like a key and does not work here, so if Airin rejects what you pasted, this is usually why.
 
-**2. Paste it into Nakama.** As a platform admin, open **Settings → Integrations → Composio**, paste the key in the **Project API key** box, and press **Save**. The project key is shared by every organization on this installation.
+**2. Paste it into Airin.** As a platform admin, open **Settings → Integrations → Composio**, paste the key in the **Project API key** box, and press **Save**. The project key is shared by every organization on this installation.
 
-![The Composio page in Nakama before a key is saved, with the Project API key box and a link to the dashboard](/screenshots/composio-api-key.png)
+![The Composio page in Airin before a key is saved, with the Project API key box and a link to the dashboard](/screenshots/composio-api-key.png)
 
-Nakama checks the key against Composio right then. A wrong key fails on the spot with the reason, so you never have to wonder whether it took. A good one turns the badge in the corner to connected.
+Airin checks the key against Composio right then. A wrong key fails on the spot with the reason, so you never have to wonder whether it took. A good one turns the badge in the corner to connected.
 
-For a container or secrets manager, keep the key outside Nakama's data directory. Mount it as a readable file and set:
+For a container or secrets manager, keep the key outside Airin's data directory. Mount it as a readable file and set:
 
 ```sh
 COMPOSIO_API_KEY_FILE=/run/secrets/composio_api_key
@@ -46,13 +46,13 @@ The list opens on the apps teams ask for most. If yours is not there, search for
 
 ![The SaaS toolkits list showing Gmail enabled and the popular apps below it](/screenshots/composio-toolkit-list.png)
 
-**4. Connect your account.** Press **Connect** on that app. A Composio page opens, you sign in to the app the normal way, and you land back in Nakama. The tools appear on their own, there is nothing to refresh.
+**4. Connect your account.** Press **Connect** on that app. A Composio page opens, you sign in to the app the normal way, and you land back in Airin. The tools appear on their own, there is nothing to refresh.
 
 ![A Gmail row enabled for the org and not yet connected, with the Connect button](/screenshots/composio-connect.png)
 
 **5. Give the app to an agent.** Enabling already gave it to your default agent, so there is nothing to do unless you want another one. Press the **profiles** button on the app's row and tick whichever agents should have it.
 
-![The profile picker listing Default Bot as able to use the toolkit and Super Nakama as not assigned](/screenshots/composio-profiles.png)
+![The profile picker listing Default Bot as able to use the toolkit and Airin as not assigned](/screenshots/composio-profiles.png)
 
 An agent can only use apps that were given to it, which is what makes it work in chat.
 
@@ -62,7 +62,7 @@ That is the whole setup. Ask the agent to check your inbox and it will.
 
 | What you see | What it means | What to do |
 | --- | --- | --- |
-| The agent says it cannot reach your account | You are signed in to Nakama as someone who has not connected that app yet | Open **Settings → Integrations → Composio** and press **Connect** |
+| The agent says it cannot reach your account | You are signed in to Airin as someone who has not connected that app yet | Open **Settings → Integrations → Composio** and press **Connect** |
 | The agent never mentions the app at all | The app was enabled, but not given to this agent | Press the profiles button on the app's row and tick that agent |
 | Composio says "not reachable" on the Composio card | The API key is saved but Composio is not answering | Check the key, and check that the server has internet access |
 | On Telegram or WhatsApp, the agent says it cannot start the sign-in | The sign-in link would point at the server's own machine, which your phone cannot open | Set **Settings → Workspace → Preferences → Public web URL**, then restart the channel |
@@ -85,13 +85,13 @@ Disabling an app for the organisation stops it for everybody at once. Disconnect
 
 For anyone who wants the mechanics rather than the steps.
 
-- Nakama talks to Composio through the `@composio/core` SDK, and the agent reaches the tools over an MCP session that Composio hosts.
-- An API key saved through **Settings → Integrations → Composio** is stored as `api_key` in `~/.nakama/composio/config.ini` on the server. `COMPOSIO_API_KEY` and `COMPOSIO_API_KEY_FILE` keep it outside that file.
-- Nakama creates the Composio auth config for a toolkit the first time somebody connects it, which is why the Google Cloud project and consent screen walkthrough in Composio's own documentation does not apply here. The exception is an app with no Composio managed credentials, such as Google Forms. For that app, an org admin creates a custom auth config in Composio first.
+- Airin talks to Composio through the `@composio/core` SDK, and the agent reaches the tools over an MCP session that Composio hosts.
+- An API key saved through **Settings → Integrations → Composio** is stored as `api_key` in `~/.airin/composio/config.ini` on the server. `COMPOSIO_API_KEY` and `COMPOSIO_API_KEY_FILE` keep it outside that file.
+- Airin creates the Composio auth config for a toolkit the first time somebody connects it, which is why the Google Cloud project and consent screen walkthrough in Composio's own documentation does not apply here. The exception is an app with no Composio managed credentials, such as Google Forms. For that app, an org admin creates a custom auth config in Composio first.
 - An agent never sees hundreds of tools at once. It gets two, `composio__search_actions` to find an action and `composio__invoke_action` to run it, so the prompt stays the same size no matter how large the toolkit is. When an account is not connected it also gets `composio__connect_account`, which produces a sign-in link the agent can paste into the reply.
-- Each member's connection lives in `composio_user_connections`, and the Composio user id is `nakama:user:{userId}`. Web chat resolves tools against the connection of the person talking. On Telegram, WhatsApp, Discord, and CLI, it uses the connection of the earliest org admin.
-- The sign-in callback (`/v1/composio/oauth/callback`) is public, because Composio redirects a browser there with no Nakama session.
-- Web chat takes the callback address from the browser. The Telegram, WhatsApp, Discord and CLI bridges cannot, so they read `web_public_url` from `~/.nakama/config.ini` (or `NAKAMA_WEB_PUBLIC_URL`). A loopback address is refused rather than sent to a phone that cannot open it.
+- Each member's connection lives in `composio_user_connections`, and the Composio user id is `airin:user:{userId}`. Web chat resolves tools against the connection of the person talking. On Telegram, WhatsApp, Discord, and CLI, it uses the connection of the earliest org admin.
+- The sign-in callback (`/v1/composio/oauth/callback`) is public, because Composio redirects a browser there with no Airin session.
+- Web chat takes the callback address from the browser. The Telegram, WhatsApp, Discord and CLI bridges cannot, so they read `web_public_url` from `~/.airin/config.ini` (or `AIRIN_WEB_PUBLIC_URL`). A loopback address is refused rather than sent to a phone that cannot open it.
 - Automations that run without a person attached do not resolve personal Composio tools.
 - Everything is scoped to one organisation. Enable the app and assign the agent in the same org your Telegram `/org` selection points at.
 - `GET /health` reports whether a key is saved, and always reports `composioAvailable: false` because it runs local checks only. Reachability is on `GET /v1/system/status`.

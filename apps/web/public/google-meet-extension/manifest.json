@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Nakama Google Meet Transcriber",
+  "name": "Airin Google Meet Transcriber",
   "version": "0.3.0",
-  "description": "Capture Google Meet audio for a Nakama live transcript.",
+  "description": "Capture Google Meet audio for an Airin live transcript.",
   "minimum_chrome_version": "116",
   "icons": { "192": "icon.png" },
   "permissions": [
@@ -17,7 +17,7 @@
   "background": { "service_worker": "background.js" },
   "action": {
     "default_icon": "icon.png",
-    "default_title": "Nakama Meet transcription"
+    "default_title": "Airin Meet transcription"
   },
   "side_panel": { "default_path": "sidepanel.html" },
   "content_scripts": [

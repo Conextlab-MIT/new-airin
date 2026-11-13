@@ -41,7 +41,7 @@ const hostError = (message) => {
 };
 
 process.on("message", (message) => {
-  if (message?.type !== "nakama-host-result") {
+  if (message?.type !== "airin-host-result") {
     return;
   }
 
@@ -70,7 +70,7 @@ context.host = (request) =>
 
     const id = crypto.randomUUID();
     pending.set(id, { reject, resolve });
-    process.send({ id, request, type: "nakama-host-request" }, (error) => {
+    process.send({ id, request, type: "airin-host-request" }, (error) => {
       if (error) {
         pending.delete(id);
         hostErrors.add(error);

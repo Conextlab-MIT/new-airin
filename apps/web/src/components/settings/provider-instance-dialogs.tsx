@@ -1,5 +1,5 @@
-import type { ProviderInstanceSummary, WireApi } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
+import type { ProviderInstanceSummary, WireApi } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -7,14 +7,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@nakama/ui/dialog";
+} from "@airin/ui/dialog";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@nakama/ui/input-group";
-import { Spinner } from "@nakama/ui/spinner";
+} from "@airin/ui/input-group";
+import { Spinner } from "@airin/ui/spinner";
 import { LinkSquare02Icon, ViewIcon, ViewOffIcon } from "hugeicons-react";
 import { type ReactNode, useRef, useState } from "react";
 import {
@@ -265,7 +265,7 @@ function ReplaceKeyForm({
       </InputGroup>
       {instance.secretSource === "environment" ? (
         <p className="text-sm">
-          Managed by {instance.secretEnvName}. Restart Nakama after you change
+          Managed by {instance.secretEnvName}. Restart Airin after you change
           it.
         </p>
       ) : null}

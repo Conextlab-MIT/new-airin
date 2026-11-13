@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { NakamaApiError, type UserConfig } from "@nakama/core";
+import { AirinApiError, type UserConfig } from "@airin/core";
 import { resolveTranscriptionProviderSelection } from "./audio-transcription";
 
 describe("resolveTranscriptionProviderSelection", () => {
@@ -48,7 +48,7 @@ describe("resolveTranscriptionProviderSelection", () => {
     };
 
     expect(() => resolveTranscriptionProviderSelection(config)).toThrow(
-      NakamaApiError
+      AirinApiError
     );
   });
 
@@ -109,7 +109,7 @@ describe("resolveTranscriptionProviderSelection", () => {
     };
 
     expect(() => resolveTranscriptionProviderSelection(config)).toThrow(
-      NakamaApiError
+      AirinApiError
     );
   });
 

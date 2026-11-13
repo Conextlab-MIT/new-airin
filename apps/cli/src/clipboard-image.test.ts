@@ -3,8 +3,8 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { MAX_IMAGE_BYTES } from "@airin/core";
 import * as nativeClipboard from "@crosscopy/clipboard";
-import { MAX_IMAGE_BYTES } from "@nakama/core";
 import {
   attachmentFromClipboardBytes,
   detectClipboardImageMediaType,
@@ -40,7 +40,7 @@ test.each([
 ])(
   "reads copied files and terminal-created images in %s",
   async (temporaryDir) => {
-    const dir = await mkdtemp(join(temporaryDir, "nakama-paste-"));
+    const dir = await mkdtemp(join(temporaryDir, "airin-paste-"));
     const filePath = join(dir, "screen shot.png");
     const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     const hasFiles = spyOn(nativeClipboard, "hasFiles").mockReturnValue(true);

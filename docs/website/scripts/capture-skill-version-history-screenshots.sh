@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Capture the skill page Version history (pending suggestion + restore) for docs.
-# Prerequisite: bun run --filter @nakama/web build
+# Prerequisite: bun run --filter @airin/web build
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 source "$(dirname "$0")/capture-common.sh"
 SCREENSHOT_DIR="$(cd "$(dirname "$0")/.." && pwd)/public/screenshots"
-TEMP_CONFIG="/tmp/nakama-docs-skill-versions-screenshots-$$"
-COOKIE_JAR="/tmp/nakama-docs-skill-versions-cookies-$$.txt"
-SERVER_LOG=/tmp/nakama-docs-skill-versions-screenshot-server.log
+TEMP_CONFIG="/tmp/airin-docs-skill-versions-screenshots-$$"
+COOKIE_JAR="/tmp/airin-docs-skill-versions-cookies-$$.txt"
+SERVER_LOG=/tmp/airin-docs-skill-versions-screenshot-server.log
 PORT=4316
 BASE_URL="http://127.0.0.1:${PORT}"
-SESSION=nakama-docs-skill-versions-screenshots
+SESSION=airin-docs-skill-versions-screenshots
 SERVER_PID=""
 VIEWPORT_WIDTH=1400
 VIEWPORT_HEIGHT=1150
@@ -32,7 +32,7 @@ stop_server() {
 
 start_server() {
   stop_server
-  NAKAMA_CONFIG_DIR="$TEMP_CONFIG" NAKAMA_PORT="$PORT" \
+  AIRIN_CONFIG_DIR="$TEMP_CONFIG" AIRIN_PORT="$PORT" \
     bun run "$ROOT/apps/server/src/index.ts" > "$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
 
@@ -69,8 +69,8 @@ SETUP_BODY=$(curl -sf -c "$COOKIE_JAR" -X POST "${BASE_URL}/v1/auth/setup" \
   }")
 
 ORG_ID=$(printf '%s' "$SETUP_BODY" | bun -e 'const j=JSON.parse(await Bun.stdin.text()); process.stdout.write(j.activeOrgId ?? "");')
-CSRF_VAL=$(awk '$6=="nakama_csrf"{print $7}' "$COOKIE_JAR")
-SESSION_VAL=$(awk '$6=="nakama_session"{print $7}' "$COOKIE_JAR")
+CSRF_VAL=$(awk '$6=="airin_csrf"{print $7}' "$COOKIE_JAR")
+SESSION_VAL=$(awk '$6=="airin_session"{print $7}' "$COOKIE_JAR")
 
 api() {
   local method="$1" path="$2"
@@ -102,14 +102,14 @@ api PATCH "/v1/skills/${SKILL_ID}" -d "{
 
 # Pending patch proposal, shown as "Suggested · Pending review".
 stop_server
-(cd "$ROOT/apps/server" && NAKAMA_CONFIG_DIR="$TEMP_CONFIG" \
+(cd "$ROOT/apps/server" && AIRIN_CONFIG_DIR="$TEMP_CONFIG" \
   bun run scripts/seed-skill-proposal-docs.ts version-history "$PROFILE_ID")
 start_server
 
 $AB --session "$SESSION" close 2>/dev/null || true
-$AB --session "$SESSION" cookies set nakama_session "$SESSION_VAL" \
+$AB --session "$SESSION" cookies set airin_session "$SESSION_VAL" \
   --url "${BASE_URL}/" --httpOnly --sameSite Lax
-$AB --session "$SESSION" cookies set nakama_csrf "$CSRF_VAL" \
+$AB --session "$SESSION" cookies set airin_csrf "$CSRF_VAL" \
   --url "${BASE_URL}/" --sameSite Lax
 $AB --session "$SESSION" set viewport "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT"
 $AB --session "$SESSION" set media light

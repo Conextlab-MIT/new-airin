@@ -93,7 +93,7 @@ Do not copy arbitrary source files or use `cloneProfile()` to bypass source tena
 Reject publication when the template requires unpublished tenant resources or unsupported parent MCP connections.
 Block team edits to template-owned fields through profile, soul, assignment, clone, and import APIs.
 Keep local agents separate. Do not silently convert a shared instance into a local agent.
-Exclude Super Nakama and the built-in Default Bot from publication.
+Exclude Airin and the built-in Default Bot from publication.
 
 Availability does not automatically assign every tool or skill to every agent.
 Use existing profile assignment controls. Reject assignments that the source publication no longer permits.
@@ -264,7 +264,7 @@ Tests must assert access, returned data, and side effects rather than exact copy
 
 Do not label resources **Available to all teams** until their actual use passes the access tests.
 Record related work against a feature issue before implementation, as required by `CONTRIBUTING.md`.
-Feature issue: [#1765](https://github.com/ahmadrosid/nakama/issues/1765), assigned to `ahmadrosid`, with `stage: now`.
+Feature issue: [#1765](https://github.com/ahmadrosid/airin/issues/1765), assigned to `ahmadrosid`, with `stage: now`.
 
 ## Limits and risks
 
@@ -310,7 +310,7 @@ The issue gate remained unmet on three consecutive goal turns. Implementation is
 Slice 1a adds the nullable parent column, foreign key, self-link rejection, index, and repeatable migration tests.
 Checks: `bun test packages/db/src/migrate.test.ts` passed (37 tests); `bun x ultracite check` passed (1532 files).
 The database type check failed twice. A temporary config extends root settings and includes all database source and tests.
-Command: `bun apps/web/node_modules/typescript/bin/tsc --project /tmp/nakama-db-typecheck.json --noEmit`.
+Command: `bun apps/web/node_modules/typescript/bin/tsc --project /tmp/airin-db-typecheck.json --noEmit`.
 The final check reported 48 existing errors, including SQLite generic arguments, nullable rows, and stale test types.
 A separate copy using `HEAD` versions of changed files produced the same 48 diagnostics after path and line normalization.
 No new type errors appeared. The required passing type gate remains unmet, so this iteration stops without a commit.
@@ -345,7 +345,7 @@ Slice log (one row per commit):
 | 2026-10-11 | 1a | Parent schema and idempotent migration; repaired existing database type errors | Fresh and upgrade migration, reference constraints; 145 database tests passed | Parent adapter persistence and archive guards |
 | 2026-10-11 | 1b | Persist parent relationships; reject reparenting, nested teams, inactive parents, unsafe archive and deletion | Lookups, memberships, ordinary updates, lifecycle guards; 147 database tests passed | Publication records and migration |
 | 2026-10-11 | 1c | Publication and shared agent source-link tables; repeatable migration | Five resource kinds, uniqueness, references, revocation survival, cleanup; 149 database tests passed | Publication adapter operations |
-| 2026-10-11 | 1d | Scoped publication reads and writes; idempotent publish; SQL ownership checks and source-deletion triggers | Active root, wrong scope, retry, default/Super Nakama rejection, SQL ownership and deletion; 151 database tests passed | Agent source-link operations and atomic team creation |
+| 2026-10-11 | 1d | Scoped publication reads and writes; idempotent publish; SQL ownership checks and source-deletion triggers | Active root, wrong scope, retry, default/Airin rejection, SQL ownership and deletion; 151 database tests passed | Agent source-link operations and atomic team creation |
 | 2026-10-11 | 1e | Atomic shared agent profile/source-link creation; scoped reads and explicit reconnection | Concurrent selection, sibling isolation, revocation, retained sessions, source deletion, injected rollback; 154 database tests passed | Atomic team creation and request idempotency |
 | 2026-10-11 | 1f | Durable team requests; atomic child/admin insertion, completion, and guarded cleanup | Retry identity, pending visibility, admin checks, archive ordering, migration replay, injected member/request failures; 160 database tests passed | OrgService team setup, compensation, and permission checks |
 | 2026-10-11 | 1g | Team setup, permission checks, retry, and compensation | 221 focused service, HTTP, and database tests passed | Publication source validation |
@@ -372,7 +372,7 @@ Stage 1 remains incomplete. Next: publication adapter operations and source vali
 
 2026-10-11: Slice 1d adds publication operations to the existing database adapter.
 Writes check active root status and SQL source ownership inside one transaction.
-Agent publication excludes default and Super Nakama profiles. Skill publication excludes disabled and foreign skills.
+Agent publication excludes default and Airin profiles. Skill publication excludes disabled and foreign skills.
 Global tools keep global access. Publication removal does not delete source resources.
 Deletion triggers invalidate agent, skill, and tool publications, including when foreign-key enforcement is disabled.
 Knowledge-file validation, configured-model validation, profile skill paths, and agent dependencies remain for OrgService.
@@ -392,7 +392,7 @@ Stage 1 remains incomplete. Next: atomic team creation and request idempotency.
 2026-10-11: Slice 1f adds durable request records for team creation.
 The immediate write transaction checks the parent, creator authority, and first admin before inserting the child, membership, and request.
 Pending requests produce derived `setupPending` state. Membership lists hide incomplete teams until setup completes.
-Completion requires active parent/team records, the assigned admin, and seeded default/Super Nakama profiles.
+Completion requires active parent/team records, the assigned admin, and seeded default/Airin profiles.
 Guarded cleanup deletes only an incomplete matching request and child. Completed requests survive team deletion and prevent duplicate creation on retry.
 The existing foreign-key deletion guard now serves normal deletion and failed-setup compensation.
 Checks: all 160 database tests passed; database type check and `bun x ultracite check` passed.
@@ -408,9 +408,9 @@ Checks: 234 focused service, HTTP, and database tests passed; database and affec
 The full server type check reported 607 existing diagnostics before these edits.
 Two code repair attempts corrected five existing errors and the new test type error. The full check still reports 602 existing diagnostics.
 After path/line normalization, the remaining diagnostics contain no new errors compared with the baseline.
-Full command: `bun apps/web/node_modules/typescript/bin/tsc --project /tmp/nakama-server-typecheck.json --noEmit --pretty false`.
+Full command: `bun apps/web/node_modules/typescript/bin/tsc --project /tmp/airin-server-typecheck.json --noEmit --pretty false`.
 Config: extends root `tsconfig.json`; includes `apps/server/src/**/*.ts`; uses `ESNext`, `DOM`, and root `node_modules/@types`.
-Evidence logs: `/tmp/nakama-server-baseline-types.log`, `/tmp/nakama-team-service-full-types.log`, `/tmp/nakama-team-service-tests.log`.
+Evidence logs: `/tmp/airin-server-baseline-types.log`, `/tmp/airin-team-service-full-types.log`, `/tmp/airin-team-service-tests.log`.
 The loop stops under goal step 12. No commit, push, or PR ran for slice 1g.
 Next: obtain a verification decision before committing slice 1g or starting another slice.
 
@@ -422,7 +422,7 @@ Provider fields use optional output types; explicit Ollama labels survive field 
 Four HTTP test files reuse the existing `AppFetch` type rather than requiring Bun's global fetch properties.
 Regression tests cover malformed catalog fields, redirect variants, and explicit Ollama labels.
 Checks: 151 tests passed across six files. Full server type checks still failed after both repair passes.
-Evidence: `/tmp/nakama-type-repair-1.log`, `/tmp/nakama-type-repair-2.log`, and `/tmp/nakama-type-repair-tests.log`.
+Evidence: `/tmp/airin-type-repair-1.log`, `/tmp/airin-type-repair-2.log`, and `/tmp/airin-type-repair-tests.log`.
 Step 12 stops this iteration. All new repairs and slice 1g remain uncommitted; no push or PR ran.
 Next: continue the authorized type-error cleanup after restarting the stopped loop; retain the full passing type-check requirement.
 
@@ -433,7 +433,7 @@ Affected provider, service, and HTTP fixtures now use this helper rather than in
 The compaction event fixture accepts typed extra event fields. Its fetch helper regression checks calls and offline preconnect.
 Focused runs passed: 249 tests across 16 files, 69 across six files, and 45 across four files.
 The first test run failed four port-binding fixtures inside the sandbox. The same run passed with local port access.
-Evidence: `/tmp/nakama-fetch-repair-types-final.log`, `/tmp/nakama-fetch-repair-tests.log`, `/tmp/nakama-fetch-repair-extra-tests.log`, `/tmp/nakama-fetch-repair-spy-tests.log`.
+Evidence: `/tmp/airin-fetch-repair-types-final.log`, `/tmp/airin-fetch-repair-tests.log`, `/tmp/airin-fetch-repair-extra-tests.log`, `/tmp/airin-fetch-repair-spy-tests.log`.
 The full server type gate remains unmet. No commit, push, or PR ran. Next: repair the remaining source and fixture types.
 The import formatter corrected three files after the first lint check. `bun x ultracite check` passed all 1532 files.
 
@@ -446,7 +446,7 @@ The ChatGPT JWT result type comes from its existing validation schema.
 Regression coverage checks missing database route registration; existing tests check permissions, invalid polling values, downloads, sessions, and OAuth.
 Focused runs passed: 66 tests across two files, 144 across four files, 73 across three files, and 15 across two files.
 The final server check still fails with 342 existing diagnostics. `bun x ultracite check` passed all 1532 files.
-Evidence: `/tmp/nakama-http-boundary-types-final.log`, `/tmp/nakama-http-fixture-repair-tests.log`, `/tmp/nakama-http-boundary-repair-tests.log`, `/tmp/nakama-http-boundary-extra-tests.log`, `/tmp/nakama-http-session-caller-tests.log`.
+Evidence: `/tmp/airin-http-boundary-types-final.log`, `/tmp/airin-http-fixture-repair-tests.log`, `/tmp/airin-http-boundary-repair-tests.log`, `/tmp/airin-http-boundary-extra-tests.log`, `/tmp/airin-http-session-caller-tests.log`.
 No commit, push, or PR ran. Next: continue the authorized cleanup before committing slice 1g or resuming feature work.
 
 2026-10-11: Request and response boundary repairs removed 20 more server diagnostics; 322 remain, with no new diagnostics.
@@ -457,7 +457,7 @@ The affected core package type check had 125 baseline diagnostics before this gr
 Regression tests verify malformed profile requests return 400 without calling the service, and unknown non-Error values receive fingerprints.
 Focused runs passed: 186 tests across 11 files and 76 across two files. `bun x ultracite check` passed all 1532 files.
 Full server and core type checks still fail on existing diagnostics; no commit, push, or PR ran.
-Evidence: `/tmp/nakama-request-schema-server-final.log`, `/tmp/nakama-core-before-boundary-types.log`, `/tmp/nakama-request-schema-core-final.log`, `/tmp/nakama-request-schema-tests.log`, `/tmp/nakama-request-schema-regression-tests.log`.
+Evidence: `/tmp/airin-request-schema-server-final.log`, `/tmp/airin-core-before-boundary-types.log`, `/tmp/airin-request-schema-core-final.log`, `/tmp/airin-request-schema-tests.log`, `/tmp/airin-request-schema-regression-tests.log`.
 Next: continue the authorized type cleanup, including affected core-package errors, before completing slice 1g.
 
 2026-10-11: Tool input repairs reduced the core type errors from 123 to 63, with no new diagnostics.
@@ -470,7 +470,7 @@ The root config has only `ESNext`; checking without Web API declarations produce
 DOM iterator declarations remove seven server diagnostics for supported Web API iteration; 315 server errors remain, with no new diagnostics.
 Checks: 99 focused tests passed, two existing tests skipped, database type check passed, and `bun x ultracite check` passed all 1532 files.
 Server and core type checks still fail. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-tool-input-server-final.log`, `/tmp/nakama-tool-input-core-final.log`, `/tmp/nakama-tool-input-db-final.log`, `/tmp/nakama-tool-input-all-tests.log`.
+Evidence: `/tmp/airin-tool-input-server-final.log`, `/tmp/airin-tool-input-core-final.log`, `/tmp/airin-tool-input-db-final.log`, `/tmp/airin-tool-input-all-tests.log`.
 Next: continue the authorized type cleanup before completing slice 1g and resuming feature implementation.
 
 2026-10-11: Channel and fetch fixture repairs reduced core type errors from 63 to 22, with no new diagnostics.
@@ -480,7 +480,7 @@ Channel configuration fixtures now include required profile and handshake-expiry
 Checks: 181 tests passed across 11 files, including the shared fetch regression. `bun x ultracite check` passed all 1532 files.
 The full server check remains at 315 errors, with no new diagnostics. The core check still fails on 22 existing errors.
 No commit, push, or PR ran. Feature slice 1g remains pending until the complete type checks pass.
-Evidence: `/tmp/nakama-channel-fixture-core-1.log`, `/tmp/nakama-channel-fixture-server-final.log`, `/tmp/nakama-channel-fixture-tests.log`, `/tmp/nakama-channel-fixture-lint.log`.
+Evidence: `/tmp/airin-channel-fixture-core-1.log`, `/tmp/airin-channel-fixture-server-final.log`, `/tmp/airin-channel-fixture-tests.log`, `/tmp/airin-channel-fixture-lint.log`.
 Next: repair the remaining core fixtures, then continue the authorized server type cleanup.
 
 2026-10-11: Remaining core fixture repairs reduced its 22 diagnostics to zero. The full core type check passed.
@@ -493,7 +493,7 @@ The first type check found an incorrect delivery-type import; the corrected impo
 Checks: 135 focused tests passed across 12 files; 20 regression tests passed across two files; lint passed all 1532 files.
 The server type check has 314 remaining diagnostics, with no new errors against the prior 315-error result.
 No commit, push, or PR ran. Slice 1g remains pending until the server gate passes.
-Evidence: `/tmp/nakama-core-final-fixtures-types-final.log`, `/tmp/nakama-core-final-fixtures-server.log`, `/tmp/nakama-core-final-fixtures-tests.log`, `/tmp/nakama-core-final-fixtures-regression.log`, `/tmp/nakama-core-final-fixtures-lint.log`.
+Evidence: `/tmp/airin-core-final-fixtures-types-final.log`, `/tmp/airin-core-final-fixtures-server.log`, `/tmp/airin-core-final-fixtures-tests.log`, `/tmp/airin-core-final-fixtures-regression.log`, `/tmp/airin-core-final-fixtures-lint.log`.
 Next: continue the authorized server type cleanup; core type checking now passes.
 
 2026-10-11: Provider fixture repairs reduced server type diagnostics from 314 to 286, with no new diagnostics.
@@ -504,7 +504,7 @@ Usage fixtures use typed tool definitions and structured tool arguments, matchin
 A formatter check found one duplicate system field; the existing nonempty prompt was retained before repeating the routing tests.
 Checks: 71 tests passed across six files; routing and Gemini rechecks each passed 10 tests. Lint passed all 1532 files.
 The full server type check still fails on 286 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-provider-fixture-types-final.log`, `/tmp/nakama-provider-fixture-tests.log`, `/tmp/nakama-provider-create-recheck.log`, `/tmp/nakama-provider-gemini-recheck.log`, `/tmp/nakama-provider-fixture-lint-final.log`.
+Evidence: `/tmp/airin-provider-fixture-types-final.log`, `/tmp/airin-provider-fixture-tests.log`, `/tmp/airin-provider-create-recheck.log`, `/tmp/airin-provider-gemini-recheck.log`, `/tmp/airin-provider-fixture-lint-final.log`.
 Next: continue the authorized server cleanup before committing feature slice 1g.
 
 2026-10-11: Composio service fixture repairs reduced server type errors from 286 to 278, with no new diagnostics.
@@ -512,7 +512,7 @@ The mock client declares the five public methods it supplies, rather than requir
 Partial catalog overrides merge with the existing complete mock client; profile fixtures include required update timestamps.
 Checks: all 12 Composio service tests passed; lint passed all 1532 files. The full server type check still fails.
 No commit, push, or PR ran. Feature slice 1g remains pending.
-Evidence: `/tmp/nakama-composio-fixture-types-1.log`, `/tmp/nakama-composio-fixture-tests.log`, `/tmp/nakama-composio-fixture-lint.log`.
+Evidence: `/tmp/airin-composio-fixture-types-1.log`, `/tmp/airin-composio-fixture-tests.log`, `/tmp/airin-composio-fixture-lint.log`.
 Next: repair remaining service dependency and worker fixture types, then repeat the complete server check.
 
 2026-10-11: Shared schema repairs reduced server diagnostics from 278 to 266, with no new errors.
@@ -522,7 +522,7 @@ Gemini uses the installed SDK's `parametersJsonSchema` field for JSON Schema inp
 Regression tests check the SDK-generated request field, converted numeric bound, and absence of the incompatible `parameters` field.
 Checks: 96 focused tests passed across six files; 15 Gemini request/config tests passed; core and database type checks passed; lint passed all 1532 files.
 The full server type check still fails on 266 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-schema-repair-server-final.log`, `/tmp/nakama-schema-repair-core-1.log`, `/tmp/nakama-schema-repair-db.log`, `/tmp/nakama-schema-repair-tests.log`, `/tmp/nakama-schema-repair-wire-tests.log`, `/tmp/nakama-schema-repair-lint.log`.
+Evidence: `/tmp/airin-schema-repair-server-final.log`, `/tmp/airin-schema-repair-core-1.log`, `/tmp/airin-schema-repair-db.log`, `/tmp/airin-schema-repair-tests.log`, `/tmp/airin-schema-repair-wire-tests.log`, `/tmp/airin-schema-repair-lint.log`.
 Next: continue the authorized server type cleanup before committing feature slice 1g.
 
 2026-10-11: Auth request boundary repairs reduced server type errors from 266 to 257, with no new diagnostics.
@@ -533,7 +533,7 @@ The new regression rejects malformed login/enrollment credentials with 400, pres
 The first regression run lacked the required CSRF header; the corrected requests passed all 15 focused tests across four files.
 Lint passed all 1532 files. The complete server type check still fails on 257 existing diagnostics.
 No commit, push, or PR ran. Feature slice 1g remains pending.
-Evidence: `/tmp/nakama-auth-schema-types-final.log`, `/tmp/nakama-auth-schema-tests-final.log`, `/tmp/nakama-auth-schema-lint.log`.
+Evidence: `/tmp/airin-auth-schema-types-final.log`, `/tmp/airin-auth-schema-tests-final.log`, `/tmp/airin-auth-schema-lint.log`.
 Next: continue the authorized server type cleanup before resuming feature implementation.
 
 2026-10-11: Route dependency and request validation repairs reduced server type errors from 257 to 248, with no new diagnostics.
@@ -543,7 +543,7 @@ Regression tests cover missing database routes and malformed model requests. Int
 The first test run exposed a fixture using the user configuration directory; the corrected fixture passed the repeated checks.
 Checks: 162 tests passed across three files. Lint passed all 1532 files. `git diff --check` passed.
 The complete server type check still fails on 248 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-route-boundaries-types-final.log`, `/tmp/nakama-route-boundaries-tests-final.log`, `/tmp/nakama-route-boundaries-lint.log`.
+Evidence: `/tmp/airin-route-boundaries-types-final.log`, `/tmp/airin-route-boundaries-tests-final.log`, `/tmp/airin-route-boundaries-lint.log`.
 Next: continue the authorized server type cleanup before committing feature slice 1g.
 
 2026-10-11: Tool input repairs reduced server type errors from 248 to 235, with no new diagnostics.
@@ -555,7 +555,7 @@ Checks: all 12 unit tests passed across two files; lint passed all 1532 files; `
 The provider cassette test failed: its recorded Chat Completions endpoint does not intercept the current Responses request, which failed DNS lookup.
 The cassette remains unchanged. Its provider request coverage needs repair before the complete test gate can pass.
 The complete server type check still fails on 235 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-tool-boundaries-types.log`, `/tmp/nakama-tool-boundaries-unit.log`, `/tmp/nakama-tool-boundaries-tests.log`, `/tmp/nakama-tool-boundaries-lint.log`.
+Evidence: `/tmp/airin-tool-boundaries-types.log`, `/tmp/airin-tool-boundaries-unit.log`, `/tmp/airin-tool-boundaries-tests.log`, `/tmp/airin-tool-boundaries-lint.log`.
 Next: repair provider cassette coverage and continue the authorized server type cleanup before committing feature slice 1g.
 
 2026-10-11: Cassette response validation reduced server type errors from 235 to 234, with no new diagnostics.
@@ -566,7 +566,7 @@ Automatic approval review rejected the recording request because the user had no
 No network recording ran and the existing cassette remains unchanged. Explicit approval is needed only for that external request.
 Checks: all 29 offline tests passed across three files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 234 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-cassette-types-final.log`, `/tmp/nakama-cassette-local-tests-final.log`, `/tmp/nakama-cassette-validation.log`, `/tmp/nakama-cassette-lint-final.log`.
+Evidence: `/tmp/airin-cassette-types-final.log`, `/tmp/airin-cassette-local-tests-final.log`, `/tmp/airin-cassette-validation.log`, `/tmp/airin-cassette-lint-final.log`.
 Next: continue local type repairs; record and replay the questionnaire cassette only after explicit approval.
 
 2026-10-11: Composio bridge fixture repairs reduced server type errors from 234 to 225, with no new diagnostics.
@@ -576,7 +576,7 @@ The missing-user fixture throws if assignment or session methods run, preserving
 Checks: all 25 bridge and service tests passed across two files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 225 existing diagnostics. No commit, push, or PR ran.
 The external questionnaire recording request remains pending; no network recording was attempted in this iteration.
-Evidence: `/tmp/nakama-bridge-fixtures-types.log`, `/tmp/nakama-bridge-fixtures-tests.log`, `/tmp/nakama-bridge-fixtures-lint.log`.
+Evidence: `/tmp/airin-bridge-fixtures-types.log`, `/tmp/airin-bridge-fixtures-tests.log`, `/tmp/airin-bridge-fixtures-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Output handling repairs reduced server type errors from 225 to 222, with no new diagnostics.
@@ -585,7 +585,7 @@ The static content-type table allows extension lookup while retaining the existi
 Regression tests cover missing assistant content and serving a file outside the explicit content-type table.
 Checks: all 16 tests passed across two files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 222 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-output-boundaries-types.log`, `/tmp/nakama-output-boundaries-tests.log`, `/tmp/nakama-output-boundaries-lint.log`.
+Evidence: `/tmp/airin-output-boundaries-types.log`, `/tmp/airin-output-boundaries-tests.log`, `/tmp/airin-output-boundaries-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Worker service and fixture repairs reduced server type errors from 222 to 199, with no new diagnostics.
@@ -597,7 +597,7 @@ Telegram migration now updates only Telegram notification destinations. Regressi
 The first check exposed callback error-result and regression-fixture field mismatches; corrected fields passed repeated tests and removed all worker diagnostics.
 Checks: all 44 worker tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 199 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-worker-types-final-2.log`, `/tmp/nakama-worker-types-tests-final.log`, `/tmp/nakama-worker-types-lint-final.log`.
+Evidence: `/tmp/airin-worker-types-final-2.log`, `/tmp/airin-worker-types-tests-final.log`, `/tmp/airin-worker-types-lint-final.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: MCP storage boundary repairs reduced server type errors from 199 to 189, with no new diagnostics.
@@ -607,7 +607,7 @@ Regression coverage rejects malformed stored grants and preserves valid tokens a
 The first OAuth test run could not bind a local port in the sandbox. The same tests passed with isolated local port access.
 Checks: all 26 MCP service and OAuth tests passed across two files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 189 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-mcp-storage-types.log`, `/tmp/nakama-mcp-storage-tests-final.log`, `/tmp/nakama-mcp-storage-lint.log`.
+Evidence: `/tmp/airin-mcp-storage-types.log`, `/tmp/airin-mcp-storage-tests-final.log`, `/tmp/airin-mcp-storage-lint.log`.
 Next: continue local server type repairs, including MCP request schemas, before committing feature slice 1g.
 
 2026-10-11: MCP request schema repairs reduced server type errors from 189 to 186, with no new diagnostics.
@@ -619,7 +619,7 @@ The first type check found an untyped test callback; its declared service parame
 Checks: all 154 HTTP and settings tests passed; both MCP regressions passed again; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 186 existing diagnostics. No commit, push, or PR ran.
 The external questionnaire recording request remains pending. No network recording ran in this iteration.
-Evidence: `/tmp/nakama-mcp-request-types-final.log`, `/tmp/nakama-mcp-request-tests.log`, `/tmp/nakama-mcp-request-regressions.log`, `/tmp/nakama-mcp-request-lint-final.log`.
+Evidence: `/tmp/airin-mcp-request-types-final.log`, `/tmp/airin-mcp-request-tests.log`, `/tmp/airin-mcp-request-regressions.log`, `/tmp/airin-mcp-request-lint-final.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Memory backend repairs reduced server type errors from 186 to 178, with no new diagnostics.
@@ -629,7 +629,7 @@ Test fixtures include the existing task type field. Two regression cases verify 
 Retries reuse the saved document without a second upload. Tests use the local transport fixture and send no external requests.
 Checks: all 17 memory backend tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 178 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-memory-boundary-types.log`, `/tmp/nakama-memory-boundary-tests.log`, `/tmp/nakama-memory-boundary-lint.log`.
+Evidence: `/tmp/airin-memory-boundary-types.log`, `/tmp/airin-memory-boundary-tests.log`, `/tmp/airin-memory-boundary-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Coding harness repairs reduced server type errors from 178 to 167, with no new diagnostics.
@@ -639,7 +639,7 @@ Six harness fixtures use the existing workspace settings merge helper to supply 
 No runtime behavior changed. Existing tests cover environment routing, disabled passthrough, readiness caching, and descendant termination.
 Checks: all 23 harness and spawn-environment tests passed across two files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 167 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-harness-types.log`, `/tmp/nakama-harness-types-tests.log`, `/tmp/nakama-harness-types-lint.log`.
+Evidence: `/tmp/airin-harness-types.log`, `/tmp/airin-harness-types-tests.log`, `/tmp/airin-harness-types-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Session fixture repairs reduced server type errors from 167 to 156, with no new diagnostics.
@@ -648,7 +648,7 @@ Profile pack tests reuse the existing browser-session header contract instead of
 No production behavior changed. Tests preserve ephemeral session privacy, sender authorization, profile selection, and import access checks.
 Checks: all 13 session and profile pack tests passed across two files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 156 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-session-fixtures-types.log`, `/tmp/nakama-session-fixtures-tests.log`, `/tmp/nakama-session-fixtures-lint.log`.
+Evidence: `/tmp/airin-session-fixtures-types.log`, `/tmp/airin-session-fixtures-tests.log`, `/tmp/airin-session-fixtures-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: MCP client repairs reduced server type errors from 156 to 151, with no new diagnostics.
@@ -659,7 +659,7 @@ The new regression rejects six invalid stored configurations before client conne
 The first type check found a removed import used by another method; restoring it removed the new diagnostic.
 Checks: all 36 MCP client, service, and bridge tests passed across three files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 151 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-mcp-client-types-final.log`, `/tmp/nakama-mcp-client-types-tests-final.log`, `/tmp/nakama-mcp-client-types-lint-final.log`.
+Evidence: `/tmp/airin-mcp-client-types-final.log`, `/tmp/airin-mcp-client-types-tests-final.log`, `/tmp/airin-mcp-client-types-lint-final.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Provider mapping repairs reduced server type errors from 151 to 140, with no new diagnostics.
@@ -669,7 +669,7 @@ Responses image and document tests assert complete mapped message objects withou
 No runtime behavior changed. Existing tests cover tool IDs, text, images, documents, thinking, and streaming calls.
 Checks: all 29 provider mapping and Gemini tests passed across three files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 140 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-provider-mapping-types.log`, `/tmp/nakama-provider-mapping-tests-final.log`, `/tmp/nakama-provider-mapping-lint.log`.
+Evidence: `/tmp/airin-provider-mapping-types.log`, `/tmp/airin-provider-mapping-tests-final.log`, `/tmp/airin-provider-mapping-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Organization memory fixture repairs reduced server type errors from 140 to 133, with no new diagnostics.
@@ -678,7 +678,7 @@ Tests retain viewer denial, missing-context denial, document ID resolution, and 
 No production behavior changed. No casts or weaker assertions were added.
 Checks: all 11 organization memory tool tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 133 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-org-memory-fixture-types.log`, `/tmp/nakama-org-memory-fixture-tests.log`, `/tmp/nakama-org-memory-fixture-lint.log`.
+Evidence: `/tmp/airin-org-memory-fixture-types.log`, `/tmp/airin-org-memory-fixture-tests.log`, `/tmp/airin-org-memory-fixture-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Workspace fixture repairs reduced server type errors from 133 to 123, with no new diagnostics.
@@ -687,7 +687,7 @@ The helper supplies required defaults and retains each fixture's explicit harnes
 No production behavior changed. Existing tests cover settings persistence, provider routing, image model rejection, and agent execution.
 Checks: all 75 tests passed across three files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 123 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-workspace-fixture-types.log`, `/tmp/nakama-workspace-fixture-tests.log`, `/tmp/nakama-workspace-fixture-lint.log`.
+Evidence: `/tmp/airin-workspace-fixture-types.log`, `/tmp/airin-workspace-fixture-tests.log`, `/tmp/airin-workspace-fixture-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Provider selection repairs reduced server type errors from 123 to 119, with no new diagnostics.
@@ -697,7 +697,7 @@ The avatar fixture declares its absent default provider explicitly. No runtime b
 The first routing test run could not bind local ports in the sandbox. All ten routing tests passed with local mock-server access.
 Checks: all 41 distinct image selection, avatar access, and provider routing tests passed across three files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 119 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-provider-selection-types.log`, `/tmp/nakama-provider-selection-tests.log`, `/tmp/nakama-provider-selection-routing-tests.log`, `/tmp/nakama-provider-selection-lint.log`.
+Evidence: `/tmp/airin-provider-selection-types.log`, `/tmp/airin-provider-selection-tests.log`, `/tmp/airin-provider-selection-routing-tests.log`, `/tmp/airin-provider-selection-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: String lookup repairs reduced server type errors from 119 to 114, with no new diagnostics.
@@ -706,7 +706,7 @@ The timezone test runner receives a mutable copy of its readonly seasonal data.
 No runtime behavior changed. Existing tests cover seasonal offsets, source reads, avatars, and profile pack access rules.
 Checks: all 23 timezone, tool source, and profile portability tests passed across three files; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 114 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-string-lookups-types.log`, `/tmp/nakama-string-lookups-tests.log`, `/tmp/nakama-string-lookups-lint.log`.
+Evidence: `/tmp/airin-string-lookups-types.log`, `/tmp/airin-string-lookups-tests.log`, `/tmp/airin-string-lookups-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: System status repairs reduced server type errors from 114 to 110, with no new diagnostics.
@@ -716,7 +716,7 @@ Organization status now supplies a null WhatsApp QR code while hiding channel de
 A regression test checks organization channel redaction. Its first run used profile scope; the corrected organization scope passed.
 Checks: all 68 system status and HTTP tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 110 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-system-status-types-final.log`, `/tmp/nakama-system-status-types-tests-final.log`, `/tmp/nakama-system-status-types-lint-final.log`.
+Evidence: `/tmp/airin-system-status-types-final.log`, `/tmp/airin-system-status-types-tests-final.log`, `/tmp/airin-system-status-types-lint-final.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Worker log fixture repairs reduced server type errors from 110 to 106, with no new diagnostics.
@@ -724,7 +724,7 @@ The fixture requires worker validation and accepts the log method each request c
 No production behavior changed. Existing tests cover log reads, line limits, unknown workers, clearing, and service failures.
 Checks: all 14 app tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 106 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-worker-log-fixture-types.log`, `/tmp/nakama-worker-log-fixture-tests.log`, `/tmp/nakama-worker-log-fixture-lint.log`.
+Evidence: `/tmp/airin-worker-log-fixture-types.log`, `/tmp/airin-worker-log-fixture-tests.log`, `/tmp/airin-worker-log-fixture-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Provider request repairs reduced server type errors from 106 to 104, with no new diagnostics.
@@ -734,7 +734,7 @@ A regression rejects eight malformed requests before service calls and verifies 
 The first test run found a stale transcription fixture using mimeType. Its corrected mediaType input restores the upstream error test.
 Checks: all 134 provider, HTTP error, and role tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 104 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-provider-request-types-final.log`, `/tmp/nakama-provider-request-tests-final.log`, `/tmp/nakama-provider-request-lint.log`.
+Evidence: `/tmp/airin-provider-request-types-final.log`, `/tmp/airin-provider-request-tests-final.log`, `/tmp/airin-provider-request-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Route fixture repairs reduced server type errors from 104 to 101, with no new diagnostics.
@@ -744,7 +744,7 @@ The first automation run failed during setup because it used the user configurat
 No production behavior changed. Tests retain Composio role and OAuth coverage and automation destination authorization checks.
 Checks: all six route tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 101 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-route-fixture-types.log`, `/tmp/nakama-route-fixture-tests-final.log`, `/tmp/nakama-route-fixture-lint.log`.
+Evidence: `/tmp/airin-route-fixture-types.log`, `/tmp/airin-route-fixture-tests-final.log`, `/tmp/airin-route-fixture-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Profile service repairs reduced server type errors from 101 to 96, with no new diagnostics.
@@ -754,7 +754,7 @@ The first type check rejected null todo arrays; empty arrays fixed those fixture
 ZIP checks found recursive OpenAPI generation in the passkey JSON schema. Explicit JSON type metadata fixes generation while retaining z.json runtime validation.
 Checks: all 77 profile, tool HTTP, knowledge ZIP, and MFA tests passed; two Windows-only tests skipped; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 96 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-profile-types-final.log`, `/tmp/nakama-profile-types-tests-final.log`, `/tmp/nakama-profile-types-lint.log`.
+Evidence: `/tmp/airin-profile-types-final.log`, `/tmp/airin-profile-types-tests-final.log`, `/tmp/airin-profile-types-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Compatible provider repairs reduced server type errors from 96 to 90, with no new diagnostics.
@@ -763,7 +763,7 @@ The thinking request builder declares the installed SDK reasoning_effort contrac
 No runtime behavior changed. Tests retain Netra continuation, reasoning controls, tool restrictions, and streamed whitespace coverage.
 Checks: all 15 compatible provider tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 90 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-compatible-reasoning-types.log`, `/tmp/nakama-compatible-reasoning-tests.log`, `/tmp/nakama-compatible-reasoning-lint.log`.
+Evidence: `/tmp/airin-compatible-reasoning-types.log`, `/tmp/airin-compatible-reasoning-tests.log`, `/tmp/airin-compatible-reasoning-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: OpenRouter repairs reduced server type errors from 90 to 84, with no new diagnostics.
@@ -773,7 +773,7 @@ Two regressions verify structured text and all three response-mode checks. Routi
 The first tests found incorrect undefined-field assertions and a blocked local port. Corrected assertions and isolated local mock-server access passed.
 Checks: all 38 OpenRouter tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 84 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-openrouter-types.log`, `/tmp/nakama-openrouter-types-tests-final.log`, `/tmp/nakama-openrouter-types-lint.log`.
+Evidence: `/tmp/airin-openrouter-types.log`, `/tmp/airin-openrouter-types-tests-final.log`, `/tmp/airin-openrouter-types-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Command environment repairs reduced server type errors from 84 to 81, with no new diagnostics.
@@ -783,7 +783,7 @@ The installer environment table declares its string lookup contract. The mock re
 Checks: all 94 installer, harness, environment, and bash tests passed across six files; one platform-specific test skipped; lint passed all 1532 files; `git diff --check` passed.
 Installer and harness tests used isolated local mock-server access. No external provider calls ran.
 The complete server type check still fails on 81 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-command-env-types.log`, `/tmp/nakama-command-env-tests.log`, `/tmp/nakama-command-env-bash-tests.log`, `/tmp/nakama-command-env-lint.log`.
+Evidence: `/tmp/airin-command-env-types.log`, `/tmp/airin-command-env-tests.log`, `/tmp/airin-command-env-bash-tests.log`, `/tmp/airin-command-env-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Plugin route repairs reduced server type errors from 81 to 75, with no new diagnostics.
@@ -792,7 +792,7 @@ Media and error tables declare their string lookup contracts. The lifecycle fixt
 No runtime behavior changed. Tests cover role and CSRF checks, plugin lifecycle, UI asset boundaries, and OpenAPI generation.
 Checks: all 12 plugin route tests passed with an isolated local package registry; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 75 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-plugin-route-types.log`, `/tmp/nakama-plugin-route-types-tests.log`, `/tmp/nakama-plugin-route-types-lint.log`.
+Evidence: `/tmp/airin-plugin-route-types.log`, `/tmp/airin-plugin-route-types-tests.log`, `/tmp/airin-plugin-route-types-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Notification fixture repairs reduced server type errors from 75 to 73, with no new diagnostics.
@@ -800,7 +800,7 @@ The service fixture uses the existing TelegramOutboundAdapter send input type. T
 No production behavior changed. Existing tests cover formatted delivery, authentication, idempotency, channel isolation, and archived organizations.
 Checks: all 23 notification tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 73 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-notification-fixture-types.log`, `/tmp/nakama-notification-fixture-tests.log`, `/tmp/nakama-notification-fixture-lint.log`.
+Evidence: `/tmp/airin-notification-fixture-types.log`, `/tmp/airin-notification-fixture-tests.log`, `/tmp/airin-notification-fixture-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Provider assertion repairs reduced server type errors from 73 to 70, with no new diagnostics.
@@ -809,7 +809,7 @@ ChatGPT tests check enabled reasoning values and absent reasoning separately. No
 Checks: all 37 OpenAI and ChatGPT tests passed; lint passed all 1532 files; `git diff --check` passed.
 Tests used mocked fetch responses. No external provider calls ran.
 The complete server type check still fails on 70 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-provider-assertion-types.log`, `/tmp/nakama-provider-assertion-tests.log`, `/tmp/nakama-provider-assertion-lint.log`.
+Evidence: `/tmp/airin-provider-assertion-types.log`, `/tmp/airin-provider-assertion-tests.log`, `/tmp/airin-provider-assertion-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Custom tool type repairs reduced server type errors from 70 to 67, with no new diagnostics.
@@ -820,7 +820,7 @@ No runtime behavior changed. Tests cover credential isolation, redaction, retrie
 Checks: all 64 custom tool and plugin runtime tests passed; four platform-specific tests skipped; lint passed all 1532 files after a formatting repair; `git diff --check` passed.
 Plugin runtime tests used an isolated local package registry. No external provider calls ran.
 The complete server type check still fails on 67 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-custom-tool-types-final.log`, `/tmp/nakama-custom-tool-types-tests-final.log`, `/tmp/nakama-custom-tool-plugin-runtime-tests.log`, `/tmp/nakama-custom-tool-types-lint-final.log`.
+Evidence: `/tmp/airin-custom-tool-types-final.log`, `/tmp/airin-custom-tool-types-tests-final.log`, `/tmp/airin-custom-tool-plugin-runtime-tests.log`, `/tmp/airin-custom-tool-types-lint-final.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Automation type repairs reduced server type errors from 67 to 61, with no new diagnostics.
@@ -830,7 +830,7 @@ Runner assertions compare result fields through object matchers. Existing tests 
 The first type check found a missing description in the new test. The corrected fixture passed the second check for these files.
 Checks: all 103 automation tests passed across four files; the complete core type check passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 61 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-automation-server-types-final.log`, `/tmp/nakama-automation-core-types.log`, `/tmp/nakama-automation-types-tests-final.log`, `/tmp/nakama-automation-types-lint-final.log`.
+Evidence: `/tmp/airin-automation-server-types-final.log`, `/tmp/airin-automation-core-types.log`, `/tmp/airin-automation-types-tests-final.log`, `/tmp/airin-automation-types-lint-final.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Composio request repairs reduced server type errors from 61 to 59, with no new diagnostics.
@@ -838,7 +838,7 @@ Both request normalizers accept typed or untrusted inputs through their existing
 No runtime behavior changed. Tests retain slug validation, assignment checks, organization boundaries, personal OAuth ownership, and route authorization.
 Checks: all 41 Composio tests passed across four files; the complete core type check passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 59 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-composio-request-server-types.log`, `/tmp/nakama-composio-request-core-types.log`, `/tmp/nakama-composio-request-types-tests.log`, `/tmp/nakama-composio-request-types-lint.log`.
+Evidence: `/tmp/airin-composio-request-server-types.log`, `/tmp/airin-composio-request-core-types.log`, `/tmp/airin-composio-request-types-tests.log`, `/tmp/airin-composio-request-types-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Session fixture repairs reduced server type errors from 59 to 55, with no new diagnostics.
@@ -848,7 +848,7 @@ Timer spies observe actual timer creation and clearing. The first replacement wr
 No production behavior changed. Tests retain cancellation, deadline cleanup, history persistence, archive access, and profile deletion coverage.
 Checks: all 30 session tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server type check still fails on 55 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-session-fixture-types-final.log`, `/tmp/nakama-session-fixture-tests-final.log`, `/tmp/nakama-session-fixture-lint-final.log`.
+Evidence: `/tmp/airin-session-fixture-types-final.log`, `/tmp/airin-session-fixture-tests-final.log`, `/tmp/airin-session-fixture-lint-final.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Meeting fixture repairs reduced server type errors from 55 to 50, with no new diagnostics.
@@ -858,7 +858,7 @@ No production behavior changed. Tests retain capture authorization, extension co
 Checks: all 20 meeting tests passed; lint passed all 1532 files; `git diff --check` passed.
 Tests used VM and fetch fixtures. No browser checks or external provider calls ran.
 The complete server type check still fails on 50 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-meet-fixture-types.log`, `/tmp/nakama-meet-fixture-types-tests.log`, `/tmp/nakama-meet-fixture-types-lint.log`.
+Evidence: `/tmp/airin-meet-fixture-types.log`, `/tmp/airin-meet-fixture-types-tests.log`, `/tmp/airin-meet-fixture-types-lint.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Portability repairs reduced server type errors from 50 to 47, with no new diagnostics.
@@ -867,7 +867,7 @@ Backup fixtures use the current MeetingStore close signature and verify the live
 Checks: all 56 data backup, profile pack, and route tests passed; lint passed all 1532 files after a formatting repair; `git diff --check` passed.
 Existing tests retain rollback, private file boundaries, role checks, and snapshot restoration coverage.
 The complete server type check still fails on 47 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-portability-types.log`, `/tmp/nakama-portability-types-tests.log`, `/tmp/nakama-portability-types-lint-final.log`.
+Evidence: `/tmp/airin-portability-types.log`, `/tmp/airin-portability-types-tests.log`, `/tmp/airin-portability-types-lint-final.log`.
 Next: continue authorized local server type repairs before committing feature slice 1g.
 
 2026-10-11: Agent prompt repairs reduced server type errors from 47 to 44, with no new diagnostics.
@@ -877,7 +877,7 @@ The private learn-content helper keeps its existing union signature and drops un
 The complete agent check includes every package source and test. Its baseline had 20 diagnostics; the repair reduced them to 17, with no new diagnostics.
 Checks: all 18 focused prompt tests passed; lint passed all 1532 files after a formatting repair; `git diff --check` passed.
 The complete server and agent type checks still fail on 44 and 17 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-agent-prompt-server-types.log`, `/tmp/nakama-agent-prompt-types-baseline.log`, `/tmp/nakama-agent-prompt-types.log`, `/tmp/nakama-agent-prompt-tests.log`, `/tmp/nakama-agent-prompt-lint-final.log`.
+Evidence: `/tmp/airin-agent-prompt-server-types.log`, `/tmp/airin-agent-prompt-types-baseline.log`, `/tmp/airin-agent-prompt-types.log`, `/tmp/airin-agent-prompt-tests.log`, `/tmp/airin-agent-prompt-lint-final.log`.
 Next: continue authorized local type repairs before committing feature slice 1g.
 
 2026-10-11: Agent tool repairs reduced server type errors from 44 to 41 and agent type errors from 17 to 14.
@@ -889,7 +889,7 @@ Checks: all 43 focused tests passed across four files; the complete core type ch
 An existing optimizer test exceeded the default five-second limit. It passed with a twenty-second limit; the full focused run took 5.41 seconds.
 The first lint check found one unsorted fixture object. Its correction passed the second check.
 The complete server and agent type checks still fail on 41 and 14 existing diagnostics. No commit, push, or PR ran.
-Evidence: `/tmp/nakama-agent-tool-tests-final.log`, `/tmp/nakama-agent-tool-server-types.log`, `/tmp/nakama-agent-tool-agent-types.log`, `/tmp/nakama-agent-tool-core-types.log`, `/tmp/nakama-agent-tool-lint-final.log`.
+Evidence: `/tmp/airin-agent-tool-tests-final.log`, `/tmp/airin-agent-tool-server-types.log`, `/tmp/airin-agent-tool-agent-types.log`, `/tmp/airin-agent-tool-core-types.log`, `/tmp/airin-agent-tool-lint-final.log`.
 Next: continue authorized local type repairs before committing feature slice 1g.
 
 2026-10-11: Agent chat fixture repairs reduced agent type errors from 14 to 6, with no new diagnostics.
@@ -900,7 +900,7 @@ No production behavior changed. Tests retain cancellation, tool ordering, image 
 Checks: all 62 focused tests passed across five files; lint passed all 1532 files; `git diff --check` passed.
 The complete agent check now reports only six existing chat implementation errors. The server check still reports 41 errors, with no new diagnostics.
 No commit, push, PR, browser check, or external provider call ran.
-Evidence: `/tmp/nakama-agent-chat-fixture-tests.log`, `/tmp/nakama-agent-chat-fixture-agent-types.log`, `/tmp/nakama-agent-chat-fixture-server-types.log`, `/tmp/nakama-agent-chat-fixture-lint.log`.
+Evidence: `/tmp/airin-agent-chat-fixture-tests.log`, `/tmp/airin-agent-chat-fixture-agent-types.log`, `/tmp/airin-agent-chat-fixture-server-types.log`, `/tmp/airin-agent-chat-fixture-lint.log`.
 Next: repair chat implementation types before committing feature slice 1g.
 
 2026-10-11: Chat implementation repairs resolved all six remaining agent type errors and reduced server errors from 41 to 35.
@@ -911,7 +911,7 @@ Existing tests cover valid image delivery, preprocessing failures, image replay,
 Checks: all 62 focused tests passed across four files; the complete agent type check passed; lint passed all 1532 files after a formatting repair; `git diff --check` passed.
 No new server diagnostics appeared. Its complete check still reports 35 existing errors.
 No commit, push, PR, browser check, or external provider call ran.
-Evidence: `/tmp/nakama-chat-implementation-tests-final.log`, `/tmp/nakama-chat-implementation-agent-types.log`, `/tmp/nakama-chat-implementation-server-types.log`, `/tmp/nakama-chat-implementation-lint-final.log`.
+Evidence: `/tmp/airin-chat-implementation-tests-final.log`, `/tmp/airin-chat-implementation-agent-types.log`, `/tmp/airin-chat-implementation-server-types.log`, `/tmp/airin-chat-implementation-lint-final.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: HTTP fixture repairs reduced server type errors from 35 to 29, with no new diagnostics.
@@ -921,7 +921,7 @@ No production behavior changed. Tests retain role denial, organization isolation
 Checks: all 125 focused tests passed across four files; lint passed all 1532 files; `git diff --check` passed.
 The first type check found the second OpenAPI fixture still used its old shape. Its correction passed the second check for all four changed files.
 The complete server check still reports 29 existing errors. No commit, push, PR, browser check, or external provider call ran.
-Evidence: `/tmp/nakama-http-fixture-tests.log`, `/tmp/nakama-http-fixture-types-final.log`, `/tmp/nakama-http-fixture-lint-final.log`.
+Evidence: `/tmp/airin-http-fixture-tests.log`, `/tmp/airin-http-fixture-types-final.log`, `/tmp/airin-http-fixture-lint-final.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: Plugin validation repairs reduced server type errors from 29 to 26, with no new diagnostics.
@@ -931,7 +931,7 @@ No runtime behavior changed. Tests retain schema limits, path checks, package in
 Checks: all 41 plugin tests passed across two files; the complete core type check passed; lint passed all 1532 files; `git diff --check` passed.
 Server plugin tests used an isolated local package registry with local port access. No external provider calls ran.
 The complete server check still reports 26 existing errors. No commit, push, PR, or browser check ran.
-Evidence: `/tmp/nakama-plugin-validation-core-tests.log`, `/tmp/nakama-plugin-validation-server-tests.log`, `/tmp/nakama-plugin-validation-core-types.log`, `/tmp/nakama-plugin-validation-server-types.log`, `/tmp/nakama-plugin-validation-lint.log`.
+Evidence: `/tmp/airin-plugin-validation-core-tests.log`, `/tmp/airin-plugin-validation-server-tests.log`, `/tmp/airin-plugin-validation-core-types.log`, `/tmp/airin-plugin-validation-server-types.log`, `/tmp/airin-plugin-validation-lint.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: Gemini content repairs reduced server type errors from 26 to 24, with no new diagnostics.
@@ -941,7 +941,7 @@ The signed continuation assertion compares the containing content object under t
 Checks: all 32 focused tests passed across four files; lint passed all 1532 files; `git diff --check` passed.
 The signed Gemini test replayed its committed cassette with LLM_VCR_MODE=replay. No external provider calls ran.
 The complete server check still reports 24 existing errors. No commit, push, PR, or browser check ran.
-Evidence: `/tmp/nakama-gemini-content-tests.log`, `/tmp/nakama-gemini-content-types.log`, `/tmp/nakama-gemini-content-lint.log`.
+Evidence: `/tmp/airin-gemini-content-tests.log`, `/tmp/airin-gemini-content-types.log`, `/tmp/airin-gemini-content-lint.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: ACP stream repairs reduced server type errors from 24 to 22, with no new diagnostics.
@@ -951,7 +951,7 @@ No runtime behavior changed. Existing process tests verify initialization, text 
 Checks: all 35 ACP tests passed across nine files; lint passed all 1532 files; `git diff --check` passed.
 The initial sandbox test failed to bind its local MCP endpoint. The same tests passed with isolated local port access.
 The complete server check still reports 22 existing errors. No commit, push, PR, browser check, or external provider call ran.
-Evidence: `/tmp/nakama-acp-stream-tests-final.log`, `/tmp/nakama-acp-stream-types-final.log`, `/tmp/nakama-acp-stream-lint-final.log`.
+Evidence: `/tmp/airin-acp-stream-tests-final.log`, `/tmp/airin-acp-stream-types-final.log`, `/tmp/airin-acp-stream-lint-final.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: Agent profile repairs reduced server type errors from 22 to 18, with no new diagnostics.
@@ -961,7 +961,7 @@ Existing profile validation and session behavior remain unchanged. Tests retain 
 Checks: all 95 focused tests passed across three files; lint passed all 1532 files; `git diff --check` passed.
 Provider fixtures handled the vision calls locally. No external provider calls ran.
 The complete server check still reports 18 existing errors. No commit, push, PR, or browser check ran.
-Evidence: `/tmp/nakama-agent-profile-scope-tests.log`, `/tmp/nakama-agent-profile-scope-types.log`, `/tmp/nakama-agent-profile-scope-lint.log`.
+Evidence: `/tmp/airin-agent-profile-scope-tests.log`, `/tmp/airin-agent-profile-scope-types.log`, `/tmp/airin-agent-profile-scope-lint.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: Provider absence repairs reduced server type errors from 18 to 14, with no new diagnostics.
@@ -972,7 +972,7 @@ Two regressions verify zero provider calls and zero billed requests. Missing vis
 The first test run exposed a missing temporary config directory in the new image test. Adding the existing setup helper made the second run pass.
 Checks: all 52 focused tests passed across two files; lint passed all 1532 files; `git diff --check` passed.
 The complete server check still reports 14 existing errors. No commit, push, PR, browser check, or external provider call ran.
-Evidence: `/tmp/nakama-provider-absence-tests-final.log`, `/tmp/nakama-provider-absence-types.log`, `/tmp/nakama-provider-absence-lint.log`.
+Evidence: `/tmp/airin-provider-absence-tests-final.log`, `/tmp/airin-provider-absence-types.log`, `/tmp/airin-provider-absence-lint.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: Workflow and session event fixture repairs reduced server type errors from 14 to 11, with no new diagnostics.
@@ -981,7 +981,7 @@ The todo fixture uses satisfies to retain its JSON object shape while checking A
 Production behavior did not change. Existing tests retain organization isolation, installation recovery, tool permissions, and event replay order.
 Checks: all 12 focused tests passed across two files; lint passed all 1532 files; `git diff --check` passed.
 The complete server check still reports 11 existing errors. No commit, push, PR, browser check, or external provider call ran.
-Evidence: `/tmp/nakama-workflow-event-fixture-tests.log`, `/tmp/nakama-workflow-event-fixture-types.log`, `/tmp/nakama-workflow-event-fixture-lint.log`.
+Evidence: `/tmp/airin-workflow-event-fixture-tests.log`, `/tmp/airin-workflow-event-fixture-types.log`, `/tmp/airin-workflow-event-fixture-lint.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: Skill proposal input repair reduced server type errors from 11 to 10, with no new diagnostics.
@@ -989,16 +989,16 @@ The private insert input omits consolidateLoserSkillNames before redefining its 
 No runtime behavior changed. Existing tests retain pending storage, approval, rejection, organization isolation, and consolidation archive behavior.
 Checks: all 11 focused tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server check still reports 10 existing errors. No commit, push, PR, browser check, or external provider call ran.
-Evidence: `/tmp/nakama-skill-proposal-input-tests.log`, `/tmp/nakama-skill-proposal-input-types.log`, `/tmp/nakama-skill-proposal-input-lint.log`.
+Evidence: `/tmp/airin-skill-proposal-input-tests.log`, `/tmp/airin-skill-proposal-input-types.log`, `/tmp/airin-skill-proposal-input-lint.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
-2026-10-11: Super Nakama type repairs reduced server type errors from 10 to 7, with no new diagnostics.
+2026-10-11: Airin type repairs reduced server type errors from 10 to 7, with no new diagnostics.
 JsonSchema accepts a string or string array for type, matching the existing nullable model schema. Runtime schemas did not change.
 Tool setup fixtures return full profile responses through the existing fixture helper. Assignment retry and credential isolation remain covered.
 Checks: all 106 focused tests passed across four files; two Windows tests skipped on macOS; complete core and agent type checks passed.
 Lint passed all 1532 files; `git diff --check` passed. The complete server check still reports seven existing errors.
 No commit, push, PR, browser check, or external provider call ran.
-Evidence: `/tmp/nakama-super-nakama-types-tests.log`, `/tmp/nakama-super-nakama-schema-tests.log`, `/tmp/nakama-super-nakama-types-{server,core,agent}.log`, `/tmp/nakama-super-nakama-types-lint.log`.
+Evidence: `/tmp/airin-super-airin-types-tests.log`, `/tmp/airin-super-airin-schema-tests.log`, `/tmp/airin-super-airin-types-{server,core,agent}.log`, `/tmp/airin-super-airin-types-lint.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: Bash tool type repair reduced server type errors from seven to six, with no new diagnostics.
@@ -1006,7 +1006,7 @@ The coding-agent Bash wrapper declares ToolDefinition<BashInput>, matching its e
 No runtime behavior changed. Existing tests retain workspace guards, cancellation, sandbox limits, credential isolation, and coding-agent environment handling.
 Checks: all 60 focused tests passed across four files; lint passed all 1532 files; `git diff --check` passed.
 The complete server check still reports six existing errors. No commit, push, PR, browser check, or external provider call ran.
-Evidence: `/tmp/nakama-bash-tool-type-tests.log`, `/tmp/nakama-bash-tool-type-types.log`, `/tmp/nakama-bash-tool-type-lint.log`.
+Evidence: `/tmp/airin-bash-tool-type-tests.log`, `/tmp/airin-bash-tool-type-types.log`, `/tmp/airin-bash-tool-type-lint.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: Telegram update ID repair reduced server type errors from six to five, with no new diagnostics.
@@ -1015,7 +1015,7 @@ A regression verifies mixed missing, null, string, and out-of-order IDs across t
 Checks: all seven focused tests passed; lint passed all 1532 files; `git diff --check` passed.
 The complete server check still reports five existing errors. Tests used injected local responses; no external Telegram or provider calls ran.
 No commit, push, PR, or browser check ran.
-Evidence: `/tmp/nakama-telegram-update-id-tests.log`, `/tmp/nakama-telegram-update-id-types.log`, `/tmp/nakama-telegram-update-id-lint.log`.
+Evidence: `/tmp/airin-telegram-update-id-tests.log`, `/tmp/airin-telegram-update-id-types.log`, `/tmp/airin-telegram-update-id-lint.log`.
 Next: continue authorized server type repairs before committing feature slice 1g.
 
 2026-10-11: Todo storage assertion repair reduced server type errors from five to four, with no new diagnostics.
@@ -1026,7 +1026,7 @@ The session requirement test passed. The provider schema test remains failed; no
 Lint passed all 1532 files; `git diff --check` passed. The complete server check still reports four errors in index.ts.
 This iteration stops after two failed focused-test attempts. No commit, push, PR, or browser check ran.
 External recording permission remains unresolved. Next: repair index.ts locally, then resolve stale provider cassettes before the full test gate.
-Evidence: `/tmp/nakama-todo-storage-type-tests.log`, `/tmp/nakama-todo-storage-type-tests-final.log`, `/tmp/nakama-todo-storage-type-types.log`, `/tmp/nakama-todo-storage-type-lint.log`.
+Evidence: `/tmp/airin-todo-storage-type-tests.log`, `/tmp/airin-todo-storage-type-tests-final.log`, `/tmp/airin-todo-storage-type-types.log`, `/tmp/airin-todo-storage-type-lint.log`.
 
 2026-10-11: Server entry type repairs cleared the final four server diagnostics. The complete server and agent type checks now pass.
 Server callbacks declare Bun's required WebSocket data type parameter. Server runtime behavior remains unchanged.
@@ -1035,7 +1035,7 @@ Checks: all 38 focused tests passed across three files; lint passed all 1532 fil
 The saved todo and questionnaire provider responses still need repair. Full tests and builds remain unchecked; no external provider calls ran.
 This slice includes earlier checked consolidation content and test fixture repairs in the same files. Other feature and type cleanup changes remain uncommitted.
 Next: verify and commit the remaining authorized type cleanup and feature slice 1g, then resume the first implementation step.
-Evidence: `/tmp/nakama-server-entry-types-tests.log`, `/tmp/nakama-server-entry-types-{server,agent}.log`, `/tmp/nakama-server-entry-types-lint-final.log`.
+Evidence: `/tmp/airin-server-entry-types-tests.log`, `/tmp/airin-server-entry-types-{server,agent}.log`, `/tmp/airin-server-entry-types-lint-final.log`.
 
 2026-10-11: Slice 1g passed its complete type gate after the authorized server cleanup.
 OrgService creates teams through durable requests, seeds profiles and workspaces, and removes only the failed child's data.
@@ -1046,7 +1046,7 @@ Lint passed all 1532 files; `git diff --check` passed. The slice retains the two
 Step 1 and delivery stage 1 remain incomplete. Publication source validation, contracts, and organization routes are still required.
 Other authorized type cleanup changes remain uncommitted. Stale provider cassettes, full tests, and builds remain unresolved.
 Next: implement parent publication source validation and its access tests within the existing OrgService.
-Evidence: `/tmp/nakama-team-service-ready-tests.log`, `/tmp/nakama-team-service-ready-{server,db}-types.log`, `/tmp/nakama-team-service-ready-lint.log`.
+Evidence: `/tmp/airin-team-service-ready-tests.log`, `/tmp/airin-team-service-ready-{server,db}-types.log`, `/tmp/airin-team-service-ready-lint.log`.
 
 2026-10-11: Slice 1h adds knowledge publication and scoped removal to the existing OrgService.
 Team creation and publication mutations reuse the same active-root and parent-admin check. Disabled users, team admins, parent members, and viewers cannot manage parent publications.
@@ -1058,7 +1058,7 @@ The first test run exposed Bun's null access() return value. The revised asserti
 Step 1 and delivery stage 1 remain incomplete. Knowledge reads, HTTP publication routes, and skill, agent, tool, and model source validation are still required.
 No browser or external provider calls ran. Other authorized cleanup changes remain uncommitted; stale provider cassettes and full tests remain unresolved.
 Next: extend publication source validation for tools and profile-owned skills, using their existing stores.
-Evidence: `/tmp/nakama-knowledge-publication-tests-final.log`, `/tmp/nakama-knowledge-publication-types.log`, `/tmp/nakama-knowledge-publication-lint.log`.
+Evidence: `/tmp/airin-knowledge-publication-tests-final.log`, `/tmp/airin-knowledge-publication-types.log`, `/tmp/airin-knowledge-publication-lint.log`.
 
 2026-10-11: Slice 1i adds tool and profile-owned skill publication checks to the existing OrgService.
 Tools must exist and belong to the parent or the global catalog. Publication does not change tool configuration or credential rules.
@@ -1069,7 +1069,7 @@ Checks: all 224 focused service and database tests passed across 29 files; compl
 Step 1 and delivery stage 1 remain incomplete. Agent and model publication checks, contracts, and HTTP routes remain required.
 No browser or external provider calls ran. Other authorized cleanup changes remain uncommitted; stale provider cassettes, full tests, and builds remain unresolved.
 Next: validate agent publication dependencies and configured model selections in the existing OrgService.
-Evidence: `/tmp/nakama-skill-tool-tests-final.log`, `/tmp/nakama-skill-tool-types.log`, `/tmp/nakama-skill-tool-lint.log`.
+Evidence: `/tmp/airin-skill-tool-tests-final.log`, `/tmp/airin-skill-tool-types.log`, `/tmp/airin-skill-tool-lint.log`.
 
 2026-10-11: Slice 1j validates model publications through the existing configured-provider and model-selection helpers.
 References keep their provider identity as providerId::modelId. Whitespace normalization returns the same publication on retry.
@@ -1080,10 +1080,10 @@ Checks: all 258 focused service, provider-helper, and database tests passed acro
 Step 1 and delivery stage 1 remain incomplete. Agent dependency checks, contracts, and HTTP routes remain required.
 Live model catalog and execution checks remain for step 3. No browser or external provider calls ran; stale provider cassettes, full tests, and builds remain unresolved.
 Next: validate shared agent templates and their permitted assignments in the existing OrgService.
-Evidence: `/tmp/nakama-model-publication-tests-final.log`, `/tmp/nakama-model-publication-types.log`, `/tmp/nakama-model-publication-lint.log`.
+Evidence: `/tmp/airin-model-publication-tests-final.log`, `/tmp/airin-model-publication-types.log`, `/tmp/airin-model-publication-lint.log`.
 
 2026-10-11: Slice 1k completes step 1 with agent publication source and dependency checks.
-Templates exclude foreign, Default Bot, and Super Nakama profiles. Tenant tools, skills, and attached knowledge require valid current publications.
+Templates exclude foreign, Default Bot, and Airin profiles. Tenant tools, skills, and attached knowledge require valid current publications.
 Global tools, skills, configured models, and global MCP servers retain existing access. Conflicting tool and skill names, disabled skills, private profile knowledge, and unsupported parent integrations block publication.
 The existing knowledge reference reader now exports its read-only operation. Guarded reference reads preserve source layout and avoid legacy migration during publication checks.
 Publication and template checks reuse one source validator. Missing source files and invalid model selections fail without replacing the template record or source configuration.
@@ -1093,7 +1093,7 @@ Checks: all 250 focused tests passed across 31 files; complete server and core t
 Step 1 is complete. Delivery stage 1 remains incomplete until contracts and routes pass their checks. Runtime refresh and actual executable-name checks remain in step 3.
 No browser or external provider calls ran. Other authorized cleanup changes remain uncommitted; stale provider cassettes, full tests, and builds remain unresolved.
 Next: add typed overview, team-creation, and publication contracts with the existing OpenAPI schemas.
-Evidence: `/tmp/nakama-agent-publication-tests-final.log`, `/tmp/nakama-agent-publication-{server,core}-types.log`, `/tmp/nakama-agent-publication-lint.log`.
+Evidence: `/tmp/airin-agent-publication-tests-final.log`, `/tmp/airin-agent-publication-{server,core}-types.log`, `/tmp/airin-agent-publication-lint.log`.
 
 2026-10-11: Slice 2a connects team creation to POST /v1/orgs/:orgId/teams in the existing organization route module.
 CreateTeamRequest uses an existing account ID, a durable request ID, name, and slug. OrganizationSummary exposes nullable parentOrgId without removing existing fields.
@@ -1106,7 +1106,7 @@ This slice includes earlier checked JsonSchema type repairs and the quota route 
 Step 2 and delivery stage 1 remain incomplete. Publication routes, overview, and shared-instance routes remain required.
 No browser or external provider calls ran. Stale provider cassettes, full tests, and builds remain unresolved.
 Next: connect publication HTTP mutations to the existing OrgService with typed contracts and access checks.
-Evidence: `/tmp/nakama-team-route-tests-final.log`, `/tmp/nakama-team-route-{server,core}-types.log`, `/tmp/nakama-team-route-lint.log`.
+Evidence: `/tmp/airin-team-route-tests-final.log`, `/tmp/airin-team-route-{server,core}-types.log`, `/tmp/airin-team-route-lint.log`.
 
 2026-10-11: Slice 2b adds publish and unpublish HTTP operations under /v1/orgs/:orgId/shared-resources.
 Core contracts define the five resource kinds, publication request, publication record, and mutation response. OrgService uses the request contract for source validation.
@@ -1119,7 +1119,7 @@ Checks: all 75 focused HTTP and service tests passed on the first run; complete 
 Step 2 and delivery stage 1 remain incomplete. Publication list, overview, and shared-instance routes remain required.
 No browser or external provider calls ran. Other authorized cleanup remains uncommitted; stale provider cassettes, full tests, and builds remain unresolved.
 Next: derive the parent in team context and return authorized publication summaries and filtered team overview data.
-Evidence: `/tmp/nakama-publication-route-tests.log`, `/tmp/nakama-publication-route-{server,core}-types.log`, `/tmp/nakama-publication-route-lint.log`.
+Evidence: `/tmp/airin-publication-route-tests.log`, `/tmp/airin-publication-route-{server,core}-types.log`, `/tmp/airin-publication-route-lint.log`.
 
 2026-10-11: Slice 2c adds GET /v1/orgs/:orgId/shared-resources with typed summary and OpenAPI contracts.
 OrgService checks the active tenant and actor, then derives the parent from the stored team relationship. Team readers need no parent membership.
@@ -1132,7 +1132,7 @@ Checks: all 76 focused HTTP and service tests passed; complete server and core t
 Step 2 and delivery stage 1 remain incomplete. Filtered team overview and shared-agent instance routes remain required. Readiness describes source validation; execution checks remain in step 3.
 No browser or external provider calls ran. Other authorized cleanup remains uncommitted; stale provider cassettes, full tests, and builds remain unresolved.
 Next: return filtered team overview data and stored member and local-resource counts through active tenant context.
-Evidence: /tmp/nakama-publication-list-tests-final.log, /tmp/nakama-publication-list-{server,core}-types.log, /tmp/nakama-publication-list-lint.log.
+Evidence: /tmp/airin-publication-list-tests-final.log, /tmp/airin-publication-list-{server,core}-types.log, /tmp/airin-publication-list-lint.log.
 
 2026-10-11: Slice 2d adds GET /v1/orgs/:orgId/overview with typed contracts and matching OpenAPI fields.
 The overview derives the parent through the active tenant. It reuses publication summaries and returns only the parent ID/name, permitted team rows, and context-specific action flags.
@@ -1146,7 +1146,7 @@ Checks: all 94 focused HTTP, service, and database tests passed; complete server
 Step 2 and delivery stage 1 remain incomplete. Shared-agent instance routes and final stage checks remain required.
 No browser or external provider calls ran. Other authorized cleanup remains uncommitted; stale provider cassettes, full tests, and builds remain unresolved.
 Next: create a shared-agent instance through authorized team context and return the existing team profile on retry.
-Evidence: /tmp/nakama-overview-tests-final.log, /tmp/nakama-overview-{server,core,db}-types.log, /tmp/nakama-overview-lint.log.
+Evidence: /tmp/airin-overview-tests-final.log, /tmp/airin-overview-{server,core,db}-types.log, /tmp/airin-overview-lint.log.
 
 2026-10-11: Slice 2e adds guarded shared-agent selection to the existing OrgService.
 The service derives the parent from an active team, checks an enabled actor and existing team invocation permission, and revalidates the scoped agent publication and its dependencies.
@@ -1159,7 +1159,7 @@ Checks: all 98 focused service, database, and HTTP tests passed; complete server
 Step 2 and delivery stage 1 remain incomplete. The selection service has no HTTP entry yet; shared-profile write guards must precede that route. Assignment loading, source soul composition, and execution refresh remain in step 3.
 No browser or external provider calls ran. Other authorized cleanup remains uncommitted; stale provider cassettes, full tests, and builds remain unresolved.
 Next: add shared-profile write guards before exposing selection and its normal team ProfileResponse through HTTP.
-Evidence: /tmp/nakama-shared-selection-tests-final.log, /tmp/nakama-shared-selection-{server,db}-types.log, /tmp/nakama-shared-selection-lint.log.
+Evidence: /tmp/airin-shared-selection-tests-final.log, /tmp/airin-shared-selection-{server,db}-types.log, /tmp/airin-shared-selection-lint.log.
 
 2026-10-11: Slice 2f adds shared-profile write guards to the existing ProfileService before HTTP selection exposure.
 Template configuration changes reject before profile, soul file, or audit writes. Memory-only updates remain permitted in the team workspace and preserve source memory and template fields.
@@ -1172,7 +1172,7 @@ Checks: 123 focused profile and organization service tests passed; two existing 
 Step 2 and delivery stage 1 remain incomplete. Direct soul writes, integration configuration, import paths, and the selection HTTP route still require checks and guards. Shared skill maintenance and runtime refresh remain in step 3.
 No browser or external provider calls ran. Stale provider cassettes, full tests, and builds remain unresolved.
 Next: guard direct soul and integration configuration writes on shared profiles, while retaining team-owned memory and user context.
-Evidence: /tmp/nakama-shared-profile-guards-tests.log, /tmp/nakama-shared-profile-guards-server-types.log, /tmp/nakama-shared-profile-guards-lint.log.
+Evidence: /tmp/airin-shared-profile-guards-tests.log, /tmp/airin-shared-profile-guards-server-types.log, /tmp/airin-shared-profile-guards-lint.log.
 
 2026-10-11: Step 2 slice 2g complete — direct soul and integration configuration write guards.
 AgentService rejects shared-profile identity, style, instructions, and ACP draft setting changes before file, audit, agent-process, or database writes. Team memory remains writable; USER.md stays unchanged.
@@ -1185,7 +1185,7 @@ Checks: all 59 focused tests passed; complete server type check passed; lint pas
 Step 2 and delivery stage 1 remain incomplete. Import paths and the shared-agent selection HTTP route still need checks. Runtime source composition and refresh remain in step 3.
 No browser or external provider calls ran. Stale provider cassettes, full tests, and builds remain unresolved.
 Next: check import paths for shared-profile configuration writes before exposing shared-agent selection through HTTP.
-Evidence: /tmp/nakama-shared-direct-config-tests.log, /tmp/nakama-shared-direct-config-server-types.log, /tmp/nakama-shared-direct-config-lint.log.
+Evidence: /tmp/airin-shared-direct-config-tests.log, /tmp/airin-shared-direct-config-server-types.log, /tmp/airin-shared-direct-config-lint.log.
 
 2026-10-11: Step 2 slice 2h verifies profile-pack import isolation before shared-agent HTTP selection.
 The existing importer allocates a free profile ID globally. Manifest sourceProfileId is provenance, not a write target. It constructs the destination organization and profile fields explicitly.
@@ -1196,7 +1196,7 @@ Checks: all 21 focused service and HTTP tests passed; complete server type check
 Step 2 and delivery stage 1 remain incomplete. Shared-agent selection still has no HTTP entry. Shared-reference export, inactive-reference import, full data restore, and publication restoration remain in step 5; this test does not claim those paths are complete.
 No browser or external provider calls ran. Stale provider cassettes, full tests, and builds remain unresolved.
 Next: expose the authorized shared-agent selection service through HTTP and return a team-owned ProfileResponse.
-Evidence: /tmp/nakama-shared-import-guards-tests.log, /tmp/nakama-shared-import-guards-server-types.log, /tmp/nakama-shared-import-guards-lint.log.
+Evidence: /tmp/airin-shared-import-guards-tests.log, /tmp/airin-shared-import-guards-server-types.log, /tmp/airin-shared-import-guards-lint.log.
 
 2026-10-11: Step 2 slice 2i adds POST /v1/orgs/:orgId/shared-agents/:publicationId/instance with its OpenAPI contract.
 The route checks active tenant context and existing invocation permission, derives the publication through OrgService, and returns the normal team ProfileResponse. Concurrent selection and retries return one stable team profile.
@@ -1211,20 +1211,20 @@ Full suite attempt 2 ran outside the sandbox with isolated configuration and pro
 Automatic approval review previously rejected provider recording because sending its test payload and tool schema to OpenAI lacked explicit human approval. No provider recording or browser automation ran during this slice. No push or PR ran.
 Step 2 remains unchecked until its delivery gate passes. Full-suite repair stopped after the two runs; shared-reference portability and runtime configuration refresh remain incomplete.
 Next: repair the root browser test setup, then resolve the provider fixtures after the required permission is supplied. Recheck delivery stage 1 before marking it complete.
-Evidence: /tmp/nakama-shared-selection-http-tests.log, /tmp/nakama-shared-selection-http-{server,db,web}-types.log, /tmp/nakama-shared-selection-http-lint.log, /tmp/nakama-stage-one-knip.log, /tmp/nakama-stage-one-full-tests.log, /tmp/nakama-stage-one-full-tests-unsandboxed.log.
+Evidence: /tmp/airin-shared-selection-http-tests.log, /tmp/airin-shared-selection-http-{server,db,web}-types.log, /tmp/airin-shared-selection-http-lint.log, /tmp/airin-stage-one-knip.log, /tmp/airin-stage-one-full-tests.log, /tmp/airin-stage-one-full-tests-unsandboxed.log.
 
 2026-10-11: Step 2 gate repair separates server and web tests in the root `bun run test` script.
 The non-web run discovers all tests except apps/web; the web run uses its existing DOM preload in a separate process. The script stops on a failed non-web run. Both complete suites ran separately for this gate check.
 Global DOM setup caused provider SDK safety failures. Bun file isolation removed those failures but broke interception during the complete provider replay run, causing requests with a test key to return authentication errors. Both approaches were removed; the final process split retains SDK browser safety and restores offline replay.
 The web type check now includes its existing preload. A provider regression checks that browser objects cannot enable server credentials or cause a request. The existing cassette viewer is an explicit knip entry.
-Channel fixtures now scope NAKAMA_CONFIG_DIR to their temporary home and restore it after each test. Shared fixtures, Telegram outbound tests, and notification webhook tests retain their existing setup and cleanup. The platform organization response test checks the new parentOrgId field.
+Channel fixtures now scope AIRIN_CONFIG_DIR to their temporary home and restore it after each test. Shared fixtures, Telegram outbound tests, and notification webhook tests retain their existing setup and cleanup. The platform organization response test checks the new parentOrgId field.
 This slice includes previously authorized fetch fixture typing and channel fixture field corrections in the same files. Other cleanup remains uncommitted.
 Checks: all 126 focused tests passed; all 654 web tests passed; complete core, server, and web type checks passed; lint passed all 1532 files; knip passed; git diff --check passed.
 The final complete non-web run outside the sandbox used a temporary configuration directory and LLM_VCR_MODE=replay: 4183 passed, 22 skipped, 2 failed. Combined with the web suite: 4837 passed, 22 skipped, 2 failed across 512 files. Both remaining failures are the existing ask_user_question and todo_write OpenAI recordings returning empty Responses output.
 Earlier repair runs failed with global DOM setup (112 failures) and file isolation (40 failures). No further full-suite repair runs will run in this iteration. Step 2 and delivery stage 1 remain unchecked.
 Automatic approval review previously rejected provider recording because sending the test payload and tool schema to OpenAI lacked explicit human approval. No recording ran. Browser automation, builds, push, and PR remain unchecked.
 Next: obtain the required recording permission, replace the two stale provider recordings with real Responses calls, replay offline, and recheck the stage 1 gate. Runtime composition, UI, portability, and docs remain incomplete.
-Evidence: /tmp/nakama-root-test-setup-final-{focused,node,web,core-types,server-types,web-types,lint,knip}.log.
+Evidence: /tmp/airin-root-test-setup-final-{focused,node,web,core-types,server-types,web-types,lint,knip}.log.
 
 2026-10-11: Step 2 slice 2j revokes knowledge publications when their organization document is deleted or replaced.
 The core store runs a server callback after manifest removal and file cleanup, under its existing organization document lock. A cleanup failure still runs the callback. A missing-document retry also runs it, so a failed database write cannot leave permanent publication metadata.
@@ -1234,7 +1234,7 @@ Tests cover deletion, replacement, duplicate skip, attachment protection, unchan
 Checks: all 152 focused tests passed; complete core and server type checks passed; lint passed all 1532 files; knip passed; git diff --check passed. No new package, dependency, or source file was added.
 Step 2 and delivery stage 1 remain unchecked. The existing document lock covers one server process; shared data across server processes still needs a shared lock. The two stale OpenAI recordings still block the full gate. No provider recording, browser automation, build, push, or PR ran.
 Next: audit configured-model source deletion for the remaining step 2 publication invalidation rule. Recheck the full stage 1 gate after the required recording permission is supplied. Runtime resource use, UI, portability, and docs remain incomplete.
-Evidence: /tmp/nakama-knowledge-unpublish-{focused,core-types,server-types,lint,knip}.log.
+Evidence: /tmp/airin-knowledge-unpublish-{focused,core-types,server-types,lint,knip}.log.
 
 2026-10-11: Step 2 slice 2k revokes model publications when their install-wide provider is deleted.
 AgentService removes only model references with the exact providerId:: prefix across active and archived organizations. Equal model names under other providers, longer provider IDs, and other resource kinds remain unchanged. Existing global provider access and default-provider fallback remain effective.
@@ -1245,7 +1245,7 @@ The initial focused run found an archived fixture that attempted new publication
 Checks: all 251 focused tests passed; complete server type check passed; lint passed all 1532 files; knip passed; git diff --check passed. No new package, dependency, or source file was added.
 Step 2 and delivery stage 1 remain unchecked. Removing individual configured models through provider updates still needs publication invalidation. The two stale OpenAI recordings still block the complete stage gate. No provider recording, browser automation, build, push, or PR ran.
 Next: invalidate removed custom model references during provider updates while preserving valid model references and existing global access. Recheck the full gate after recording permission is supplied. Runtime use, UI, portability, and docs remain incomplete.
-Evidence: /tmp/nakama-provider-unpublish-{focused,server-types,lint,knip}.log.
+Evidence: /tmp/airin-provider-unpublish-{focused,server-types,lint,knip}.log.
 
 2026-10-11: Step 2 slice 2l revokes model publications that become invalid after provider updates.
 Provider updates use the same server lock as model publication and provider deletion. The existing provider model policy determines validity; this change adds no model allowlist. Matching provider references are removed only when that provider no longer accepts the model. Other providers, resource kinds, active or archived organizations, and remaining valid references are preserved.
@@ -1257,7 +1257,7 @@ The complete root test script ran outside the sandbox with a temporary configura
 The same ask_user_question and todo_write recordings still return empty Responses output. This required stage 1 gate has remained blocked across consecutive goal turns. Automatic approval review rejected recording because sending the test prompts and tool schemas to OpenAI lacked explicit human approval. No recording ran; no replacement or fabricated cassette can prove the real tool contract.
 Step 2 and all delivery stages remain unchecked. Further stage delivery waits for that required input. The publication lock covers one server process; runtime use, UI, portability, docs, builds, push, and PR remain incomplete.
 Next: obtain explicit permission for the two real OpenAI test calls, or receive genuine recordings from the user. Replay both recordings offline and repeat the complete stage 1 gate before proceeding with resource execution work.
-Evidence: /tmp/nakama-model-update-unpublish-{focused,server-types,lint,knip,full,full-web}.log.
+Evidence: /tmp/airin-model-update-unpublish-{focused,server-types,lint,knip,full,full-web}.log.
 
 2026-10-11: Step 2 slice 2m replaces the two stale OpenAI tool recordings after explicit human approval.
 Both approved calls returned HTTP 200 through /v1/responses. Tests validated ask_user_question and todo_write arguments and their local state changes.
@@ -1272,10 +1272,10 @@ Combined: 4852 passed, 22 skipped, 0 failed across 512 files. The required deliv
 Implementation step 2 remains unchecked because its root setup and publication controls also require the planned Organization screen.
 Next: connect published resources to execution, then complete the screen and client controls. Stages 2 through 4 remain incomplete.
 No browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-approved-tool-{recordings,replay}.log and /tmp/nakama-approved-recordings-{types,lint,knip,full}.log.
+Evidence: /tmp/airin-approved-tool-{recordings,replay}.log and /tmp/airin-approved-recordings-{types,lint,knip,full}.log.
 
 2026-10-11: Step 2 slice 2n connects the organization routes to the existing typed client.
-NakamaClient now supports overview, team creation, publication listing, publish, unpublish, and shared agent instance creation.
+AirinClient now supports overview, team creation, publication listing, publish, unpublish, and shared agent instance creation.
 Each operation sends its explicit organization ID in both the encoded path and X-Org-Id. Calls preserve the client's default organization.
 Team requests retain requestId and first-admin selection. Model IDs retain providerId::modelId. Agent selection returns the existing ProfileResponse contract.
 Twelve request tests cover all six operations, encoded IDs, explicit scope, default scope preservation, response data, empty 204 results, and denied access.
@@ -1287,7 +1287,7 @@ No new source file, dependency, or abstraction was added. Other authorized type 
 Steps 2 and 5 remain unchecked. The screen, query state, resource execution, portability, and docs still require implementation.
 Next: add authorized shared resource reads through the active team, then complete execution checks before the Organization screen.
 This slice does not finish a delivery stage. No full-suite rerun, browser check, build, push, or PR ran.
-Evidence: /tmp/nakama-client-foundation-{focused,types,lint}.log.
+Evidence: /tmp/airin-client-foundation-{focused,types,lint}.log.
 
 2026-10-11: Step 2 slice 2o adds knowledge content reads through the active organization's publication IDs.
 GET /v1/orgs/:orgId/shared-resources/:publicationId/content returns original downloads or extracted-text previews through the existing profile service.
@@ -1304,7 +1304,7 @@ Checks: all 167 focused tests passed across six files; complete server type chec
 Steps 2 and 3 remain unchecked. Knowledge catalogs, profile assignments, indexed and regex search, and the other execution paths remain incomplete.
 Next: supply published parent document references to team knowledge catalogs and searches, with live publication checks.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran.
-Evidence: /tmp/nakama-published-knowledge-{focused,types,lint}.log.
+Evidence: /tmp/airin-published-knowledge-{focused,types,lint}.log.
 
 2026-10-11: Step 2 slice 2p adds published parent document metadata to the existing profile knowledge response.
 ListKnowledgeBaseResponse declares an optional publishedDocuments field. The server returns it separately from local documents and attached team documents.
@@ -1319,7 +1319,7 @@ Checks: all 108 focused tests passed across four files; complete core and server
 Steps 2 and 3 remain unchecked. This catalog slice does not finish a delivery stage.
 Next: pass these authorized references into regex and indexed search, then include them in prompt catalogs after actual search use passes access tests.
 No new source file, dependency, or package was added. No full-suite rerun, browser check, build, push, or PR ran.
-Evidence: /tmp/nakama-published-catalog-{focused,core-types,server-types,lint}.log.
+Evidence: /tmp/airin-published-catalog-{focused,core-types,server-types,lint}.log.
 
 2026-10-11: Step 2 slice 2q connects published parent knowledge to team search.
 The server supplies live publication references through the existing tool context in chat, automation, plugins, subagents, ACP drafts, and playground calls.
@@ -1336,7 +1336,7 @@ Lint passed all 1532 files. git diff --check passed. No new file, package, or de
 Steps 2 and 3 remain unchecked. This slice does not finish a delivery stage.
 Next: include authorized parent knowledge in prompt catalogs, then connect the remaining resource execution paths.
 No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-parent-search-{focused,final-focused,core-types,server-types,lint}.log.
+Evidence: /tmp/airin-parent-search-{focused,final-focused,core-types,server-types,lint}.log.
 
 2026-10-11: Step 2 slice 2r includes published parent knowledge in prompt catalogs.
 Core composition accepts server-authorized references and adds a separate parent count and source organization identifiers.
@@ -1353,7 +1353,7 @@ git diff --check passed. No new source file, package, or dependency was added.
 Steps 2 and 3 remain unchecked. This slice does not finish a delivery stage.
 Next: connect published parent skills to discovery and assignments, preserving source write protection and team execution context.
 No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-parent-prompt-{focused,core-types,server-types,lint}.log.
+Evidence: /tmp/airin-parent-prompt-{focused,core-types,server-types,lint}.log.
 
 2026-10-11: Step 2 slice 2s stopped after two failed repair attempts, as required by the iteration rules.
 Uncommitted changes add a separate publishedSkills contract, its OpenAPI schema, and parent catalog resolution without private source paths.
@@ -1365,7 +1365,7 @@ Final focused result: 21 existing tests passed and eight new tests failed. Each 
 The exact remaining cause is unverified. Next investigation: compare stored source paths with canonical profile skill directories and inspect source records after discovery.
 No step or delivery stage is complete. Product changes and tests remain uncommitted for investigation.
 No type check, full lint, full-suite run, browser check, build, push, or PR ran after the failed focused gate.
-Evidence: /tmp/nakama-published-skills-{focused,format}.log.
+Evidence: /tmp/airin-published-skills-{focused,format}.log.
 
 2026-10-11: Step 2 slice 2s completes the published parent skill metadata catalog after the failed iteration.
 A local reproduction confirmed the remaining failure: stored paths used /var while profile directory resolution returned /private/var.
@@ -1382,7 +1382,7 @@ Checks: all 112 focused tests passed after repair; complete core and server type
 No new source file, package, or dependency was added. Steps 2 and 3 remain unchecked; this slice does not finish a delivery stage.
 Next: permit guarded parent skill detail reads and assignments, then load supporting assets with team execution context and source write protection.
 No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-published-skills-repair-focused.log and /tmp/nakama-published-skills-{core-types,server-types,lint}.log.
+Evidence: /tmp/airin-published-skills-repair-focused.log and /tmp/airin-published-skills-{core-types,server-types,lint}.log.
 
 2026-10-11: Step 2 slice 2t adds shared skill detail reads through the active team.
 GET /v1/orgs/:orgId/shared-resources/:publicationId/skill returns permitted parent metadata and the published SKILL.md body.
@@ -1392,7 +1392,7 @@ Unavailable sources return a generic 404. Catalogs omit those entries; unexpecte
 The route verifies its path organization against the authenticated active organization. Members and viewers in either sibling can read without parent membership.
 Tests deny private resource IDs, foreign publication IDs, other resource kinds, unrelated organizations, parent context, wrong active context, anonymous requests, revoked sources, missing files, and symlink escapes.
 Source updates appear on the next read. The existing private source routes and source write permissions remain unchanged.
-NakamaClient.getPublishedSkill sends explicit X-Org-Id and encoded path IDs. Request tests verify response preservation, default scope preservation, and denied access.
+AirinClient.getPublishedSkill sends explicit X-Org-Id and encoded path IDs. Request tests verify response preservation, default scope preservation, and denied access.
 Initial HTTP tests expected 403 for inaccessible parent context; existing tenant middleware returns 404. The fixture now asserts that behavior.
 Additional foreign-kind fixtures initially failed the database's source validation. Corrected fixtures create real source resources before publication.
 Checks: all 176 focused tests passed across seven files; the final skill check passed all 32 tests with the additional publication scope cases.
@@ -1400,7 +1400,7 @@ Complete core, server, and client type checks passed. Lint passed all 1532 files
 No new source file, package, or dependency was added. Steps 2 and 3 remain unchecked; this slice does not finish a delivery stage.
 Next: connect published skill assignments and prompt discovery, then guarded supporting assets and team execution with source write protection.
 No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-skill-read-{focused,final-focused,core-types,server-types,client-types,lint}.log.
+Evidence: /tmp/airin-shared-skill-read-{focused,final-focused,core-types,server-types,client-types,lint}.log.
 
 2026-10-11: Step 2 slice 2u stops at the server type check after two repair attempts.
 Uncommitted changes permit published parent skill assignments by reference and return separate publishedSkills metadata in profile responses.
@@ -1415,7 +1415,7 @@ No further repair ran this iteration. Next: supply the existing curator trigger 
 Product changes and tests remain uncommitted. Only this failure record is committed. Steps 2 and 3 and delivery stage 2 remain unchecked.
 Shared prompt discovery, supporting assets, script tools, and runtime authorization remain incomplete.
 No full lint, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-parent-skill-assignment-{baseline,repair,final-focused,core-types,server-types}.log.
+Evidence: /tmp/airin-parent-skill-assignment-{baseline,repair,final-focused,core-types,server-types}.log.
 
 2026-10-11: Step 2 slice 2u completes shared skill assignment records after the failed iteration.
 The curator test now supplies trigger: manual. All 115 focused tests passed across four files, with two platform-specific skips.
@@ -1432,7 +1432,7 @@ No new source file, package, or dependency was added. Steps 2 and 3 and delivery
 Next: connect published skill prompt discovery and authorized supporting assets, then script tools with team context and live publication checks.
 Parent assignments remain excluded from runtime discovery until that path is implemented. Shared skill execution is not complete.
 No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-parent-skill-assignment-resumed-{focused,core-types,server-types,client-types,lint}.log.
+Evidence: /tmp/airin-parent-skill-assignment-resumed-{focused,core-types,server-types,client-types,lint}.log.
 
 2026-10-11: Step 2 slice 2v adds guarded published skill file lists and previews.
 GET /v1/orgs/:orgId/shared-resources/:publicationId/skill/files lists relative source paths. GET on skill/file with a path query previews a supporting file.
@@ -1440,7 +1440,7 @@ Both routes validate the active organization and use the existing published skil
 The resolver retains its canonical source directory internally. Public skill metadata and file responses do not expose that directory.
 Existing local and published reads share the same bounded listing and preview code. File lists omit symlinks; file reads reject traversal, absolute paths, null bytes, and symlink escapes.
 Image previews retain media type and base64 data. Binary and oversized files retain existing unavailable preview results and the 1 MB limit.
-OpenAPI declares the reused SkillFilesResponse and SkillFileResponse contracts. NakamaClient adds typed operations with explicit team headers and encoded publication IDs and paths.
+OpenAPI declares the reused SkillFilesResponse and SkillFileResponse contracts. AirinClient adds typed operations with explicit team headers and encoded publication IDs and paths.
 Tests cover two siblings without parent membership, unrelated and parent contexts, wrong active context, anonymous access, direct resource IDs, foreign publications, and wrong publication kinds.
 They also cover revocation, disabled and missing sources, source symlinks, archived tenants, supporting-file escapes, current file updates, preview limits, and preserved database failures.
 Local file preview and skill installation tests still pass. Client request tests preserve response data, default context, and denied requests.
@@ -1448,7 +1448,7 @@ Checks: all 159 focused tests passed across five files, with two platform-specif
 No new source file, package, or dependency was added. Steps 2 and 3 and delivery stage 2 remain unchecked.
 Next: connect published skill prompt discovery and reads through the agent tool context, then script tools with team execution context and live publication checks.
 Shared skill execution remains incomplete. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-skill-assets-{focused,server-types,client-types,lint}.log.
+Evidence: /tmp/airin-shared-skill-assets-{focused,server-types,client-types,lint}.log.
 
 2026-10-11: Step 2 slice 2w connects assigned parent skills to prompts and guarded agent file reads.
 Prompt discovery resolves current parent publications by stable assignment ID. Parent entries use published-skill://publicationId paths and source labels, without private source directories.
@@ -1467,7 +1467,7 @@ No new source file, package, or dependency was added. Steps 2 and 3 and delivery
 Next: load shared script tools with team execution context and live invocation guards; extend shared binary/Word asset reads beyond the existing preview contract.
 Shared code remains explicitly blocked in discovery. Shared agent configuration synchronization and other resource execution checks remain incomplete.
 No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-published-skill-prompts-{focused,repair-focused,final-focused,core-types,server-types,lint}.log.
+Evidence: /tmp/airin-published-skill-prompts-{focused,repair-focused,final-focused,core-types,server-types,lint}.log.
 
 ### Slice 2x — bounded shared skill asset bytes
 Assigned parent skill reads now return bounded bytes through the existing team tool context, after current publication and assignment checks.
@@ -1478,7 +1478,7 @@ The first type check found a missing ToolContext test import. One repair added i
 Checks: 168 focused tests passed across three files, with two Windows-specific skips; complete core and server type checks passed; lint passed 1532 files; git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: load shared script tools with team execution context and current publication checks at invocation.
 No package, dependency, or source file was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-skill-bytes-{focused,repair-focused,core-types,server-types,lint}.log.
+Evidence: /tmp/airin-skill-bytes-{focused,repair-focused,core-types,server-types,lint}.log.
 
 ### Slice 2y — shared Python skill execution
 Assigned parent Python entrypoints and declared Python scripts now load through the existing skill tool resolver.
@@ -1492,7 +1492,7 @@ The initial formatter found an invalid bound-method expression. The first repair
 Checks: all 109 focused tests passed across four files; the complete server type check passed; lint passed 1532 files; git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: shared JavaScript skill loading and invocation checks, then session capability refresh for added tools.
 No source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-python-{focused,repair-focused,types,lint}.log.
+Evidence: /tmp/airin-shared-python-{focused,repair-focused,types,lint}.log.
 
 ### Slice 2z — shared JavaScript skill execution
 Assigned parent JavaScript and TypeScript entrypoints now use the existing subprocess runner. The source review gate runs before metadata loading or invocation.
@@ -1506,7 +1506,7 @@ Tests cover JavaScript and TypeScript entrypoints, approved metadata, input para
 Checks: all 129 focused tests passed across five files; the complete server type check passed; lint passed 1532 files; git diff --check passed. No failed check required a repair.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: session capability refresh for newly assigned or changed shared tools, with persisted and ephemeral history preservation.
 No source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-js-{focused,final-focused,types,lint}.log.
+Evidence: /tmp/airin-shared-js-{focused,final-focused,types,lint}.log.
 
 ### Slice 2aa — shared skill session refresh checks incomplete
 Uncommitted code computes shared skill capability revisions from current publications, reviewed source files, and source review settings.
@@ -1520,7 +1520,7 @@ Final checks: all 146 focused tests passed across five files; lint passed 1532 f
 The two repair attempts are used. This iteration commits only this progress record. Product code and tests remain uncommitted for the next iteration.
 Next: add the required timestamp to that test call, rerun the checks, and finish the shared skill session refresh slice. Steps 2 and 3 and delivery stage 2 remain unchecked.
 No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-skill-refresh-{focused,repair-focused,final-focused,types,lint}.log.
+Evidence: /tmp/airin-skill-refresh-{focused,repair-focused,final-focused,types,lint}.log.
 
 ### Slice 2ab — shared skill session refresh verified
 The missing setUserContext test timestamp from slice 2aa is fixed. This slice commits the previously uncommitted shared skill revision and session refresh code.
@@ -1532,7 +1532,7 @@ Tests verify four user turns after assignment, schema changes, and revocation; t
 Checks: 146 focused service tests passed across five files; 54 session route and turn registry tests passed across four files; the complete server type check passed; lint passed 1532 files; git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: synchronize shared agent configuration and published soul data before new turns, with capability refresh and history preservation.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-skill-refresh-complete-{focused,routes,types,lint}.log.
+Evidence: /tmp/airin-skill-refresh-complete-{focused,routes,types,lint}.log.
 
 ### Slice 2ac — shared agent availability before new execution
 Shared agent instances now recheck the active team, its recorded parent, the exact agent publication, and the current source validation before new execution.
@@ -1545,7 +1545,7 @@ The first checks found an ephemeral history read that attempted runtime resoluti
 Checks: 194 focused tests passed across seven files; the complete server type check passed; lint passed 1532 files; git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: synchronize permitted shared agent configuration, soul data, and assignments before new turns; rebuild cached sessions while preserving team history.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-agent-guard-final-focused.log and /tmp/nakama-shared-agent-guard-verified-{types,lint}.log.
+Evidence: /tmp/airin-shared-agent-guard-final-focused.log and /tmp/airin-shared-agent-guard-verified-{types,lint}.log.
 
 ### Slice 2ad — live shared agent record configuration
 OrgService now resolves each shared instance to its current permitted source settings after the existing publication and source checks.
@@ -1558,7 +1558,7 @@ Tests cover permitted model and thinking settings, local policy preservation, un
 Focused checks passed 139 tests across three service files and 130 tests across six runtime and route files. The first type check found a missing required apiKey field in the provider test setup; one repair added an empty test value. All 85 organization tests passed again, the complete server type check passed, lint passed 1532 files, and git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: compose published agent soul configuration with team memory and user context, then synchronize permitted assignments and their execution checks.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-config-{focused,runtime,repair-focused,verified-types,lint}.log.
+Evidence: /tmp/airin-shared-config-{focused,runtime,repair-focused,verified-types,lint}.log.
 
 ### Slice 2ae — published agent soul configuration
 Shared agent runtime records now include only the current source SOUL.md, STYLE.md, and INSTRUCTIONS.md contents. Missing or blank files produce absent values that also clear stale team identity, style, and instructions during composition.
@@ -1571,7 +1571,7 @@ The first focused checks found test assertions using the wrong provider input fi
 Checks: 269 focused tests passed across eight service and route files; the complete server type check passed; lint passed 1532 files; git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: synchronize permitted shared agent assignments and their execution checks, then finish the remaining shared tool and model paths.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-soul-complete-{focused,types,lint}.log.
+Evidence: /tmp/airin-shared-soul-complete-{focused,types,lint}.log.
 
 ### Slice 2af — live shared agent skill assignments
 SkillsService now derives shared instance skill assignments from the current source profile. It checks the active team and parent, their recorded relationship, the exact agent publication, and source profile restrictions before reading assignments.
@@ -1584,7 +1584,7 @@ The first focused run found a missing team workspace in the database-only test f
 Checks: 242 focused tests passed across six service and session route files; the complete server type check passed; lint passed 1532 files; git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: implement permitted shared agent tool and integration assignments, then finish shared tool catalogs and model use checks.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-agent-skills-complete-focused.log and /tmp/nakama-shared-agent-skills-{types,lint}.log.
+Evidence: /tmp/airin-shared-agent-skills-complete-focused.log and /tmp/airin-shared-agent-skills-{types,lint}.log.
 
 ### Slice 2ag — live shared agent stored tool assignments
 Shared agent runtime records now include current source tool assignments. Cached persisted and ephemeral sessions refresh after assignment and definition changes.
@@ -1598,7 +1598,7 @@ Checks: 306 focused tests passed across ten files, with four Windows tests skipp
 The touched tool-resolver file also includes its previously authorized BashInput type correction. Other authorized type cleanup remains uncommitted.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: implement permitted shared agent integration assignments and shared tool catalog and credential setup access.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran.
-Evidence: /tmp/nakama-shared-tools-final-focused.log, /tmp/nakama-shared-tools-verified-org.log, /tmp/nakama-shared-tools-verified-runtime.log, /tmp/nakama-shared-tools-verified-types-final.log, and /tmp/nakama-shared-tools-lint.log.
+Evidence: /tmp/airin-shared-tools-final-focused.log, /tmp/airin-shared-tools-verified-org.log, /tmp/airin-shared-tools-verified-runtime.log, /tmp/airin-shared-tools-verified-types-final.log, and /tmp/airin-shared-tools-lint.log.
 
 ### Slice 2ah — live shared agent global MCP assignments
 Shared agent runtime records now include current source MCP assignments. Existing publication validation permits enabled global servers and rejects parent-owned connections and unsupported Composio assignments.
@@ -1611,7 +1611,7 @@ The first focused run expected the wrong status for a disabled server. Repair on
 Checks: 204 focused tests passed across six service and session route files. The complete server type check, lint across 1532 files, and git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: implement shared tool catalog, assignment, and team credential setup access, then finish model and compatibility checks.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-mcp-final-focused.log, /tmp/nakama-shared-mcp-final-types.log, and /tmp/nakama-shared-mcp-lint.log.
+Evidence: /tmp/airin-shared-mcp-final-focused.log, /tmp/airin-shared-mcp-final-types.log, and /tmp/airin-shared-mcp-lint.log.
 
 ### Slice 2ai — published parent tool catalog and team credential access
 ProfileService now adds current published parent tools to the active team's existing tool catalog. It checks the active team, active root parent, current publication, and current source ownership.
@@ -1626,7 +1626,7 @@ Checks: 158 focused tests passed across three service and HTTP route files, with
 The touched tools route test file also includes its previously authorized test response type cleanup. Other authorized type cleanup remains uncommitted.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: authorize parent tool detail reads and profile assignments, then recheck published tools across normal agent and playground execution.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran.
-Evidence: /tmp/nakama-tool-catalog-final-focused.log, /tmp/nakama-tool-catalog-final-server-types.log, /tmp/nakama-tool-catalog-final-core-types.log, and /tmp/nakama-tool-catalog-lint.log.
+Evidence: /tmp/airin-tool-catalog-final-focused.log, /tmp/airin-tool-catalog-final-server-types.log, /tmp/airin-tool-catalog-final-core-types.log, and /tmp/airin-tool-catalog-lint.log.
 
 ### Slice 2aj — tool detail and assignment verification stopped
 Uncommitted code scopes HTTP tool detail and source reads to the active tenant catalog. Published details keep sanitized configuration and load schemas from the source record. Parent source-file reads remain unavailable through team context.
@@ -1638,7 +1638,7 @@ The complete server type check passed before the second repair. Final type and l
 Only this progress record is committed. The five touched source and test files remain uncommitted for the next iteration. Steps 2 and 3 and delivery stage 2 remain unchecked.
 Next: correct the remaining status assertion, verify the full slice, and commit it. Then connect parent tool assignments to normal agent and playground execution checks.
 No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-tool-detail-final-focused.log and /tmp/nakama-tool-detail-initial-types.log.
+Evidence: /tmp/airin-tool-detail-final-focused.log and /tmp/airin-tool-detail-initial-types.log.
 
 ### Slice 2ak — published tool details and assignments verified
 The remaining shared template assignment assertion now checks the existing 403 response. This slice commits the tool detail and assignment code left uncommitted by slice 2aj.
@@ -1651,7 +1651,7 @@ Tests verify resolved custom tool schemas, safe HTTP details, denied parent sour
 Checks: 214 focused tests passed across four service and HTTP route files, with two Windows tests skipped. The complete server type check, lint across 1532 files, and git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: resolve published parent tool assignments during local agent execution, including cached sessions and retained definitions, then cover playground execution.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-tool-detail-complete-focused.log, /tmp/nakama-tool-detail-complete-types.log, and /tmp/nakama-tool-detail-complete-lint.log.
+Evidence: /tmp/airin-tool-detail-complete-focused.log, /tmp/airin-tool-detail-complete-types.log, and /tmp/airin-tool-detail-complete-lint.log.
 
 ### Slice 2al — published tools on local agents
 Local agents now resolve parent-owned tool assignments through current publications. A shared check validates the active team, active root parent, current source ownership, publications, and duplicate stored executable names.
@@ -1665,7 +1665,7 @@ The first focused run found runtime catalog initialization conflicting with the 
 Checks: 270 focused tests passed across eight service and HTTP route files, with two Windows tests skipped. The complete server type check, lint across 1532 files, and git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: connect direct playground and parameter suggestion calls to published tool authorization and team execution context, then complete model and compatibility checks.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-local-published-tools-final-focused.log, /tmp/nakama-local-published-tools-types.log, and /tmp/nakama-local-published-tools-lint.log.
+Evidence: /tmp/airin-local-published-tools-final-focused.log, /tmp/airin-local-published-tools-types.log, and /tmp/airin-local-published-tools-lint.log.
 
 ### Slice 2am — published tool playground execution
 Playground execution now reads tool details through the active tenant catalog. It checks the selected team profile through the existing execution-profile guard before building tool context.
@@ -1679,7 +1679,7 @@ The first focused run found a Python fixture without its required run function. 
 Checks: 258 focused tests passed across six service and HTTP route files, with six Windows tests skipped. The complete server type check, lint across 1532 files, and git diff --check passed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: audit tool setup approval authorization, then complete model use checks and remaining compatibility paths.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-published-playground-final-focused.log, /tmp/nakama-published-playground-types.log, and /tmp/nakama-published-playground-lint.log.
+Evidence: /tmp/airin-published-playground-final-focused.log, /tmp/airin-published-playground-types.log, and /tmp/airin-published-playground-lint.log.
 
 ### Slice 2an — tool setup retry authorization
 The setup approval route already validates the selected profile in the active tenant before staging a key. Setup storage uses organization-specific sections; new proposals do not name an existing tool.
@@ -1690,7 +1690,7 @@ Checks: 91 focused tests passed across three files, with two Windows tests skipp
 This commit includes the existing type corrections in the touched setup test fixtures. Other authorized type cleanup remains uncommitted.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: complete model use checks and remaining compatibility paths.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran.
-Evidence: /tmp/nakama-setup-authorization-focused.log, /tmp/nakama-setup-authorization-types.log, and /tmp/nakama-setup-authorization-lint.log.
+Evidence: /tmp/airin-setup-authorization-focused.log, /tmp/airin-setup-authorization-types.log, and /tmp/airin-setup-authorization-lint.log.
 
 ### Slice 2ao — shared agent runtime model validation
 AgentService now validates a shared agent's configured model against its runtime provider list whenever it resolves the source profile. The existing strict model helper rejects a missing provider or unavailable model before session creation or a new cached turn can reach the fallback provider path.
@@ -1699,7 +1699,7 @@ Tests cover persisted and ephemeral sessions, equal model names under two provid
 The initial focused run found the test constructor arguments reversed. One repair passes configuration in the correct argument. All 190 focused tests across three service files then passed, along with the complete server type check, lint across 1532 files, and git diff --check.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: audit session override and auxiliary model calls, then complete effective profile and portability compatibility paths.
 No new source file, package, or dependency was added. No full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-model-focused.log, /tmp/nakama-shared-model-types.log, and /tmp/nakama-shared-model-lint.log.
+Evidence: /tmp/airin-shared-model-focused.log, /tmp/airin-shared-model-types.log, and /tmp/airin-shared-model-lint.log.
 
 ### Slice 2ap — session override and vision model use
 Session resolution now revalidates an explicit stored model override before each new turn. Cached persisted and ephemeral sessions cannot continue with a removed provider through the cached-session return path. History reads and current running calls retain their existing behavior.
@@ -1708,7 +1708,7 @@ Shared agent tests cover changing a session override, removing its runtime provi
 Checks: 165 focused tests across three files passed, along with the complete server type check, lint across 1532 files, and git diff --check. Two repairs corrected the vision helper import and a missing label in the provider test fixture.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: audit effective profile settings and template model consumers, then complete portability and invocation compatibility paths.
 No new source file, package, or dependency was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-model-paths-focused.log, /tmp/nakama-model-paths-types.log, and /tmp/nakama-model-paths-lint.log.
+Evidence: /tmp/airin-model-paths-focused.log, /tmp/airin-model-paths-types.log, and /tmp/airin-model-paths-lint.log.
 
 ### Slice 2aq — coding command template model resolution
 Coding command environment resolution now checks the requested profile within its team. Shared instances resolve their current published source through OrgService before selecting provider settings. Missing publication or organization service blocks setup; missing configured models cannot fall back to another provider.
@@ -1718,7 +1718,7 @@ Shared model tests now verify command provider keys follow source changes, the s
 Checks: 168 focused tests across four files passed, along with the complete server type check, lint across 1532 files, and git diff --check. One repair replaced unintended host CLI probing and supplied missing profile fixtures.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: expose current shared configuration and assignments in profile reads, then complete portability and invocation compatibility paths.
 No new source file, package, or dependency was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-coding-focused.log, /tmp/nakama-shared-coding-types.log, and /tmp/nakama-shared-coding-lint.log.
+Evidence: /tmp/airin-shared-coding-focused.log, /tmp/airin-shared-coding-types.log, and /tmp/airin-shared-coding-lint.log.
 
 ### Slice 2ar — effective shared profile reads
 ProfileService receives the existing OrgService through AgentService setup. Profile detail and list reads now resolve authorized shared sources before returning current names, models, system prompts, and inherited tool and global MCP counts. Detail reads include current source assignments; skill summaries use source assignments with team usage and existing published-skill checks.
@@ -1728,7 +1728,7 @@ Tests verify current source settings in detail and list responses, foreign team 
 Checks: 209 focused tests passed across three service files, with two Windows tests skipped. Complete core and server type checks, lint across 1532 files, and git diff --check passed. No repair was needed after validation.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: audit shared profile assignment read routes and portability, then finish invocation compatibility checks before the delivery-stage gate.
 No new source file, package, or dependency was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-profile-focused.log, /tmp/nakama-shared-profile-types.log, /tmp/nakama-shared-profile-core-types.log, and /tmp/nakama-shared-profile-lint.log.
+Evidence: /tmp/airin-shared-profile-focused.log, /tmp/airin-shared-profile-types.log, /tmp/airin-shared-profile-core-types.log, and /tmp/airin-shared-profile-lint.log.
 
 ### Slice 2as — shared assignment read paths
 The profile tool list now uses current authorized source assignments for shared instances. Unavailable instances return no active tool assignments. Published parent tool details pass through the existing credential and path redaction, with current publication and source labels.
@@ -1738,7 +1738,7 @@ Tests cover shared JavaScript and Python tool lists, current publication metadat
 Checks: 228 focused tests passed across five files, with two Windows tests skipped. The complete server type check, lint across 1532 files, and git diff --check passed. No repair was needed after validation.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: audit shared profile portability and invocation compatibility, then run the delivery-stage gate.
 No new source file, package, or dependency was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-assignment-reads-focused.log, /tmp/nakama-assignment-reads-types.log, and /tmp/nakama-assignment-reads-lint.log.
+Evidence: /tmp/airin-assignment-reads-focused.log, /tmp/airin-assignment-reads-types.log, and /tmp/airin-assignment-reads-lint.log.
 
 ### Slice 2at — tenant-local profile pack source boundary
 Profile pack export now filters foreign tenant tool and skill assignment names from metadata. A team cannot export a parent-owned module merely because its local profile has that tool assigned. Custom tool collection checks ownership before resolving or reading the module and records a skipped item for foreign code.
@@ -1747,7 +1747,7 @@ Tests export a team profile with an assigned parent custom tool, with and withou
 Checks: 23 focused service and HTTP route tests passed, along with the complete server type check, lint across 1532 files, and git diff --check. No repair was needed after validation.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Shared instance import still needs an inactive source reference; this slice does not complete portability. Next: retain shared source identity during export and import without converting instances into local agents, then audit tenant archives and invocation compatibility.
 No new source file, package, or dependency was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-pack-source-boundary-focused.log, /tmp/nakama-pack-source-boundary-types.log, and /tmp/nakama-pack-source-boundary-lint.log.
+Evidence: /tmp/airin-pack-source-boundary-focused.log, /tmp/airin-pack-source-boundary-types.log, and /tmp/airin-pack-source-boundary-lint.log.
 
 ### Slice 2au — shared profile pack source references
 Profile packs now retain the shared agent publication, source organization, and source profile IDs. Import stores the reference against a new destination profile. It does not create parent links or publications. Existing source checks keep the reference unavailable until the destination has the matching active parent and publication.
@@ -1756,7 +1756,7 @@ Tests cover unavailable foreign imports, denied identity edits, valid destinatio
 Checks: 127 focused service and HTTP route tests passed across three files. Complete core, database, and server type checks passed. Lint checked 1532 files. git diff --check passed. One test repair used the profile response envelope and the existing database assignment method.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: audit tenant archive export and import, including shared references and conversation history, then invocation compatibility and the delivery-stage gate.
 No new source file, package, or dependency was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-import-shared-ref-focused.log, /tmp/nakama-import-shared-ref-server-types.log, /tmp/nakama-import-shared-ref-core-types.log, /tmp/nakama-import-shared-ref-db-types.log, and /tmp/nakama-import-shared-ref-lint.log.
+Evidence: /tmp/airin-import-shared-ref-focused.log, /tmp/airin-import-shared-ref-server-types.log, /tmp/airin-import-shared-ref-core-types.log, /tmp/airin-import-shared-ref-db-types.log, and /tmp/airin-import-shared-ref-lint.log.
 
 ### Slice 2av — tenant archive shared references and history
 Organization data exports now include each local shared instance's publication, source organization, and source profile IDs. References remain present after publication removal. Export reads local profile rows and workspaces; it does not resolve or copy the parent template. Existing session IDs and stored messages remain in the tenant archive.
@@ -1765,7 +1765,7 @@ Checks: 37 data portability service tests and 11 HTTP route tests passed. The co
 The touched test file includes three previously authorized type corrections: close the restored database without an unsupported argument, capture callback observations in an array, and assert that array. Other type cleanup remains uncommitted.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: audit installation backup restore for publication activation and source revision refresh, then invocation compatibility and the delivery-stage gate.
 No new source file, package, or dependency was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran.
-Evidence: /tmp/nakama-org-export-ref-focused.log, /tmp/nakama-org-export-ref-http.log, /tmp/nakama-org-export-ref-types.log, and /tmp/nakama-org-export-ref-lint.log.
+Evidence: /tmp/airin-org-export-ref-focused.log, /tmp/airin-org-export-ref-http.log, /tmp/airin-org-export-ref-types.log, and /tmp/airin-org-export-ref-lint.log.
 
 ### Slice 2aw — backup restore publication authority
 Installation backup restore now filters staged publications against the destination's current publication IDs, owner IDs, resource kinds, and resource IDs. It reads destination authority after the existing beforeReplace hook drains active requests. A publication removed during staging cannot return through the backup. A changed source under the same publication ID cannot regain the old grant.
@@ -1774,7 +1774,7 @@ Tests cover matching grants, revocation inside beforeReplace, deleted sources, c
 Checks: 62 focused service, platform route, and setup import tests passed across three files. The complete server type check, lint across 1532 files, and git diff --check passed. One test repair changed its replacement resource to an unpublished profile, avoiding a fixture collision with the existing unique publication constraint.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: verify source revision refresh after restore, then invocation compatibility and the delivery-stage gate.
 No new source file, package, or dependency was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-restore-publications-focused.log, /tmp/nakama-restore-publications-types.log, and /tmp/nakama-restore-publications-lint.log.
+Evidence: /tmp/airin-restore-publications-focused.log, /tmp/airin-restore-publications-types.log, and /tmp/airin-restore-publications-lint.log.
 
 ### Slice 2ax — restored shared session refresh proof
 Added a real SQLite backup and restore test for an active shared agent session. The test saves a turn, changes the parent configuration and style, changes team memory, and runs another cached turn. It then restores the backup, reopens the same database adapter, and calls the existing reloadAfterDataRestore hook.
@@ -1783,7 +1783,7 @@ No runtime change was needed. The existing reload hook calls refreshProviderConf
 Checks: 103 OrgService tests passed. The complete server type check, lint across 1532 files, and git diff --check passed. One verification repair copied the read-only history array for typed equality assertions.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: verify shared resource revocation through HTTP, CLI, channels, and automation entry points, plus existing quotas and role checks, then run the delivery-stage gate.
 No new source file, package, dependency, or runtime abstraction was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-restore-refresh-focused.log, /tmp/nakama-shared-restore-refresh-types.log, and /tmp/nakama-shared-restore-refresh-lint.log.
+Evidence: /tmp/airin-shared-restore-refresh-focused.log, /tmp/airin-shared-restore-refresh-types.log, and /tmp/airin-shared-restore-refresh-lint.log.
 
 ### Slice 2ay — HTTP shared session revocation and viewer checks
 Added authenticated HTTP checks for both stored and ephemeral shared agent sessions. A team member creates a real session and runs one turn through the existing agent session implementation with a fake provider. After parent publication removal, HTTP denies both a new shared session and a new turn on the cached session. No additional provider call occurs, and no turn reservation remains active.
@@ -1792,7 +1792,7 @@ No runtime change was needed. Tests exercise the existing browser authentication
 Checks: 136 OrgService and HTTP session scope tests passed across two files. The complete server type check, lint across 1532 files, and git diff --check passed. One verification repair added the required channel to the session-creation request fixture.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: verify CLI, channel, and automation revocation plus team quota and credential ownership, then run the delivery-stage gate.
 No new source file, package, dependency, or runtime abstraction was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-http-revocation-focused.log, /tmp/nakama-shared-http-revocation-types.log, and /tmp/nakama-shared-http-revocation-lint.log.
+Evidence: /tmp/airin-shared-http-revocation-focused.log, /tmp/airin-shared-http-revocation-types.log, and /tmp/airin-shared-http-revocation-lint.log.
 
 ### Slice 2az — automation runner shared source revocation
 Added an integration test through AutomationService, AutomationRunner, and the real AgentService automation execution path. A published shared agent runs with its team profile ID, published source instructions and style, and team memory. Parent private memory stays outside the provider request. The test uses a fake streaming provider and sends no external request.
@@ -1801,7 +1801,7 @@ No runtime change was needed. Existing requireExecutionProfile checks protect ru
 Checks: 137 OrgService and automation service tests passed across two files. The complete server type check, lint across 1532 files, and git diff --check passed. Two verification repairs completed the streaming provider fixture and supplied the required automation description.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: verify CLI and channel revocation plus team quota and credential ownership, then run the delivery-stage gate.
 No new source file, package, dependency, or runtime abstraction was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-automation-revocation-focused.log, /tmp/nakama-shared-automation-revocation-types.log, and /tmp/nakama-shared-automation-revocation-lint.log.
+Evidence: /tmp/airin-shared-automation-revocation-focused.log, /tmp/airin-shared-automation-revocation-types.log, and /tmp/airin-shared-automation-revocation-lint.log.
 
 ### Slice 2ba — shared turn quota and usage isolation
 Added shared agent quota tests for stored chat, ephemeral chat, and automation execution. The parent starts with an exhausted quota. Each team execution still succeeds under its own quota and records its provider tokens and one turn only under the team ID. Parent usage remains unchanged, and sibling usage stays empty.
@@ -1810,16 +1810,16 @@ No runtime change was needed. Existing team-scoped quota and usage callbacks rem
 Checks: 121 OrgService and quota service tests passed across two files. The complete server type check, lint across 1532 files, and git diff --check passed. One verification repair supplied token usage in the fake provider result.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: verify CLI and channel revocation and personal credential ownership, then run the delivery-stage gate.
 No new source file, package, dependency, or runtime abstraction was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-team-quota-focused.log, /tmp/nakama-shared-team-quota-types.log, and /tmp/nakama-shared-team-quota-lint.log.
+Evidence: /tmp/airin-shared-team-quota-focused.log, /tmp/airin-shared-team-quota-types.log, and /tmp/airin-shared-team-quota-lint.log.
 
 ### Slice 2bb — local-token client shared session revocation
-Added real NakamaClient integration checks for CLI, Telegram, Discord, WhatsApp, and Slack session requests. The client uses local-token authentication and the real HTTP session routes through an in-process fetch adapter. Each shared team session completes a normal turn and a streamed turn with a fake provider. Stored sessions use the selected channel, team profile, and local client user.
+Added real AirinClient integration checks for CLI, Telegram, Discord, WhatsApp, and Slack session requests. The client uses local-token authentication and the real HTTP session routes through an in-process fetch adapter. Each shared team session completes a normal turn and a streamed turn with a fake provider. Stored sessions use the selected channel, team profile, and local client user.
 After parent publication removal, new sessions, normal turns, and streamed turns fail with status 404. No additional provider call occurs, and no turn reservation remains active. The owning team can still read saved history. A sibling team cannot read that history, even with the same local token. Shared local profile rows remain unchanged.
 No runtime change was needed. These checks cover the client and server boundary used by CLI and channel workers. They do not start external channel bridges or test platform message delivery.
 Checks: 114 OrgService tests passed, including five channel cases. The complete server type check, lint across 1532 files, and git diff --check passed. One verification repair removed an orgId assertion from StoredSessionRecord, which does not expose that field; sibling access checks verify the team boundary.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: verify personal credential ownership and approval isolation, then run the delivery-stage gate.
 No new source file, package, dependency, or runtime abstraction was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-channel-focused.log, /tmp/nakama-shared-channel-types.log, and /tmp/nakama-shared-channel-lint.log.
+Evidence: /tmp/airin-shared-channel-focused.log, /tmp/airin-shared-channel-types.log, and /tmp/airin-shared-channel-lint.log.
 
 ### Slice 2bc — personal integration connection ownership
 Added a real ComposioService database test with one parent and two child teams. The same user has different connected accounts in each tenant. Assignment reads and session endpoint creation use only the selected tenant's account. Separate tenant cache entries keep those endpoints distinct. Repeated reads reuse the correct endpoint without another remote session request.
@@ -1828,7 +1828,7 @@ No runtime change was needed. Existing shared profile assignment tests still rej
 Checks: 128 ComposioService and OrgService tests passed across two files. The complete server type check, lint across 1532 files, and git diff --check passed. No verification repair was needed. The fake Composio client sends no external request.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: verify shared agent approval policy isolation, then audit all resource paths and run the delivery-stage gate.
 No new source file, package, dependency, or runtime abstraction was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-team-oauth-focused.log, /tmp/nakama-team-oauth-types.log, and /tmp/nakama-team-oauth-lint.log.
+Evidence: /tmp/airin-team-oauth-focused.log, /tmp/airin-team-oauth-types.log, and /tmp/airin-team-oauth-lint.log.
 
 ### Slice 2bd — team policy defaults for new shared instances
 Fixed shared instance creation in the existing SQLite transaction. New instances no longer copy parent approval, post-turn review, curator, or automation policy overrides. Skill policy fields start as null and use team defaults; automation starts enabled, matching ordinary profile defaults. Template identity, instructions, thinking, and model configuration still come from the source.
@@ -1837,7 +1837,7 @@ The database concurrency test now seeds parent policy overrides and verifies tha
 Checks: 133 OrgService and database organization tests passed across two files. Complete server and database type checks, lint across 1532 files, and git diff --check passed. No verification repair was needed.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: audit the five resource paths and remaining approval execution checks, then run the delivery-stage gate before starting the Organization UI.
 No new source file, package, dependency, or runtime abstraction was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-policy-focused.log, /tmp/nakama-shared-policy-server-types.log, /tmp/nakama-shared-policy-db-types.log, and /tmp/nakama-shared-policy-lint.log.
+Evidence: /tmp/airin-shared-policy-focused.log, /tmp/airin-shared-policy-server-types.log, /tmp/airin-shared-policy-db-types.log, and /tmp/airin-shared-policy-lint.log.
 
 ### Slice 2be — shared instance skill proposal guards
 Added shared instance checks to SkillProposalService staging and pending approval. The source link blocks these writes even when the publication or source is unavailable. Ownership checks still return 404 for a foreign tenant. Pending records remain readable, and admins can reject them without applying skill changes.
@@ -1846,7 +1846,7 @@ This slice includes the earlier authorized type correction in insertProposal: co
 Checks: 69 proposal service, skill service, and HTTP proposal tests passed across three files. The complete server type check and git diff --check passed. Two code repairs used the stored profile snapshot and the public database proposal reader in the new test. The first lint check found a line-wrap error; the commit hook formatted it, and the post-commit lint check passed across 1532 files.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: audit completion evidence for all five resource paths and run the delivery-stage gate before starting the Organization UI.
 No new source file, package, dependency, or runtime abstraction was added. No paid provider call, full-suite rerun, browser check, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-shared-proposal-focused.log, /tmp/nakama-shared-proposal-types.log, and /tmp/nakama-shared-proposal-lint.log.
+Evidence: /tmp/airin-shared-proposal-focused.log, /tmp/airin-shared-proposal-types.log, and /tmp/airin-shared-proposal-lint.log.
 
 ### Slice 2bf — audit found missing tool setup readiness; type gate remains open
 The stage audit ran 243 focused resource, proposal, connection, HTTP knowledge, tool catalog, and database tests across seven files; all passed. It then found that published JavaScript and Python tools with missing team credentials appeared ready in the overview. Parent code publication must not imply that a team's required API key or environment variables exist.
@@ -1854,7 +1854,7 @@ An uncommitted slice adds requires_setup to the shared resource contract and Ope
 Checks after the edits: 127 OrgService and HTTP organization tests passed across two files. Complete core and client type checks, lint across 1532 files, and git diff --check passed. The complete server type check fails at apps/server/src/services/org-service.ts:256 with TS18046: tool.handlerConfig is unknown. Two verification repairs corrected the environment-save fixture arguments and response enum assertion, then replaced an invalid blank-key removal fixture with the existing credential deletion operation.
 The iteration stops under goal step 12. Only this Progress record is committed. The five changed source/test files remain unstaged. No delivery stage or implementation step is marked complete. Next: safely validate the requiresApiKey field before reading it, rerun focused tests and types, then resume the resource audit and stage gate.
 No full-suite or knip run started because the audit found unfinished resource behavior. No new file, package, dependency, browser check, paid provider call, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-stage2-focused.log, /tmp/nakama-tool-readiness-focused.log, /tmp/nakama-tool-readiness-server-types.log, /tmp/nakama-tool-readiness-core-types.log, /tmp/nakama-tool-readiness-client-types.log, and /tmp/nakama-tool-readiness-lint.log.
+Evidence: /tmp/airin-stage2-focused.log, /tmp/airin-tool-readiness-focused.log, /tmp/airin-tool-readiness-server-types.log, /tmp/airin-tool-readiness-core-types.log, /tmp/airin-tool-readiness-client-types.log, and /tmp/airin-tool-readiness-lint.log.
 
 ### Slice 2bg — tool setup readiness completed
 Completed the previously uncommitted readiness slice. Shared resource contracts and OpenAPI now include requires_setup. Published JavaScript and Python tools report that state when the active tenant lacks a required API key or environment variable. Parent and sibling credentials cannot supply the team's readiness. Removing credentials updates the next overview; deleting the tool removes its publication.
@@ -1862,7 +1862,7 @@ OrgService reuses the existing readHandlerConfig parser rather than accessing un
 Checks: 127 OrgService and HTTP organization tests passed across two files. Complete server, core, and client type checks, lint across 1532 files, and git diff --check passed. The earlier TS18046 failure is resolved. No verification repair was needed in this iteration.
 Steps 2 and 3 and delivery stage 2 remain unchecked. Next: complete the resource audit and run full tests, check, and knip before closing delivery stage 2 and starting the Organization UI.
 No new file, package, dependency, or abstraction was added. No full-suite rerun, browser check, paid provider call, build, push, or PR ran. Other authorized type cleanup remains uncommitted.
-Evidence: /tmp/nakama-tool-readiness-focused.log, /tmp/nakama-tool-readiness-server-types.log, /tmp/nakama-tool-readiness-core-types.log, /tmp/nakama-tool-readiness-client-types.log, and /tmp/nakama-tool-readiness-lint.log.
+Evidence: /tmp/airin-tool-readiness-focused.log, /tmp/airin-tool-readiness-server-types.log, /tmp/airin-tool-readiness-core-types.log, /tmp/airin-tool-readiness-client-types.log, and /tmp/airin-tool-readiness-lint.log.
 
 ### Slice 2bh — full delivery gate found skill compatibility and lint failures
 The resource audit ran 255 tests across eight files; all passed. Complete server, core, agent, database, and client type checks passed. Ultracite checked 1532 files successfully, and knip passed. These checks use the current worktree, including the earlier authorized type cleanup that remains uncommitted.
@@ -1871,7 +1871,7 @@ Two verification repairs are uncommitted. The first seeds an actual organization
 The required bun run check still fails in its anti-slop phase. The initial run reported 1755 errors across 107 files; the repair run reports 1756 errors. The current totals include 1686 readable-spacing errors and 70 assertion, type, parameter, spread, runtime-type, and reflection errors. No rule was disabled. The full suite was not rerun after the scoped repairs because the verification gate remains open.
 The iteration stops under goal step 12 after two repairs. Only this Progress entry is committed. The three source/test files remain unstaged, together with the earlier type cleanup. No implementation step or delivery stage is marked complete. Next: resolve the anti-slop gate in bounded slices, verify these pending skill repairs, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, build, push, or PR ran. The full web test phase and final release builds remain unverified.
-Evidence: /tmp/nakama-stage2-focused.log, /tmp/nakama-stage2-{server,core,agent,db,client}-types.log, /tmp/nakama-stage2-lint.log, /tmp/nakama-stage2-knip.log, /tmp/nakama-stage2-full-tests.log, /tmp/nakama-stage2-check.log, /tmp/nakama-stage2-skill-fixture.log, /tmp/nakama-stage2-repair-focused.log, /tmp/nakama-stage2-repair-types.log, /tmp/nakama-stage2-repair-lint.log, and /tmp/nakama-stage2-repair-check.log.
+Evidence: /tmp/airin-stage2-focused.log, /tmp/airin-stage2-{server,core,agent,db,client}-types.log, /tmp/airin-stage2-lint.log, /tmp/airin-stage2-knip.log, /tmp/airin-stage2-full-tests.log, /tmp/airin-stage2-check.log, /tmp/airin-stage2-skill-fixture.log, /tmp/airin-stage2-repair-focused.log, /tmp/airin-stage2-repair-types.log, /tmp/airin-stage2-repair-lint.log, and /tmp/airin-stage2-repair-check.log.
 
 ### Slice 2bi — shared skill compatibility repairs completed
 Completed the three pending skill repairs from slice 2bh. The skill creation test now uses a seeded, tenant-owned profile. Plugin catalog requests for a foreign tenant assert status 404. Prompt discovery checks each published parent skill against names already present, instead of rejecting existing local/plugin name combinations. Existing plugin precedence remains valid; published parent collisions still fail with status 409.
@@ -1879,7 +1879,7 @@ The existing plugin and shared-skill regression tests cover the corrected behavi
 The commit contains those three source/test files and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the full current worktree, including that cleanup; it does not prove the server type gate for committed HEAD alone.
 Steps 2 and 3 and delivery stage 2 remain unchecked. This slice does not close the delivery stage. The repository-wide anti-slop failure recorded in 2bh remains open outside these files. Next: clear the remaining lint failures in bounded slices, then rerun the canonical full suite and stage checks before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. The full web test phase and release builds remain unverified.
-Evidence: /tmp/nakama-skill-compat-focused.log, /tmp/nakama-skill-compat-types.log, /tmp/nakama-skill-compat-lint.log, /tmp/nakama-skill-compat-lint-baseline.log, /tmp/nakama-skill-compat-spacing.log, and /tmp/nakama-skill-compat-oxlint.log.
+Evidence: /tmp/airin-skill-compat-focused.log, /tmp/airin-skill-compat-types.log, /tmp/airin-skill-compat-lint.log, /tmp/airin-skill-compat-lint-baseline.log, /tmp/airin-skill-compat-spacing.log, and /tmp/airin-skill-compat-oxlint.log.
 
 ### Slice 2bj — organization service lint gate repaired
 Removed 490 readable-spacing errors from OrgService and its tests with the existing fixer. The runtime service changes add blank lines only. The malformed invite-domain test now passes its deliberate string input without a chained type assertion, using a documented expected type error at that negative test boundary. The test still verifies status 400 and preservation of the stored invite policy for all three invalid inputs.
@@ -1887,7 +1887,7 @@ Checks passed: 127 OrgService and HTTP organization tests across two files, with
 The commit contains only OrgService, its tests, and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. This slice removes the 491 scoped errors found at its start. The repository-wide lint gate remains open outside these files and was not rerun in this slice. Next: repair the remaining resource and HTTP lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, test harness, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-org-spacing-baseline.log, /tmp/nakama-org-spacing-fix.log, /tmp/nakama-org-spacing-focused.log, /tmp/nakama-org-spacing-types.log, /tmp/nakama-org-spacing-oxlint.log, /tmp/nakama-org-spacing-format.log, and /tmp/nakama-org-spacing-lint.log.
+Evidence: /tmp/airin-org-spacing-baseline.log, /tmp/airin-org-spacing-fix.log, /tmp/airin-org-spacing-focused.log, /tmp/airin-org-spacing-types.log, /tmp/airin-org-spacing-oxlint.log, /tmp/airin-org-spacing-format.log, and /tmp/airin-org-spacing-lint.log.
 
 ### Slice 2bk — organization HTTP lint gate repaired
 Removed 197 readable-spacing errors from the organization routes and HTTP tests with the existing fixer. Runtime route changes add blank lines only. Test helpers now accept CreateTeamRequest for valid team creation or serialized JSON strings for deliberately invalid HTTP bodies. Conditional request bodies and CSRF headers are added with explicit statements instead of empty-object spreads. The existing invalid-input, retry, role, context, source-preservation, and CSRF assertions remain unchanged.
@@ -1895,7 +1895,7 @@ The scoped baseline contained 203 errors: 197 spacing errors, three unknown para
 The commit contains only the organization route module, its HTTP test file, and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. This slice does not close the delivery stage. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair the remaining shared-resource lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, abstraction, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-org-http-lint-baseline.log, /tmp/nakama-org-http-lint-fix.log, /tmp/nakama-org-http-format.log, /tmp/nakama-org-http-focused.log, /tmp/nakama-org-http-types.log, /tmp/nakama-org-http-oxlint.log, and /tmp/nakama-org-http-lint.log.
+Evidence: /tmp/airin-org-http-lint-baseline.log, /tmp/airin-org-http-lint-fix.log, /tmp/airin-org-http-format.log, /tmp/airin-org-http-focused.log, /tmp/airin-org-http-types.log, /tmp/airin-org-http-oxlint.log, and /tmp/airin-org-http-lint.log.
 
 ### Slice 2bl — shared knowledge and profile summary lint repaired
 Removed 112 readable-spacing errors from ProfileService and the organization knowledge HTTP tests. Profile summary construction now adds sharedAgent explicitly when the source link exists, preserving its availability and source IDs while omitting the field for ordinary profiles. This replaces an empty-object conditional spread without changing returned values or authorization.
@@ -1904,7 +1904,7 @@ The scoped baseline contained 115 errors: 112 spacing errors, one conditional em
 The commit contains only ProfileService, the knowledge HTTP test file, and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair the remaining shared runtime and resource lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-knowledge-lint-baseline.log, /tmp/nakama-knowledge-lint-fix.log, /tmp/nakama-knowledge-format.log, /tmp/nakama-knowledge-oxlint.log, /tmp/nakama-knowledge-lint-focused.log, /tmp/nakama-knowledge-lint-types.log, and /tmp/nakama-knowledge-lint-check.log.
+Evidence: /tmp/airin-knowledge-lint-baseline.log, /tmp/airin-knowledge-lint-fix.log, /tmp/airin-knowledge-format.log, /tmp/airin-knowledge-oxlint.log, /tmp/airin-knowledge-lint-focused.log, /tmp/airin-knowledge-lint-types.log, and /tmp/airin-knowledge-lint-check.log.
 
 ### Slice 2bm — shared agent execution spacing repaired
 Removed all 138 readable-spacing errors from AgentService and its tests with the existing fixer. The diff adds blank lines only: git diff --ignore-blank-lines produces no changes for either file. No runtime branch, access check, test assertion, signature, or configuration changed. Existing execution tests provide regression coverage; no new behavior test was needed for spacing alone.
@@ -1912,7 +1912,7 @@ Checks passed: 171 AgentService and OrgService tests across two files, with 1402
 The commit contains only AgentService, its test file, and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair the remaining shared skill, tool, and database lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, abstraction, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-agent-lint-baseline.log, /tmp/nakama-agent-lint-fix.log, /tmp/nakama-agent-oxlint.log, /tmp/nakama-agent-lint-focused.log, /tmp/nakama-agent-lint-types.log, and /tmp/nakama-agent-lint-check.log.
+Evidence: /tmp/airin-agent-lint-baseline.log, /tmp/airin-agent-lint-fix.log, /tmp/airin-agent-oxlint.log, /tmp/airin-agent-lint-focused.log, /tmp/airin-agent-lint-types.log, and /tmp/airin-agent-lint-check.log.
 
 ### Slice 2bn — shared skill test lint repaired
 Removed 140 readable-spacing errors from the skill service tests with the existing fixer. Session-refresh fixtures now access the existing AgentService state fields with their actual types, removing a chained unknown assertion and an anonymous replacement type. The stored transcript assertion uses the existing ChatMessage contract with a safety comment for the real session-write path. No runtime source or behavior assertion changed.
@@ -1920,7 +1920,7 @@ The scoped baseline contained 145 errors: 140 spacing errors, one chained assert
 The commit contains only the skill service test file and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside this file and was not rerun here. Next: repair the remaining tool, database, and supporting resource lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, abstraction, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-skill-tests-lint-baseline.log, /tmp/nakama-skill-tests-lint-fix.log, /tmp/nakama-skill-tests-format.log, /tmp/nakama-skill-tests-oxlint.log, /tmp/nakama-skill-tests-focused.log, /tmp/nakama-skill-tests-types.log, and /tmp/nakama-skill-tests-lint-check.log.
+Evidence: /tmp/airin-skill-tests-lint-baseline.log, /tmp/airin-skill-tests-lint-fix.log, /tmp/airin-skill-tests-format.log, /tmp/airin-skill-tests-oxlint.log, /tmp/airin-skill-tests-focused.log, /tmp/airin-skill-tests-types.log, and /tmp/airin-skill-tests-lint-check.log.
 
 ### Slice 2bo — database lint repaired
 Removed 113 readable-spacing errors from the SQLite adapter and organization archive tests with the existing fixer. The JSON record type now uses the adapter's existing recursive JsonValue contract. The existing record guard preserves its input type. The question filter keeps the same validation while retaining the narrowed question type. No database operation, access check, migration, or behavior assertion changed.
@@ -1928,7 +1928,7 @@ Checks passed: 161 database tests across 28 files, with 679 assertions; complete
 The commit contains only the SQLite adapter, organization archive tests, and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair remaining tool and supporting resource lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-db-lint-baseline.log, /tmp/nakama-db-lint-fix.log, /tmp/nakama-db-oxlint.log, /tmp/nakama-db-focused.log, /tmp/nakama-db-types.log, and /tmp/nakama-db-lint-check.log.
+Evidence: /tmp/airin-db-lint-baseline.log, /tmp/airin-db-lint-fix.log, /tmp/airin-db-oxlint.log, /tmp/airin-db-focused.log, /tmp/airin-db-types.log, and /tmp/airin-db-lint-check.log.
 
 ### Slice 2bp — shared tool HTTP and resolver spacing repaired
 Removed all 34 readable-spacing errors from the tool HTTP routes, their tests, and the stored tool resolver with the existing fixer. The diff adds blank lines only: git diff --ignore-blank-lines produces no changes for these files. No runtime branch, authorization rule, credential lookup, test assertion, signature, or configuration changed. Existing tool tests provide regression coverage; no new behavior test was needed for spacing alone.
@@ -1936,7 +1936,7 @@ Checks passed: 134 tool HTTP, tool resolver, and OrgService tests across three f
 The commit contains only these three tool files and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair remaining custom tool execution and supporting resource lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, abstraction, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-tools-lint-baseline.log, /tmp/nakama-tools-lint-fix.log, /tmp/nakama-tools-focused.log, /tmp/nakama-tools-types.log, /tmp/nakama-tools-lint-check.log, and /tmp/nakama-tools-oxlint.log.
+Evidence: /tmp/airin-tools-lint-baseline.log, /tmp/airin-tools-lint-fix.log, /tmp/airin-tools-focused.log, /tmp/airin-tools-types.log, /tmp/airin-tools-lint-check.log, and /tmp/airin-tools-oxlint.log.
 
 ### Slice 2bq — custom tool execution lint repaired
 Removed nine readable-spacing errors from JavaScript and Python tool execution. The JavaScript runner now builds its context before calling the tool, preserving skill context and the team workspace override. Built-in source lookup now uses Map, preserving known entries and returning 404 for unknown names, including inherited object names. Added a behavior test for missing_tool, toString, constructor, and __proto__ lookups. Invalid API-key tests use direct calls, retaining numeric input rejection through a documented type-error fixture.
@@ -1945,7 +1945,7 @@ Checks passed: 174 custom tool loader, source lookup, tool HTTP, and OrgService 
 The commit contains only seven custom tool files and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair supporting shared resource lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-custom-tools-baseline.log, /tmp/nakama-custom-tools-fix.log, /tmp/nakama-custom-tools-format.log, /tmp/nakama-custom-tools-test-format.log, /tmp/nakama-custom-tools-focused.log, /tmp/nakama-custom-tools-types.log, /tmp/nakama-custom-tools-oxlint.log, and /tmp/nakama-custom-tools-lint-check.log.
+Evidence: /tmp/airin-custom-tools-baseline.log, /tmp/airin-custom-tools-fix.log, /tmp/airin-custom-tools-format.log, /tmp/airin-custom-tools-test-format.log, /tmp/airin-custom-tools-focused.log, /tmp/airin-custom-tools-types.log, /tmp/airin-custom-tools-oxlint.log, and /tmp/airin-custom-tools-lint-check.log.
 
 ### Slice 2br — shared knowledge access spacing repaired
 Removed all 34 readable-spacing errors from the knowledge catalog, document store, knowledge search tool, and their affected tests with the existing fixer. The diff adds blank lines only: git diff --ignore-blank-lines produces no changes for these five files. No publication check, path validation, search scope, download rule, runtime branch, or test assertion changed. Existing knowledge access tests provide regression coverage; no new behavior test was needed for spacing alone.
@@ -1953,7 +1953,7 @@ Checks passed: 74 knowledge store, search tool, and organization knowledge HTTP 
 The commit contains only these five knowledge files and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair remaining shared resource and compatibility lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, abstraction, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-kb-lint-baseline.log, /tmp/nakama-kb-lint-fix.log, /tmp/nakama-kb-focused.log, /tmp/nakama-kb-core-types.log, /tmp/nakama-kb-server-types.log, /tmp/nakama-kb-lint-check.log, and /tmp/nakama-kb-oxlint.log.
+Evidence: /tmp/airin-kb-lint-baseline.log, /tmp/airin-kb-lint-fix.log, /tmp/airin-kb-focused.log, /tmp/airin-kb-core-types.log, /tmp/airin-kb-server-types.log, /tmp/airin-kb-lint-check.log, and /tmp/airin-kb-oxlint.log.
 
 ### Slice 2bs — shared file tool lint repaired
 Removed the 24 spacing failures and chained fixture assertion from the file tool baseline. The published Word asset test now supplies the complete memory-file contract. Its read, write, and remove callbacks all reject local memory access, preserving the assertion that parent assets bypass local memory. Removed the unused ToolContext import. File tool source changes add blank lines only; no path guard, publication callback, runtime branch, or behavior assertion changed.
@@ -1961,7 +1961,7 @@ Checks passed: 143 file tool, knowledge search, and skill service tests across t
 The commit contains only builtin.ts, builtin.test.ts, and this Progress entry. The inspected earlier SearchFilesInput correction remains unstaged because it needs no change in this slice. Other authorized type cleanup also remains unstaged. Type verification uses the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair remaining shared resource and compatibility lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-file-tools-baseline.log, /tmp/nakama-file-tools-fix.log, /tmp/nakama-file-tools-focused.log, /tmp/nakama-file-tools-core-types.log, /tmp/nakama-file-tools-server-types.log, /tmp/nakama-file-tools-lint-check.log, and /tmp/nakama-file-tools-oxlint.log.
+Evidence: /tmp/airin-file-tools-baseline.log, /tmp/airin-file-tools-fix.log, /tmp/airin-file-tools-focused.log, /tmp/airin-file-tools-core-types.log, /tmp/airin-file-tools-server-types.log, /tmp/airin-file-tools-lint-check.log, and /tmp/airin-file-tools-oxlint.log.
 
 ### Slice 2bt — shared resource portability lint repaired
 Removed all 85 readable-spacing errors from data portability, profile portability, and their tests. Avatar media lookup now uses Map with the same five extensions. Shared profile reference validation reuses the existing string guard and retains nonempty and 256-character limits. Extended invalid-reference tests with numeric publication IDs, boolean source organization IDs, and oversized source profile IDs. Preview and import must reject each input before creating profiles.
@@ -1970,7 +1970,7 @@ Checks passed: 172 data portability, profile portability, and OrgService tests a
 The commit contains only these four portability files and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair remaining resource, migration, and client lint failures, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-portability-baseline.log, /tmp/nakama-portability-fix.log, /tmp/nakama-portability-format.log, /tmp/nakama-portability-test-format.log, /tmp/nakama-portability-focused.log, /tmp/nakama-portability-types.log, /tmp/nakama-portability-lint-check.log, and /tmp/nakama-portability-oxlint.log.
+Evidence: /tmp/airin-portability-baseline.log, /tmp/airin-portability-fix.log, /tmp/airin-portability-format.log, /tmp/airin-portability-test-format.log, /tmp/airin-portability-focused.log, /tmp/airin-portability-types.log, /tmp/airin-portability-lint-check.log, and /tmp/airin-portability-oxlint.log.
 
 ### Slice 2bu — shared resource route and contract spacing repaired
 Removed all 84 readable-spacing errors from skill routes, profile and Composio service tests, migration tests, and client tests with the existing fixer. The diff adds blank lines only: git diff --ignore-blank-lines produces no changes for these five files. No route authorization, shared-source restriction, migration, client operation, OAuth scope, runtime branch, or test assertion changed. Existing behavior tests provide regression coverage; no new test was needed for spacing alone.
@@ -1978,7 +1978,7 @@ Checks passed: 203 profile, Composio, skill, migration, and client tests across 
 The commit contains only these five resource files and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: inspect remaining repository lint errors, repair the required compatibility changes, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, abstraction, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-resource-contract-baseline.log, /tmp/nakama-resource-contract-fix.log, /tmp/nakama-resource-contract-focused.log, /tmp/nakama-resource-contract-server-types.log, /tmp/nakama-resource-contract-db-types.log, /tmp/nakama-resource-contract-client-types.log, /tmp/nakama-resource-contract-lint-check.log, and /tmp/nakama-resource-contract-oxlint.log.
+Evidence: /tmp/airin-resource-contract-baseline.log, /tmp/airin-resource-contract-fix.log, /tmp/airin-resource-contract-focused.log, /tmp/airin-resource-contract-server-types.log, /tmp/airin-resource-contract-db-types.log, /tmp/airin-resource-contract-client-types.log, /tmp/airin-resource-contract-lint-check.log, and /tmp/airin-resource-contract-oxlint.log.
 
 ### Slice 2bv — HTTP boundary regression lint repaired
 The current repository scan found 179 lint errors before this slice. Removed all 39 spacing errors in HTTP app tests, platform MFA tests, and unexpected-error tests with the existing fixer. Included the inspected earlier authorized regression tests and fixture corrections in these files. They cover invalid profile, model, MCP, provider, and passkey requests; service-call rejection; unchanged authentication factors; command alias compatibility; and database-free route registration. The fixture corrections use the existing fetch helper, real request field names, and typed service calls.
@@ -1986,15 +1986,15 @@ No runtime source changed in this slice. No authentication, tenant access, servi
 The commit contains only these three HTTP test files and this Progress entry. Other authorized type cleanup remains unstaged, including the route implementation and shared test helpers on which these regression tests depend. Type and test verification use the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files. Next: repair the remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-remaining-lint-baseline.log, /tmp/nakama-http-boundary-fix.log, /tmp/nakama-http-boundary-focused.log, /tmp/nakama-http-boundary-types.log, /tmp/nakama-http-boundary-lint-check.log, and /tmp/nakama-http-boundary-oxlint.log.
+Evidence: /tmp/airin-remaining-lint-baseline.log, /tmp/airin-http-boundary-fix.log, /tmp/airin-http-boundary-focused.log, /tmp/airin-http-boundary-types.log, /tmp/airin-http-boundary-lint-check.log, and /tmp/airin-http-boundary-oxlint.log.
 
 ### Slice 2bw — shared agent support spacing repaired
-Removed all 16 readable-spacing errors from skill proposals, image vision fallback, and Super Nakama tests with the existing fixer. The diff adds blank lines only: git diff --ignore-blank-lines produces no changes for these five files. No shared-source write guard, model authorization, approval action, profile creation restriction, runtime branch, or test assertion changed. Existing behavior tests provide regression coverage; no new test was needed for spacing alone.
-Checks passed: 163 skill proposal, image vision fallback, Super Nakama, and OrgService tests across four files, with 1328 assertions; complete server type check; scoped anti-slop check; Ultracite across 1532 files; and git diff --check. No verification repair was needed, and no lint rule was disabled.
+Removed all 16 readable-spacing errors from skill proposals, image vision fallback, and Airin tests with the existing fixer. The diff adds blank lines only: git diff --ignore-blank-lines produces no changes for these five files. No shared-source write guard, model authorization, approval action, profile creation restriction, runtime branch, or test assertion changed. Existing behavior tests provide regression coverage; no new test was needed for spacing alone.
+Checks passed: 163 skill proposal, image vision fallback, Airin, and OrgService tests across four files, with 1328 assertions; complete server type check; scoped anti-slop check; Ultracite across 1532 files; and git diff --check. No verification repair was needed, and no lint rule was disabled.
 The commit contains only these five agent support files and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, abstraction, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-agent-support-baseline.log, /tmp/nakama-agent-support-fix.log, /tmp/nakama-agent-support-focused.log, /tmp/nakama-agent-support-types.log, /tmp/nakama-agent-support-lint-check.log, and /tmp/nakama-agent-support-oxlint.log.
+Evidence: /tmp/airin-agent-support-baseline.log, /tmp/airin-agent-support-fix.log, /tmp/airin-agent-support-focused.log, /tmp/airin-agent-support-types.log, /tmp/airin-agent-support-lint-check.log, and /tmp/airin-agent-support-oxlint.log.
 
 ### Slice 2bx — worker and file lookup compatibility lint repaired
 Replaced five open dictionary annotations with inferred Map lookups for worker scripts, static content types, plugin UI content types, and plugin error statuses. Worker names still derive from the source table, and worker tables retain PlatformWorkerName coverage checks. Unknown file extensions retain their existing fallback. Removed two spacing failures in the worker migration test.
@@ -2003,7 +2003,7 @@ Checks passed: 63 worker manager, static web, and plugin HTTP tests across three
 The commit contains only these six lookup and regression files and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree, including that cleanup; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide lint gate remains open outside these files and was not rerun here. Next: repair remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-lookup-baseline.log, /tmp/nakama-lookup-fix.log, /tmp/nakama-lookup-format.log, /tmp/nakama-lookup-focused.log, /tmp/nakama-lookup-types.log, /tmp/nakama-lookup-lint-check.log, and /tmp/nakama-lookup-oxlint.log.
+Evidence: /tmp/airin-lookup-baseline.log, /tmp/airin-lookup-fix.log, /tmp/airin-lookup-format.log, /tmp/airin-lookup-focused.log, /tmp/airin-lookup-types.log, /tmp/airin-lookup-lint-check.log, and /tmp/airin-lookup-oxlint.log.
 
 ### Slice 2by — coding-agent environment compatibility lint repaired
 Removed seven spacing errors from the shared-agent model resolution path. Replaced three open dictionary return annotations with the existing CodingAgentSpawnEnvResult environment contract. No new type, wrapper, dependency, or runtime branch was needed for these lint fixes.
@@ -2012,7 +2012,7 @@ Checks passed: 55 coding-agent environment, harness, and bash tests across four 
 The commit contains only these four environment source and test files and this Progress entry. Other authorized type cleanup remains unstaged. Type and test verification use the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide anti-slop gate remains open outside these files. Next: repair remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-coding-env-baseline.log, /tmp/nakama-coding-env-fix.log, /tmp/nakama-coding-env-focused.log, /tmp/nakama-coding-env-types.log, /tmp/nakama-coding-env-oxlint.log, and /tmp/nakama-coding-env-lint-check.log.
+Evidence: /tmp/airin-coding-env-baseline.log, /tmp/airin-coding-env-fix.log, /tmp/airin-coding-env-focused.log, /tmp/airin-coding-env-types.log, /tmp/airin-coding-env-oxlint.log, and /tmp/airin-coding-env-lint-check.log.
 
 ### Slice 2bz — MCP stored configuration compatibility lint repaired
 Used the existing StoredMcpServerRecord configuration contract at stored MCP parsing boundaries and removed eleven spacing errors. Stored configuration remains untrusted: transport configuration passes through Zod before a client can connect, and OAuth grants pass through the SDK token and client-information schemas. No parser was replaced by a type assertion, and no lint rule was disabled. The scoped baseline contained nine unknown-parameter errors and eleven spacing errors.
@@ -2021,7 +2021,7 @@ Checks passed: 156 MCP service, client manager, OAuth, tool bridge, and OrgServi
 The commit contains only these six MCP source and test files and this Progress entry. Other authorized type cleanup remains unstaged, including MCP tool bridge test fixtures. Type and test verification use the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide anti-slop gate remains open outside these files. Next: repair remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. The OAuth tests used a local fake server; live OAuth and release builds remain unverified.
-Evidence: /tmp/nakama-mcp-compat-baseline.log, /tmp/nakama-mcp-compat-format.log, /tmp/nakama-mcp-compat-fix.log, /tmp/nakama-mcp-compat-focused.log, /tmp/nakama-mcp-compat-types.log, /tmp/nakama-mcp-compat-oxlint.log, and /tmp/nakama-mcp-compat-lint-check.log.
+Evidence: /tmp/airin-mcp-compat-baseline.log, /tmp/airin-mcp-compat-format.log, /tmp/airin-mcp-compat-fix.log, /tmp/airin-mcp-compat-focused.log, /tmp/airin-mcp-compat-types.log, /tmp/airin-mcp-compat-oxlint.log, and /tmp/airin-mcp-compat-lint-check.log.
 
 ### Slice 2ca — memory backend response compatibility lint repaired
 The current repository scan found 87 anti-slop errors before this slice. Removed five spacing errors from memory backend document synchronization. Included the inspected earlier authorized response validation and regression tests in this source and test pair. GET responses must parse as documents before ownership checks; POST responses must contain a valid acknowledgement before the receipt ID changes. Invalid responses reject the operation and retain retry state. Existing document ownership and team scope checks remain in place.
@@ -2030,7 +2030,7 @@ Checks passed: 133 memory backend and OrgService tests across two files, with 12
 The commit contains only the memory backend source, its tests, and this Progress entry. Other authorized type cleanup remains unstaged. Type and test verification use the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide anti-slop gate remains open outside these files. Next: repair remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. The memory backend tests used a fake transport; live remote memory and release builds remain unverified.
-Evidence: /tmp/nakama-remaining-lint-current.log, /tmp/nakama-memory-compat-baseline.log, /tmp/nakama-memory-compat-fix.log, /tmp/nakama-memory-compat-focused.log, /tmp/nakama-memory-compat-types.log, /tmp/nakama-memory-compat-oxlint.log, and /tmp/nakama-memory-compat-lint-check.log.
+Evidence: /tmp/airin-remaining-lint-current.log, /tmp/airin-memory-compat-baseline.log, /tmp/airin-memory-compat-fix.log, /tmp/airin-memory-compat-focused.log, /tmp/airin-memory-compat-types.log, /tmp/airin-memory-compat-oxlint.log, and /tmp/airin-memory-compat-lint-check.log.
 
 ### Slice 2cb — Composio SDK response compatibility lint repaired
 Documented three narrow no-unknown-parameters exceptions at the actual SDK response parsing boundaries. Each function immediately parses its input with the existing Zod schema. These inputs must accept malformed external fields and SDK nullable fields; a typed input must not bypass or replace runtime validation. No new alias, wrapper, parser, file, or dependency was added.
@@ -2039,7 +2039,7 @@ Checks passed: 41 Composio API client, service, and tool bridge tests across thr
 The commit contains only the Composio API client source, its tests, and this Progress entry. Other authorized type cleanup remains unstaged, including tool bridge fixtures. Type and test verification use the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide anti-slop gate remains open outside these files. Next: repair remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Tests used fixtures; live Composio OAuth and release builds remain unverified.
-Evidence: /tmp/nakama-composio-compat-baseline.log, /tmp/nakama-composio-compat-format.log, /tmp/nakama-composio-compat-focused.log, /tmp/nakama-composio-compat-types.log, /tmp/nakama-composio-compat-oxlint.log, and /tmp/nakama-composio-compat-lint-check.log.
+Evidence: /tmp/airin-composio-compat-baseline.log, /tmp/airin-composio-compat-format.log, /tmp/airin-composio-compat-focused.log, /tmp/airin-composio-compat-types.log, /tmp/airin-composio-compat-oxlint.log, and /tmp/airin-composio-compat-lint-check.log.
 
 ### Slice 2cc — ACP byte-stream compatibility lint repaired
 Replaced two chained assertions in the ACP child-process and fake-agent streams with single intersection assertions that retain Node's original stream type and the SDK's DOM byte-stream contract. Kept SAFETY comments for the verified byte-stream boundary and added the required spacing. No transport, stream buffering, connection initialization, process exit handling, or capability restriction changed. No new file, wrapper, adapter, or dependency was added.
@@ -2048,7 +2048,7 @@ Checks passed: 35 ACP tests across nine files, with 55 assertions; complete serv
 The commit contains only the ACP process source, fake-agent fixture, and this Progress entry. Other authorized type cleanup remains unstaged. Type verification uses the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide anti-slop gate remains open outside these files. Next: repair remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Tests used the local fake agent; live coding providers and release builds remain unverified.
-Evidence: /tmp/nakama-acp-compat-baseline.log, /tmp/nakama-acp-compat-probe-types.log, /tmp/nakama-acp-compat-format.log, /tmp/nakama-acp-compat-focused.log, /tmp/nakama-acp-compat-types.log, /tmp/nakama-acp-compat-oxlint.log, and /tmp/nakama-acp-compat-lint-check.log.
+Evidence: /tmp/airin-acp-compat-baseline.log, /tmp/airin-acp-compat-probe-types.log, /tmp/airin-acp-compat-format.log, /tmp/airin-acp-compat-focused.log, /tmp/airin-acp-compat-types.log, /tmp/airin-acp-compat-oxlint.log, and /tmp/airin-acp-compat-lint-check.log.
 
 ### Slice 2cd — Gemini provider compatibility verified and committed
 Removed three spacing failures from Gemini configuration and provider tests. Included the inspected earlier authorized Gemini compatibility changes across its three source modules and four test files. Tool declarations send sanitized core JSON schemas through the installed SDK's parametersJsonSchema field; parameters remains absent. Function call streaming uses the SDK FunctionCall contract, and argument parsing retains the existing record parser. Unresolved image_ref and document_ref content cannot become invalid inline provider data. Existing provider signatures and tool IDs remain preserved through serialized history.
@@ -2057,7 +2057,7 @@ Checks passed: 26 Gemini tests across four files, with 68 assertions; complete s
 The commit contains only these seven Gemini source and test files and this Progress entry. Other authorized type cleanup remains unstaged, including shared provider test helpers. Type and test verification use the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide anti-slop gate remains open outside these files. Next: repair remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Gemini verification used mocked HTTP and offline cassette replay; live provider behavior and release builds remain unverified.
-Evidence: /tmp/nakama-gemini-compat-baseline.log, /tmp/nakama-gemini-compat-fix.log, /tmp/nakama-gemini-compat-focused.log, /tmp/nakama-gemini-compat-types.log, /tmp/nakama-gemini-compat-oxlint.log, and /tmp/nakama-gemini-compat-lint-check.log.
+Evidence: /tmp/airin-gemini-compat-baseline.log, /tmp/airin-gemini-compat-fix.log, /tmp/airin-gemini-compat-focused.log, /tmp/airin-gemini-compat-types.log, /tmp/airin-gemini-compat-oxlint.log, and /tmp/airin-gemini-compat-lint-check.log.
 
 ### Slice 2ce — OpenRouter and compatible-provider compatibility verified
 Removed seven spacing failures from OpenRouter and OpenAI-compatible provider tests. Included the inspected earlier authorized SDK compatibility changes in the two provider sources and OpenCode Go fixture tests. OpenRouter parses the SDK ChatResult contract, joins structured text parts for chat and text generation, and rejects a stream response for a non-stream request or a non-stream response for a stream request. The existing error handling, retry checks, routing configuration, and tool result parsing remain in place. OpenAI-compatible reasoning controls use the SDK request field contract, while reasoning details retain their existing array validation.
@@ -2066,7 +2066,7 @@ Checks passed: 65 provider tests across five files, with 290 assertions; complet
 The commit contains only these five provider source and test files and this Progress entry. Other authorized type cleanup remains unstaged, including provider factories and shared test helpers. Type and test verification use the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide anti-slop gate remains open outside these files. Next: repair remaining compatibility lint errors and commit their inspected type corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Tests used mocked HTTP and a local fixture; live providers and release builds remain unverified.
-Evidence: /tmp/nakama-compatible-provider-baseline.log, /tmp/nakama-compatible-provider-fix.log, /tmp/nakama-compatible-provider-focused.log, /tmp/nakama-compatible-provider-types.log, /tmp/nakama-compatible-provider-oxlint.log, and /tmp/nakama-compatible-provider-lint-check.log.
+Evidence: /tmp/airin-compatible-provider-baseline.log, /tmp/airin-compatible-provider-fix.log, /tmp/airin-compatible-provider-focused.log, /tmp/airin-compatible-provider-types.log, /tmp/airin-compatible-provider-oxlint.log, and /tmp/airin-compatible-provider-lint-check.log.
 
 ### Slice 2cf — provider test fixtures verified and committed
 Reused the existing core asTestFetch helper through the server provider test helper. The helper retains mock call tracking and adds an offline preconnect function. Included the inspected earlier authorized fixture corrections across Anthropic streaming, thinking, tool replay, OpenAI streaming and thinking, message mapping, compaction estimates, and usage tracking. SDK content fixtures include signature and citations fields; tool arguments use the existing object contract; request captures include the fields asserted by the tests. Message mapping assertions check the complete expected message shape without unsafe SDK union access.
@@ -2075,163 +2075,163 @@ Checks passed: 98 provider tests across eight files, with 490 assertions; comple
 The commit contains only these nine provider helper and test files and this Progress entry. Other authorized type cleanup remains unstaged. Verification uses the current worktree; committed HEAD alone remains unverified.
 Steps 2 and 3 and delivery stage 2 remain unchecked. The repository-wide anti-slop gate remains open outside these files. Next: complete the remaining compatibility corrections, then repeat the full delivery gate before starting the Organization UI.
 No new file, package, dependency, browser check, paid provider call, full-suite rerun, build, push, or PR ran. Live provider behavior and release builds remain unverified.
-Evidence: /tmp/nakama-provider-fixtures-baseline.log, /tmp/nakama-provider-fixtures-focused.log, /tmp/nakama-provider-fixtures-types.log, /tmp/nakama-provider-fixtures-oxlint.log, and /tmp/nakama-provider-fixtures-lint-check.log.
+Evidence: /tmp/airin-provider-fixtures-baseline.log, /tmp/airin-provider-fixtures-focused.log, /tmp/airin-provider-fixtures-types.log, /tmp/airin-provider-fixtures-oxlint.log, and /tmp/airin-provider-fixtures-lint-check.log.
 
 ### Slice 2cg — provider factory and fetch fixture compatibility committed
 Committed the inspected earlier authorized provider factory and OAuth type corrections. The API-key factory excludes the two OAuth provider kinds already handled by createProviderForInstance. JWT parsing returns the existing schema's inferred type and retains runtime validation. Request fixtures include system; ChatGPT assertions check both reasoning states; Ollama fixtures reuse asTestFetch. Committed the existing core fetch helper, which retains mock call tracking and supplies offline preconnect. Removed two spacing failures and one obsolete assertion comment. No production routing, token refresh, account validation, or credential access changed.
 Checks passed: 78 tests across eight files, with 291 assertions; complete server and core type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. Tests cover provider routing, OAuth refresh and failure, model discovery, channel fetch fixtures, and offline preconnect. Local routing tests used a fake HTTP server. No verification repair was needed. The commit contains these seven source and test files plus this entry; other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish remaining compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; live providers and release builds remain unverified.
-Evidence: /tmp/nakama-provider-factory-baseline.log, /tmp/nakama-provider-factory-focused.log, /tmp/nakama-provider-factory-server-types.log, /tmp/nakama-provider-factory-core-types.log, /tmp/nakama-provider-factory-oxlint.log, and /tmp/nakama-provider-factory-lint-check.log.
+Evidence: /tmp/airin-provider-factory-baseline.log, /tmp/airin-provider-factory-focused.log, /tmp/airin-provider-factory-server-types.log, /tmp/airin-provider-factory-core-types.log, /tmp/airin-provider-factory-oxlint.log, and /tmp/airin-provider-factory-lint-check.log.
 
 ### Slice 2ch — integration tool bridge fixtures verified and committed
 Committed the inspected earlier authorized Composio builder contracts and fixtures. Each builder accepts the existing service methods it actually calls through Pick; fixtures satisfy that contract without asserting an incomplete object as the complete service. MCP tests require parameter properties before checking removal of internal context. Extended the missing-user test to verify that connect tools cannot start OAuth; its assignment, session, and connection methods throw if called. Production tool behavior and credential checks remain unchanged. Caller inspection covered AgentService.resolveProfileTools and both builder test paths.
 Checks passed: 152 Composio bridge, MCP bridge, Composio service, and OrgService tests across four files, with 1269 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This commit contains the bridge source, two bridge test files, and this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish remaining compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; live OAuth and release builds remain unverified.
-Evidence: /tmp/nakama-tool-bridge-baseline.log, /tmp/nakama-tool-bridge-focused.log, /tmp/nakama-tool-bridge-types.log, /tmp/nakama-tool-bridge-oxlint.log, and /tmp/nakama-tool-bridge-lint-check.log.
+Evidence: /tmp/airin-tool-bridge-baseline.log, /tmp/airin-tool-bridge-focused.log, /tmp/airin-tool-bridge-types.log, /tmp/airin-tool-bridge-oxlint.log, and /tmp/airin-tool-bridge-lint-check.log.
 
 ### Slice 2ci — email tool input compatibility repaired
 Kept the existing schema input and parsed output types distinct. Removed the unknown-value dictionary intersection and chained test assertion. The invalid-send fixture uses a documented expected type error to exercise runtime validation; its test now checks rejection and confirms that no sender is created. The cross-action fixture retains its complete inferred shape, including extra flat-schema fields, without widening the production contract. Existing schema parsing, mailbox scope, recipient validation, sender errors, and cleanup remain in place. Caller inspection covered runEmailTool, its parser, the registered builtin tool, and the test paths.
 Checks passed after two repairs: 16 email and mail tests across three files, with 68 assertions; complete core and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. The first repair retained the cross-action fixture's inferred shape after excess-property checking failed. The second repaired spacing and formatting. The commit contains only the email source, its tests, and this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish remaining compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; live mail delivery and release builds remain unverified.
-Evidence: /tmp/nakama-email-compat-baseline.log, /tmp/nakama-email-compat-focused.log, /tmp/nakama-email-compat-core-types.log, /tmp/nakama-email-compat-server-types.log, /tmp/nakama-email-compat-oxlint.log, /tmp/nakama-email-compat-format.log, and /tmp/nakama-email-compat-lint-check.log.
+Evidence: /tmp/airin-email-compat-baseline.log, /tmp/airin-email-compat-focused.log, /tmp/airin-email-compat-core-types.log, /tmp/airin-email-compat-server-types.log, /tmp/airin-email-compat-oxlint.log, /tmp/airin-email-compat-format.log, and /tmp/airin-email-compat-lint-check.log.
 
 ### Slice 2cj — questionnaire input compatibility verified and committed
 Documented one narrow no-unknown-parameters exception at the existing schema parsing boundary. Tool input remains untrusted until QuestionnaireInputSchema validates it. Included the inspected earlier invalid-input regression and null filtering after the complete-questionnaire rejection check; malformed questions cannot produce partial stored data. Extended that test to confirm invalid replacement input preserves an existing questionnaire. Removed one spacing failure from the offline cassette test. Caller inspection covered the registered tool, AgentService construction, state writes, and cassette tests. No schema validation, session requirement, legacy choice support, or pending-state protection was removed.
 Checks passed: eight questionnaire tool, state, and cassette tests across three files, with 21 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. LLM_VCR_MODE=replay used the existing OpenAI recording offline. No verification repair was needed. The commit contains the questionnaire tool and its two test files plus this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish remaining compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; live providers and release builds remain unverified.
-Evidence: /tmp/nakama-question-compat-baseline.log, /tmp/nakama-question-cassette-baseline.log, /tmp/nakama-question-compat-format.log, /tmp/nakama-question-compat-focused.log, /tmp/nakama-question-compat-types.log, /tmp/nakama-question-compat-oxlint.log, and /tmp/nakama-question-compat-lint-check.log.
+Evidence: /tmp/airin-question-compat-baseline.log, /tmp/airin-question-cassette-baseline.log, /tmp/airin-question-compat-format.log, /tmp/airin-question-compat-focused.log, /tmp/airin-question-compat-types.log, /tmp/airin-question-compat-oxlint.log, and /tmp/airin-question-compat-lint-check.log.
 
 ### Slice 2ck — session route compatibility verified and committed
 Committed inspected earlier session schema, stream fixture, response byte, and browser-session fixture corrections. Attachment schemas require the fields consumed by message handlers; image download responses use a Uint8Array body. streamMessage accepts its three existing session methods through Pick. Stream fixtures satisfy that contract directly; timer spies verify that a completed turn clears its actual deadline. Browser-session overloads retain an explicitly supplied orgId, and fresh-install fixtures return that known ID. Cognito request fixtures permit omitted optional creation fields. Removed two spacing failures. Caller inspection covered registered session routes, streamMessage, setup and login fixtures, and their callers.
 Added eight invalid attachment requests across normal and streamed modes. Each returns HTTP 400, leaves stored history unchanged, and makes no provider request; repeated requests also verify cancellation of the failed turn. Checks passed: 47 Cognito, organization scope, and stream tests across three files, with 211 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. Existing tests cover cross-org denial, admin-only profiles, image reads, late replies after clearing, cancellation, and deadline cleanup. No verification repair was needed. This commit contains six session source and fixture files plus this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish remaining compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; full web tests and release builds remain unverified.
-Evidence: /tmp/nakama-session-routes-baseline.log, /tmp/nakama-session-routes-format.log, /tmp/nakama-session-routes-focused.log, /tmp/nakama-session-routes-types.log, /tmp/nakama-session-routes-oxlint.log, and /tmp/nakama-session-routes-lint-check.log.
+Evidence: /tmp/airin-session-routes-baseline.log, /tmp/airin-session-routes-format.log, /tmp/airin-session-routes-focused.log, /tmp/airin-session-routes-types.log, /tmp/airin-session-routes-oxlint.log, and /tmp/airin-session-routes-lint-check.log.
 
 ### Slice 2cl — HTTP authentication compatibility verified and committed
 Committed inspected earlier authentication schema, service guards, and fixture contracts. Passkey requests use the existing credential fields and JSON extension values; OpenAPI receives a JSON union description without recursively traversing that schema. Authentication factor handlers require both configured authentication and database services. Session and login helpers use the existing AppFetch contract; setup overrides retain nested optional fields and the correct AuthService import. Extended the malformed credential test to cover passkey removal alongside login and enrollment. All three reject malformed input with HTTP 400 and retain stored passkeys and MFA state. Existing nested JSON extension input reaches the normal unknown-credential HTTP 401 path. No password comparison, session ownership, CSRF, membership, or passkey verification restriction was removed.
 Checks passed: 26 browser session, login timing, MFA, organization member, and invitation tests across five files, with 423 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. The commit contains these five authentication source and fixture files plus this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish remaining compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; physical passkey use and release builds remain unverified.
-Evidence: /tmp/nakama-auth-compat-baseline.log, /tmp/nakama-auth-compat-focused.log, /tmp/nakama-auth-compat-types.log, /tmp/nakama-auth-compat-oxlint.log, and /tmp/nakama-auth-compat-lint-check.log.
+Evidence: /tmp/airin-auth-compat-baseline.log, /tmp/airin-auth-compat-focused.log, /tmp/airin-auth-compat-types.log, /tmp/airin-auth-compat-oxlint.log, and /tmp/airin-auth-compat-lint-check.log.
 
 ### Slice 2cm — Notification route compatibility verified and committed
 Committed inspected earlier database and authentication service guards in both notification route registrations, and the Telegram delivery fixture's existing adapter parameter type. Removed one spacing failure. Extended the webhook regression: an invalid severity returns HTTP 400 without delivery or claiming its key; a valid retry succeeds once, and replay returns HTTP 409. Existing tests cover destination ownership, viewer denial, key rotation, archived organizations, and delivery failures. Checks passed: 28 tests across three notification route and service files with 145 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains four notification files and this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections, then repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. Live notification delivery and the Organization screen remain unverified.
-Evidence: /tmp/nakama-notification-compat-baseline.log, /tmp/nakama-notification-compat-focused.log, /tmp/nakama-notification-compat-types.log, /tmp/nakama-notification-compat-oxlint.log, and /tmp/nakama-notification-compat-lint-check.log.
+Evidence: /tmp/airin-notification-compat-baseline.log, /tmp/airin-notification-compat-focused.log, /tmp/airin-notification-compat-types.log, /tmp/airin-notification-compat-oxlint.log, and /tmp/airin-notification-compat-lint-check.log.
 
 ### Slice 2cn — Agent runtime compatibility verified and committed
 Committed inspected earlier agent runtime and fixture corrections: tool results validate as JSON before distillation; discovery schemas match runtime validation; image arrays validate together, with malformed or empty results retained as JSON. Turn usage uses its existing owner type, optional tool context is safe, and learn-content replacement accepts its existing union. Fixtures use the provider, tool, image-reference, read-file, and message-content contracts. Removed one spacing failure and replaced two lint failures with inferred provider evidence and the existing array representation branch. Tests cover five malformed image results, non-JSON results without distillation, invalid discovery requests, cancellation, tool permissions, streaming, vision fallback, learn prompts, and titles. Checks passed: all 142 agent tests across 16 files with 551 assertions; complete agent and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains nine agent files and this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; the Organization screen remains incomplete.
-Evidence: /tmp/nakama-agent-runtime-compat-baseline.log, /tmp/nakama-agent-runtime-compat-focused.log, /tmp/nakama-agent-runtime-compat-agent-types.log, /tmp/nakama-agent-runtime-compat-server-types.log, /tmp/nakama-agent-runtime-compat-oxlint.log, and /tmp/nakama-agent-runtime-compat-lint-check.log.
+Evidence: /tmp/airin-agent-runtime-compat-baseline.log, /tmp/airin-agent-runtime-compat-focused.log, /tmp/airin-agent-runtime-compat-agent-types.log, /tmp/airin-agent-runtime-compat-server-types.log, /tmp/airin-agent-runtime-compat-oxlint.log, and /tmp/airin-agent-runtime-compat-lint-check.log.
 
 ### Slice 2co — Automation compatibility verified and committed
 Committed inspected earlier automation route, service, and fixture corrections. Worker interval requests now require an integer from 1 to 1440 through the existing request schema; five invalid requests return HTTP 400 and leave workspace settings unchanged. Schedule filtering retains typed, nonempty tenant IDs. Stored delivery status validates before response conversion; invalid status rejects without changing its run. Fixtures use the existing minimal HTTP app, browser-session contract, and temporary configuration root. Removed three initial spacing failures and two representation checks; one verification repair added a missing blank line before the new test loop. Checks passed: 44 automation service, runner, route, and worker-setting tests across four files with 148 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. This slice contains seven automation files and this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; the Organization screen remains incomplete.
-Evidence: /tmp/nakama-automation-compat-baseline.log, /tmp/nakama-automation-compat-focused.log, /tmp/nakama-automation-compat-types.log, /tmp/nakama-automation-compat-oxlint.log, and /tmp/nakama-automation-compat-lint-check.log.
+Evidence: /tmp/airin-automation-compat-baseline.log, /tmp/airin-automation-compat-focused.log, /tmp/airin-automation-compat-types.log, /tmp/airin-automation-compat-oxlint.log, and /tmp/airin-automation-compat-lint-check.log.
 
 ### Slice 2cp — File and archive HTTP compatibility verified and committed
 Committed inspected earlier HTTP response byte conversions, database service guard, and browser-session fixture types. Public artifact downloads and platform, organization, user, and profile ZIP exports use Uint8Array response bodies. Extended download tests to verify exact artifact bytes and decoded ZIP configuration contents. Existing tests cover tenant isolation, secret exclusion, member denial, profile import, file pin ownership, path boundaries, failed snapshot replacement, and restore failures. Checks passed: 40 artifact share, data portability, profile portability, and artifact authorization tests across four files with 253 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains seven HTTP source and test files and this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; the Organization screen remains incomplete.
-Evidence: /tmp/nakama-portability-http-compat-baseline.log, /tmp/nakama-portability-http-compat-focused.log, /tmp/nakama-portability-http-compat-types.log, /tmp/nakama-portability-http-compat-oxlint.log, and /tmp/nakama-portability-http-compat-lint-check.log.
+Evidence: /tmp/airin-portability-http-compat-baseline.log, /tmp/airin-portability-http-compat-focused.log, /tmp/airin-portability-http-compat-types.log, /tmp/airin-portability-http-compat-oxlint.log, and /tmp/airin-portability-http-compat-lint-check.log.
 
 ### Slice 2cq — Settings and integration HTTP compatibility verified and committed
 Committed inspected earlier settings and integration contracts: MCP transport, config, creation, testing, update, and assignment inputs; provider, image, audio, and thinking request fields; the actual system status response; database guards for coding harness and token optimization settings; and existing HTTP fixture types. MCP connection tests retain unnamed servers and normalize the command alias. Removed three spacing failures. Extended malformed MCP coverage with numeric HTTP headers and process environment values; both reject with HTTP 400 before any service call. Checks passed: 177 HTTP app, settings role, mutation role, coding harness, and MCP callback tests across five files with 650 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains seven HTTP source and test files and this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; live integration connections and the Organization screen remain unverified.
-Evidence: /tmp/nakama-admin-http-compat-baseline.log, /tmp/nakama-admin-http-compat-focused.log, /tmp/nakama-admin-http-compat-types.log, /tmp/nakama-admin-http-compat-oxlint.log, and /tmp/nakama-admin-http-compat-lint-check.log.
+Evidence: /tmp/airin-admin-http-compat-baseline.log, /tmp/airin-admin-http-compat-focused.log, /tmp/airin-admin-http-compat-types.log, /tmp/airin-admin-http-compat-oxlint.log, and /tmp/airin-admin-http-compat-lint-check.log.
 
 ### Slice 2cr — Channel configuration and delivery compatibility verified and committed
 Committed inspected earlier channel fixture contracts: existing fetch compatibility helper, deliverable artifact owner type, typed hot-session lookup, and required Discord invite and WhatsApp expiry fields. Slack public settings return null for absent or expired pairing codes; existing added assertions cover absent, active, and expired states. Replaced the artifact fixture's conditional empty spread with explicit optional property assignment and added null to invalid byte counts. Tests retain metadata rejection, channel owner isolation, pairing code behavior, credential masking, outbound failures, artifact delivery, and session cache behavior. Checks passed: 107 channel configuration, delivery, artifact, and session tests across eight files with 259 assertions; complete core and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains nine core files and this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; live channel delivery and the Organization screen remain unverified.
-Evidence: /tmp/nakama-channel-compat-baseline.log, /tmp/nakama-channel-compat-focused.log, /tmp/nakama-channel-compat-core-types.log, /tmp/nakama-channel-compat-server-types.log, /tmp/nakama-channel-compat-oxlint.log, and /tmp/nakama-channel-compat-lint-check.log.
+Evidence: /tmp/airin-channel-compat-baseline.log, /tmp/airin-channel-compat-focused.log, /tmp/airin-channel-compat-core-types.log, /tmp/airin-channel-compat-server-types.log, /tmp/airin-channel-compat-oxlint.log, and /tmp/airin-channel-compat-lint-check.log.
 
 ### Slice 2cs — Automation delivery input compatibility verified and committed
 Replaced the inspected earlier unconstrained generic delivery input with an explicit unknown input boundary and a documented lint exception; the existing schema validates every supplied value. Committed earlier delivery fixture corrections: removed obsolete owner arguments, reused the existing fetch helper, and imported the scheduler contract from its owner. Added nine malformed delivery cases covering primitive, array, missing-field, and incorrect-field inputs. One verification repair wrapped each test input in a case object because Bun treated the empty array as a callback test. Checks passed: 80 delivery normalization, destination authorization, scheduler, and server automation tests across four files with 191 assertions; complete core and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. This slice contains four core files and this entry. Other authorized cleanup remains unstaged; checks use the current worktree, and committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran; live delivery and the Organization screen remain unverified.
-Evidence: /tmp/nakama-delivery-compat-baseline.log, /tmp/nakama-delivery-compat-focused.log, /tmp/nakama-delivery-compat-core-types.log, /tmp/nakama-delivery-compat-server-types.log, /tmp/nakama-delivery-compat-oxlint.log, and /tmp/nakama-delivery-compat-lint-check.log.
+Evidence: /tmp/airin-delivery-compat-baseline.log, /tmp/airin-delivery-compat-focused.log, /tmp/airin-delivery-compat-core-types.log, /tmp/airin-delivery-compat-server-types.log, /tmp/airin-delivery-compat-oxlint.log, and /tmp/airin-delivery-compat-lint-check.log.
 
 ### Slice 2ct — Coding harness compatibility verified and committed
 Committed inspected earlier coding harness contracts and fixtures. Harness readiness probes accept the stored kind and name fields. Test settings use the existing merge helper. Registry fixtures supply byte arrays. Cursor output accepts assistant events without text and preserves the final result. Tool activity uses validated details for file and fallback branches. Replaced the installer environment object with a Set; only listed keys pass, including case-insensitive names. Extended the existing environment test to reject inherited object keys and omit undefined values. One verification repair sorted test fields after Ultracite reported key order. Checks passed: 45 coding harness, package install, Cursor output, and sub-agent tests across four files with 112 assertions; one Windows-only test skipped; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. This slice contains eight server files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. Windows subprocess behavior and the Organization screen remain unverified.
-Evidence: /tmp/nakama-coding-harness-compat-focused.log, /tmp/nakama-coding-harness-compat-types.log, /tmp/nakama-coding-harness-compat-oxlint.log, and /tmp/nakama-coding-harness-compat-lint-check.log.
+Evidence: /tmp/airin-coding-harness-compat-focused.log, /tmp/airin-coding-harness-compat-types.log, /tmp/airin-coding-harness-compat-oxlint.log, and /tmp/airin-coding-harness-compat-lint-check.log.
 
 ### Slice 2cu — Media provider compatibility verified and committed
 Committed inspected earlier image and audio fixture corrections: reused existing fetch helpers and workspace settings defaults. Image selection passes the complete configuration to the existing provider lookup. Retained the provider label regression. Extended image tests for absent configuration and two compatible providers with equal model names; the selected provider ID determines endpoint and key. Two verification repairs corrected test spacing and formatting. Checks passed: 68 image generation, audio transcription, provider helper, and external model catalog tests across four files with 168 assertions; complete core and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. This slice contains five source and test files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. Live media providers and the Organization screen remain unverified.
-Evidence: /tmp/nakama-media-provider-compat-focused.log, /tmp/nakama-media-provider-compat-core-types.log, /tmp/nakama-media-provider-compat-server-types.log, /tmp/nakama-media-provider-compat-oxlint.log, and /tmp/nakama-media-provider-compat-lint-check.log.
+Evidence: /tmp/airin-media-provider-compat-focused.log, /tmp/airin-media-provider-compat-core-types.log, /tmp/airin-media-provider-compat-server-types.log, /tmp/airin-media-provider-compat-oxlint.log, and /tmp/airin-media-provider-compat-lint-check.log.
 
 ### Slice 2cv — System status compatibility verified and committed
 Committed inspected earlier status contracts. The service names only its required AgentService members. Worker status overloads preserve each channel's response type. Organization status supplies an empty WhatsApp QR code and excludes channel process details. Test fixtures supply actual model response fields without an AgentService assertion. Extended tenant usage coverage to a profile-owner scope; usage remains charged to its organization. One verification repair corrected test spacing. Checks passed: 100 system status and settings authorization tests across two files with 327 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. This slice contains two server files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. Live channel processes and the Organization screen remain unverified.
-Evidence: /tmp/nakama-system-status-compat-focused.log, /tmp/nakama-system-status-compat-types.log, /tmp/nakama-system-status-compat-oxlint.log, and /tmp/nakama-system-status-compat-lint-check.log.
+Evidence: /tmp/airin-system-status-compat-focused.log, /tmp/airin-system-status-compat-types.log, /tmp/airin-system-status-compat-oxlint.log, and /tmp/airin-system-status-compat-lint-check.log.
 
 ### Slice 2cw — Plugin installation compatibility verified and committed
 Replaced inspected earlier unconstrained validator generics with explicit unknown boundaries and documented lint exceptions. Existing manifest and schema parsers validate each input before use. Committed earlier fixture corrections: existing fetch helper for skill installation, JSON package fixtures, workflow timestamps, and validated JSON IPC values. Removed the now-unnecessary schema fixture annotation. Added seven malformed input cases for both package manifest and action schema validation. Checks passed: 59 plugin validation, plugin service, official workflow, and skill installation tests across four files with 277 assertions; complete core and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains five source and test files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. External package installation and the Organization screen remain unverified.
-Evidence: /tmp/nakama-plugin-install-compat-focused.log, /tmp/nakama-plugin-install-compat-core-types.log, /tmp/nakama-plugin-install-compat-server-types.log, /tmp/nakama-plugin-install-compat-oxlint.log, and /tmp/nakama-plugin-install-compat-lint-check.log.
+Evidence: /tmp/airin-plugin-install-compat-focused.log, /tmp/airin-plugin-install-compat-core-types.log, /tmp/airin-plugin-install-compat-server-types.log, /tmp/airin-plugin-install-compat-oxlint.log, and /tmp/airin-plugin-install-compat-lint-check.log.
 
 ### Slice 2cx — Meeting integration compatibility verified and committed
 Committed inspected earlier meeting fixtures: keyed extension storage, PCM sample arrays, WebSocket ArrayBuffer frames, and existing fetch helpers. The worklet fixture names its actual flush message instead of using a runtime type check. The invalid transcription settings test passes its input directly instead of using Reflect.apply. Existing tests cover exact PCM samples, tenant and actor isolation, assignment checks, token reuse, capture finalization, cancellation, transcript persistence, and invalid settings. Initial sandbox tests failed because local listeners could not bind; the same tests passed outside the sandbox. One code verification repair corrected fixture formatting. Checks passed: all 41 meeting tests across six files with 264 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. This slice contains three server test files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. Live Meet capture and the Organization screen remain unverified.
-Evidence: /tmp/nakama-meeting-compat-focused.log, /tmp/nakama-meeting-compat-types.log, /tmp/nakama-meeting-compat-oxlint.log, and /tmp/nakama-meeting-compat-lint-check.log.
+Evidence: /tmp/airin-meeting-compat-focused.log, /tmp/airin-meeting-compat-types.log, /tmp/airin-meeting-compat-oxlint.log, and /tmp/airin-meeting-compat-lint-check.log.
 
 ### Slice 2cy — Telegram pairing compatibility verified and committed
 Completed the inspected earlier polling correction. Missing update IDs are checked before arithmetic; Number.isFinite rejects invalid values without coercion. Extended the existing offset regression with a numeric string that must not advance the offset. Tests retain pairing ownership, cancellation, expiry, cloud validation, and failed-save behavior. One verification repair corrected source formatting. Checks passed: 37 managed pairing and Telegram configuration tests across two files with 108 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. This slice contains two server files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. Live Telegram pairing and the Organization screen remain unverified.
-Evidence: /tmp/nakama-telegram-pairing-compat-focused.log, /tmp/nakama-telegram-pairing-compat-types.log, /tmp/nakama-telegram-pairing-compat-oxlint.log, and /tmp/nakama-telegram-pairing-compat-lint-check.log.
+Evidence: /tmp/airin-telegram-pairing-compat-focused.log, /tmp/airin-telegram-pairing-compat-types.log, /tmp/airin-telegram-pairing-compat-oxlint.log, and /tmp/airin-telegram-pairing-compat-lint-check.log.
 
 ### Slice 2cz — File and skill compatibility verified and committed
 Committed inspected earlier file and skill contracts: SearchFilesInput uses schema input types so callers can omit defaults; parsing still supplies execution values. Document fixtures narrow the returned content type before reading text. Skill download and web fetch fixtures reuse the existing fetch helper. Script fixtures use typed file maps. Corrected five spacing failures before verification. Existing tests cover default search inputs, workspace limits, document conversion, archive limits, traversal rejection, download fallback cleanup, script discovery, and web fetch restrictions. Checks passed: 92 document, file search, web fetch, skill download, and script tests across five files with 373 assertions; complete core and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains five core files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. Live external downloads and the Organization screen remain unverified.
-Evidence: /tmp/nakama-file-skill-compat-focused.log, /tmp/nakama-file-skill-compat-core-types.log, /tmp/nakama-file-skill-compat-server-types.log, /tmp/nakama-file-skill-compat-oxlint.log, and /tmp/nakama-file-skill-compat-lint-check.log.
+Evidence: /tmp/airin-file-skill-compat-focused.log, /tmp/airin-file-skill-compat-core-types.log, /tmp/airin-file-skill-compat-server-types.log, /tmp/airin-file-skill-compat-oxlint.log, and /tmp/airin-file-skill-compat-lint-check.log.
 
 ### Slice 2da — Timezone compatibility verified and committed
 Replaced the inspected earlier open-record timezone alias annotation with a Map initialized from the existing city data. Dynamic lookup supports unknown keys without inherited object entries. Returned arrays remain independent copies. Committed the earlier mutable seasonal test table input required by Bun. Added unknown-key, prototype-key, and mutation regression checks. Checks passed: five timezone catalog and alias tests with 36 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains two server files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. The Organization screen remains unverified.
-Evidence: /tmp/nakama-timezone-compat-focused.log, /tmp/nakama-timezone-compat-types.log, /tmp/nakama-timezone-compat-oxlint.log, and /tmp/nakama-timezone-compat-lint-check.log.
+Evidence: /tmp/airin-timezone-compat-focused.log, /tmp/airin-timezone-compat-types.log, /tmp/airin-timezone-compat-oxlint.log, and /tmp/airin-timezone-compat-lint-check.log.
 
 ### Slice 2db — Session and memory fixtures verified and committed
 Committed inspected earlier session, review, and memory fixtures. The clear-session test uses a real agent session and database spy; clearing empties history without deleting stored messages through the wrapper. Turn events retain narrow todo statuses. Post-turn review fixtures supply object tool arguments. Memory proposal tests validate returned proposal IDs before reading records and retain shared-document and tenant access checks. Corrected one spacing failure before verification. Checks passed: 51 session persistence, turn registry, post-turn review, and organization memory tests across four files with 208 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains four server test files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. The Organization screen remains unverified.
-Evidence: /tmp/nakama-session-fixture-compat-focused.log, /tmp/nakama-session-fixture-compat-types.log, /tmp/nakama-session-fixture-compat-oxlint.log, and /tmp/nakama-session-fixture-compat-lint-check.log.
+Evidence: /tmp/airin-session-fixture-compat-focused.log, /tmp/airin-session-fixture-compat-types.log, /tmp/airin-session-fixture-compat-oxlint.log, and /tmp/airin-session-fixture-compat-lint-check.log.
 
 ### Slice 2dc — HTTP fixtures verified and committed
 Committed inspected earlier HTTP fixture corrections. Worker log fixtures require worker validation and supply only the operation each test uses. Avatar fixtures supply the existing default provider field. Public URL tests use AppFetch and await its actual response before checking stored settings. Corrected four spacing failures before verification. Existing tests cover worker log bounds and failures, avatar tenant isolation, administrator access, URL persistence, origin checks, and authorization. Checks passed: 22 tests across three files with 63 assertions; complete server type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains three server test files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. The Organization screen remains incomplete.
-Evidence: /tmp/nakama-http-fixture-compat-focused.log, /tmp/nakama-http-fixture-compat-types.log, /tmp/nakama-http-fixture-compat-oxlint.log, and /tmp/nakama-http-fixture-compat-lint-check.log.
+Evidence: /tmp/airin-http-fixture-compat-focused.log, /tmp/airin-http-fixture-compat-types.log, /tmp/airin-http-fixture-compat-oxlint.log, and /tmp/airin-http-fixture-compat-lint-check.log.
 
 ### Slice 2dd — Composio request compatibility verified and committed
 Replaced inspected earlier unconstrained request generics with explicit unknown inputs and documented lint exceptions. Existing schemas validate inputs before toolkit and assignment normalization. Committed the earlier route fixture's required API client operations and cache setup without an impossible private-field intersection. Corrected one service spacing failure before verification. Added seven malformed inputs for each normalizer. Existing service and route tests retain tenant isolation, personal OAuth ownership, shared-agent write denial, authorization, and toolkit assignments. Checks passed: 44 tests across three files with 135 assertions; complete core and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains four source and test files and this entry. Other authorized cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. Live OAuth and the Organization screen remain unverified.
-Evidence: /tmp/nakama-composio-request-compat-focused.log, /tmp/nakama-composio-request-compat-core-types.log, /tmp/nakama-composio-request-compat-server-types.log, /tmp/nakama-composio-request-compat-oxlint.log, and /tmp/nakama-composio-request-compat-lint-check.log.
+Evidence: /tmp/airin-composio-request-compat-focused.log, /tmp/airin-composio-request-compat-core-types.log, /tmp/airin-composio-request-compat-server-types.log, /tmp/airin-composio-request-compat-oxlint.log, and /tmp/airin-composio-request-compat-lint-check.log.
 
 ### Slice 2de — Local token and profile fixtures verified and committed
 Committed inspected earlier fixture corrections. Local token assertions narrow null before checking that configuration excludes the secret. Profile summaries supply the existing required timestamps and counts. Soul initialization checks retain the nonempty content assertion while accepting the optional field type. Corrected one spacing failure before verification. Extended generated-token coverage to verify the stored token through the authentication function. Existing tests cover token rotation and rejection, profile selection and role filtering, tenant scope selection, workspace seeding, and preservation of customized soul content. Checks passed: 18 tests across three files with 42 assertions; complete core type check; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No verification repair was needed. This slice contains three core test files and this entry. Error tracking cleanup remains unstaged. Checks use the current worktree; committed HEAD alone remains unverified. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: finish compatibility corrections and repeat full delivery checks. No browser check, paid call, full-suite rerun, build, push, or PR ran. The Organization screen remains incomplete.
-Evidence: /tmp/nakama-profile-fixture-compat-focused.log, /tmp/nakama-profile-fixture-compat-types.log, /tmp/nakama-profile-fixture-compat-oxlint.log, and /tmp/nakama-profile-fixture-compat-lint-check.log.
+Evidence: /tmp/airin-profile-fixture-compat-focused.log, /tmp/airin-profile-fixture-compat-types.log, /tmp/airin-profile-fixture-compat-oxlint.log, and /tmp/airin-profile-fixture-compat-lint-check.log.
 
 ### Slice 2df — Error tracking compatibility verified and committed
 Completed inspected earlier error boundary types. Removed the incomplete recursive thrown-value union; JavaScript can throw functions, symbols, and other values outside it. Error report inputs and process handlers accept unknown values with narrow documented lint exceptions; existing normalization and scrubbing remain intact. Extended coverage to undefined, null, symbol, function, and BigInt values, checking report data and fingerprints. One verification repair replaced JSON test-name formatting, which Bun cannot apply to BigInt. Local listener tests initially failed in the sandbox; the same tests passed outside it. Checks passed: 69 error report, settings, scrubbing, and sink tests across four files with 135 assertions; complete core and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. This slice contains two core files and this entry. Earlier compatibility cleanup is now committed. Global lint and full delivery checks remain. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: complete the delivery gates and requirement audit. No browser check, paid call, full-suite rerun, build, push, or PR ran. Live external error ingestion and the Organization screen remain unverified.
-Evidence: /tmp/nakama-error-tracking-compat-focused.log, /tmp/nakama-error-tracking-compat-core-types.log, /tmp/nakama-error-tracking-compat-server-types.log, /tmp/nakama-error-tracking-compat-oxlint.log, and /tmp/nakama-error-tracking-compat-lint-check.log.
+Evidence: /tmp/airin-error-tracking-compat-focused.log, /tmp/airin-error-tracking-compat-core-types.log, /tmp/airin-error-tracking-compat-server-types.log, /tmp/airin-error-tracking-compat-oxlint.log, and /tmp/airin-error-tracking-compat-lint-check.log.
 
 ### Slice 2dg — Server and core spacing checks completed
 The full check found 12 remaining spacing errors. Corrected ten in seven server and core files without changing behavior. Existing tests cover knowledge authorization, skill composition, curator tenant rules, Telegram outbound delivery, and offline todo tool recording replay. Checks passed: 59 tests across five files with 299 assertions; complete core and server type checks; scoped anti-slop; Ultracite across 1532 files; and git diff --check. No new tests were added for blank-line edits. Two web spacing errors remain in chat-composer.tsx and chat-skill-picker.tsx; the full lint gate is not yet green. This slice contains seven files and this entry. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: correct the web spacing errors, then run full delivery checks and audit requirements. No browser check, paid call, full-suite rerun, build, push, or PR ran. The Organization screen remains incomplete.
-Evidence: /tmp/nakama-remaining-delivery-check.log, /tmp/nakama-server-core-spacing-focused.log, /tmp/nakama-server-core-spacing-core-types.log, /tmp/nakama-server-core-spacing-server-types.log, /tmp/nakama-server-core-spacing-oxlint.log, and /tmp/nakama-server-core-spacing-lint-check.log.
+Evidence: /tmp/airin-remaining-delivery-check.log, /tmp/airin-server-core-spacing-focused.log, /tmp/airin-server-core-spacing-core-types.log, /tmp/airin-server-core-spacing-server-types.log, /tmp/airin-server-core-spacing-oxlint.log, and /tmp/airin-server-core-spacing-lint-check.log.
 
 ### Slice 2dh — Web spacing and full lint checks completed
 Corrected the final two spacing errors in the chat composer and skill picker with blank lines only. Existing tests cover composer actions, selection, and skill suggestions. Checks passed: 39 tests across two files with 70 assertions; complete web type check; Ultracite across 1532 files; full bun run check including anti-slop; and git diff --check. React Doctor changed-scope scans stayed at 91/100 before and after, with no reported issues. No new tests were added for blank-line edits. This slice contains two web files and this entry. All earlier compatibility cleanup is committed and the full lint gate is green. Steps 2 and 3 and delivery stage 2 remain unchecked. Next: run full delivery tests and knip, then audit backend requirements before the Organization UI slices. No browser check, paid call, full-suite rerun, build, push, or PR ran. The Organization screen remains incomplete.
-Evidence: /tmp/nakama-web-spacing-focused.log, /tmp/nakama-web-spacing-types.log, /tmp/nakama-web-spacing-lint-check.log, /tmp/nakama-web-spacing-full-check.log, /tmp/nakama-web-spacing-doctor-before.log, and /tmp/nakama-web-spacing-doctor-after.log.
+Evidence: /tmp/airin-web-spacing-focused.log, /tmp/airin-web-spacing-types.log, /tmp/airin-web-spacing-lint-check.log, /tmp/airin-web-spacing-full-check.log, /tmp/airin-web-spacing-doctor-before.log, and /tmp/airin-web-spacing-doctor-after.log.
 
 ### Slice 2di — Backend delivery stage verified
 The worktree was clean before verification. The canonical full test script passed both phases: 4364 non-web tests with 22 skips across 419 files, then 654 web tests across 93 files. The phases made 16203 and 1784 assertions respectively. All 255 focused shared-resource, organization HTTP, proposal, integration, knowledge, tool catalog, and database tests passed across eight files with 2469 assertions. Complete core, server, agent, database, and client type checks passed. Full bun run check, Ultracite across 1532 files, knip, and git diff --check passed. No repair was needed.
 The backend audit and tests cover all five resource paths, explicit publication, tenant-private execution, source removal, credential readiness, shared instance uniqueness, preserved team work, archive boundaries, and compatibility. Delivery stage 2 and implementation step 3 are complete. Implementation step 2 remains open because its publication controls and shared-agent selection flow require the Organization UI. Next: implement the Organization overview and client query state, followed by team creation and publication controls. This slice changes only this progress record. No browser check, paid call, build, push, or PR ran. Release builds, live external delivery and OAuth, and the Organization screen remain unverified.
-Evidence: /tmp/nakama-stage2-current-full-tests.log, /tmp/nakama-stage2-current-focused.log, /tmp/nakama-stage2-current-{core,server,agent,db,client}-types.log, /tmp/nakama-stage2-current-check.log, /tmp/nakama-stage2-current-lint.log, and /tmp/nakama-stage2-current-knip.log.
+Evidence: /tmp/airin-stage2-current-full-tests.log, /tmp/airin-stage2-current-focused.log, /tmp/airin-stage2-current-{core,server,agent,db,client}-types.log, /tmp/airin-stage2-current-check.log, /tmp/airin-stage2-current-lint.log, and /tmp/airin-stage2-current-knip.log.
 
 ### Slice 3a — Organization overview verification stopped
 The uncommitted overview shows five shared-resource rows, resource readiness, team member and resource counts, the current team, and existing team settings. The query key includes the parent organization and active team. Four component tests passed with 24 assertions: resource rows and stored counts, an empty standalone organization, request retry, and rejection of late data from a previous team. The complete web type check passed. React Doctor stayed at 91/100 with no reported issues.
 Verification stopped after two repair attempts. The first corrected query notification timing in the test helper. The second added a blank line at the wrong statement. Scoped anti-slop still reports require-readable-spacing at OrganizationPanel.test.tsx:163; the blank line must precede the data declaration. This commit records progress only. The four overview source and test files remain unstaged. Implementation steps 2 and 4 and delivery stage 3 remain unchecked. Next: correct that spacing error, repeat the focused tests, web type check, and lint checks, then commit the overview slice. Team actions, publication controls, and shared-agent selection remain incomplete. No browser check, paid call, full test run, build, push, or PR ran.
-Evidence: /tmp/nakama-organization-overview-focused.log, /tmp/nakama-organization-overview-types.log, /tmp/nakama-organization-overview-oxlint.log, /tmp/nakama-organization-overview-lint.log, /tmp/nakama-organization-overview-doctor-before.log, and /tmp/nakama-organization-overview-doctor-after.log.
+Evidence: /tmp/airin-organization-overview-focused.log, /tmp/airin-organization-overview-types.log, /tmp/airin-organization-overview-oxlint.log, /tmp/airin-organization-overview-lint.log, /tmp/airin-organization-overview-doctor-before.log, and /tmp/airin-organization-overview-doctor-after.log.
 
 ### Slice 3b — Organization overview verified and committed
 Completed the pending overview slice and corrected the test spacing error. The screen uses existing cards and icons for the parent name, five published-resource rows, readiness, stored team counts, and the current-team badge. Existing settings remain below the overview with the appropriate root or team heading. Resource chips remain static until authorized detail and setup actions are added. The overview query uses both parent and active team IDs; a response for another team cannot replace the current view. A new component test file was required because no existing Organization component test could hold this coverage.
 All four component tests passed with 24 assertions. The complete web type check, scoped anti-slop, Ultracite across 1533 files, and git diff --check passed. React Doctor stayed at 91/100 with no issues; its sandbox npm request failed DNS resolution, and the same command passed outside the sandbox. No verification code repair was needed after the initial spacing correction. This commit contains the overview component, existing query hook and key modules, the component tests, and this entry. Implementation steps 2, 4, and 5 and delivery stage 3 remain open. Next: add team details and permitted switching, followed by team creation and publication controls. No browser check, paid provider call, full test run, build, push, or PR ran. Resource actions and final delivery checks remain incomplete.
-Evidence: /tmp/nakama-organization-overview-retry-{focused,types,oxlint,lint,doctor}.log and /tmp/nakama-organization-overview-doctor-before.log.
+Evidence: /tmp/airin-organization-overview-retry-{focused,types,oxlint,lint,doctor}.log and /tmp/airin-organization-overview-doctor-before.log.
 
 ### Slice 3c — Team details and permitted switching completed
 Team name buttons open the existing dialog with stored team ID, slug, member count, and local resource counts. Opening details does not change the active tenant. The switch action requires the server-provided permission and a different active team ID. It uses the existing authentication operation, which clears cached tenant data after server success. Pending switching blocks repeated submission and dialog dismissal. Failed switching keeps the details and permits retry. Row state is keyed by active tenant and team, so switching context removes old open details. Each row owns its dialog state in the existing component module; no new file or dependency was added.
 All nine component tests passed with 46 assertions. They cover stored details, focusable team buttons, permitted switching, repeated submission, pending state, current-team and denied-action gates, failure retry, and removal of old details after a team change. The complete web type check, scoped anti-slop, Ultracite across 1533 files, and git diff --check passed. React Doctor stayed at 91/100 with no issues. Two verification repairs corrected the test callback parameter type and replaced an unnecessary query mutation with the existing asynchronous handler pattern; authentication already clears the cache. This commit contains the component, its tests, and this entry. Steps 2, 4, and 5 and delivery stage 3 remain open. Next: add team creation with first-admin selection and retry-safe requests. No browser check, paid call, full test run, build, push, or PR ran. Browser keyboard activation, team creation, publication controls, and final delivery checks remain unverified or incomplete.
-Evidence: /tmp/nakama-team-details-{focused,types,oxlint,lint,doctor}.log and /tmp/nakama-organization-overview-retry-doctor.log.
+Evidence: /tmp/airin-team-details-{focused,types,oxlint,lint,doctor}.log and /tmp/airin-organization-overview-retry-doctor.log.
 
 ### Slice 3d — Team creation and first-admin assignment completed
 Permitted parent admins can open Add team from the Teams card. The existing dialog and inputs accept a name, slug, and existing admin user ID, defaulting to the creator's account. The existing server validates the account and creation request. The typed mutation hook uses explicit parent scope and invalidates the parent overview. Successful creation refreshes authentication membership data without selecting the child. The previous slice supplies permitted switching from team details; selecting another first admin does not add creator membership.
 Unchanged retries reuse the same request ID, including after dialog closing and reopening. Changed input starts a new request. Pending submission blocks duplicate calls, field edits, and dismissal. After confirmed creation, fields remain fixed if membership refresh fails; retry performs only the refresh, without another creation call. Dialog state is keyed by parent and user. No new file, package, dependency, or server operation was added.
 All 15 component tests passed with 97 assertions. Tests cover default and alternate admin IDs, explicit parent scope, overview invalidation, membership refresh, retained parent selection, request retry, dialog reopening, refresh failure, duplicate submission, and denial of parent controls to a team admin. The complete web type check, scoped anti-slop, Ultracite across 1533 files, and git diff --check passed. React Doctor stayed at 91/100 with no issues. Two verification repairs used the mounted input prototype and window.Event in the existing happy-dom environment. This commit contains the component, its tests, the existing query hook module, and this entry. Steps 2, 4, and 5 and delivery stage 3 remain open. Next: add parent publication selectors and explicit publish/unpublish actions. No browser check, paid call, full test run, build, push, or PR ran. Native browser form behavior, publication controls, and final delivery checks remain unverified or incomplete.
-Evidence: /tmp/nakama-create-team-{focused,types,oxlint,lint,doctor}.log and /tmp/nakama-team-details-doctor.log.
+Evidence: /tmp/airin-create-team-{focused,types,oxlint,lint,doctor}.log and /tmp/airin-team-details-doctor.log.
 
 ### Slice 3e — Knowledge publication controls completed
 Parent admins can manage knowledge publications from the Knowledge row. The dialog loads the existing parent knowledge catalog only when opened. Its existing Select component offers ready documents that are not already published. Publish sends the stable document ID and knowledge kind through the explicitly scoped client operation. Unpublish sends the publication ID. The existing server validates parent authority, source ownership, document readiness, and source paths. Team users do not receive these controls or requests to the private parent catalog.
 The existing query hook module now supplies a publication mutation with explicit publish and unpublish actions. Success invalidates the parent's overview family, knowledge catalogs, and profile queries. Failed mutations retain the displayed catalog and selection for retry. Failed overview refreshes now retain previously loaded resource chips and offer Retry overview; initial request failures still use the original failure view. Pending changes disable mutation controls and dialog dismissal. No new file, package, dependency, or server operation was added.
 All 19 component tests passed with 118 assertions. New tests cover lazy catalog loading, exclusion of failed and published documents, stable IDs and parent scope, publish and unpublish failures, catalog invalidation, and stale-catalog retention through refresh failure and retry. Existing team creation and switching tests remain green. The complete web type check, scoped anti-slop, Ultracite across 1533 files, and git diff --check passed. React Doctor stayed at 91/100 with no issues. One verification repair separated simulated server records from cached test data with structuredClone. This commit contains the component, its tests, the existing query hook module, and this entry. Steps 2, 4, and 5 and delivery stage 3 remain open. Next: add publication selectors for skills and agent templates, then tools and models. No browser check, paid call, full test run, build, push, or PR ran. Other publication selectors, resource detail actions, shared-agent selection, and final delivery checks remain incomplete.
-Evidence: /tmp/nakama-knowledge-publication-{focused,types,oxlint,lint,doctor}.log and /tmp/nakama-create-team-doctor.log.
+Evidence: /tmp/airin-knowledge-publication-{focused,types,oxlint,lint,doctor}.log and /tmp/airin-create-team-doctor.log.
 
 ### Slice 3f — Skill and agent publication selectors completed
-Extended the existing knowledge publication dialog for three actual resource rows, without copying its controls. Parent admins can manage Skills and Agents through the same selector, publish, unpublish, pending, error, and retry states. Skills come from the explicitly scoped catalog and must be enabled and owned by the parent; global and foreign entries remain outside publication selection. Agents come from the explicitly scoped parent profile catalog. The selector excludes Default Bot, Super Nakama, and managed shared instances. The existing server retains source-path, assignment, integration, and template validation.
+Extended the existing knowledge publication dialog for three actual resource rows, without copying its controls. Parent admins can manage Skills and Agents through the same selector, publish, unpublish, pending, error, and retry states. Skills come from the explicitly scoped catalog and must be enabled and owned by the parent; global and foreign entries remain outside publication selection. Agents come from the explicitly scoped parent profile catalog. The selector excludes Default Bot, Airin, and managed shared instances. The existing server retains source-path, assignment, integration, and template validation.
 The catalog query key includes the source organization and resource kind. It loads only when its dialog opens. Duplicate labels include stable IDs to distinguish choices; private skill paths are not shown. Publication changes also invalidate these source catalogs and existing skill queries. Knowledge publication tests remain green after the shared dialog change. No new file, package, dependency, or server operation was added.
 All 23 component tests passed with 148 assertions. New tests cover stable skill and profile IDs, parent scope, lazy queries, source exclusions, duplicate labels, both publication actions, catalog retry, and denial of private catalogs to team admins. The complete web type check, scoped anti-slop, Ultracite across 1533 files, and git diff --check passed. React Doctor stayed at 91/100 with no issues. No verification repair was needed. This commit contains the component, its tests, the existing query hook and key modules, and this entry. Steps 2, 4, and 5 and delivery stage 3 remain open. Next: add tool and model publication selectors, then authorized resource actions and shared-agent selection. No browser check, paid call, full test run, build, push, or PR ran. Tool and model controls, template selection into a team chat, and final delivery checks remain incomplete.
-Evidence: /tmp/nakama-skill-agent-publication-{focused,types,oxlint,lint,doctor}.log and /tmp/nakama-knowledge-publication-doctor.log.
+Evidence: /tmp/airin-skill-agent-publication-{focused,types,oxlint,lint,doctor}.log and /tmp/airin-knowledge-publication-doctor.log.
 
 ### Slice 3g — Tool and model publication selectors
 
@@ -2241,7 +2241,7 @@ All 25 component tests passed with 170 assertions. New tests cover lazy tool and
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: authorized resource actions and shared-agent selection into a team chat. No browser check, paid call, full test run, build, push, or PR ran. Those final checks remain required before stage completion.
 
-Evidence: /tmp/nakama-tools-models-{focused,types,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-tools-models-{focused,types,oxlint,lint,doctor}.log.
 
 ### Slice 3h — Read-only shared skill details
 
@@ -2253,17 +2253,17 @@ All 31 component tests passed with 210 assertions. Tests cover admin, member, an
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: knowledge detail/download actions, then remaining resource actions and shared-agent selection. Root resource details remain open. No browser check, full suite, build, paid call, push, or PR ran.
 
-Evidence: /tmp/nakama-shared-skill-{focused,types,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-shared-skill-{focused,types,oxlint,lint,doctor}.log.
 
 ### Slice 3i — Typed published knowledge reads
 
-Added `NakamaClient.readPublishedKnowledgeBaseDocument` in the existing client module. It requests the existing publication content route with the active tenant ID, publication ID, and explicit `X-Org-Id`. Default reads return original bytes for download; `render: "text"` requests extracted text for preview. Both return the content type and an ArrayBuffer. Existing raw-response authentication and error handling remain in use.
+Added `AirinClient.readPublishedKnowledgeBaseDocument` in the existing client module. It requests the existing publication content route with the active tenant ID, publication ID, and explicit `X-Org-Id`. Default reads return original bytes for download; `render: "text"` requests extracted text for preview. Both return the content type and an ArrayBuffer. Existing raw-response authentication and error handling remain in use.
 
 All 76 client and document route tests passed with 391 assertions. Five new client cases cover encoded IDs, text and binary requests, unchanged bytes, missing content type, explicit tenant context, unchanged client context, and 403/404 denial. Existing HTTP cases verify viewer reads without parent membership, sibling access, denied foreign and private IDs, revocation, source removal, archive, and symlink boundaries. The complete client type check, scoped anti-slop, Ultracite across 1533 files, and git diff --check passed. No verification repair was needed.
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: connect this operation to knowledge chips with preview, download, pending, retry, and team-change handling. This slice adds no UI, server route, package, dependency, or file. No browser check, full suite, build, paid call, push, or PR ran.
 
-Evidence: /tmp/nakama-published-document-client-{focused,types,oxlint,lint}.log.
+Evidence: /tmp/airin-published-document-client-{focused,types,oxlint,lint}.log.
 
 ### Slice 3j — Knowledge actions verification stopped
 
@@ -2275,7 +2275,7 @@ React Doctor improved from 88/100 to 90/100 but remains below the 91/100 baselin
 
 Only this progress entry is committed. The component, its tests, and query keys remain unstaged for the next iteration. Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: resolve the remaining object URL diagnostic, then verify and commit knowledge actions. No browser check, full suite, build, paid call, push, or PR ran.
 
-Evidence: /tmp/nakama-knowledge-actions-{focused,types,oxlint,lint,doctor,rule}.log.
+Evidence: /tmp/airin-knowledge-actions-{focused,types,oxlint,lint,doctor,rule}.log.
 
 ### Slice 3k — Knowledge preview and download controls
 
@@ -2287,7 +2287,7 @@ All 40 component tests passed with 282 assertions. Coverage includes admin, memb
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: shared-agent selection into a team chat, then tool/model actions and root resource details. No browser check, full suite, build, paid call, push, or PR ran.
 
-Evidence: /tmp/nakama-knowledge-actions-final-{focused,types,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-knowledge-actions-final-{focused,types,oxlint,lint,doctor}.log.
 
 ### Slice 3l — Shared-agent selection into team chat
 
@@ -2301,7 +2301,7 @@ Two verification repairs were used. The first removed unsupported test storage a
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: tool/model actions, root resource details, and shared-template field controls. This slice adds no package, dependency, file, or browser check. No full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-agent-selection-{focused,types,oxlint,lint,doctor,rule}.log.
+Evidence: /tmp/airin-agent-selection-{focused,types,oxlint,lint,doctor,rule}.log.
 
 ### Slice 3m — Permitted tool details and setup
 
@@ -2315,7 +2315,7 @@ Complete web and client type checks, scoped anti-slop, Ultracite across 1533 fil
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: model detail actions, remaining root resource details, and shared-template field controls. No new package, dependency, file, or server route was added. No browser check, full suite, build, paid call, push, or PR ran. Actual setup through the browser remains unverified.
 
-Evidence: /tmp/nakama-shared-tools-{web-tests,api-tests,web-types,client-types,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-shared-tools-{web-tests,api-tests,web-types,client-types,oxlint,lint,doctor}.log.
 
 ### Slice 3n — Model details and permitted settings links
 
@@ -2329,7 +2329,7 @@ All 75 component tests passed with 501 assertions. New coverage includes lazy re
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: remaining root resource details, then shared-template field controls and compatibility labels. No new package, dependency, file, or server route was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks and browser settings navigation remain unverified.
 
-Evidence: /tmp/nakama-shared-models-{focused,types,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-shared-models-{focused,types,oxlint,lint,doctor}.log.
 
 ### Slice 3o — Root agent and skill source links
 
@@ -2341,7 +2341,7 @@ The route audit found an unfinished access requirement. Existing GET organizatio
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: resolve parent-admin catalog read permissions, then root document actions and shared-template field controls. No package, dependency, file, server route, or new read permission was added in this slice. No browser check, full suite, build, paid call, push, or PR ran. Browser destination rendering and final delivery checks remain unverified.
 
-Evidence: /tmp/nakama-root-source-links-{focused,types,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-root-source-links-{focused,types,oxlint,lint,doctor}.log.
 
 ### Slice 3p — Tenant-admin source catalog reads
 
@@ -2353,7 +2353,7 @@ Complete server types, scoped anti-slop, Ultracite, and git diff --check passed.
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: scoped parent-admin detail reads and root document actions, then shared-template field controls. No package, dependency, file, or endpoint was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-admin-catalog-{focused,types,oxlint,lint}.log.
+Evidence: /tmp/airin-admin-catalog-{focused,types,oxlint,lint}.log.
 
 ### Slice 3q — Root document preview and download
 
@@ -2365,7 +2365,7 @@ All 91 component tests passed with 579 assertions. Eight new cases cover root ro
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: parent-admin skill details, then shared-template field controls and compatibility labels. No package, dependency, file, endpoint, or new read permission was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-root-knowledge-{web-tests,api-tests,web-types,server-types,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-root-knowledge-{web-tests,api-tests,web-types,server-types,oxlint,lint,doctor}.log.
 
 ### Slice 3r — Parent-admin published skill details
 
@@ -2379,7 +2379,7 @@ Complete web and server types, scoped anti-slop, Ultracite, and git diff --check
 
 Steps 2, 4, and 5 and delivery stages 3 and 4 remain open. Next: audit the remaining contract and route requirements for step 2, then shared-template field controls and compatibility labels. No package, dependency, file, or endpoint was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-root-skills-{web-tests,api-tests,web-types,server-types,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-root-skills-{web-tests,api-tests,web-types,server-types,oxlint,lint,doctor}.log.
 
 ### Slice 3s — Knowledge catalog boundaries and completed route audit
 
@@ -2395,7 +2395,7 @@ The full test command first failed because local test ports could not open in th
 
 Next: finish Organization page access for permitted team readers, then shared-template field controls and compatibility labels. No browser check, build, paid call, push, or PR ran. Final UI, compatibility, documentation, and build checks remain required.
 
-Evidence: /tmp/nakama-knowledge-boundaries-{focused,types,format,format-oxlint}.log and /tmp/nakama-step2-audit-{full-tests,full-tests-outside,knip,check}.log.
+Evidence: /tmp/airin-knowledge-boundaries-{focused,types,format,format-oxlint}.log and /tmp/airin-step2-audit-{full-tests,full-tests-outside,knip,check}.log.
 
 ### Slice 3t — Organization page access for tenant readers
 
@@ -2407,7 +2407,7 @@ All 119 focused component and navigation tests passed with 723 assertions. Four 
 
 The complete web type check passed. React Doctor stayed at 91/100 with no issues. Steps 4 and 5 and delivery stages 3 and 4 remain open. Next: shared-template field controls, accessible team settings actions, and compatibility labels. No new file, package, dependency, server permission, or browser check was added. Full release checks, builds, docs, push, and PR remain required.
 
-Evidence: /tmp/nakama-overview-access-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-overview-access-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3u — Shared-agent identity controls
 
@@ -2421,7 +2421,7 @@ One verification repair corrected the prompt assertion to use the existing previ
 
 Steps 4 and 5 and delivery stages 3 and 4 remain open. Next: verify shared assignment controls, keep template soul files read-only while retaining team memory, and review clone and transfer controls. Accessible team settings actions and compatibility labels also remain open. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-template-identity-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-template-identity-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3v — Shared-agent soul editor permissions
 
@@ -2433,7 +2433,7 @@ The complete web type check passed. React Doctor remained at 91/100 with no issu
 
 Steps 4 and 5 and delivery stages 3 and 4 remain open. Next: verify shared assignment controls and remove forbidden clone and transfer actions. Accessible team settings actions and compatibility labels remain open. No server permission changed. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-template-soul-{focused,api,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-template-soul-{focused,api,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3w — Shared-agent clone and transfer actions
 
@@ -2445,7 +2445,7 @@ The complete web type check passed. React Doctor remained at 91/100 with no issu
 
 Steps 4 and 5 and delivery stages 3 and 4 remain open. Next: verify shared assignment and behavior controls, then accessible team settings actions and compatibility labels. No server permission, package, dependency, or file was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-template-actions-{focused,api,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-template-actions-{focused,api,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3x — Shared-agent behavior controls
 
@@ -2455,7 +2455,7 @@ Five new component cases cover available and unavailable shared instances, platf
 
 Steps 4 and 5 and delivery stages 3 and 4 remain open. Next: verify assignment controls and delayed assignment handlers, then accessible team settings actions and compatibility labels. No server permission, file, package, dependency, or helper abstraction was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-template-behavior-{focused,api,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-template-behavior-{focused,api,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3y — Shared-agent assignment handlers and dialogs
 
@@ -2467,7 +2467,7 @@ React Doctor retained 91/100 with no errors. Two complexity warnings remain in t
 
 Steps 4 and 5 and delivery stages 3 and 4 remain open. Next: audit remaining assignment surfaces, then accessible team settings actions and compatibility labels. No server permission, file, package, or dependency was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-template-assignments-{focused,api,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-template-assignments-{focused,api,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3z — Team settings ID and accessible actions
 
@@ -2479,7 +2479,7 @@ One verification repair gave the header a distinct key from its sibling invite-d
 
 Steps 4 and 5 and delivery stages 3 and 4 remain open. Next: audit the remaining Organization screen requirements, including layout, wrapping, keyboard actions, and retained settings. Client labels and compatibility also remain open. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-team-settings-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-team-settings-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3aa — Organization layout and completed screen audit
 
@@ -2491,7 +2491,7 @@ The step 4 audit inspected OrganizationPage, OrganizationOverview, OrganizationT
 
 Step 4 is complete. Step 5 and delivery stages 3 and 4 remain open. Next: client labels, query scope, cache invalidation, and import/export/archive/restore compatibility. Pixel layout remains unverified because browser checks are excluded by the goal. No new file, package, dependency, server permission, full suite, build, paid call, push, or PR was added. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-org-layout-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-org-layout-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3ab — Team labels in the existing switcher
 
@@ -2501,7 +2501,7 @@ Two component cases cover expanded and collapsed modes with an organization and 
 
 Step 5 and delivery stages 3 and 4 remain open. Next: audit explicit client scope, query keys, cache invalidation, and data portability compatibility. No server permission, file, package, dependency, or helper abstraction was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-switcher-teams-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-switcher-teams-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3ac — Overview refresh after member changes
 
@@ -2511,7 +2511,7 @@ Eight new cases exercise all four existing mutation hooks with success and failu
 
 One verification repair completed the typed member and invitation response fixtures and supplied the cache value's type. No production repair, new file, package, dependency, or helper abstraction was needed. Step 5 and delivery stages 3 and 4 remain open. Next: source catalog invalidation, account cache boundaries, and data portability compatibility. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-member-overview-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-member-overview-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3ad — Profile source catalog refresh
 
@@ -2521,7 +2521,7 @@ Eight new cases exercise create, clone, update, and delete hooks with success an
 
 Step 5 and delivery stages 3 and 4 remain open. Next: the remaining resource source mutations, account cache boundaries, and data portability compatibility. No new file, package, dependency, or helper abstraction was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-profile-catalog-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-profile-catalog-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3ae — Skill source catalog refresh
 
@@ -2531,7 +2531,7 @@ Eight new cases exercise all four hooks with success and failure responses. They
 
 Step 5 and delivery stages 3 and 4 remain open. Next: knowledge, tool, and provider source changes, account cache boundaries, and data portability compatibility. No new file, package, dependency, or helper abstraction was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-skill-catalog-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-skill-catalog-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3af — Provider and tool source catalog refresh
 
@@ -2543,7 +2543,7 @@ The knowledge audit checked OrgService team counts and all web calls to the orga
 
 Step 5 and delivery stages 3 and 4 remain open. Next: integration and plugin caches, account cache boundaries, and data portability compatibility. No new file, package, dependency, or helper abstraction was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-source-catalog-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-source-catalog-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3ag — Plugin source catalog refresh
 
@@ -2553,7 +2553,7 @@ Four new cases cover enable and disable hooks with success and failure responses
 
 The integration audit found another dependent read: shared-agent source validation checks MCP server state and Composio assignments. MCP server configuration and lifecycle mutations and Composio assignment mutations need their own cache slice. Step 5 and delivery stages 3 and 4 remain open. Next: those integration reads, account cache boundaries, and data portability compatibility. No new file, package, dependency, or helper abstraction was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-plugin-catalog-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-plugin-catalog-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3ah — Integration readiness cache refresh
 
@@ -2563,7 +2563,7 @@ Twelve new cases cover all six hooks with success and failure responses. Query o
 
 Step 5 and delivery stages 3 and 4 remain open. Next: account cache boundaries, late responses during team switches, and import/export/archive/restore compatibility. No new file, package, dependency, or helper abstraction was added. No browser check, full suite, build, paid call, push, or PR ran. Final delivery checks remain required.
 
-Evidence: /tmp/nakama-integration-catalog-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-integration-catalog-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3ai — Authentication cache boundary checks
 
@@ -2571,19 +2571,19 @@ The existing AuthProvider clears the complete query cache after logout, team swi
 
 The cases also check the resulting authenticated user, active tenant, and exact switch request. Account replacement retains the same active tenant to check account identity independently of tenant switching. All 154 focused authentication and Organization component tests passed with 1142 assertions. Complete web types, scoped anti-slop, Ultracite, and git diff --check passed. React Doctor retained 91/100 with the same two assignment complexity warnings and no errors. One verification repair added the cache value's numeric type and removed an unused catch parameter. No production change was needed. Existing cache clearing already satisfies these query-response cases.
 
-These tests do not prove ordering of concurrent authentication requests. The source audit found that AuthProvider refreshSession accepts its result after waiting, while NakamaClient getMe and setActiveOrg update the client's implicit tenant on completion. That ordering still needs a focused race check before step 5 can close. Import/export/archive/restore compatibility and final delivery checks also remain open. No new file, package, dependency, browser check, full suite, build, paid call, push, or PR was added.
+These tests do not prove ordering of concurrent authentication requests. The source audit found that AuthProvider refreshSession accepts its result after waiting, while AirinClient getMe and setActiveOrg update the client's implicit tenant on completion. That ordering still needs a focused race check before step 5 can close. Import/export/archive/restore compatibility and final delivery checks also remain open. No new file, package, dependency, browser check, full suite, build, paid call, push, or PR was added.
 
-Evidence: /tmp/nakama-auth-cache-{focused,types,format,oxlint,doctor,lint}.log.
+Evidence: /tmp/airin-auth-cache-{focused,types,format,oxlint,doctor,lint}.log.
 
 ### Slice 3aj — Client authentication response ordering
 
-NakamaClient now tracks explicit request-scope changes and the order of active-tenant requests. A delayed getMe response cannot replace a scope selected or cleared after that read began. An unchanged identity read does not invalidate a pending switch. A delayed setActiveOrg response cannot restore cleared scope or replace the newest switch request. Current identity reads still select the server's active tenant. Public method signatures and returned authentication response fields remain unchanged; these guards affect the client's default header only.
+AirinClient now tracks explicit request-scope changes and the order of active-tenant requests. A delayed getMe response cannot replace a scope selected or cleared after that read began. An unchanged identity read does not invalidate a pending switch. A delayed setActiveOrg response cannot restore cleared scope or replace the newest switch request. Current identity reads still select the server's active tenant. Public method signatures and returned authentication response fields remain unchanged; these guards affect the client's default header only.
 
 Seven new HTTP-mock cases check late identity reads after switching or clearing scope, a delayed switch after clearing an initially empty scope, both switch completion orders, an unchanged identity read during a switch, and normal identity scope selection. They assert the next profile request's X-Org-Id and retained response fields. The initial five-case race check failed four cases before the change. All 58 client tests passed after the change with 222 assertions. Complete client types, scoped anti-slop, Ultracite, and git diff --check passed. No verification repair was needed after implementation.
 
 AuthProvider still accepts returned authentication data after its own waits. Its state updates need the corresponding race guard and component tests in the next slice. The client does not cancel server mutations or change caller response data. Step 5 and delivery stages 3 and 4 remain open. Import/export/archive/restore compatibility and final delivery checks remain required. No new file, package, dependency, browser check, full suite, build, paid call, push, or PR was added.
 
-Evidence: /tmp/nakama-client-auth-race-{before,focused,types,format,oxlint,lint}.log.
+Evidence: /tmp/airin-client-auth-race-{before,focused,types,format,oxlint,lint}.log.
 
 ### Slice 3ak — Authentication UI response ordering
 
@@ -2593,7 +2593,7 @@ Nine new component cases cover initial reads after logout or refresh, refreshed 
 
 Step 5 and delivery stages 3 and 4 remain open. The next slice must audit login, setup, organization mutations, and platform-list refreshes for late authentication state updates. Client login, setup, profile updates, and invite acceptance also remain to check. Import/export/archive/restore compatibility and final delivery checks remain required. These guards do not cancel server mutations. No new file, package, dependency, browser check, full suite, build, paid call, push, or PR was added.
 
-Evidence: /tmp/nakama-auth-order-{before,focused,types,format,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-auth-order-{before,focused,types,format,oxlint,lint,doctor}.log.
 
 ### Slice 3al — Authentication mutations preserve the selected client scope
 
@@ -2603,7 +2603,7 @@ Twelve HTTP-mock cases cover all four operations after switching, resetting scop
 
 Step 5 and delivery stages 3 and 4 remain open. The next slice must check AuthProvider login and setup continuations after logout or switching. Organization mutations and platform-list refreshes also need review. These client guards preserve scope changes; they do not cancel server mutations or order concurrent account requests before any scope change. Import/export/archive/restore compatibility and final delivery checks remain required. No new file, package, dependency, browser check, full repository suite, build, paid call, push, or PR was added.
 
-Evidence: /tmp/nakama-auth-writer-{before,focused,types,format,oxlint,lint}.log.
+Evidence: /tmp/airin-auth-writer-{before,focused,types,format,oxlint,lint}.log.
 
 ### Slice 3am — Login and setup respect newer authentication actions
 
@@ -2613,7 +2613,7 @@ Eight new component cases cover both login and setup after logout, a team switch
 
 Step 5 and delivery stages 3 and 4 remain open. Next, audit organization mutations and platform-list refreshes for late authentication state updates. Import/export/archive/restore compatibility and final delivery checks remain required. Client response guards and UI revision checks do not cancel server mutations or control browser-cookie response ordering. No new file, package, dependency, browser check, full repository suite, build, paid call, push, or PR was added.
 
-Evidence: /tmp/nakama-auth-entry-{before,focused,types,format,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-auth-entry-{before,focused,types,format,oxlint,lint,doctor}.log.
 
 ### Slice 3an — Organization lists retain current authentication scope
 
@@ -2623,7 +2623,7 @@ Thirty new component cases cover tenant and platform updates, delays during muta
 
 Step 5 and delivery stages 3 and 4 remain open. Next, protect organization creation and archive continuations before they select a tenant or write authentication state. Import/export/archive/restore compatibility and final delivery checks remain required. These guards do not cancel server mutations. No new file, package, dependency, browser check, full repository suite, build, paid call, push, or PR was added.
 
-Evidence: /tmp/nakama-auth-list-{before,focused,types,format,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-auth-list-{before,focused,types,format,oxlint,lint,doctor}.log.
 
 ### Slice 3ao — Creation and archive retain the latest authentication action
 
@@ -2633,7 +2633,7 @@ Thirty-nine new component cases cover creation, archive with a remaining tenant,
 
 Step 5 and delivery stages 3 and 4 remain open. Next, review import, export, clone, archive, and restore compatibility against the plan's tenant and publication requirements. Final delivery checks and user documentation remain required. Authentication response checks do not cancel server mutations or control browser-cookie ordering. No new file, package, dependency, browser check, full repository suite, build, paid call, push, or PR was added.
 
-Evidence: /tmp/nakama-auth-org-transition-{before,focused,types,format,oxlint,lint,doctor}.log.
+Evidence: /tmp/airin-auth-org-transition-{before,focused,types,format,oxlint,lint,doctor}.log.
 
 ### Slice 3ap — Tenant exports exclude linked parent files
 
@@ -2643,7 +2643,7 @@ Seven new filesystem cases cover workspace files, profile roots with parent arti
 
 Existing tests also cover inactive shared pack references, destination publication verification, tenant-local history exports, and restore without reviving revoked publications. Step 5 and delivery stages 3 and 4 remain open. Next, finish the import, clone, archive, restore, and revision-invalidation review, then run the delivery-stage checks. User documentation and final builds remain required. No new file, package, dependency, browser check, full repository suite, build, paid call, push, or PR was added.
 
-Evidence: /tmp/nakama-team-{export-before,pack-before,export-extra-before,export-linked,export-focused,export-types,export-format,export-oxlint,export-lint}.log.
+Evidence: /tmp/airin-team-{export-before,pack-before,export-extra-before,export-linked,export-focused,export-types,export-format,export-oxlint,export-lint}.log.
 
 ### Slice 3aq — Client compatibility checks and delivery stage 3 completion
 
@@ -2655,7 +2655,7 @@ All 251 focused tests passed with two Windows-only skips and 1,848 assertions. C
 
 Implementation step 5 and delivery stage 3 are complete. Delivery stage 4 remains open. Next: document System → Organization, parent publications, team additions, roles, and team-local connections in existing user docs. Final builds and release checks remain required. No browser check, new file, package, dependency, paid call, push, or PR ran in this slice.
 
-Evidence: /tmp/nakama-compatibility-{focused,server-types,client-types,core-types,db-types,web-types,lint}.log; /tmp/nakama-stage3-{full-test,knip-confirm,check-confirm}.log.
+Evidence: /tmp/airin-compatibility-{focused,server-types,client-types,core-types,db-types,web-types,lint}.log; /tmp/airin-stage3-{full-test,knip-confirm,check-confirm}.log.
 
 ### Slice 4a — User documentation and final checks
 
@@ -2667,7 +2667,7 @@ Final bun run check, bun run knip, and git diff --check passed. The canonical bu
 
 Delivery stage 4 is complete. All five implementation steps and all four delivery stages are complete. Push and a ready PR remain required. The current branch is main, as previously requested. GitHub main matches the local origin/main reference. A main-to-main PR cannot carry these changes. Publication needs a user choice of review branch before pushing. The prepared PR description uses the repository ADHD format. Browser behavior and live OAuth delivery remain unverified.
 
-Evidence: /tmp/nakama-stage4-{pipeline,docs-types,docs-build,lint,check,knip,full-test}.log; /tmp/nakama-final-{server-build,web-build,server-types,agent-types,client-types,core-types,db-types}.log. Prepared PR body: /tmp/nakama-organization-teams-pr.md.
+Evidence: /tmp/airin-stage4-{pipeline,docs-types,docs-build,lint,check,knip,full-test}.log; /tmp/airin-final-{server-build,web-build,server-types,agent-types,client-types,core-types,db-types}.log. Prepared PR body: /tmp/airin-organization-teams-pr.md.
 
 ### Slice 4b — Review branch and current-main compatibility
 
@@ -2677,4 +2677,4 @@ All 83 focused search, migration, and organization archive tests passed with 420
 
 All implementation and delivery checkboxes remain complete. The branch choice is resolved. Next: push this branch and open the ready PR against main. No browser check, live OAuth check, or paid provider call ran. The original design remains attached to the plan.
 
-Evidence: /tmp/nakama-main-merge-{focused,core-types,db-types,server-types,format,oxlint,lint,check,knip,full-test,server-build,web-build,docs-build,doctor}.log.
+Evidence: /tmp/airin-main-merge-{focused,core-types,db-types,server-types,format,oxlint,lint,check,knip,full-test,server-build,web-build,docs-build,doctor}.log.

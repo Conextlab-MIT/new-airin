@@ -1,8 +1,8 @@
 import {
+  AirinApiError,
   type CustomModelEntry,
-  NakamaApiError,
   normalizeBaseUrl,
-} from "@nakama/core";
+} from "@airin/core";
 import { fetchRemoteOpenAIModels } from "../compatible-models";
 
 interface OllamaTagsResponse {
@@ -40,7 +40,7 @@ async function fetchOllamaTagsModels(
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `Cannot reach Ollama at ${new URL(tagsUrl).host}. Start Ollama, then refresh.`,
       502
     );

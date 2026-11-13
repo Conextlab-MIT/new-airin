@@ -2,7 +2,7 @@ import { expect, mock, spyOn, test } from "bun:test";
 import type {
   AutomationRunRecord,
   StoredAutomation,
-} from "@nakama/core/contract";
+} from "@airin/core/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -69,7 +69,7 @@ test("automation notification opens the automation under its agent", async () =>
   }
 });
 
-test("automations follow the selected agent and Super Nakama shows all", async () => {
+test("automations follow the selected agent and Airin shows all", async () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -497,7 +497,7 @@ test("a finished run keeps its output when the transcript does not load", async 
 
 test("opens a run whose transcript saved an artifact", async () => {
   const artifactPath =
-    "/home/test/.nakama/orgs/org_1/profiles/profile/artifacts/report.md";
+    "/home/test/.airin/orgs/org_1/profiles/profile/artifacts/report.md";
 
   const run: AutomationRunRecord = {
     automationId: "automation",
@@ -1349,7 +1349,7 @@ test("detail panel shows the webhook URL and a new secret only once", async () =
 
   const createSecret = spyOn(client, "createAutomationWebhookSecret")
     .mockResolvedValueOnce("new-secret-value")
-    .mockRejectedValueOnce(new Error("Set NAKAMA_SECRETS_KEY"));
+    .mockRejectedValueOnce(new Error("Set AIRIN_SECRETS_KEY"));
 
   const codes = () =>
     Array.from(container.querySelectorAll("code")).map(
@@ -1374,8 +1374,7 @@ test("detail panel shows the webhook URL and a new secret only once", async () =
       `${window.location.origin}/v1/automations/a%2Fb/webhook`,
     ]);
 
-    const configured =
-      "https://nakama.example.com/v1/automations/a%2Fb/webhook";
+    const configured = "https://airin.example.com/v1/automations/a%2Fb/webhook";
 
     await renderDetailPanel(root, queryClient, {
       ...webhookAutomation({ type: "webhook" }, "a/b"),

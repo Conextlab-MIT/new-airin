@@ -20,8 +20,8 @@ import type {
   PluginUsageResponse,
   ReadLocalPluginFileRequest,
   UpdateOrgPluginRequest,
-} from "@nakama/core/contract";
-import { withDisabledFetchIdle } from "@nakama/core/fetch-idle";
+} from "@airin/core/contract";
+import { withDisabledFetchIdle } from "@airin/core/fetch-idle";
 import { ChatClient } from "./client-chat";
 import type { OfficialPluginInstallResponse } from "./client-helpers";
 

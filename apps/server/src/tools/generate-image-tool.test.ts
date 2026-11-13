@@ -9,14 +9,14 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { inferArtifactMimeType, type UserConfig } from "@nakama/core";
-import { GENERATE_IMAGE_TOOL_ID } from "@nakama/core/tools/protected";
+import { inferArtifactMimeType, type UserConfig } from "@airin/core";
+import { GENERATE_IMAGE_TOOL_ID } from "@airin/core/tools/protected";
 import {
   createInMemoryDatabaseAdapter,
   ensureGenerateImageToolDefinition,
   seedDatabase,
-  seedOrgSuperNakamaProfile,
-} from "@nakama/db";
+  seedOrgSuperAirinProfile,
+} from "@airin/db";
 import { IMAGE_GENERATION_SELECTION } from "../providers/models";
 import { resolveToolsFromStorage } from "../services/tool-resolver";
 import {
@@ -61,7 +61,7 @@ function generateImageTool(
 }
 
 describe("generate_image tool seed and resolver (U3)", () => {
-  test("seedDatabase includes generate_image and a new Super Nakama gets it", async () => {
+  test("seedDatabase includes generate_image and a new Airin gets it", async () => {
     const db = createInMemoryDatabaseAdapter();
     await db.upsertOrganization({
       createdAt: new Date().toISOString(),
@@ -72,11 +72,11 @@ describe("generate_image tool seed and resolver (U3)", () => {
     });
 
     await seedDatabase(db);
-    const superNakama = await seedOrgSuperNakamaProfile(db, "org_a");
+    const superAirin = await seedOrgSuperAirinProfile(db, "org_a");
 
     expect(await db.getTool(GENERATE_IMAGE_TOOL_ID)).not.toBeNull();
 
-    const assignedIds = (await db.listToolsForProfile(superNakama.id)).map(
+    const assignedIds = (await db.listToolsForProfile(superAirin.id)).map(
       (tool) => tool.id
     );
 
@@ -138,7 +138,7 @@ describe("generate_image tool seed and resolver (U3)", () => {
 });
 
 describe("generate_image tool persistence (U4)", () => {
-  const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+  const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
   let tempConfigDir = "";
   let workspaceRoot = "";
 
@@ -154,16 +154,16 @@ describe("generate_image tool persistence (U4)", () => {
     }
 
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
   });
 
   async function setupWorkspace() {
-    tempConfigDir = await mkdtemp(path.join(tmpdir(), "nakama-gen-img-cfg-"));
-    workspaceRoot = await mkdtemp(path.join(tmpdir(), "nakama-gen-img-ws-"));
-    process.env.NAKAMA_CONFIG_DIR = tempConfigDir;
+    tempConfigDir = await mkdtemp(path.join(tmpdir(), "airin-gen-img-cfg-"));
+    workspaceRoot = await mkdtemp(path.join(tmpdir(), "airin-gen-img-ws-"));
+    process.env.AIRIN_CONFIG_DIR = tempConfigDir;
   }
 
   test("forwards the turn's cancel signal to the provider call", async () => {

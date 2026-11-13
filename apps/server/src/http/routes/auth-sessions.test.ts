@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ListBrowserSessionsResponse } from "@nakama/core";
-import { createInMemoryDatabaseAdapter } from "@nakama/db";
+import type { ListBrowserSessionsResponse } from "@airin/core";
+import { createInMemoryDatabaseAdapter } from "@airin/db";
 import { AgentService } from "../../services/agent-service";
 import { AuthService } from "../../services/auth-service";
 import { createMinimalHonoApp } from "../test-app-helpers";
@@ -19,8 +19,8 @@ import {
 const PASSWORD = "password123";
 
 async function createApp() {
-  process.env.NAKAMA_CONFIG_DIR = await mkdtemp(
-    join(tmpdir(), "nakama-auth-sessions-route-")
+  process.env.AIRIN_CONFIG_DIR = await mkdtemp(
+    join(tmpdir(), "airin-auth-sessions-route-")
   );
 
   const databaseAdapter = createInMemoryDatabaseAdapter();

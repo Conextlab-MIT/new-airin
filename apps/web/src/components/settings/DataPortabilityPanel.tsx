@@ -1,7 +1,7 @@
-import type { DataImportPreviewResponse } from "@nakama/core/contract";
-import { Button } from "@nakama/ui/button";
-import { toast } from "@nakama/ui/toast";
-import { cn } from "@nakama/ui/utils";
+import type { DataImportPreviewResponse } from "@airin/core/contract";
+import { Button } from "@airin/ui/button";
+import { toast } from "@airin/ui/toast";
+import { cn } from "@airin/ui/utils";
 import { Alert02Icon, Download04Icon, Upload04Icon } from "hugeicons-react";
 import type { ReactNode, SVGProps } from "react";
 import { useRef, useState } from "react";
@@ -89,7 +89,7 @@ export function DataPortabilityPanel() {
 
     try {
       const handle = await picker({
-        suggestedName: "nakama-export.zip",
+        suggestedName: "airin-export.zip",
         types: [
           {
             accept: { "application/zip": [".zip"] },

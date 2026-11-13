@@ -8,7 +8,7 @@ import { isDeepStrictEqual, promisify } from "node:util";
 
 const execute = promisify(execFile);
 
-const repository = "ahmadrosid/nakama";
+const repository = "ahmadrosid/airin";
 
 const platforms = {
   mac: { manifest: "latest-mac.yml", suffixes: ["arm64-mac.zip", "arm64.dmg"] },
@@ -26,7 +26,7 @@ export function updateManifest(manifest, tag, platform = "mac") {
   }
 
   const names = config.suffixes.map(
-    (suffix) => `Nakama-${manifest.version}-${suffix}`
+    (suffix) => `Airin-${manifest.version}-${suffix}`
   );
 
   if (
@@ -68,9 +68,7 @@ async function inspectArtifacts(directory, version, tag) {
 
     const canonical = updateManifest(manifest, tag, platform);
 
-    const names = config.suffixes.map(
-      (suffix) => `Nakama-${version}-${suffix}`
-    );
+    const names = config.suffixes.map((suffix) => `Airin-${version}-${suffix}`);
 
     const files = [
       ...names.flatMap((name) => [name, `${name}.blockmap`]),
@@ -148,7 +146,7 @@ export async function publishRelease({
     }
   };
 
-  const temp = await mkdtemp(join(tmpdir(), "nakama-release-"));
+  const temp = await mkdtemp(join(tmpdir(), "airin-release-"));
 
   try {
     let existing = await release(tag);
@@ -160,7 +158,7 @@ export async function publishRelease({
 
       for (const [platform, config] of Object.entries(platforms)) {
         const names = config.suffixes.map(
-          (suffix) => `Nakama-${version}-${suffix}`
+          (suffix) => `Airin-${version}-${suffix}`
         );
 
         const files = [
@@ -203,7 +201,7 @@ export async function publishRelease({
         "--verify-tag",
         "--draft",
         "--title",
-        `Nakama Desktop ${version}`,
+        `Airin Desktop ${version}`,
         "--notes",
         "Self-contained desktop installers: macOS 15+ Apple Silicon (DMG) and Windows 10 19041+ / Windows 11 x64 (Setup.exe).\n\nDownload the installer for your operating system below. The unsigned MSIX is a workflow artifact for Microsoft Store submission only, not an installer download.",
         "--latest=false"

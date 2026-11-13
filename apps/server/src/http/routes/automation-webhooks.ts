@@ -1,6 +1,6 @@
+import type { CreateAutomationWebhookSecretResponse } from "@airin/core";
+import { DatabaseAutomationStore } from "@airin/db";
 import { createRoute, z } from "@hono/zod-openapi";
-import type { CreateAutomationWebhookSecretResponse } from "@nakama/core";
-import { DatabaseAutomationStore } from "@nakama/db";
 import type { ServerOptions } from "../context";
 import {
   requireActiveOrgIdFromContext,

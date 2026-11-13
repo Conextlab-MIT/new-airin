@@ -3,7 +3,7 @@
  * serves artifact bytes) and the web app (which decides how to preview them).
  */
 
-import { NakamaApiError } from "./api-error";
+import { AirinApiError } from "./api-error";
 
 export const MAX_HTML_ARTIFACT_BYTES = 16_000_000;
 
@@ -85,7 +85,7 @@ function fileExtension(filename: string): string {
   return basename.slice(dotIndex + 1).toLowerCase();
 }
 
-/** Best-effort MIME type for an artifact that has no `.nakama-meta.json` sidecar. */
+/** Best-effort MIME type for an artifact that has no `.airin-meta.json` sidecar. */
 export function inferArtifactMimeType(filename: string): string {
   return (
     Object.entries(MIME_TYPE_BY_EXTENSION).find(
@@ -132,7 +132,7 @@ export function assertHtmlArtifactSize(
     (isHtmlArtifactMimeType(mimeType) ||
       isHtmlArtifactMimeType(inferArtifactMimeType(filename)))
   ) {
-    throw new NakamaApiError(
+    throw new AirinApiError(
       `HTML artifacts cannot exceed ${MAX_HTML_ARTIFACT_BYTES} bytes.`,
       413
     );

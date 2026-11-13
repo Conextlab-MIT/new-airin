@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   title: SITE_NAME,
 };
 
-const GITHUB_REPO_URL = "https://github.com/ahmadrosid/nakama";
+const GITHUB_REPO_URL = "https://github.com/ahmadrosid/airin";
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -72,7 +72,7 @@ const features: Array<{
   },
   {
     details:
-      "Run Nakama on your own infrastructure or let us handle hosting for you.",
+      "Run Airin on your own infrastructure or let us handle hosting for you.",
     icon: CloudIcon,
     title: "Self-hosted or managed",
   },
@@ -87,7 +87,7 @@ export default function HomePage() {
             className="font-semibold text-lg text-stone-900 tracking-tight dark:text-white"
             href="/"
           >
-            Nakama
+            Airin
           </Link>
           <div className="flex items-center gap-5 text-sm text-stone-600 dark:text-white/55">
             <Link
@@ -98,7 +98,7 @@ export default function HomePage() {
             </Link>
             <a
               className="hidden transition-colors hover:text-stone-900 sm:inline dark:hover:text-white"
-              href="https://getnakama.cloud/"
+              href="https://getairin.cloud/"
               rel="noreferrer"
               target="_blank"
             >
@@ -144,7 +144,7 @@ export default function HomePage() {
                   </Link>
                   <a
                     className="hero-cta-secondary"
-                    href="https://getnakama.cloud/"
+                    href="https://getairin.cloud/"
                     rel="noreferrer"
                     target="_blank"
                   >
@@ -152,7 +152,7 @@ export default function HomePage() {
                   </a>
                   <a
                     className="hero-cta-secondary"
-                    href="https://github.com/ahmadrosid/nakama"
+                    href="https://github.com/ahmadrosid/airin"
                     rel="noreferrer"
                     target="_blank"
                   >
@@ -174,11 +174,11 @@ export default function HomePage() {
               <span className="size-2.5 rounded-full bg-stone-300 dark:bg-white/15" />
               <span className="size-2.5 rounded-full bg-stone-300 dark:bg-white/15" />
               <span className="ml-2 text-[11px] text-stone-500 dark:text-white/35">
-                nakama · dashboard
+                airin · dashboard
               </span>
             </div>
             <Image
-              alt="Nakama chat preview"
+              alt="Airin chat preview"
               className="block h-auto w-full dark:hidden"
               height={800}
               src={withBasePath("/screenshots/chat-light.png")}
@@ -202,7 +202,7 @@ export default function HomePage() {
                 Give your agents a place on the team.
               </h2>
               <p className="mt-3 text-stone-600 dark:text-white/50">
-                Inspired by Hermes Agent and OpenClaw, Nakama brings memory,
+                Inspired by Hermes Agent and OpenClaw, Airin brings memory,
                 skills, tools, and automation into a platform built for teams.
               </p>
             </div>
@@ -239,11 +239,11 @@ export default function HomePage() {
           <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-12 lg:gap-20">
             <div className="md:pt-7">
               <h2 className="landing-section-title max-w-sm text-balance font-medium text-3xl tracking-tight md:text-4xl">
-                What people are building with Nakama
+                What people are building with Airin
               </h2>
               <p className="mt-4 max-w-sm text-stone-600 leading-relaxed dark:text-white/50">
                 These are workflows our users already run. We’re still exploring
-                what else Nakama can help teams do.
+                what else Airin can help teams do.
               </p>
             </div>
             <UseCaseRows />
@@ -254,7 +254,7 @@ export default function HomePage() {
           <div className="mx-auto flex max-w-6xl flex-col items-stretch justify-between gap-8 rounded-2xl border border-stone-200 bg-white p-8 sm:items-start lg:flex-row lg:items-center lg:p-10 dark:border-white/8 dark:bg-[#111113]">
             <div className="max-w-xl">
               <h2 className="landing-section-title font-medium text-2xl tracking-tight md:text-3xl">
-                What will you build with Nakama?
+                What will you build with Airin?
               </h2>
               <p className="mt-3 text-stone-600 dark:text-white/50">
                 Create your first agent, automate a workflow, or build something
@@ -271,7 +271,7 @@ export default function HomePage() {
               </Link>
               <a
                 className="hero-cta-secondary w-full justify-center sm:w-auto"
-                href="https://getnakama.cloud/"
+                href="https://getairin.cloud/"
                 rel="noreferrer"
                 target="_blank"
               >
@@ -284,7 +284,7 @@ export default function HomePage() {
 
       <footer className="border-stone-200 border-t px-6 py-6 text-center text-sm text-stone-500 dark:border-white/5 dark:text-white/40">
         <p>Released under the MIT License.</p>
-        <p>Copyright © Nakama contributors</p>
+        <p>Copyright © Airin contributors</p>
       </footer>
     </div>
   );

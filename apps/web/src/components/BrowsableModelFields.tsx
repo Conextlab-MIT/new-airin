@@ -1,5 +1,5 @@
-import { Button } from "@nakama/ui/button";
-import { FormField } from "@nakama/ui/form-field";
+import { Button } from "@airin/ui/button";
+import { FormField } from "@airin/ui/form-field";
 import { Add01Icon } from "hugeicons-react";
 import { type ReactNode, useState } from "react";
 import { usePhoneWidth } from "@/components/ModelBrowseShell";

@@ -12,14 +12,14 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (!theme) {
       try {
-        theme = localStorage.getItem("nakama-theme");
+        theme = localStorage.getItem("airin-theme");
       } catch {
         // Storage can be unavailable on error pages.
       }
     }
 
     ipcRenderer.send(
-      "nakama:theme",
+      "airin:theme",
       ["light", "dark", "system"].includes(theme) ? theme : "system"
     );
   };

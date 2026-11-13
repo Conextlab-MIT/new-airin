@@ -1,6 +1,6 @@
-import type { ProfileSummary } from "@nakama/core";
-import { type AgentGroup, groupRoster } from "@nakama/core/agent-groups";
-import type { WorkspaceEntry } from "@nakama/core/contract";
+import type { ProfileSummary } from "@airin/core";
+import { type AgentGroup, groupRoster } from "@airin/core/agent-groups";
+import type { WorkspaceEntry } from "@airin/core/contract";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GroupComposer } from "@/components/agent-groups/group-composer";
@@ -239,7 +239,11 @@ export function GroupLivePanel({
         {run ? (
           <ThinkingState
             className="text-sm"
-            label={run.stopping ? "Stopping after this reply" : "Working…"}
+            label={
+              run.stopping
+                ? "Stopping after this reply"
+                : run.activity?.trim() || "Working…"
+            }
           />
         ) : (
           <p className="text-muted-foreground text-sm">Done</p>

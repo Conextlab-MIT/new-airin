@@ -2,11 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { AcpAgentConfig } from "@nakama/core";
+import type { AcpAgentConfig } from "@airin/core";
 import { z } from "zod";
 
 /**
- * Agents Nakama ships with. They are pinned in the runtime manifest, so each
+ * Agents Airin ships with. They are pinned in the runtime manifest, so each
  * one runs from node_modules: no download when a chat starts.
  */
 const BUNDLED_AGENTS = [
@@ -126,7 +126,7 @@ function readEnv(
 
 /**
  * The platform binary that `opencode-ai` installs as an optional dependency.
- * Its own bin is a stub until postinstall runs, and Nakama installs with
+ * Its own bin is a stub until postinstall runs, and Airin installs with
  * `--ignore-scripts`, so the platform package is the reliable path.
  */
 function findOpencodePackageBinary(platform: NodeJS.Platform): string | null {
@@ -187,7 +187,7 @@ function agentSearchPath(host: Required<AcpAgentLaunchOptions>): string {
 }
 
 export const CODEX_NOT_INSTALLED_MESSAGE =
-  "Codex can't run on this Nakama server yet: its program isn't installed here, and Nakama Cloud doesn't include it at the moment. Pick Claude or OpenCode as this profile's chat agent instead. Self-hosting? Use the -full image, or set CODEX_PATH to a codex binary.";
+  "Codex can't run on this Airin server yet: its program isn't installed here, and Airin Cloud doesn't include it at the moment. Pick Claude or OpenCode as this profile's chat agent instead. Self-hosting? Use the -full image, or set CODEX_PATH to a codex binary.";
 
 const CODEX_TARGETS = new Map([
   ["darwin-arm64", "aarch64-apple-darwin"],
@@ -294,7 +294,7 @@ export function resolveAcpAgentLaunch(
   if (!found) {
     if (isOpencode) {
       throw new Error(
-        "OpenCode is not installed on the Nakama server. Install opencode-ai (OpenCode 0.15.10 or later), or set OPENCODE_PATH to the opencode binary."
+        "OpenCode is not installed on the Airin server. Install opencode-ai (OpenCode 0.15.10 or later), or set OPENCODE_PATH to the opencode binary."
       );
     }
 

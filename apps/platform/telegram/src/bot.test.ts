@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import path from "node:path";
 import { inspect } from "node:util";
-import { NakamaClient } from "@nakama/client";
-import { resetActiveStreamsForTests } from "@nakama/core/channel-active-stream";
-import { ChannelSessionStore } from "@nakama/core/channel-session-store";
+import { AirinClient } from "@airin/client";
+import { resetActiveStreamsForTests } from "@airin/core/channel-active-stream";
+import { ChannelSessionStore } from "@airin/core/channel-session-store";
 import { Bot } from "grammy";
 import { TelegramAuthStore } from "./auth-store";
 import { createBot, redactBotToken } from "./bot";
@@ -379,8 +379,8 @@ test("concurrent chats send session requests to their own organizations", async 
     let firstProfilesRequested = false;
     const sessions: Array<{ org: string | null; profile: string }> = [];
 
-    const client = new NakamaClient({
-      baseUrl: "http://nakama.test",
+    const client = new AirinClient({
+      baseUrl: "http://airin.test",
       fetch: async (input, options) => {
         const pathname = new URL(String(input)).pathname;
         const org = new Headers(options?.headers).get("X-Org-Id");

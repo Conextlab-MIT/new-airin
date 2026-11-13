@@ -6,12 +6,12 @@ import type {
   ChatCompletionResult,
   ProviderClient,
   ProviderInstance,
-} from "@nakama/core";
-import { NETRA_AGENT_MODEL_ID } from "@nakama/core/discovery-providers";
+} from "@airin/core";
+import { NETRA_AGENT_MODEL_ID } from "@airin/core/discovery-providers";
 import {
   createInMemoryDatabaseAdapter,
   mergeWorkspaceSettings,
-} from "@nakama/db";
+} from "@airin/db";
 import { asTestFetch } from "../providers/test-helpers";
 import { setupTestConfigDir } from "../test-config-dir";
 import { AgentService } from "./agent-service";
@@ -37,8 +37,8 @@ function privateServiceAccess<T>(service: AgentService): T {
 }
 
 test("rejects a Netra provider when the model endpoint rejects its API key", async () => {
-  const configDir = await mkdtemp(path.join(tmpdir(), "nakama-netra-secret-"));
-  process.env.NAKAMA_CONFIG_DIR = configDir;
+  const configDir = await mkdtemp(path.join(tmpdir(), "airin-netra-secret-"));
+  process.env.AIRIN_CONFIG_DIR = configDir;
 
   using fetchMock = spyOn(globalThis, "fetch").mockImplementation(
     asTestFetch(async () => new Response("invalid key", { status: 401 }))
@@ -65,7 +65,7 @@ test("rejects a Netra provider when the model endpoint rejects its API key", asy
     ).rejects.toMatchObject({ status: 400 });
     expect(fetchMock).toHaveBeenCalled();
   } finally {
-    delete process.env.NAKAMA_CONFIG_DIR;
+    delete process.env.AIRIN_CONFIG_DIR;
     await rm(configDir, { force: true, recursive: true });
   }
 });
@@ -92,7 +92,7 @@ test("discovers the supported Netra model without a custom base URL", async () =
 });
 
 describe("discoverModelsForProvider", () => {
-  setupTestConfigDir("nakama-discovery-provider-");
+  setupTestConfigDir("airin-discovery-provider-");
 
   test("uses the provider default base URL for discovery providers", async () => {
     let seenUrl = "";
@@ -151,7 +151,7 @@ describe("discoverModelsForProvider", () => {
 });
 
 describe("AgentService usage pricing context", () => {
-  setupTestConfigDir("nakama-usage-context-");
+  setupTestConfigDir("airin-usage-context-");
 
   test("retains each harness's rates when another provider completes during a stream", async () => {
     const db = createInMemoryDatabaseAdapter();
@@ -307,7 +307,7 @@ describe("AgentService usage pricing context", () => {
 });
 
 describe("AgentService model list", () => {
-  setupTestConfigDir("nakama-chatgpt-plan-");
+  setupTestConfigDir("airin-chatgpt-plan-");
 
   test("reports the plan of a connected ChatGPT account", async () => {
     const claims = Buffer.from(
@@ -346,7 +346,7 @@ describe("AgentService model list", () => {
 });
 
 describe("AgentService vision settings", () => {
-  setupTestConfigDir("nakama-vision-settings-");
+  setupTestConfigDir("airin-vision-settings-");
 
   test.each(["primary", "vision"] as const)(
     "handles missing %s credentials without a provider call",

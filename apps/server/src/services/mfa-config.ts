@@ -5,9 +5,9 @@ import {
   getUserConfigPath,
   parseIniWithSections,
   writeParsedConfigIni,
-} from "@nakama/core";
-import type { OrgRole } from "@nakama/core/contract";
-import { ORG_ROLES } from "@nakama/db";
+} from "@airin/core";
+import type { OrgRole } from "@airin/core/contract";
+import { ORG_ROLES } from "@airin/db";
 
 const MFA_SECTION = "security";
 

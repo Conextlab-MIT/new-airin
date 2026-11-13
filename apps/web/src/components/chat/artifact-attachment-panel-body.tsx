@@ -1,6 +1,6 @@
-import { CodeBlock } from "@nakama/ui/code-block";
-import { Spinner } from "@nakama/ui/spinner";
-import { cn } from "@nakama/ui/utils";
+import { CodeBlock } from "@airin/ui/code-block";
+import { Spinner } from "@airin/ui/spinner";
+import { cn } from "@airin/ui/utils";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArtifactMarkdownToc } from "@/components/chat/artifact-markdown-toc";
 import type { ArtifactPreviewMode } from "@/components/chat/artifact-preview-mode-toggle";
@@ -338,7 +338,7 @@ function ArtifactHtmlFrame({
         event.data === ARTIFACT_FRAME_READY
       ) {
         // The sandboxed frame has an opaque origin, so "*" is the only target.
-        frame.postMessage({ nakamaArtifactHtml: html }, "*");
+        frame.postMessage({ airinArtifactHtml: html }, "*");
       }
     };
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentTodo, StreamEvent } from "@nakama/core";
+import type { AgentTodo, StreamEvent } from "@airin/core";
 import { SessionTurnRegistry } from "./session-turn-registry";
 
 describe("SessionTurnRegistry", () => {

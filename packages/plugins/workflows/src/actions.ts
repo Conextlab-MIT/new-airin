@@ -4,7 +4,7 @@ import type {
   StoredWorkflow,
   UpdateWorkflowRequest,
   WorkflowRunRecord,
-} from "@nakama/core";
+} from "@airin/core";
 import {
   buildReceiptBag,
   parseWorkflowRecord,

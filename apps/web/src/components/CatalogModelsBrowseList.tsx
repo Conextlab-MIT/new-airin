@@ -1,5 +1,5 @@
-import { Input } from "@nakama/ui/input";
-import { Switch } from "@nakama/ui/switch";
+import { Input } from "@airin/ui/input";
+import { Switch } from "@airin/ui/switch";
 import { type ReactNode, useDeferredValue, useMemo, useState } from "react";
 import {
   BrowseModelRowButton,

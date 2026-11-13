@@ -1,12 +1,12 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type {
   ListMcpServersResponse,
   McpServerResponse,
   ProfileResponse,
   TestMcpServerResponse,
-} from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
-import type { McpRegistrySearchResponse } from "@nakama/core/contract";
+} from "@airin/core";
+import { AirinApiError } from "@airin/core";
+import type { McpRegistrySearchResponse } from "@airin/core/contract";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   resolveCallbackBaseUrlFromRedirect,
   resolveComposioCallbackBaseUrl,
@@ -65,7 +65,7 @@ export function registerMcpOAuthRoutes(
       return mcpOAuthPage(
         "Authorization failed",
         error instanceof Error ? error.message : String(error),
-        error instanceof NakamaApiError ? error.status : 400
+        error instanceof AirinApiError ? error.status : 400
       );
     }
   });

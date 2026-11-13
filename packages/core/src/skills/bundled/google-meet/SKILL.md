@@ -1,6 +1,6 @@
 ---
 name: google-meet
-description: Read Google Meet meetings and transcripts captured or imported in Nakama.
+description: Read Google Meet meetings and transcripts captured or imported in Airin.
 ---
 
 Use the Google Meet tools only to read meetings the user asks about. They are read-only. They list this profile's meetings and the current user's own captures and imports from the Google Meet page.

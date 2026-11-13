@@ -13,7 +13,7 @@ import {
 } from "./org-memory-history";
 import { getOrgMemoryHistoryDir } from "./resolve";
 
-const originalConfigDir = process.env.NAKAMA_CONFIG_DIR;
+const originalConfigDir = process.env.AIRIN_CONFIG_DIR;
 
 describe("org memory history", () => {
   let tempDir = "";
@@ -25,17 +25,17 @@ describe("org memory history", () => {
     }
 
     if (originalConfigDir === undefined) {
-      delete process.env.NAKAMA_CONFIG_DIR;
+      delete process.env.AIRIN_CONFIG_DIR;
     } else {
-      process.env.NAKAMA_CONFIG_DIR = originalConfigDir;
+      process.env.AIRIN_CONFIG_DIR = originalConfigDir;
     }
   });
 
   async function setupOrg(orgId = "org_a"): Promise<string> {
     tempDir = await mkdtemp(
-      path.join(os.tmpdir(), "nakama-org-memory-history-")
+      path.join(os.tmpdir(), "airin-org-memory-history-")
     );
-    process.env.NAKAMA_CONFIG_DIR = tempDir;
+    process.env.AIRIN_CONFIG_DIR = tempDir;
 
     return orgId;
   }

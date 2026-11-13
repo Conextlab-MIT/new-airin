@@ -6,8 +6,8 @@ import type {
   ListComposioToolkitsResponse,
   ListProfileComposioToolkitsResponse,
   UpdateProfileComposioToolkitsRequest,
-} from "@nakama/core";
-import { NakamaApiError } from "@nakama/core";
+} from "@airin/core";
+import { AirinApiError } from "@airin/core";
 import { resolveComposioCallbackBaseUrl } from "../../services/composio-callback-url";
 import { isSameSiteReturnPath } from "../../services/composio-service";
 import type { ServerOptions } from "../context";
@@ -34,7 +34,7 @@ function memberSafeErrorResponse(
   isOrgAdmin: boolean,
   action: string
 ): Response {
-  if (error instanceof NakamaApiError) {
+  if (error instanceof AirinApiError) {
     return errorResponse(error.message, error.status, { code: error.code });
   }
 
@@ -95,7 +95,7 @@ export function registerComposioOAuthRoutes(
         `/integrations?section=composio&connected=${encodeURIComponent(result.toolkitSlug)}`
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -135,7 +135,7 @@ export function registerComposioRoutes(
         } satisfies EnableComposioToolkitRequest)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -157,7 +157,7 @@ export function registerComposioRoutes(
         )
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 
@@ -313,7 +313,7 @@ export function registerComposioRoutes(
         await service.updateProfileAssignments(auth.activeOrgId!, profile, body)
       );
     } catch (error) {
-      if (error instanceof NakamaApiError) {
+      if (error instanceof AirinApiError) {
         return errorResponse(error.message, error.status);
       }
 

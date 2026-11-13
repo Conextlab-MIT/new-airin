@@ -26,7 +26,7 @@ const timeout = setTimeout(
 );
 
 async function run() {
-  app.setPath("userData", await mkdtemp(join(tmpdir(), "nakama-wrapper-")));
+  app.setPath("userData", await mkdtemp(join(tmpdir(), "airin-wrapper-")));
   await app.whenReady();
   const updater = new EventEmitter();
   let checks = 0;
@@ -80,7 +80,7 @@ async function run() {
   assert.equal(updateItem.enabled, false);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(checks, 2);
-  assert.equal(prompts.at(-1).message, "Nakama is up to date");
+  assert.equal(prompts.at(-1).message, "Airin is up to date");
   assert.equal(updateItem.enabled, true);
   updateAvailable = true;
   updateItem.click();
@@ -133,7 +133,7 @@ async function run() {
       "session=test-only; HttpOnly; SameSite=Lax; Path=/"
     );
     response.end(
-      '<!doctype html><title>Nakama fixture</title><h1>Existing web app</h1><input type="file"><textarea aria-label="Message"></textarea>'
+      '<!doctype html><title>Airin fixture</title><h1>Existing web app</h1><input type="file"><textarea aria-label="Message"></textarea>'
     );
   });
 
@@ -151,7 +151,7 @@ async function run() {
   );
   assert.equal(
     await window.webContents.executeJavaScript(
-      "typeof require + ':' + typeof process + ':' + typeof window.nakama"
+      "typeof require + ':' + typeof process + ':' + typeof window.airin"
     ),
     "undefined:undefined:undefined"
   );
@@ -162,7 +162,7 @@ async function run() {
 
   for (const theme of ["dark", "system", "light", "system", "dark"]) {
     await window.webContents.executeJavaScript(
-      `localStorage.setItem('nakama-theme', '${theme}'); document.documentElement.dataset.theme = '${theme}'`
+      `localStorage.setItem('airin-theme', '${theme}'); document.documentElement.dataset.theme = '${theme}'`
     );
     const deadline = Date.now() + 2000;
 
@@ -195,10 +195,10 @@ async function run() {
   server.close();
 
   if (process.argv.includes("--runtime-test")) {
-    const data = await mkdtemp(join(tmpdir(), "nakama-server-test-"));
+    const data = await mkdtemp(join(tmpdir(), "airin-server-test-"));
 
     const runtime =
-      process.env.NAKAMA_DESKTOP_TEST_RUNTIME ??
+      process.env.AIRIN_DESKTOP_TEST_RUNTIME ??
       join(import.meta.dirname, "../dist/runtime");
 
     await assert.rejects(startLocalServer(join(data, "missing"), data));
@@ -260,7 +260,7 @@ async function run() {
         Cookie: cookie,
         Origin: local.url,
         "X-CSRF-Token": decodeURIComponent(
-          cookie.match(/nakama_csrf=([^;]+)/)?.[1] ?? ""
+          cookie.match(/airin_csrf=([^;]+)/)?.[1] ?? ""
         ),
       };
 

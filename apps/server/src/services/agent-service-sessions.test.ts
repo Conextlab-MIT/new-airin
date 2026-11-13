@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { ProviderInstance } from "@nakama/core";
-import {
-  createInMemoryDatabaseAdapter,
-  createSqliteDatabase,
-} from "@nakama/db";
+import type { ProviderInstance } from "@airin/core";
+import { createInMemoryDatabaseAdapter, createSqliteDatabase } from "@airin/db";
 import { AgentService } from "./agent-service";
 import { createDefaultProfile } from "./agent-service-test-fixtures";
 import { sessionTurnRegistry } from "./session-turn-registry";

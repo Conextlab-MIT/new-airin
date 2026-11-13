@@ -1,14 +1,14 @@
-import {
-  type GenerateContentConfig,
-  ThinkingLevel,
-  type Tool,
-} from "@google/genai";
 import type {
   GenerateChatInput,
   LlmToolDefinition,
   ProviderChatOptions,
   ThinkingEffort,
-} from "@nakama/core";
+} from "@airin/core";
+import {
+  type GenerateContentConfig,
+  ThinkingLevel,
+  type Tool,
+} from "@google/genai";
 import { z } from "zod";
 import {
   normalizeThinkingEffort,

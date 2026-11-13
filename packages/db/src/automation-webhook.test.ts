@@ -18,7 +18,7 @@ async function withDatabase(
   }) => Promise<void>
 ) {
   const root = await mkdtemp(join(tmpdir(), "automation-webhook-"));
-  const filename = join(root, "nakama.sqlite");
+  const filename = join(root, "airin.sqlite");
   const database = await createSqliteDatabase(`file:${filename}`);
   const raw = new Database(filename);
   const now = new Date(T0).toISOString();

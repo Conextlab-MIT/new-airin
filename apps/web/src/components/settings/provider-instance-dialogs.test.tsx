@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import type { ProviderInstanceSummary } from "@nakama/core/contract";
+import type { ProviderInstanceSummary } from "@airin/core/contract";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
