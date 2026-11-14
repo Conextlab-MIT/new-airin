@@ -1,0 +1,393 @@
+@media (max-width: 600px) {
+  .landing-wrap {
+    width: calc(100% - 2rem);
+  }
+  .landing-header-inner {
+    gap: 0.5rem;
+  }
+  .landing-header img {
+    width: 5.8rem;
+  }
+  .landing-header nav {
+    gap: 0.8rem;
+    font-size: 0.75rem;
+  }
+  .landing-nav-cta {
+    padding: 0.7rem 0.8rem;
+    font-size: 0.7rem;
+  }
+  .landing-nav-cta svg {
+    display: none;
+  }
+  .landing-hero {
+    gap: 2rem;
+    padding-top: 2.8rem;
+  }
+  .landing h1 {
+    font-size: clamp(2.55rem, 10.5vw, 3.75rem);
+  }
+  .landing-intro .landing-hero-tagline {
+    margin-top: 1.5rem;
+    font-size: 0.95rem;
+  }
+  .landing-intro > p:not(.landing-hero-tagline) {
+    max-width: 29rem;
+    font-size: 0.86rem;
+  }
+  .landing-actions {
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+  }
+  .landing-actions > .landing-button {
+    width: 100%;
+    min-height: 3.25rem;
+  }
+  .landing-actions > .landing-text-link {
+    min-height: 44px;
+  }
+  .landing-hero-team {
+    margin-top: 0.75rem;
+  }
+  .landing-agent-stage {
+    gap: 0.4rem;
+    padding-inline: 0.65rem;
+  }
+  .landing-active-agent {
+    gap: 0.75rem;
+  }
+  .landing-active-agent > img {
+    width: 7rem;
+    height: 7rem;
+    border-radius: 22px;
+  }
+  .landing-agent-badge {
+    padding: 0.6rem;
+  }
+  .landing-agent-badge > span:last-child {
+    font-size: 0.58rem;
+  }
+  .landing-team-picker {
+    gap: 0;
+    padding: 0.15rem;
+  }
+  .landing-team-choice {
+    padding-inline: 0.45rem;
+    font-size: 0.65rem;
+  }
+  .landing-workspace-bar {
+    padding-inline: 1rem;
+  }
+  .landing-workspace-scene {
+    min-height: 24.3rem;
+    padding: 1.1rem 1rem 0.5rem;
+  }
+  .landing-brief {
+    padding: 0.7rem;
+    margin-left: 1.6rem;
+  }
+  .landing-brief p {
+    font-size: 0.72rem;
+  }
+  .landing-agent-response {
+    gap: 0.5rem;
+  }
+  .landing-agent-response p {
+    font-size: 0.72rem;
+  }
+  .landing-agent-response > img {
+    width: 2rem;
+    height: 2rem;
+  }
+  .landing-agent-response strong span {
+    font-size: 0.56rem;
+  }
+  .landing-task-output,
+  .landing-deliverable {
+    margin-left: 0;
+  }
+  .landing-task-output {
+    min-height: 9.5rem;
+  }
+  .landing-deliverable {
+    gap: 0.25rem;
+    font-size: 0.56rem;
+  }
+  .landing-deliverable > span:last-child {
+    font-size: 0.5rem;
+  }
+  .landing-workspace-bottom {
+    padding-inline: 1rem;
+    font-size: 0.52rem;
+  }
+  .landing-workbench-note {
+    padding: 0.65rem 0.8rem;
+    font-size: 0.59rem;
+  }
+  .landing-workbench-note img {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+  .landing-integrations {
+    padding-block: 3.5rem;
+  }
+  .landing-integrations h2 {
+    font-size: 2rem;
+  }
+  .landing-app-rows {
+    gap: 0.65rem;
+    margin-top: 2rem;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 5%,
+      #000 95%,
+      transparent
+    );
+  }
+  .landing-marquee-track ul {
+    gap: 0.65rem;
+    padding-right: 0.65rem;
+  }
+  .landing-marquee-track li {
+    gap: 0.65rem;
+    width: 13.5rem;
+    min-height: 4rem;
+    padding: 1rem;
+    font-size: 0.8rem;
+  }
+  .landing-marquee-track img {
+    width: 1.65rem;
+    height: 1.65rem;
+  }
+  .landing-integration-note {
+    padding-inline: 1.5rem;
+    font-size: 0.65rem !important;
+  }
+  .landing-section {
+    padding-block: 4rem;
+  }
+  .landing h2 {
+    font-size: clamp(2.2rem, 8.7vw, 3rem);
+  }
+  .landing-section-heading {
+    display: block;
+    margin-bottom: 2rem;
+  }
+  .landing-section-heading > p {
+    max-width: 100%;
+    margin-top: 1.2rem;
+    font-size: 0.88rem;
+  }
+  .landing-agent-layout {
+    gap: 2rem;
+  }
+  .landing-agent-layout > div:first-child > p {
+    margin-top: 1.2rem;
+    font-size: 0.88rem;
+  }
+  .landing-flow {
+    padding: 1.25rem;
+  }
+  .landing-flow-brief {
+    padding: 0.8rem;
+    font-size: 0.75rem;
+  }
+  .landing-flow-handoff {
+    gap: 0.25rem;
+    padding-block: 1.5rem;
+  }
+  .landing-flow-handoff img,
+  .landing-flow-human {
+    width: 3.4rem;
+    height: 3.4rem;
+  }
+  .landing-flow-handoff > div > span:last-child {
+    font-size: 0.53rem;
+  }
+  .landing-flow-handoff strong {
+    font-size: 0.75rem;
+  }
+  .landing-flow-handoff > svg {
+    width: 0.8rem;
+    height: 0.8rem;
+  }
+  .landing-flow-result {
+    gap: 0.5rem;
+    padding: 0.8rem;
+  }
+  .landing-flow-result strong {
+    font-size: 0.68rem;
+  }
+  .landing-flow-result span {
+    font-size: 0.58rem;
+  }
+  .landing-feature-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .landing-feature-team,
+  .landing-feature-design {
+    grid-column: auto;
+  }
+  .landing-feature-team .landing-feature-copy,
+  .landing-feature-design .landing-feature-copy {
+    padding: 1.5rem;
+  }
+  .landing-feature-team h3,
+  .landing-feature-design h3 {
+    font-size: 1.9rem;
+  }
+  .landing-role-cards {
+    gap: 0.5rem;
+    padding-inline: 1rem;
+  }
+  .landing-role-cards > div {
+    padding: 0.75rem 0.2rem;
+  }
+  .landing-role-cards img {
+    width: 5.5rem;
+    height: 5.5rem;
+  }
+  .landing-role-cards span {
+    font-size: 0.51rem;
+  }
+  .landing-role-cards small {
+    font-size: 0.48rem;
+  }
+  .landing-feature-design {
+    grid-template-columns: 1fr;
+  }
+  .landing-feature-posters {
+    gap: 1rem;
+    height: 23rem;
+    padding-top: 0;
+  }
+  .landing-feature-posters > .landing-poster {
+    width: min(40%, 11rem);
+  }
+  .landing-industry-switch {
+    gap: 0.45rem;
+    margin-bottom: 1rem;
+  }
+  .landing-industry-switch button {
+    padding: 0.7rem 0.25rem;
+    font-size: 0.66rem;
+  }
+  .landing-industry-switch img {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  .landing-industry-panel {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+  .landing-industry-copy h3 {
+    font-size: 1.7rem;
+  }
+  .landing-industry-copy > p {
+    font-size: 0.85rem;
+  }
+  .landing-industry-gallery {
+    width: min(100%, 24rem);
+    min-height: 27rem;
+    padding-top: 0.5rem;
+    margin-inline: auto;
+  }
+  .landing-industry-gallery > .landing-poster {
+    width: 68%;
+  }
+  .landing-campaign-secondary {
+    top: 13%;
+    width: 65%;
+    min-height: 17rem;
+  }
+  .landing-campaign-secondary strong {
+    font-size: 1.55rem;
+  }
+  .landing-design-note {
+    bottom: 0;
+    font-size: 0.5rem;
+  }
+  .landing-table {
+    min-width: 34rem;
+  }
+  .landing-table th,
+  .landing-table td {
+    padding: 1.1rem 0.9rem;
+  }
+  .landing-onboarding h2 {
+    text-align: left;
+  }
+  .landing-onboarding-steps {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    margin-top: 2rem !important;
+  }
+  .landing-onboarding-steps li {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    column-gap: 1.2rem;
+    align-items: center;
+  }
+  .landing-onboarding-steps li > div {
+    grid-row: span 2;
+    height: 8rem;
+    margin-bottom: 0;
+  }
+  .landing-onboarding-steps li > div > span {
+    top: 0.5rem;
+    left: 0.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    font-size: 0.6rem;
+  }
+  .landing-onboarding-steps img {
+    width: 6rem;
+    height: 6rem;
+  }
+  .landing-onboarding-steps h3 {
+    align-self: end;
+    font-size: 1.15rem;
+  }
+  .landing-onboarding-steps p {
+    align-self: start;
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+  }
+  .landing-waitlist {
+    padding-block: 4rem;
+  }
+  .landing-waitlist-layout {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .landing-waitlist h2 {
+    font-size: 3.3rem;
+  }
+  .landing-waitlist-team {
+    margin-top: 1.25rem;
+  }
+  .landing-waitlist-team img {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+  .landing-form {
+    padding: 1.5rem;
+  }
+  .landing-form-fields {
+    gap: 1rem;
+  }
+  .landing-form input {
+    font-size: 1rem;
+  }
+  .landing-footer {
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: start;
+    padding-block: 2rem;
+  }
+  .landing-footer > div:last-child {
+    justify-items: start;
+  }
+}

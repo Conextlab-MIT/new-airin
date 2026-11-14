@@ -120,16 +120,25 @@ export function resolveAgentCharacterId(input: {
   name?: string | null;
   profileId?: string | null;
 }): AgentCharacterId {
-  const marketplaceId = input.marketplaceId?.trim();
+  // SAFETY: Each lookup checks the key against the dictionary before indexing.
+  const marketplaceId = input.marketplaceId?.trim() as
+    | keyof typeof MARKETPLACE_CHARACTER_BY_AGENT_ID
+    | undefined;
 
-  if (marketplaceId && MARKETPLACE_CHARACTER_BY_AGENT_ID[marketplaceId]) {
-    return MARKETPLACE_CHARACTER_BY_AGENT_ID[marketplaceId]!;
+  // SAFETY: The name lookup checks the key against the dictionary before indexing.
+  const nameKey = input.name?.trim().toLowerCase() as
+    | keyof typeof MARKETPLACE_CHARACTER_BY_NAME
+    | undefined;
+
+  if (
+    marketplaceId &&
+    Object.hasOwn(MARKETPLACE_CHARACTER_BY_AGENT_ID, marketplaceId)
+  ) {
+    return MARKETPLACE_CHARACTER_BY_AGENT_ID[marketplaceId];
   }
 
-  const nameKey = input.name?.trim().toLowerCase();
-
-  if (nameKey && MARKETPLACE_CHARACTER_BY_NAME[nameKey]) {
-    return MARKETPLACE_CHARACTER_BY_NAME[nameKey]!;
+  if (nameKey && Object.hasOwn(MARKETPLACE_CHARACTER_BY_NAME, nameKey)) {
+    return MARKETPLACE_CHARACTER_BY_NAME[nameKey];
   }
 
   return characterIdForIdentity(input.profileId?.trim() || nameKey || "agent");

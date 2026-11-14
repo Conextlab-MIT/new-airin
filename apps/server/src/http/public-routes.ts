@@ -56,6 +56,7 @@ export function isPublicRouteRequest(
     (method === "POST" &&
       /^\/v1\/channels\/teams\/[^/]+\/messages$/.test(pathname)) ||
     (method === "POST" &&
-      pathname === "/v1/public/waitlist/laundry-innovation-summit")
+      (pathname === "/v1/public/waitlist" ||
+        pathname === "/v1/public/waitlist/laundry-innovation-summit"))
   );
 }

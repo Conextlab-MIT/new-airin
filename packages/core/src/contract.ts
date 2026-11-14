@@ -709,6 +709,27 @@ export interface PlatformOverviewResponse {
   };
 }
 
+export interface WaitlistSignup {
+  businessName: string;
+  businessType: string;
+  contactName: string;
+  email: string;
+  whatsapp: string;
+}
+
+export interface PlatformWaitlistResponse {
+  entries: {
+    businessName: string | null;
+    businessType: string | null;
+    contactName: string | null;
+    createdAt: string;
+    email: string;
+    id: number;
+    whatsapp: string | null;
+  }[];
+  nextCursor: number | null;
+}
+
 export interface CreateOrganizationRequest {
   admin?: {
     name: string;

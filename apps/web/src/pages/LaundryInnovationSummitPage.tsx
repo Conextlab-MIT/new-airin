@@ -1,5 +1,5 @@
-import { Button } from "@nakama/ui/button";
-import { Input } from "@nakama/ui/input";
+import { Button } from "@airin/ui/button";
+import { Input } from "@airin/ui/input";
 import {
   Analytics01Icon,
   Image01Icon,

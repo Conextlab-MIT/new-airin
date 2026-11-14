@@ -22,6 +22,39 @@ interface PluginCleanupRow {
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
+test("upgrades an existing database with a persistent waitlist", () => {
+  const db = new Database(":memory:");
+
+  try {
+    migrateDatabase(db);
+    db.exec(`
+      DROP TABLE waitlist_entries;
+      CREATE TABLE waitlist_entries (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+      INSERT INTO waitlist_entries (email, created_at)
+      VALUES ('team@example.com', '2026-01-01T00:00:00.000Z')
+    `);
+    migrateDatabase(db);
+
+    expect(
+      db
+        .query(
+          "SELECT email, contact_name, business_name, business_type, whatsapp FROM waitlist_entries"
+        )
+        .all()
+    ).toEqual([
+      {
+        business_name: null,
+        business_type: null,
+        contact_name: null,
+        email: "team@example.com",
+        whatsapp: null,
+      },
+    ]);
+  } finally {
+    db.close();
+  }
+});
+
 test.each(["fresh", "upgrade"])(
   "organization parent migration preserves tenants and enforces references: %s",
   (scenario) => {

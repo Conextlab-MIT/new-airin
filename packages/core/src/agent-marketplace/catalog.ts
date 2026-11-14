@@ -41,9 +41,14 @@ export interface AgentMarketplaceEntry {
 function withCharacter(
   entry: Omit<AgentMarketplaceEntry, "characterId">
 ): AgentMarketplaceEntry {
+  // SAFETY: The lookup checks the key against the dictionary before indexing.
+  const id = entry.id as keyof typeof MARKETPLACE_CHARACTER_BY_AGENT_ID;
+
   return {
     ...entry,
-    characterId: MARKETPLACE_CHARACTER_BY_AGENT_ID[entry.id] ?? "jovan",
+    characterId: Object.hasOwn(MARKETPLACE_CHARACTER_BY_AGENT_ID, id)
+      ? MARKETPLACE_CHARACTER_BY_AGENT_ID[id]
+      : "jovan",
   };
 }
 

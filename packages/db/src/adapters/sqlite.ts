@@ -70,6 +70,7 @@ import type {
   StoredToolRecord,
   StoredUserOrganizationRecord,
   StoredUserRecord,
+  StoredWaitlistEntry,
   StoredWorkflowRecord,
   StoredWorkflowRunRecord,
   StoredWorkflowRunStepRecord,
@@ -2980,6 +2981,33 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
+  const createWaitlistEntryStmt = db.prepare(`
+    INSERT INTO waitlist_entries (
+      email, created_at, contact_name, business_name, business_type, whatsapp
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(email) DO UPDATE SET
+      contact_name = excluded.contact_name,
+      business_name = excluded.business_name,
+      business_type = excluded.business_type,
+      whatsapp = excluded.whatsapp
+    WHERE waitlist_entries.contact_name IS NULL
+      AND waitlist_entries.business_name IS NULL
+      AND waitlist_entries.business_type IS NULL
+      AND waitlist_entries.whatsapp IS NULL
+  `);
+
+  const listWaitlistEntriesStmt = db.prepare<
+    StoredWaitlistEntry,
+    [number | null, number]
+  >(`
+    SELECT id, email, created_at AS createdAt, contact_name AS contactName,
+      business_name AS businessName, business_type AS businessType, whatsapp
+    FROM waitlist_entries
+    WHERE id < COALESCE(?, 9223372036854775807)
+    ORDER BY id DESC LIMIT ?
+  `);
+
   const listAuditEventsStmt = db.prepare<AuditEventRow, SQLQueryBindings[]>(`
     SELECT
       id, actor_user_id, org_id, action, resource_type, resource_id,
@@ -5091,6 +5119,17 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
     async createUser(record) {
       runCreateUserStmt(record);
     },
+
+    async createWaitlistEntry(entry, createdAt) {
+      createWaitlistEntryStmt.run(
+        entry.email,
+        createdAt,
+        entry.contactName,
+        entry.businessName,
+        entry.businessType,
+        entry.whatsapp
+      );
+    },
     async deleteArtifactRecord(orgId, profileId, filename) {
       deleteArtifactRecordStmt.run(orgId, profileId, filename);
     },
@@ -6313,6 +6352,10 @@ function createSqliteDatabaseAdapter(db: Database): DatabaseAdapter {
           role: record.role as StoredUserOrganizationRecord["role"],
         };
       });
+    },
+
+    async listWaitlistEntries(before, limit) {
+      return listWaitlistEntriesStmt.all(before, limit);
     },
 
     async listWorkflowRunSteps(runId) {

@@ -167,6 +167,14 @@ export class OrgsClient extends AuthClient {
     return this.request("/v1/platform/overview");
   }
 
+  async listPlatformWaitlist(
+    before: number | null = null
+  ): Promise<import("@airin/core/contract").PlatformWaitlistResponse> {
+    const query = before === null ? "" : `?before=${before}`;
+
+    return this.request(`/v1/platform/waitlist${query}`);
+  }
+
   async createPlatformOrganization(
     request: CreateOrganizationRequest
   ): Promise<CreateOrganizationResponse> {

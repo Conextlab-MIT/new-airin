@@ -1,0 +1,226 @@
+/* Feature panels use different working artifacts, not repeated icon tiles. */
+.landing-features {
+  background: #f9f7fc;
+}
+.landing-feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+}
+.landing-feature-grid article {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 16px;
+  transition:
+    transform 300ms,
+    box-shadow 300ms;
+}
+.landing-feature-grid article:hover {
+  box-shadow: 0 15px 40px -24px #4b2a7f4d;
+  transform: translateY(-3px);
+}
+.landing-feature-copy {
+  position: relative;
+  z-index: 2;
+  padding: 2rem;
+}
+.landing-feature-copy > svg {
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-bottom: 1rem;
+  color: var(--violet);
+}
+.landing-feature-copy h3 {
+  font-size: 1.8rem;
+}
+.landing-feature-copy p {
+  max-width: 27rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+.landing-feature-team {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  grid-column: 1 / -1;
+  align-items: center;
+  min-height: 20rem;
+  background: #eee7fc !important;
+}
+.landing-feature-team .landing-feature-copy {
+  padding: 2.5rem;
+}
+.landing-feature-team h3 {
+  font-size: 2.4rem;
+}
+.landing-role-cards {
+  display: flex;
+  gap: 1rem;
+  align-items: end;
+  align-self: stretch;
+  justify-content: center;
+  padding: 3rem 2rem 0;
+  perspective: 900px;
+}
+.landing-role-cards > div {
+  display: grid;
+  flex: 1;
+  justify-items: center;
+  min-width: 0;
+  padding: 1.2rem 0.5rem;
+  background: #ffffffc4;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 10px 25px -15px #4322892b;
+  backdrop-filter: blur(10px);
+  transform: translateY(1.5rem);
+  transition: transform 450ms;
+}
+.landing-role-cards > div:first-child {
+  transform: translateY(1.8rem) rotate(-5deg);
+}
+.landing-role-cards > div:nth-child(2) {
+  background: #fff;
+  transform: translateY(0.5rem);
+}
+.landing-role-cards > div:last-child {
+  transform: translateY(1.8rem) rotate(5deg);
+}
+.landing-feature-team:hover .landing-role-cards > div {
+  transform: translateY(0);
+}
+.landing-role-cards img {
+  width: 7rem;
+  max-width: 100%;
+  height: 7rem;
+  margin-bottom: 0.5rem;
+  image-rendering: pixelated;
+}
+.landing-role-cards strong {
+  font-size: 0.95rem;
+}
+.landing-role-cards span {
+  margin-top: 0.2rem;
+  font-size: 0.62rem;
+  color: var(--muted);
+}
+.landing-role-cards small {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  margin-top: 1.2rem;
+  font-size: 0.55rem;
+  color: #45622f;
+}
+.landing-role-cards small svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+.landing-schedule {
+  padding: 1rem;
+  margin: 0.5rem 2rem 2rem;
+  background: #f7f5fb;
+  border-radius: 12px;
+}
+.landing-schedule > div {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  text-align: center;
+}
+.landing-schedule > div:first-child {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+.landing-schedule > div:nth-child(2) {
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.landing-schedule > div:nth-child(2) span {
+  padding: 0.7rem 0.3rem;
+}
+.landing-schedule > div:nth-child(2) span:first-child {
+  color: #fff;
+  background: var(--violet);
+  border-radius: 9px;
+}
+.landing-schedule p {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  margin-top: 0.7rem;
+  font-size: 0.65rem;
+  color: var(--ink);
+  background: #eaf6d9;
+  border-radius: 8px;
+}
+.landing-schedule p span:last-child {
+  margin-left: auto;
+}
+.landing-access-list {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0.5rem 2rem 2rem;
+}
+.landing-access-list > div {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.9rem;
+  font-size: 0.78rem;
+  background: #f7f5fb;
+  border-radius: 10px;
+}
+.landing-access-list > div span:nth-last-child(2) {
+  margin-left: auto;
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+.landing-access-list svg {
+  width: 1rem;
+  height: 1rem;
+  color: #68953a;
+}
+.landing-feature-design {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr;
+  grid-column: 1 / -1;
+  align-items: center;
+  min-height: 23rem;
+  background: #f0f4e7 !important;
+}
+.landing-feature-design .landing-feature-copy {
+  padding: 2.5rem;
+}
+.landing-feature-design h3 {
+  font-size: 2.4rem;
+}
+.landing-feature-design .landing-text-link {
+  margin-top: 1rem;
+}
+.landing-feature-posters {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  height: 24rem;
+  padding: 2.5rem 2rem;
+  perspective: 1000px;
+}
+.landing-feature-posters > .landing-poster {
+  flex: none;
+  width: 12rem;
+  transform: rotate(-7deg) translateY(1rem);
+  transition: transform 450ms;
+}
+.landing-feature-posters > .landing-poster:last-child {
+  transform: rotate(7deg) translateY(-0.5rem);
+}
+.landing-feature-design:hover .landing-poster {
+  transform: rotate(-2deg) translateY(-0.25rem);
+}
+.landing-feature-design:hover .landing-poster:last-child {
+  transform: rotate(2deg) translateY(-1rem);
+}

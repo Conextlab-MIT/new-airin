@@ -3,7 +3,8 @@ import { buttonVariants } from "@airin/ui/button-variants";
 import { Card, CardContent } from "@airin/ui/card";
 import { Spinner } from "@airin/ui/spinner";
 import { cn } from "@airin/ui/utils";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { formatUsd } from "@/lib/chat-usage";
 import { client, formatError } from "@/lib/client";
@@ -98,7 +99,115 @@ export function PlatformOverviewPage() {
           )}
         </CardContent>
       </Card>
+      <PlatformWaitlist />
     </div>
+  );
+}
+
+function PlatformWaitlist() {
+  const [pages, setPages] = useState<number[]>([]);
+  const before = pages.at(-1) ?? null;
+
+  const { data, error, isFetching, isLoading, refetch } = useQuery({
+    placeholderData: keepPreviousData,
+    queryFn: () => client.listPlatformWaitlist(before),
+    queryKey: ["platform", "waitlist", before],
+  });
+
+  const nextCursor = data?.nextCursor;
+
+  return (
+    <section aria-labelledby="platform-waitlist-heading" className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-semibold text-lg" id="platform-waitlist-heading">
+          Waitlist
+        </h2>
+        <Button
+          disabled={isFetching}
+          onClick={() => void refetch()}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          Refresh
+        </Button>
+      </div>
+      {isLoading && (
+        <Spinner aria-label="Loading waitlist" className="size-5" />
+      )}
+      {error && (
+        <p className="text-destructive text-sm" role="alert">
+          {formatError(error)}
+        </p>
+      )}
+      {data && (
+        <>
+          <Card className="shadow-none">
+            <CardContent className="divide-y divide-border p-0">
+              {data.entries.length === 0 ? (
+                <p className="px-4 py-6 text-muted-foreground text-sm">
+                  No waitlist entries yet.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {data.entries.map((entry) => (
+                    <li
+                      className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+                      key={entry.id}
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <p className="break-words font-semibold">
+                          {entry.contactName ?? "—"}
+                        </p>
+                        <p className="break-words text-muted-foreground">
+                          {[entry.businessName, entry.businessType]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                        <p className="break-all">{entry.email}</p>
+                        {entry.whatsapp && <p>{entry.whatsapp}</p>}
+                      </div>
+                      <time
+                        className="text-muted-foreground"
+                        dateTime={entry.createdAt}
+                      >
+                        {new Date(entry.createdAt).toLocaleString()}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+          {(before !== null || nextCursor != null) && (
+            <div className="flex justify-end gap-2">
+              <Button
+                disabled={before === null || isFetching}
+                onClick={() => setPages((current) => current.slice(0, -1))}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Previous
+              </Button>
+              <Button
+                disabled={nextCursor == null || isFetching}
+                onClick={() => {
+                  if (nextCursor != null) {
+                    setPages((current) => [...current, nextCursor]);
+                  }
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Next
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

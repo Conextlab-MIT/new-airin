@@ -75,6 +75,30 @@ export function migrateDatabase(db: Database): void {
   atomic(migrateComposioTables);
   atomic(migrateComposioUserConnections);
   atomic(migrateAuditEventsTable);
+  atomic((database) => {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS waitlist_entries (
+        id INTEGER PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL
+      )
+    `);
+
+    const columns = database
+      .query<{ name: string }, []>("PRAGMA table_info(waitlist_entries)")
+      .all();
+
+    for (const name of [
+      "contact_name",
+      "business_name",
+      "business_type",
+      "whatsapp",
+    ]) {
+      if (columns.every((column) => column.name !== name)) {
+        database.exec(`ALTER TABLE waitlist_entries ADD COLUMN ${name} TEXT`);
+      }
+    }
+  });
   atomic(migrateProfileChangeEventsTable);
   atomic(migrateSkillVersionsTable);
   atomic(migratePluginTables);

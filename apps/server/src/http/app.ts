@@ -36,7 +36,10 @@ import {
   registerComposioRoutes,
 } from "./routes/composio";
 import { registerDataPortabilityRoutes } from "./routes/data-portability";
-import { registerDemoWaitlistRoutes } from "./routes/demo-waitlist";
+import {
+  registerDemoWaitlistRoutes,
+  registerPlatformWaitlistRoutes,
+} from "./routes/demo-waitlist";
 import { registerGoogleMeetRoutes } from "./routes/google-meet";
 import { registerInternalAutomationRoutes } from "./routes/internal-automations";
 import { registerInternalCuratorRoutes } from "./routes/internal-curator";
@@ -85,7 +88,7 @@ import type { HonoApp } from "./types";
  * the two drift, which is the only thing keeping this constant honest.
  */
 const THEME_BOOTSTRAP_SCRIPT_HASH =
-  "sha256-ccmZA+DQW+fCYJWBEiKXptNNdt/GBPFOLMhetVtPmLA=";
+  "sha256-1niPzuzoH1pQl20pn8Y6Q5SKCdaKOy5cbE0O10L4OW4=";
 
 // Regular JSON can carry a 5 MiB attachment after base64 expansion.
 export const DEFAULT_HTTP_REQUEST_BODY_LIMIT_BYTES = 10 * 1024 * 1024;
@@ -450,6 +453,7 @@ export function createHonoApp(options: ServerOptions) {
 
   registerSystemRoutes(app, options);
   registerAuditEventRoutes(app, options);
+  registerPlatformWaitlistRoutes(app, options);
   registerAuthRoutes(app, options);
   registerSetupImportRoutes(app, options);
   registerWorkerRoutes(app, options);

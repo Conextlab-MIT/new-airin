@@ -13,6 +13,10 @@ import type {
   RegressionCaseVerdict,
   ThinkingEffort,
 } from "@airin/core";
+import type {
+  PlatformWaitlistResponse,
+  WaitlistSignup,
+} from "@airin/core/contract";
 
 export type { OrgRole } from "@airin/core";
 
@@ -843,6 +847,8 @@ export interface StoredAuditEvent {
   resourceType: string;
 }
 
+export type StoredWaitlistEntry = PlatformWaitlistResponse["entries"][number];
+
 export interface StoredAutomationWebhookSecret {
   automationId: string;
   createdAt: string;
@@ -1019,6 +1025,7 @@ export interface DatabaseAdapter {
     record: Omit<StoredSkillVersion, "version">
   ): Promise<StoredSkillVersion>;
   createUser(record: StoredUserRecord): Promise<void>;
+  createWaitlistEntry(entry: WaitlistSignup, createdAt: string): Promise<void>;
   deleteArtifactRecord(
     orgId: string,
     profileId: string,
@@ -1515,6 +1522,10 @@ export interface DatabaseAdapter {
   listUserOrganizations(
     userId: string
   ): Promise<StoredUserOrganizationRecord[]>;
+  listWaitlistEntries(
+    before: number | null,
+    limit: number
+  ): Promise<StoredWaitlistEntry[]>;
   listWorkflowRunSteps(runId: string): Promise<StoredWorkflowRunStepRecord[]>;
   listWorkflowRuns(
     workflowId: string,

@@ -1,0 +1,57 @@
+@media (min-width: 1450px) {
+  .landing-hero {
+    gap: 5rem;
+  }
+}
+@media (max-width: 1100px) {
+  .landing-wrap {
+    width: min(100% - 3rem, 78rem);
+  }
+  .landing-header nav {
+    gap: 1.25rem;
+  }
+  .landing-hero {
+    gap: 2.2rem;
+    padding-block: 4.5rem 6rem;
+  }
+  .landing h1 {
+    font-size: clamp(2.8rem, 5.3vw, 4rem);
+  }
+  .landing-workspace-scene {
+    min-height: 24rem;
+    padding-inline: 1rem;
+  }
+  .landing-task-output,
+  .landing-deliverable {
+    margin-left: 0;
+  }
+  .landing-agent-layout {
+    gap: 3rem;
+  }
+  .landing-flow {
+    padding: 1.5rem;
+  }
+  .landing-industry-panel {
+    gap: 2rem;
+    padding: 2.5rem;
+  }
+  .landing-industry-gallery {
+    min-height: 25rem;
+  }
+  .landing-campaign-secondary {
+    min-height: 17rem;
+  }
+  .landing-campaign-secondary strong {
+    font-size: 1.6rem;
+  }
+  .landing-feature-posters {
+    gap: 0.7rem;
+    padding-inline: 1rem;
+  }
+  .landing-feature-posters > .landing-poster {
+    width: 10rem;
+  }
+  .landing-waitlist-layout {
+    gap: 3rem;
+  }
+}

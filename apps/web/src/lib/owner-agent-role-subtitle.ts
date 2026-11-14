@@ -35,11 +35,19 @@ const LAUNDRY_PROFILE_NAME_TO_ROLE = {
 export function laundryAgentRoleMessageKey(
   profile: Pick<ProfileSummary, "id" | "name" | "isSuper">
 ): OwnerAgentRoleMessageKey | null {
-  return (
-    LAUNDRY_PROFILE_ID_TO_ROLE[profile.id] ??
-    LAUNDRY_PROFILE_NAME_TO_ROLE[profile.name.trim()] ??
-    null
-  );
+  // SAFETY: Each lookup checks the key against the dictionary before indexing.
+  const id = profile.id as keyof typeof LAUNDRY_PROFILE_ID_TO_ROLE;
+
+  // SAFETY: The name lookup checks the key against the dictionary before indexing.
+  const name = profile.name.trim() as keyof typeof LAUNDRY_PROFILE_NAME_TO_ROLE;
+
+  if (Object.hasOwn(LAUNDRY_PROFILE_ID_TO_ROLE, id)) {
+    return LAUNDRY_PROFILE_ID_TO_ROLE[id];
+  }
+
+  return Object.hasOwn(LAUNDRY_PROFILE_NAME_TO_ROLE, name)
+    ? LAUNDRY_PROFILE_NAME_TO_ROLE[name]
+    : null;
 }
 
 export function ownerAgentSubtitleMessageKey(

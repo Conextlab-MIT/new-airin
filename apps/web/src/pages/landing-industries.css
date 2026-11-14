@@ -1,0 +1,278 @@
+/* Real visual concepts are present immediately, with no design/photo mode. */
+.landing-industries {
+  overflow: hidden;
+}
+.landing-industry-switch {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+.landing-industry-switch button {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  padding: 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition:
+    background 200ms,
+    border-color 200ms,
+    transform 200ms;
+}
+.landing-industry-switch button:hover {
+  transform: translateY(-2px);
+}
+.landing-industry-switch button[aria-pressed="true"] {
+  color: var(--violet-dark);
+  background: #f0e9fc;
+  border-color: var(--violet);
+}
+.landing-industry-switch img {
+  width: 3.5rem;
+  height: 3.5rem;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.landing-industry-switch svg {
+  width: 1rem;
+  height: 1rem;
+  margin-left: auto;
+  opacity: 0.4;
+}
+.landing-industry-switch [aria-pressed="true"] svg {
+  opacity: 1;
+}
+.landing-industry-panel {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 3rem;
+  padding: 3.5rem;
+  background: #f7f4fc;
+  border-radius: 16px;
+  animation: landing-scene 350ms ease-out both;
+}
+.landing-industry-copy {
+  align-self: center;
+}
+.landing-industry-copy h3 {
+  font-size: 2.1rem;
+}
+.landing-industry-copy > p {
+  margin-top: 1.2rem;
+  font-size: 0.9rem;
+}
+.landing-industry-brief {
+  display: flex;
+  gap: 0.8rem;
+  align-items: start;
+  padding: 1rem;
+  margin-block: 2rem;
+  background: #fff;
+  border-radius: 10px;
+}
+.landing-industry-brief > svg {
+  margin-top: 0.3rem;
+  color: var(--violet);
+}
+.landing-industry-brief p {
+  font-size: 0.83rem;
+  line-height: 1.65;
+  color: var(--ink);
+}
+.landing-human-role {
+  display: flex;
+  gap: 0.65rem;
+  align-items: start;
+}
+.landing-human-role svg {
+  margin-top: 0.3rem;
+  color: var(--violet);
+}
+.landing-human-role p {
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+.landing-industry-gallery {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  min-height: 29rem;
+  padding-bottom: 1.5rem;
+  perspective: 1000px;
+}
+.landing-industry-gallery > .landing-poster {
+  position: relative;
+  z-index: 2;
+  width: 65%;
+  transform: rotate(5deg);
+  transition: transform 450ms;
+}
+.landing-industry-gallery:hover > .landing-poster {
+  transform: rotate(1deg) translateY(-5px);
+}
+.landing-campaign-secondary {
+  position: absolute;
+  top: 12%;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  width: 63%;
+  min-height: 20rem;
+  padding: 1.25rem;
+  color: #2c3b19;
+  background: var(--lime);
+  border-radius: 10px;
+  box-shadow: 0 15px 25px -15px #29164433;
+  transform: rotate(-8deg);
+  transition: transform 450ms;
+}
+.landing-campaign-secondary > span {
+  font-size: 0.55rem;
+  font-weight: 750;
+}
+.landing-campaign-secondary strong {
+  max-width: 8ch;
+  margin-top: 1.5rem;
+  font-family: var(--font-heading);
+  font-size: 1.9rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+.landing-campaign-secondary > span:last-child {
+  margin-top: auto;
+  font-size: 0.5rem;
+}
+.landing-campaign-mark {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-block: 1rem;
+  color: var(--lime);
+  background: #2c3b19;
+  border-radius: 50%;
+}
+.landing-campaign-mark svg {
+  width: 2.25rem;
+  height: 2.25rem;
+  transform: rotate(-30deg);
+}
+.landing-industry-gallery:hover .landing-campaign-secondary {
+  transform: rotate(-11deg) translateX(-8px);
+}
+.landing-design-note {
+  position: absolute;
+  right: 0;
+  bottom: -0.5rem;
+  font-size: 0.58rem;
+  color: var(--muted);
+}
+.landing-poster {
+  --poster-bg: #d1fa74;
+  --poster-ink: #263e26;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  aspect-ratio: 0.72;
+  container-type: inline-size;
+  overflow: hidden;
+  color: var(--poster-ink);
+  background: var(--poster-bg);
+  border-radius: 10px;
+  box-shadow: 0 15px 30px -12px #29164440;
+}
+.landing-poster-carwash {
+  --poster-bg: #2c2851;
+  --poster-ink: #e4fd8b;
+}
+.landing-poster-restaurant {
+  --poster-bg: #f5d7a3;
+  --poster-ink: #792b1f;
+}
+.landing-poster-retail {
+  --poster-bg: #eb6c3f;
+  --poster-ink: #fff8de;
+}
+.landing-poster-top {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: space-between;
+  padding: 7% 7% 5%;
+  font-size: 2.6cqw;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.landing-poster-title {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  padding-inline: 7%;
+  font-family: var(--font-heading);
+  font-size: 11.5cqw;
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+.landing-poster-photo {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 6% 7% 0;
+  overflow: hidden;
+  background: var(--poster-ink);
+  border-radius: 45% 45% 0 0;
+}
+.landing-poster-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 500ms;
+}
+.landing-poster:hover .landing-poster-photo img {
+  transform: scale(1.04);
+}
+.landing-poster-photo > span {
+  position: absolute;
+  bottom: 8%;
+  left: 6%;
+  padding: 3% 5%;
+  font-size: 3cqw;
+  font-weight: 750;
+  background: var(--poster-bg);
+  border-radius: 3px;
+}
+.landing-poster-bottom {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6% 7%;
+  font-size: 3.1cqw;
+  font-weight: 800;
+}
+.landing-poster-bottom svg {
+  width: 5cqw;
+  height: 5cqw;
+}
+.landing-industry-carwash .landing-campaign-secondary {
+  color: #302754;
+  background: #ded7f6;
+}
+.landing-industry-restaurant .landing-campaign-secondary {
+  color: #f6dcb0;
+  background: #762d23;
+}
+.landing-industry-retail .landing-campaign-secondary {
+  color: #913916;
+  background: #f8e5b7;
+}

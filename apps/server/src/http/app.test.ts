@@ -12,7 +12,11 @@ import { AuthService } from "../services/auth-service";
 import { OrgService } from "../services/org-service";
 import { setupTestConfigDir } from "../test-config-dir";
 import { createHonoApp } from "./app";
-import { setupFreshInstallSession } from "./test-session-helpers";
+import {
+  loginUserSession,
+  seedOrgAdmin,
+  setupFreshInstallSession,
+} from "./test-session-helpers";
 
 setupTestConfigDir("airin-http-app-test-");
 
@@ -80,6 +84,110 @@ function createServerOptions() {
 }
 
 describe("createHonoApp", () => {
+  test("stores public waitlist entries once and lists them only for platform admins", async () => {
+    const options = createServerOptions();
+    const app = createHonoApp(options);
+
+    const details = {
+      businessName: "North Laundry",
+      businessType: "Laundry",
+      contactName: "Ari",
+      whatsapp: "+62 812-3456-789",
+    };
+
+    const signup = (email: string, fields = details) =>
+      app.request("/v1/public/waitlist", {
+        body: JSON.stringify({ ...fields, email }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+    expect((await signup("invalid")).status).toBe(400);
+    expect(
+      (await signup("team@example.com", { ...details, contactName: "" })).status
+    ).toBe(400);
+    expect(
+      (await signup("team@example.com", { ...details, whatsapp: "invalid" }))
+        .status
+    ).toBe(400);
+    expect((await signup(" Team@Example.com ")).status).toBe(202);
+    expect(
+      (await signup("team@example.com", { ...details, contactName: "Other" }))
+        .status
+    ).toBe(202);
+    expect(
+      await options.databaseAdapter.getUserByEmail("team@example.com")
+    ).toBeNull();
+
+    const path = "/v1/platform/waitlist";
+    expect((await app.request(path)).status).toBe(401);
+
+    const platformAdmin = await setupFreshInstallSession(
+      app,
+      options.databaseAdapter
+    );
+
+    const orgAdmin = await seedOrgAdmin(options.databaseAdapter, {
+      email: "org-admin@example.com",
+      userId: "user_waitlist_org_admin",
+    });
+
+    const orgSession = await loginUserSession(
+      app,
+      orgAdmin.email,
+      orgAdmin.password,
+      orgAdmin.orgId
+    );
+
+    expect(
+      (await app.request(path, { headers: orgSession.headers() })).status
+    ).toBe(403);
+
+    const response = await app.request(path, {
+      headers: platformAdmin.headers(),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toEqual({
+      entries: [
+        {
+          ...details,
+          createdAt: expect.any(String),
+          email: "team@example.com",
+          id: 1,
+          whatsapp: "+628123456789",
+        },
+      ],
+      nextCursor: null,
+    });
+
+    await Promise.all(
+      Array.from({ length: 50 }, (_, i) => signup(`team-${i}@example.com`))
+    );
+    const first = await app.request(path, { headers: platformAdmin.headers() });
+    const page = await first.json();
+    expect(page.entries).toHaveLength(50);
+    expect(page.nextCursor).toBe(2);
+
+    const second = await app.request(`${path}?before=${page.nextCursor}`, {
+      headers: platformAdmin.headers(),
+    });
+
+    expect(await second.json()).toEqual({
+      entries: [
+        {
+          ...details,
+          createdAt: expect.any(String),
+          email: "team@example.com",
+          id: 1,
+          whatsapp: "+628123456789",
+        },
+      ],
+      nextCursor: null,
+    });
+  });
+
   test("compresses chat history when the browser accepts gzip", async () => {
     const options = createServerOptions();
     options.agent.getSessionMessages = async () => ({

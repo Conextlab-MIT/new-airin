@@ -49,6 +49,11 @@ const MarketplacePage = lazyPage(
 
 const LoginPage = lazyPage(() => import("@/pages/LoginPage"), "LoginPage");
 
+const LandingPage = lazyPage(
+  () => import("@/pages/LandingPage"),
+  "LandingPage"
+);
+
 const PasswordResetPage = lazyPage(
   () => import("@/pages/PasswordResetPage"),
   "PasswordResetPage"
@@ -194,6 +199,14 @@ function AppShell() {
             <Route
               element={
                 <RouteBoundary fullScreen>
+                  <LandingPage />
+                </RouteBoundary>
+              }
+              path="/"
+            />
+            <Route
+              element={
+                <RouteBoundary fullScreen>
                   <AcceptInvitePage />
                 </RouteBoundary>
               }
@@ -248,7 +261,6 @@ function AppShell() {
                     </RouteBoundary>
                   }
                 >
-                  <Route element={<Navigate replace to="/chat" />} index />
                   <Route
                     element={<Navigate replace to={PAGE_PATHS.workers} />}
                     path="/status"

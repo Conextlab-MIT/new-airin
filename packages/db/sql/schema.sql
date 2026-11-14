@@ -1,5 +1,15 @@
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS waitlist_entries (
+  id INTEGER PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  contact_name TEXT,
+  business_name TEXT,
+  business_type TEXT,
+  whatsapp TEXT
+);
+
 CREATE TABLE IF NOT EXISTS managed_secrets (
   scope TEXT NOT NULL,
   name TEXT NOT NULL,
