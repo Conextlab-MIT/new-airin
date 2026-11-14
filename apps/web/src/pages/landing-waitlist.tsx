@@ -5,6 +5,7 @@ function WaitlistForm() {
   const [status, setStatus] = useState<
     "idle" | "pending" | "success" | "error"
   >("idle");
+
   // A ref, so two submits in the same tick cannot both pass the guard.
   const sending = useRef(false);
 
